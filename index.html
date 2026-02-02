@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>四色牌游戏 - Four-Color Card Game</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -70,8 +70,8 @@
                 <span id="deckCount">牌堆：117张</span>
             </div>
             <div class="info-right">
-                <button id="helpButton" class="btn-icon">❓</button>
-                <button id="exitButton" class="btn-icon">🚪</button>
+                <button id="helpButton" class="btn-icon" aria-label="帮助">❓</button>
+                <button id="exitButton" class="btn-icon" aria-label="退出游戏">🚪</button>
             </div>
         </div>
 
@@ -167,7 +167,8 @@
             <div class="declare-content">
                 <h3>声明暗坎数量</h3>
                 <p>请声明您计划保留的暗坎数量（承诺）</p>
-                <input type="number" id="kanCountInput" min="0" max="10" value="0">
+                <input type="number" id="kanCountInput" aria-labelledby="declareKanLabel" min="0" max="10" value="0">
+                <label id="declareKanLabel" style="display:none;">暗坎数量</label>
                 <button id="confirmDeclareButton" class="btn-primary">确认声明</button>
             </div>
         </div>
@@ -184,7 +185,7 @@
     <!-- Rules Modal -->
     <div id="rulesModal" class="modal hidden">
         <div class="modal-content modal-large">
-            <button class="modal-close" id="closeRulesButton">×</button>
+            <button class="modal-close" id="closeRulesButton" aria-label="关闭">×</button>
             <h2>🎴 四色牌游戏规则</h2>
             <div class="rules-content">
                 <h3>🎯 游戏简介</h3>

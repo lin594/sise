@@ -637,6 +637,18 @@ body {
     color: #333;
 }
 
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    padding: 10px 20px;
+    font-size: 16px;
+}
+
 /* Choice Options */
 .choice-options {
     display: flex;
@@ -768,6 +780,7 @@ body {
         justify-content: center;
         font-size: 24px;
         z-index: 10000;
+        pointer-events: none;
     }
 }
 
