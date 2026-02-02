@@ -645,15 +645,21 @@ class GameController {
         
         if (!card) return;
         
-        // Place in next player's response area
+        // KEY FIX: Place card in CURRENT PLAYER'S next player's response area
+        // This is critical - the responder discards to their own next player
         const nextPlayerIndex = (playerIndex + 1) % 4;
         const nextPlayer = this.state.players[nextPlayerIndex];
         nextPlayer.responseArea = card;
         
+        // Update current player to be the next player (they now have card in response area)
+        this.state.currentPlayerIndex = nextPlayerIndex;
         this.state.currentResponseCard = card;
         this.updateAllPlayerAreas();
+        this.updateCenterStatus();
         
-        // Check for responses
+        this.showNotification(`${player.name} 打出了 ${card.displayName()}`);
+        
+        // Check for responses from all players
         this.checkForResponses(nextPlayerIndex);
     }
 
@@ -662,6 +668,7 @@ class GameController {
         this.state.pendingActions = [];
         
         const responseCard = this.state.currentResponseCard;
+        const playerWithCard = this.state.players[startPlayerIndex];
         
         // Start 10-second timer for responses
         this.state.responseTimeRemaining = 10;
@@ -686,12 +693,39 @@ class GameController {
             }
         }, 1000);
         
-        // Show action panel for human if it's their turn to respond
+        // KEY FIX: Show action panel based on who has the card in their response area
+        // Human player (player 0) can see actions if:
+        // - Card is in their own response area (can 胡/开/碰/吃)
+        // - OR card is in another player's response area (can only 胡/开/碰, NOT 吃)
         if (startPlayerIndex === 0) {
+            // Human player has the card in their response area
             this.showActionPanel(responseCard);
         } else {
-            // AI response - they have the full 10 seconds but typically respond faster
-            this.handleAIResponse(startPlayerIndex);
+            // Card is in an AI player's response area
+            // Still show action panel to human but disable 吃
+            // TODO: In a real multiplayer game, ALL players would see this simultaneously
+            // For now, we check human first, then AIs
+            
+            // Check if human player wants to respond (胡/开/碰 only, NOT 吃)
+            const humanPlayer = this.state.players[0];
+            const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
+            const canKai = humanPlayer.declaredKanCount > 0 && 
+                           humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 3;
+            const canPeng = humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 2;
+            
+            if (canHu || canKai || canPeng) {
+                // Human CAN respond, show panel
+                this.showActionPanel(responseCard);
+            } else {
+                // Human cannot respond, let AI handle it
+                this.handleAIResponse(startPlayerIndex);
+            }
         }
     }
 
@@ -722,11 +756,15 @@ class GameController {
                            c.color === responseCard.color
                        ).length >= 2;
         
+        // KEY FIX: 吃 is ONLY allowed if the card is in the player's OWN response area
+        // This means the player can only 吃 their own response area card
+        const canChi = (humanPlayer.responseArea === responseCard);
+        
         // Enable/disable buttons based on possible actions
         document.getElementById('huButton').disabled = !canHu;
         document.getElementById('kaiButton').disabled = !canKai;
         document.getElementById('pengButton').disabled = !canPeng;
-        document.getElementById('chiButton').disabled = false;
+        document.getElementById('chiButton').disabled = !canChi;
         document.getElementById('passButton').disabled = false;
     }
 
@@ -857,11 +895,18 @@ class GameController {
         humanPlayer.displayArea.push(group);
         humanPlayer.score += choice.score;
         
+        // KEY FIX: Responder (human player) becomes the new current player
+        this.state.currentPlayerIndex = 0;
+        
         this.updateAllPlayerAreas();
         
-        // Now player must discard a card
-        this.showNotification(`已形成${choice.name}，请打出一张牌`);
+        // Now player must discard a card to THEIR next player (player 1)
+        this.showNotification(`已形成${choice.name}，请打出一张牌给下家`);
         this.enableCardSelection();
+        
+        // Show discard button
+        document.getElementById('discardButton').classList.remove('hidden');
+        document.getElementById('discardButton').disabled = false;
     }
 
     handleHu() {
@@ -900,18 +945,17 @@ class GameController {
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         const newCard = this.state.deck.pop();
         
-        // Replace response area card with new card
+        // KEY FIX: Old card goes to discard pile, new card becomes response card
         if (currentPlayer.responseArea) {
             this.state.discardPile.push(currentPlayer.responseArea);
         }
         currentPlayer.responseArea = newCard;
-        
-        this.updateAllPlayerAreas();
-        
-        // Check if new card can be responded to
         this.state.currentResponseCard = newCard;
         
-        // If it's jiang or goldbar, must handle it
+        this.updateAllPlayerAreas();
+        this.showNotification(`${currentPlayer.name} 抓了一张牌`);
+        
+        // If it's jiang or goldbar, current player MUST handle it
         if (newCard.isJiang() || newCard.isGoldBar) {
             if (currentPlayer.isAI) {
                 this.handleAIJiangOrGoldBar(currentPlayer, newCard);
@@ -919,8 +963,9 @@ class GameController {
                 this.showJiangGoldBarChoices(newCard);
             }
         } else {
-            // Move to next player
-            this.moveToNextPlayer();
+            // Check for responses (胡/开/碰/吃) to the new card
+            // Start from current player
+            this.checkForResponses(this.state.currentPlayerIndex);
         }
     }
 
