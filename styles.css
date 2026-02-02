@@ -154,12 +154,12 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 50px;
+    height: 35px;
     background: rgba(0,0,0,0.5);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 10px;
     color: white;
     z-index: 100;
 }
@@ -177,7 +177,7 @@ body {
 /* Game Area */
 .game-area {
     position: absolute;
-    top: 50px;
+    top: 35px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -186,17 +186,17 @@ body {
         ". top ."
         "left center right"
         ". bottom .";
-    grid-template-columns: 250px 1fr 250px;
-    grid-template-rows: 200px 1fr 250px;
-    gap: 10px;
-    padding: 10px;
+    grid-template-columns: 180px 1fr 180px;
+    grid-template-rows: 140px 1fr 180px;
+    gap: 5px;
+    padding: 5px;
 }
 
 /* Player Areas */
 .player-area {
     background: rgba(255,255,255,0.1);
-    border-radius: 10px;
-    padding: 10px;
+    border-radius: 8px;
+    padding: 5px;
     display: flex;
     flex-direction: column;
 }
@@ -219,13 +219,13 @@ body {
 
 .player-info {
     display: flex;
-    gap: 15px;
-    padding: 5px 10px;
+    gap: 8px;
+    padding: 3px 6px;
     background: rgba(0,0,0,0.3);
-    border-radius: 5px;
+    border-radius: 4px;
     color: white;
-    font-size: 14px;
-    margin-bottom: 10px;
+    font-size: 11px;
+    margin-bottom: 5px;
 }
 
 .player-name {
@@ -243,26 +243,26 @@ body {
 
 .game-status-center {
     background: rgba(0,0,0,0.5);
-    border-radius: 15px;
-    padding: 30px;
-    min-width: 350px;
+    border-radius: 10px;
+    padding: 15px;
+    min-width: 250px;
     backdrop-filter: blur(10px);
     border: 2px solid rgba(255,255,255,0.1);
 }
 
 .revealed-card-container {
     text-align: center;
-    margin-bottom: 20px;
-    padding: 15px;
+    margin-bottom: 10px;
+    padding: 8px;
     background: rgba(255,215,0,0.1);
-    border-radius: 10px;
+    border-radius: 6px;
     border: 2px solid rgba(255,215,0,0.3);
 }
 
 .revealed-card-label {
     color: #ffd700;
-    font-size: 14px;
-    margin-bottom: 10px;
+    font-size: 11px;
+    margin-bottom: 6px;
     font-weight: bold;
 }
 
@@ -270,23 +270,23 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 80px;
+    min-height: 50px;
 }
 
 .status-item {
-    margin: 15px 0;
+    margin: 8px 0;
     text-align: center;
 }
 
 .status-label {
     color: rgba(255,255,255,0.7);
-    font-size: 14px;
-    margin-bottom: 5px;
+    font-size: 11px;
+    margin-bottom: 3px;
 }
 
 .status-value {
     color: #ffd700;
-    font-size: 20px;
+    font-size: 16px;
     font-weight: bold;
 }
 
@@ -300,11 +300,11 @@ body {
 
 /* Response and Display Areas */
 .player-response-area {
-    min-height: 80px;
+    min-height: 50px;
     background: rgba(255,255,255,0.05);
     border: 2px dashed rgba(255,255,255,0.2);
-    border-radius: 8px;
-    margin: 5px 0;
+    border-radius: 6px;
+    margin: 3px 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -314,87 +314,87 @@ body {
 .player-response-area::before {
     content: '待响区';
     position: absolute;
-    top: 5px;
-    left: 5px;
-    font-size: 12px;
+    top: 2px;
+    left: 3px;
+    font-size: 9px;
     color: rgba(255,255,255,0.5);
 }
 
 .player-display-area {
     flex: 1;
     background: rgba(255,255,255,0.05);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 6px;
+    padding: 5px;
     overflow-y: auto;
     overflow-x: auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 5px;
     align-content: flex-start;
-    min-height: 100px;
-    max-height: 200px;
+    min-height: 60px;
+    max-height: 120px;
 }
 
 .player-discard-area {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 6px;
-    padding: 5px;
-    margin: 5px 0;
-    max-height: 60px;
+    border-radius: 4px;
+    padding: 3px;
+    margin: 3px 0;
+    max-height: 40px;
     overflow-y: auto;
 }
 
 .player-discard-area .discard-label {
-    font-size: 10px;
+    font-size: 8px;
     color: rgba(255,255,255,0.5);
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 .player-discard-area .discard-cards {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
+    gap: 2px;
 }
 
 .player-discard-area .card {
-    width: 30px;
-    height: 35px;
-    font-size: 12px;
+    width: 22px;
+    height: 26px;
+    font-size: 10px;
 }
 
 .player-hand-area {
-    min-height: 100px;
+    min-height: 60px;
     background: rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 6px;
+    padding: 5px;
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 3px;
     justify-content: center;
-    margin: 10px 0;
+    margin: 5px 0;
 }
 
-/* Card Styles - Reduced to nearly square for space saving */
+/* Card Styles - Compact for mobile */
 .card {
-    width: 45px;
-    height: 50px;
-    border-radius: 4px;
+    width: 36px;
+    height: 42px;
+    border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     user-select: none;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
 }
 
 .card.selected {
@@ -472,41 +472,41 @@ body {
 /* Card Group */
 .card-group {
     display: flex;
-    gap: 3px;
-    padding: 8px;
+    gap: 2px;
+    padding: 4px;
     background: rgba(0,0,0,0.2);
-    border-radius: 5px;
+    border-radius: 4px;
     position: relative;
 }
 
 .card-group::before {
     content: attr(data-label);
     position: absolute;
-    top: -15px;
-    left: 5px;
-    font-size: 10px;
+    top: -12px;
+    left: 3px;
+    font-size: 8px;
     color: rgba(255,255,255,0.7);
     background: rgba(0,0,0,0.5);
-    padding: 2px 6px;
-    border-radius: 3px;
+    padding: 1px 4px;
+    border-radius: 2px;
 }
 
 .card-group .card {
-    width: 38px;
-    height: 42px;
-    font-size: 14px;
+    width: 30px;
+    height: 35px;
+    font-size: 12px;
 }
 
 /* Action Panel */
 .action-panel {
     position: fixed;
-    bottom: 80px;
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0,0,0,0.85);
-    padding: 15px 30px;
-    border-radius: 12px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    padding: 8px 15px;
+    border-radius: 8px;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.5);
     z-index: 150;
     pointer-events: auto;
 }
@@ -517,7 +517,7 @@ body {
     bottom: auto;
     transform: translate(-50%, -50%);
     background: rgba(0,0,0,0.95);
-    padding: 25px 45px;
+    padding: 15px 25px;
     z-index: 300;
 }
 
@@ -528,15 +528,15 @@ body {
 
 .action-buttons {
     display: flex;
-    gap: 10px;
+    gap: 6px;
 }
 
 .btn-action {
-    padding: 15px 25px;
-    font-size: 18px;
+    padding: 10px 15px;
+    font-size: 15px;
     font-weight: bold;
-    border-radius: 10px;
-    min-width: 80px;
+    border-radius: 8px;
+    min-width: 60px;
 }
 
 .btn-discard {
