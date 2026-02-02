@@ -1027,6 +1027,23 @@ class GameController {
         });
         
         this.updateDeckCount();
+        this.updateRevealedCard();
+    }
+
+    updateRevealedCard() {
+        // Show dealer's revealed card in the center
+        const dealer = this.state.players[this.state.dealerIndex];
+        if (dealer && dealer.revealedCard) {
+            const container = document.getElementById('revealedCardContainer');
+            const display = document.getElementById('revealedCardDisplay');
+            
+            container.style.display = 'block';
+            display.innerHTML = '';
+            
+            const cardEl = this.createCardElement(dealer.revealedCard);
+            cardEl.style.transform = 'scale(1.2)';
+            display.appendChild(cardEl);
+        }
     }
 
     updatePlayerArea(player, index) {
