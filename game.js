@@ -914,95 +914,79 @@ class GameController {
         panel.classList.remove('hidden');
         panel.classList.add('response-mode');
         
-        // Hide discard and grab buttons for collective inquiry
-        document.getElementById('discardButton').classList.add('hidden');
-        document.getElementById('grabButton').classList.add('hidden');
-        
-        // Show collective inquiry buttons
-        document.getElementById('huButton').classList.remove('hidden');
-        document.getElementById('kaiButton').classList.remove('hidden');
-        document.getElementById('pengButton').classList.remove('hidden');
-        document.getElementById('chiButton').classList.remove('hidden');
-        document.getElementById('passButton').classList.remove('hidden');
-        
         const humanPlayer = this.state.players[0];
+        const isCurrentPlayer = (humanPlayer.responseArea === responseCard);
         
-        // Check for possible actions
-        const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
-        const canKai = humanPlayer.declaredKanCount > 0 && 
-                       humanPlayer.hand.filter(c => 
-                           c.rank === responseCard.rank && 
-                           c.color === responseCard.color
-                       ).length >= 3;
-        const canPeng = humanPlayer.hand.filter(c => 
-                           c.rank === responseCard.rank && 
-                           c.color === responseCard.color
-                       ).length >= 2;
-        
-        // KEY FIX: 吃 is ONLY allowed if the card is in the player's OWN response area
-        // This means the player can only 吃 their own response area card
-        const canChi = (humanPlayer.responseArea === responseCard);
-        
-        // Enable/disable buttons based on possible actions
-        document.getElementById('huButton').disabled = !canHu;
-        document.getElementById('kaiButton').disabled = !canKai;
-        document.getElementById('pengButton').disabled = !canPeng;
-        document.getElementById('chiButton').disabled = !canChi;
-        document.getElementById('passButton').disabled = false;
-    }
-
-    showActionPanelForChiOrGrab(responseCard) {
-        // Show panel for current player to choose: chi or grab
-        // This is shown AFTER no one responded to collective inquiry (Mode 1)
-        const panel = document.getElementById('actionPanel');
-        panel.classList.remove('hidden');
-        panel.classList.add('response-mode');
-        
-        const humanPlayer = this.state.players[0];
-        
-        // Hide collective inquiry buttons
-        document.getElementById('huButton').classList.add('hidden');
-        document.getElementById('kaiButton').classList.add('hidden');
-        document.getElementById('pengButton').classList.add('hidden');
-        document.getElementById('passButton').classList.add('hidden');
+        // Hide discard button
         document.getElementById('discardButton').classList.add('hidden');
         
-        // Show chi and grab buttons
-        document.getElementById('chiButton').classList.remove('hidden');
-        document.getElementById('grabButton').classList.remove('hidden');
-        
-        // Check if can chi (form valid groups with response card)
-        const canChi = this.canFormGroupWithCard(humanPlayer, responseCard);
-        
-        document.getElementById('chiButton').disabled = !canChi;
-        document.getElementById('grabButton').disabled = false; // Can always grab
-    }
-
-    showActionPanelForChiOrPass(responseCard) {
-        // Show panel for current player to choose: chi or pass
-        // This is shown AFTER no one responded to collective inquiry on DRAWN card (Mode 2)
-        const panel = document.getElementById('actionPanel');
-        panel.classList.remove('hidden');
-        panel.classList.add('response-mode');
-        
-        const humanPlayer = this.state.players[0];
-        
-        // Hide collective inquiry buttons and grab
-        document.getElementById('huButton').classList.add('hidden');
-        document.getElementById('kaiButton').classList.add('hidden');
-        document.getElementById('pengButton').classList.add('hidden');
-        document.getElementById('grabButton').classList.add('hidden');
-        document.getElementById('discardButton').classList.add('hidden');
-        
-        // Show chi and pass buttons
-        document.getElementById('chiButton').classList.remove('hidden');
-        document.getElementById('passButton').classList.remove('hidden');
-        
-        // Check if can chi (form valid groups with response card)
-        const canChi = this.canFormGroupWithCard(humanPlayer, responseCard);
-        
-        document.getElementById('chiButton').disabled = !canChi;
-        document.getElementById('passButton').disabled = false; // Can always pass
+        if (!isCurrentPlayer) {
+            // Others' response phase: show 胡/开/碰/过
+            document.getElementById('huButton').classList.remove('hidden');
+            document.getElementById('kaiButton').classList.remove('hidden');
+            document.getElementById('pengButton').classList.remove('hidden');
+            document.getElementById('chiButton').classList.add('hidden');
+            document.getElementById('grabButton').classList.add('hidden');
+            document.getElementById('passButton').classList.remove('hidden');
+            
+            // Check for possible actions
+            const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
+            const canKai = humanPlayer.declaredKanCount > 0 && 
+                           humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 3;
+            const canPeng = humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 2;
+            
+            document.getElementById('huButton').disabled = !canHu;
+            document.getElementById('kaiButton').disabled = !canKai;
+            document.getElementById('pengButton').disabled = !canPeng;
+            document.getElementById('passButton').disabled = false;
+        } else {
+            // Own response phase: show 胡/开/碰/吃/抓 (mode 1) or 胡/开/碰/吃/过 (mode 2)
+            // During collective inquiry, 吃/抓 or 吃/过 are greyed out
+            document.getElementById('huButton').classList.remove('hidden');
+            document.getElementById('kaiButton').classList.remove('hidden');
+            document.getElementById('pengButton').classList.remove('hidden');
+            document.getElementById('chiButton').classList.remove('hidden');
+            
+            if (this.state.isDrawnCard) {
+                // Mode 2: show 过 instead of 抓
+                document.getElementById('grabButton').classList.add('hidden');
+                document.getElementById('passButton').classList.remove('hidden');
+            } else {
+                // Mode 1: show 抓 instead of 过
+                document.getElementById('grabButton').classList.remove('hidden');
+                document.getElementById('passButton').classList.add('hidden');
+            }
+            
+            // Check for possible actions
+            const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
+            const canKai = humanPlayer.declaredKanCount > 0 && 
+                           humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 3;
+            const canPeng = humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 2;
+            
+            document.getElementById('huButton').disabled = !canHu;
+            document.getElementById('kaiButton').disabled = !canKai;
+            document.getElementById('pengButton').disabled = !canPeng;
+            
+            // During collective inquiry, chi/grab/pass are disabled
+            document.getElementById('chiButton').disabled = true;
+            if (this.state.isDrawnCard) {
+                document.getElementById('passButton').disabled = true;
+            } else {
+                document.getElementById('grabButton').disabled = true;
+            }
+        }
     }
 
     handleAction(action) {
@@ -1749,24 +1733,39 @@ class GameController {
 
     handleNoResponse() {
         // No one responded (no hu/kai/peng)
-        // KEY FIX: Now we check if CURRENT player wants to "chi" BEFORE drawing or passing
+        // KEY FIX: Enable chi/grab or chi/pass buttons, disable hu/kai/peng
         this.state.waitingForResponse = false;
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         
-        // If current player is human (player 0), show chi/grab or chi/pass options
+        // If current player is human (player 0), update button states
         if (this.state.currentPlayerIndex === 0 && currentPlayer.responseArea) {
-            if (this.state.isDrawnCard) {
-                // Mode 2: After drawing, show chi/pass
-                this.showNotification('无人响应，你可以选择吃或过');
-                this.showActionPanelForChiOrPass(currentPlayer.responseArea);
-            } else {
-                // Mode 1: Initial card, show chi/grab
-                this.showNotification('无人响应，你可以选择吃或抓牌');
-                this.showActionPanelForChiOrGrab(currentPlayer.responseArea);
-            }
+            this.showNotification('无人响应');
+            this.updateActionPanelAfterNoResponse(currentPlayer.responseArea);
         } else {
             // AI player decides
             this.handleAIChiOrGrabOrPass(currentPlayer);
+        }
+    }
+
+    updateActionPanelAfterNoResponse(responseCard) {
+        // Update panel to disable hu/kai/peng and enable chi/grab or chi/pass
+        const humanPlayer = this.state.players[0];
+        
+        // Disable hu/kai/peng
+        document.getElementById('huButton').disabled = true;
+        document.getElementById('kaiButton').disabled = true;
+        document.getElementById('pengButton').disabled = true;
+        
+        // Enable chi (if possible) and grab/pass
+        const canChi = this.canFormGroupWithCard(humanPlayer, responseCard);
+        document.getElementById('chiButton').disabled = !canChi;
+        
+        if (this.state.isDrawnCard) {
+            // Mode 2: enable pass
+            document.getElementById('passButton').disabled = false;
+        } else {
+            // Mode 1: enable grab
+            document.getElementById('grabButton').disabled = false;
         }
     }
 
