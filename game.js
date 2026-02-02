@@ -22,6 +22,9 @@ const RANKS = {
 
 const GOLD_BARS = ['公', '侯', '伯', '子', '男'];
 
+// AI decision constants
+const AI_CHI_THRESHOLD = 0.3; // Probability threshold for AI to choose chi over grab/pass
+
 const PHASES = {
     DECLARE: 'declare',
     PLAYING: 'playing',
@@ -1221,15 +1224,15 @@ class GameController {
             if (matching.length >= 1) return true;
             
             // Check for chemapao or jiangshixiang
-            const canFormJia = GameLogic.canFormJiangShiXiangJia([...player.hand, card]);
-            if (canFormJia.length > 0) return true;
+            const jiangShiXiangJiaGroups = GameLogic.canFormJiangShiXiangJia([...player.hand, card]);
+            if (jiangShiXiangJiaGroups.length > 0) return true;
             
-            const canFormCheMaPao = GameLogic.canFormCheMaPaoJia([...player.hand, card]);
-            if (canFormCheMaPao.length > 0) return true;
+            const cheMaPaoGroups = GameLogic.canFormCheMaPaoJia([...player.hand, card]);
+            if (cheMaPaoGroups.length > 0) return true;
             
             // Check for zu groups
-            const canFormZu = GameLogic.canFormDifferentColorZu([...player.hand, card]);
-            if (canFormZu.length > 0) return true;
+            const zuGroups = GameLogic.canFormDifferentColorZu([...player.hand, card]);
+            if (zuGroups.length > 0) return true;
         }
         return false;
     }
@@ -1245,7 +1248,7 @@ class GameController {
         const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
         
         // Simple AI logic: chi if possible and beneficial
-        if (canChi && Math.random() > 0.3) {
+        if (canChi && Math.random() > AI_CHI_THRESHOLD) {
             // AI chooses to chi
             setTimeout(() => {
                 this.executeAIChi(aiPlayer, responseCard);
@@ -1276,7 +1279,7 @@ class GameController {
         const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
         
         // Simple AI logic: chi if possible and beneficial
-        if (canChi && Math.random() > 0.3) {
+        if (canChi && Math.random() > AI_CHI_THRESHOLD) {
             // AI chooses to chi
             setTimeout(() => {
                 this.executeAIChi(aiPlayer, responseCard);
@@ -1332,14 +1335,24 @@ class GameController {
         // Determine best group to form
         let group;
         if (responseCard.isJiang()) {
-            const canFormJia = GameLogic.canFormJiangShiXiangJia([...aiPlayer.hand, responseCard]);
-            if (canFormJia.length > 0 && this.verifyPlayerHasCards(aiPlayer, canFormJia[0])) {
-                group = {
-                    type: 'jiangshixiang',
-                    cards: [responseCard],
-                    score: 1,
-                    name: '将士象架'
-                };
+            const jiangShiXiangJiaGroups = GameLogic.canFormJiangShiXiangJia([...aiPlayer.hand, responseCard]);
+            if (jiangShiXiangJiaGroups.length > 0) {
+                const groupInfo = jiangShiXiangJiaGroups[0];
+                if (this.verifyPlayerHasCards(aiPlayer, groupInfo)) {
+                    group = {
+                        type: 'jiangshixiang',
+                        cards: [responseCard],
+                        score: 1,
+                        name: '将士象架'
+                    };
+                } else {
+                    group = {
+                        type: 'single-jiang',
+                        cards: [responseCard],
+                        score: 1,
+                        name: '单将组'
+                    };
+                }
             } else {
                 group = {
                     type: 'single-jiang',
