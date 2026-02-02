@@ -1098,7 +1098,6 @@ class GameController {
         // Player chooses to grab (draw a new card) - Mode 1
         // Current card in response area goes to discard pile
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
-        this.state.isDrawnCard = false; // Will be set to true by drawCardForPlayer
         this.drawCardForPlayer(currentPlayer);
     }
 
@@ -1279,31 +1278,6 @@ class GameController {
         return false;
     }
 
-    handleAIChiOrGrab(aiPlayer) {
-        // AI decides whether to chi or grab (Mode 1)
-        const responseCard = aiPlayer.responseArea;
-        if (!responseCard) {
-            this.drawCardForPlayer(aiPlayer);
-            return;
-        }
-        
-        const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
-        
-        // Simple AI logic: chi if possible and random check passes (30% chance)
-        if (canChi && Math.random() < AI_CHI_THRESHOLD) {
-            // AI chooses to chi
-            setTimeout(() => {
-                this.executeAIChi(aiPlayer, responseCard);
-            }, 1000);
-        } else {
-            // AI chooses to grab
-            setTimeout(() => {
-                this.showNotification(`${aiPlayer.name} 选择抓牌`);
-                this.drawCardForPlayer(aiPlayer);
-            }, 1000);
-        }
-    }
-
     handleAIChiOrGrabOrPass(aiPlayer) {
         // AI decides whether to chi, grab (mode 1), or pass (mode 2)
         const responseCard = aiPlayer.responseArea;
@@ -1374,16 +1348,22 @@ class GameController {
         // Remove from response area
         aiPlayer.responseArea = null;
         
-        // Determine best group to form
+        // Determine best group to form and remove required cards from hand
         let group;
         if (responseCard.isJiang()) {
             const jiangShiXiangJiaGroups = GameLogic.canFormJiangShiXiangJia([...aiPlayer.hand, responseCard]);
             if (jiangShiXiangJiaGroups.length > 0) {
                 const groupInfo = jiangShiXiangJiaGroups[0];
                 if (this.verifyPlayerHasCards(aiPlayer, groupInfo)) {
+                    // Remove SHI and XIANG from hand for JiangShiXiang group
+                    const shiCard = aiPlayer.hand.find(c => c.rank === RANKS.SHI && c.color === groupInfo.color);
+                    const xiangCard = aiPlayer.hand.find(c => c.rank === RANKS.XIANG && c.color === groupInfo.color);
+                    if (shiCard) aiPlayer.removeCard(shiCard.id);
+                    if (xiangCard) aiPlayer.removeCard(xiangCard.id);
+                    
                     group = {
                         type: 'jiangshixiang',
-                        cards: [responseCard],
+                        cards: [responseCard, shiCard, xiangCard].filter(c => c),
                         score: 1,
                         name: '将士象架'
                     };
@@ -1411,18 +1391,39 @@ class GameController {
                 name: '单金条组'
             };
         } else {
-            group = {
-                type: 'pair',
-                cards: [responseCard],
-                score: 0,
-                name: '对子'
-            };
+            // For pair, remove one matching card from hand
+            const matchingCard = aiPlayer.hand.find(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCard) {
+                aiPlayer.removeCard(matchingCard.id);
+                group = {
+                    type: 'pair',
+                    cards: [responseCard, matchingCard],
+                    score: 0,
+                    name: '对子'
+                };
+            } else {
+                // Fallback: treat as single card group
+                group = {
+                    type: 'single',
+                    cards: [responseCard],
+                    score: 0,
+                    name: '单牌'
+                };
+            }
         }
         
         aiPlayer.displayArea.push(group);
         aiPlayer.score += group.score;
         
         this.updateAllPlayerAreas();
+        
+        // Set current player index to this AI before it continues its turn
+        const aiIndex = this.state.players.indexOf(aiPlayer);
+        if (aiIndex !== -1) {
+            this.state.currentPlayerIndex = aiIndex;
+        }
         
         // AI continues turn by discarding
         this.handleAITurn(aiPlayer);
