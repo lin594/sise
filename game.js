@@ -250,36 +250,40 @@ class GameLogic {
     }
 
     static canDecomposeCompletely(cards) {
-        // Improved validation - check if cards can form valid groups
-        // For a minimal viable implementation, we check:
-        // 1. All jiang/goldbar must be in valid groups (kan, jia, or single)
-        // 2. Other cards should form pairs, kan, or jia
+        // Check if cards can form valid groups
+        // Valid groups include:
+        // - 车马炮架 (same color che/ma/pao)
+        // - 将士象架 (same color jiang/shi/xiang)
+        // - 三异色卒 / 四异色卒 (3 or 4 different color zu)
+        // - 对子 (pair of same color same rank)
+        // - 单将组 (single jiang) - NOW COUNTS AS VALID GROUP IN HAND
+        // - 单金条组 (single gold bar) - NOW COUNTS AS VALID GROUP IN HAND
+        // - 坎 (3 same cards)
+        // - 鱼 (4 same cards)
         
         if (cards.length === 0) return true;
         
+        // Count different card types
         const jiangCards = cards.filter(c => c.isJiang());
         const goldBarCards = cards.filter(c => c.isGoldBar);
         const normalCards = cards.filter(c => !c.isJiang() && !c.isGoldBar);
         
-        // Check jiang cards - each should be in jia or single
-        for (let jiang of jiangCards) {
-            const sameColor = cards.filter(c => 
-                c.color === jiang.color && 
-                (c.rank === RANKS.SHI || c.rank === RANKS.XIANG)
-            );
-            // Valid if part of jiangshixiang or can be single
-            if (sameColor.length < 2 && jiangCards.length > 4) {
-                // Too many jiang without valid combinations
-                return false;
-            }
-        }
+        // Single Jiang and Single Gold Bar groups are now valid
+        // Each Jiang can be a valid group on its own (counts as 1分)
+        // Each Gold Bar can be a valid group on its own (counts as 3分)
         
-        // For gold bars, check if they can form valid groups
+        // Basic sanity checks
         if (goldBarCards.length > 5) return false; // Max 5 gold bars in game
         
-        // Basic validation passed - in a full implementation,
-        // this would use backtracking to find valid decomposition
-        return true;
+        // For a simplified implementation, we allow:
+        // - Any number of jiang (each can be single jiang group or part of jiangshixiang)
+        // - Any number of gold bars (each can be single gold bar group or form kan/yu)
+        // - Normal cards should be able to form valid combinations
+        
+        // This is a simplified check - a complete implementation would use
+        // backtracking to verify all cards can be decomposed into valid groups
+        
+        return true; // Accept for now - will refine with actual gameplay testing
     }
 }
 
@@ -536,17 +540,19 @@ class GameController {
             // AI turn
             this.handleAITurn(currentPlayer);
         } else {
-            // Human turn - enable card selection and show discard button
+            // Human turn - enable card selection and show discard button inline
             this.showNotification('你的回合，请选择要打出的牌，然后点击"打出"按钮');
             this.enableCardSelection();
             
-            // Show discard button
-            const discardButton = document.getElementById('discardButton');
-            discardButton.classList.remove('hidden');
-            discardButton.disabled = false;
+            // Show action panel as a simple bar at bottom
+            const actionPanel = document.getElementById('actionPanel');
+            actionPanel.classList.remove('hidden');
             
-            // Hide other action buttons
-            document.getElementById('actionPanel').classList.remove('hidden');
+            // Only show discard button during player's turn
+            document.getElementById('discardButton').classList.remove('hidden');
+            document.getElementById('discardButton').disabled = false;
+            
+            // Hide response action buttons
             document.getElementById('huButton').classList.add('hidden');
             document.getElementById('kaiButton').classList.add('hidden');
             document.getElementById('pengButton').classList.add('hidden');
@@ -692,6 +698,7 @@ class GameController {
     showActionPanel(responseCard) {
         const panel = document.getElementById('actionPanel');
         panel.classList.remove('hidden');
+        panel.classList.add('response-mode');
         
         // Hide discard button, show response buttons
         document.getElementById('discardButton').classList.add('hidden');
@@ -733,6 +740,7 @@ class GameController {
         
         const panel = document.getElementById('actionPanel');
         panel.classList.add('hidden');
+        panel.classList.remove('response-mode');
         
         this.state.waitingForResponse = false;
         
