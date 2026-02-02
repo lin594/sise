@@ -496,6 +496,10 @@ class GameController {
             this.startNewGame();
         });
 
+        document.getElementById('testGameButton').addEventListener('click', () => {
+            this.startTestGame();
+        });
+
         document.getElementById('backButton').addEventListener('click', () => {
             this.showScreen('loadingScreen');
         });
@@ -559,6 +563,44 @@ class GameController {
         this.showScreen('gameScreen');
         this.setupPlayers();
         this.initializeGame();
+    }
+
+    startTestGame() {
+        // Start a test game with 4 AI players
+        this.showScreen('gameScreen');
+        this.setupTestPlayers();
+        this.initializeGame();
+        
+        // Auto-complete declare phase for all AI players
+        setTimeout(() => {
+            this.autoCompleteDeclarePhase();
+        }, 1000);
+    }
+
+    setupTestPlayers() {
+        this.state.players = [];
+        this.aiPlayers = [];
+
+        // Create 4 AI players
+        for (let i = 0; i < 4; i++) {
+            const aiPlayer = new Player(i, `AI玩家${i + 1}`, true, 'normal');
+            this.state.players.push(aiPlayer);
+            this.aiPlayers.push(new AIPlayer(aiPlayer, 'normal'));
+        }
+    }
+
+    autoCompleteDeclarePhase() {
+        // Auto-declare for all AI players
+        this.state.players.forEach(player => {
+            player.declaredKanCount = Math.floor(Math.random() * 3); // 0-2 kans
+        });
+        
+        this.state.phase = PHASES.PLAYING;
+        this.updateAllPlayerAreas();
+        this.updateGameInfo();
+        
+        // Start the game from dealer
+        this.handleAITurn(this.state.players[this.state.dealerIndex]);
     }
 
     setupPlayers() {
