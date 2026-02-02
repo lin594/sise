@@ -533,13 +533,8 @@ class GameController {
             const cardId = cardEl.dataset.cardId;
             const card = humanPlayer.hand.find(c => c.id === cardId);
             
-            if (card && !card.canBeDiscarded()) {
-                cardEl.classList.add('disabled');
-                cardEl.style.cursor = 'not-allowed';
-            } else {
-                cardEl.style.cursor = 'pointer';
-                cardEl.onclick = () => this.handleCardClick(cardId);
-            }
+            cardEl.style.cursor = 'pointer';
+            cardEl.onclick = () => this.handleCardClick(cardId);
         });
     }
 

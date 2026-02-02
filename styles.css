@@ -443,6 +443,12 @@ body {
     border-radius: 15px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.5);
     z-index: 200;
+    pointer-events: auto;
+}
+
+.action-panel.hidden {
+    display: none;
+    pointer-events: none;
 }
 
 .action-buttons {
@@ -504,6 +510,12 @@ body {
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     z-index: 300;
     text-align: center;
+    pointer-events: auto;
+}
+
+.declare-panel.hidden {
+    display: none;
+    pointer-events: none;
 }
 
 .declare-content h3 {
