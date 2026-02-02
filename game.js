@@ -944,9 +944,65 @@ class GameController {
         const handArea = document.getElementById('player0Hand');
         handArea.innerHTML = '';
         
-        player.hand.forEach(card => {
+        // Sort cards before displaying
+        const sortedHand = this.sortCards(player.hand);
+        
+        sortedHand.forEach(card => {
             const cardEl = this.createCardElement(card);
             handArea.appendChild(cardEl);
+        });
+    }
+
+    sortCards(cards) {
+        // Define sort order for gold bars: 公, 侯, 伯, 子, 男
+        const goldBarOrder = { '公': 0, '侯': 1, '伯': 2, '子': 3, '男': 4 };
+        
+        // Define sort order for colors: 黄(yellow), 红(red), 绿(green), 白(white)
+        const colorOrder = {
+            'yellow': 0,
+            'red': 1,
+            'green': 2,
+            'white': 3
+        };
+        
+        // Define sort order for ranks: 将, 士, 象, 车, 马, 炮 (卒 handled separately)
+        const rankOrder = {
+            '将': 0,
+            '士': 1,
+            '象': 2,
+            '车': 3,
+            '马': 4,
+            '炮': 5
+        };
+        
+        return [...cards].sort((a, b) => {
+            // 1. Gold bars come first
+            if (a.isGoldBar && !b.isGoldBar) return -1;
+            if (!a.isGoldBar && b.isGoldBar) return 1;
+            
+            // Both are gold bars - sort by gold bar order
+            if (a.isGoldBar && b.isGoldBar) {
+                return goldBarOrder[a.rank] - goldBarOrder[b.rank];
+            }
+            
+            // 2. 卒 (Zu) comes last
+            const aIsZu = a.rank === RANKS.ZU;
+            const bIsZu = b.rank === RANKS.ZU;
+            
+            if (aIsZu && !bIsZu) return 1;
+            if (!aIsZu && bIsZu) return -1;
+            
+            // Both are 卒 - sort by color only
+            if (aIsZu && bIsZu) {
+                return colorOrder[a.color] - colorOrder[b.color];
+            }
+            
+            // 3. Normal cards - sort by color first, then rank
+            const colorDiff = colorOrder[a.color] - colorOrder[b.color];
+            if (colorDiff !== 0) return colorDiff;
+            
+            // Same color - sort by rank
+            return rankOrder[a.rank] - rankOrder[b.rank];
         });
     }
 
