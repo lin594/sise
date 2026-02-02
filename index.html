@@ -101,9 +101,23 @@
 
             <!-- Center Area -->
             <div class="center-area">
-                <div id="discardPile" class="discard-pile">
-                    <div class="area-label">弃牌区</div>
-                    <div id="discardCards" class="discard-cards"></div>
+                <div id="gameStatus" class="game-status-center">
+                    <div class="status-item">
+                        <div class="status-label">当前阶段</div>
+                        <div id="centerPhase" class="status-value">等待开始</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">当前出牌</div>
+                        <div id="centerTurn" class="status-value">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">剩余牌数</div>
+                        <div id="centerDeck" class="status-value">117张</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">响应倒计时</div>
+                        <div id="centerTimer" class="status-value">-</div>
+                    </div>
                 </div>
             </div>
 
@@ -133,6 +147,7 @@
         <!-- Action Panel -->
         <div id="actionPanel" class="action-panel hidden">
             <div class="action-buttons">
+                <button id="discardButton" class="btn-action btn-discard hidden">打出</button>
                 <button id="huButton" class="btn-action btn-hu" disabled>胡</button>
                 <button id="kaiButton" class="btn-action btn-kai" disabled>开</button>
                 <button id="pengButton" class="btn-action btn-peng" disabled>碰</button>

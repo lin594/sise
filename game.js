@@ -33,21 +33,28 @@ class GameState {
     constructor() {
         this.players = [];
         this.deck = [];
-        this.discardPile = [];
         this.currentPlayerIndex = 0;
         this.dealerIndex = 0;
         this.phase = PHASES.DECLARE;
         this.currentResponseCard = null;
         this.waitingForResponse = false;
         this.pendingActions = [];
+        this.selectedCards = [];  // Cards selected from hand
+        this.responseTimer = null;
+        this.responseTimeRemaining = 0;
     }
 
     reset() {
         this.deck = [];
-        this.discardPile = [];
         this.currentResponseCard = null;
         this.waitingForResponse = false;
         this.pendingActions = [];
+        this.selectedCards = [];
+        if (this.responseTimer) {
+            clearInterval(this.responseTimer);
+            this.responseTimer = null;
+        }
+        this.responseTimeRemaining = 0;
     }
 }
 
@@ -377,6 +384,7 @@ class GameController {
         });
 
         // Action buttons
+        document.getElementById('discardButton').addEventListener('click', () => this.handleDiscardButtonClick());
         document.getElementById('huButton').addEventListener('click', () => this.handleAction('hu'));
         document.getElementById('kaiButton').addEventListener('click', () => this.handleAction('kai'));
         document.getElementById('pengButton').addEventListener('click', () => this.handleAction('peng'));
@@ -522,14 +530,28 @@ class GameController {
     currentPlayerTurn() {
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         this.updateGameInfo();
+        this.updateCenterStatus();
         
         if (currentPlayer.isAI) {
             // AI turn
             this.handleAITurn(currentPlayer);
         } else {
-            // Human turn - enable card selection
-            this.showNotification('你的回合，请选择要打出的牌');
+            // Human turn - enable card selection and show discard button
+            this.showNotification('你的回合，请选择要打出的牌，然后点击"打出"按钮');
             this.enableCardSelection();
+            
+            // Show discard button
+            const discardButton = document.getElementById('discardButton');
+            discardButton.classList.remove('hidden');
+            discardButton.disabled = false;
+            
+            // Hide other action buttons
+            document.getElementById('actionPanel').classList.remove('hidden');
+            document.getElementById('huButton').classList.add('hidden');
+            document.getElementById('kaiButton').classList.add('hidden');
+            document.getElementById('pengButton').classList.add('hidden');
+            document.getElementById('chiButton').classList.add('hidden');
+            document.getElementById('passButton').classList.add('hidden');
         }
     }
 
@@ -542,25 +564,73 @@ class GameController {
             const card = humanPlayer.hand.find(c => c.id === cardId);
             
             cardEl.style.cursor = 'pointer';
-            cardEl.onclick = () => this.handleCardClick(cardId);
+            cardEl.onclick = () => this.toggleCardSelection(cardId);
         });
     }
 
-    handleCardClick(cardId) {
+    toggleCardSelection(cardId) {
         const humanPlayer = this.state.players[0];
         const card = humanPlayer.hand.find(c => c.id === cardId);
+        const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
         
         if (!card) return;
         
-        if (!card.canBeDiscarded()) {
+        // Check if card can be discarded
+        if (!card.canBeDiscarded() && !this.state.waitingForResponse) {
             this.showNotification('将/金条不可主动打出！');
-            const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
             cardEl.classList.add('shake');
             setTimeout(() => cardEl.classList.remove('shake'), 500);
             return;
         }
         
-        this.discardCard(0, cardId);
+        const index = this.state.selectedCards.findIndex(c => c.id === cardId);
+        if (index >= 0) {
+            // Deselect
+            this.state.selectedCards.splice(index, 1);
+            cardEl.classList.remove('selected');
+        } else {
+            // Select - for discard, only allow 1 card
+            if (!this.state.waitingForResponse) {
+                // Discard mode - only 1 card
+                this.state.selectedCards.forEach(c => {
+                    const el = document.querySelector(`[data-card-id="${c.id}"]`);
+                    if (el) el.classList.remove('selected');
+                });
+                this.state.selectedCards = [card];
+                cardEl.classList.add('selected');
+            }
+        }
+    }
+
+    handleCardClick(cardId) {
+        // Keep for backwards compatibility but redirect to toggle
+        this.toggleCardSelection(cardId);
+    }
+
+    handleDiscardButtonClick() {
+        if (this.state.selectedCards.length === 0) {
+            this.showNotification('请先选择要打出的牌');
+            return;
+        }
+        
+        if (this.state.selectedCards.length > 1) {
+            this.showNotification('一次只能打出一张牌');
+            return;
+        }
+        
+        const card = this.state.selectedCards[0];
+        
+        // Clear selection
+        this.state.selectedCards = [];
+        document.querySelectorAll('.card.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Hide discard button and show waiting state
+        document.getElementById('discardButton').classList.add('hidden');
+        
+        // Discard the card
+        this.discardCard(0, card.id);
     }
 
     discardCard(playerIndex, cardId) {
@@ -585,19 +655,36 @@ class GameController {
         this.state.waitingForResponse = true;
         this.state.pendingActions = [];
         
-        // Check all players for possible actions (hu, kai, peng)
-        // Priority: hu > kai > peng, counter-clockwise from current player
-        
         const responseCard = this.state.currentResponseCard;
         
-        // For simplicity, only check basic actions
-        // In a full implementation, would check all possible responses
+        // Start 10-second timer for responses
+        this.state.responseTimeRemaining = 10;
+        this.updateCenterStatus();
+        
+        if (this.state.responseTimer) {
+            clearInterval(this.state.responseTimer);
+        }
+        
+        this.state.responseTimer = setInterval(() => {
+            this.state.responseTimeRemaining--;
+            this.updateCenterStatus();
+            
+            if (this.state.responseTimeRemaining <= 0) {
+                clearInterval(this.state.responseTimer);
+                this.state.responseTimer = null;
+                
+                // Time's up - if no one responded, draw a card
+                if (this.state.waitingForResponse) {
+                    this.handleNoResponse();
+                }
+            }
+        }, 1000);
         
         // Show action panel for human if it's their turn to respond
         if (startPlayerIndex === 0) {
             this.showActionPanel(responseCard);
         } else {
-            // AI response
+            // AI response - they have the full 10 seconds but typically respond faster
             this.handleAIResponse(startPlayerIndex);
         }
     }
@@ -605,6 +692,14 @@ class GameController {
     showActionPanel(responseCard) {
         const panel = document.getElementById('actionPanel');
         panel.classList.remove('hidden');
+        
+        // Hide discard button, show response buttons
+        document.getElementById('discardButton').classList.add('hidden');
+        document.getElementById('huButton').classList.remove('hidden');
+        document.getElementById('kaiButton').classList.remove('hidden');
+        document.getElementById('pengButton').classList.remove('hidden');
+        document.getElementById('chiButton').classList.remove('hidden');
+        document.getElementById('passButton').classList.remove('hidden');
         
         const humanPlayer = this.state.players[0];
         
@@ -629,8 +724,17 @@ class GameController {
     }
 
     handleAction(action) {
+        // Clear response timer since someone is responding
+        if (this.state.responseTimer) {
+            clearInterval(this.state.responseTimer);
+            this.state.responseTimer = null;
+            this.state.responseTimeRemaining = 0;
+        }
+        
         const panel = document.getElementById('actionPanel');
         panel.classList.add('hidden');
+        
+        this.state.waitingForResponse = false;
         
         if (action === 'pass') {
             this.handlePass();
@@ -640,6 +744,8 @@ class GameController {
             this.handleHu();
         }
         // Add other actions as needed
+        
+        this.updateCenterStatus();
     }
 
     handlePass() {
@@ -940,6 +1046,34 @@ class GameController {
         }
     }
 
+    updateCenterStatus() {
+        // Update center status display
+        const phaseText = this.state.phase === PHASES.DECLARE ? '声明暗坎' :
+                         this.state.phase === PHASES.PLAYING ? '出牌阶段' : '游戏结束';
+        document.getElementById('centerPhase').textContent = phaseText;
+        
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+        document.getElementById('centerTurn').textContent = currentPlayer ? currentPlayer.name : '-';
+        
+        document.getElementById('centerDeck').textContent = `${this.state.deck.length}张`;
+        
+        if (this.state.responseTimeRemaining > 0) {
+            document.getElementById('centerTimer').textContent = `${this.state.responseTimeRemaining}秒`;
+        } else {
+            document.getElementById('centerTimer').textContent = '-';
+        }
+    }
+
+    handleNoResponse() {
+        // No one responded - draw a card
+        this.state.waitingForResponse = false;
+        this.showNotification('无人响应，抓牌');
+        
+        setTimeout(() => {
+            this.drawCard();
+        }, 500);
+    }
+
     updateHandArea(player) {
         const handArea = document.getElementById('player0Hand');
         handArea.innerHTML = '';
@@ -1050,6 +1184,7 @@ class GameController {
 
     updateDeckCount() {
         document.getElementById('deckCount').textContent = `牌堆：${this.state.deck.length}张`;
+        document.getElementById('centerDeck').textContent = `${this.state.deck.length}张`;
     }
 
     updateGameInfo() {
@@ -1059,6 +1194,9 @@ class GameController {
         
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         document.getElementById('currentTurn').textContent = `当前：${currentPlayer.name}`;
+        
+        // Also update center status
+        this.updateCenterStatus();
     }
 }
 

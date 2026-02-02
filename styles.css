@@ -241,12 +241,30 @@ body {
     justify-content: center;
 }
 
-.discard-pile {
-    background: rgba(0,0,0,0.3);
-    border-radius: 10px;
-    padding: 20px;
-    min-width: 300px;
-    min-height: 200px;
+.game-status-center {
+    background: rgba(0,0,0,0.5);
+    border-radius: 15px;
+    padding: 30px;
+    min-width: 350px;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+.status-item {
+    margin: 15px 0;
+    text-align: center;
+}
+
+.status-label {
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.status-value {
+    color: #ffd700;
+    font-size: 20px;
+    font-weight: bold;
 }
 
 .area-label {
@@ -255,13 +273,6 @@ body {
     font-weight: bold;
     margin-bottom: 10px;
     text-align: center;
-}
-
-.discard-cards {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    justify-content: center;
 }
 
 /* Response and Display Areas */
@@ -462,6 +473,11 @@ body {
     font-weight: bold;
     border-radius: 10px;
     min-width: 80px;
+}
+
+.btn-discard {
+    background: #4CAF50;
+    color: white;
 }
 
 .btn-hu {
