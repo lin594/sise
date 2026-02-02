@@ -96,6 +96,7 @@ class Player {
         this.responseArea = null;
         this.displayArea = [];
         this.revealedCard = null;  // Dealer's revealed card
+        this.discardPile = [];  // Per-player discard pile for unresponded cards
         this.declaredKanCount = 0;
         this.score = 0;
     }
@@ -498,15 +499,37 @@ class GameController {
         this.state.phase = PHASES.DECLARE;
         this.updateGameInfo();
         
-        // For AI players, auto-declare
+        // For AI players, auto-declare based on their actual kan count
         this.state.players.forEach((player, index) => {
             if (player.isAI) {
-                player.declaredKanCount = Math.floor(Math.random() * 3);
+                const actualKanCount = this.countActualKans(player.hand);
+                player.declaredKanCount = actualKanCount;
             }
         });
         
+        // For human player, calculate actual kan count and set as default
+        const humanPlayer = this.state.players[0];
+        const actualKanCount = this.countActualKans(humanPlayer.hand);
+        document.getElementById('kanCountInput').value = actualKanCount;
+        
         // Show declare panel for human player
         document.getElementById('declarePanel').classList.remove('hidden');
+    }
+    
+    countActualKans(hand) {
+        // Count how many sets of 3 same color+rank cards exist
+        const cardCounts = {};
+        hand.forEach(card => {
+            const key = `${card.color}-${card.rank}`;
+            cardCounts[key] = (cardCounts[key] || 0) + 1;
+        });
+        
+        let kanCount = 0;
+        Object.values(cardCounts).forEach(count => {
+            kanCount += Math.floor(count / 3);
+        });
+        
+        return kanCount;
     }
 
     handleDeclareKan() {
@@ -945,9 +968,9 @@ class GameController {
         const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         const newCard = this.state.deck.pop();
         
-        // KEY FIX: Old card goes to discard pile, new card becomes response card
+        // KEY FIX: Old card goes to PLAYER'S OWN discard pile, new card becomes response card
         if (currentPlayer.responseArea) {
-            this.state.discardPile.push(currentPlayer.responseArea);
+            currentPlayer.discardPile.push(currentPlayer.responseArea);
         }
         currentPlayer.responseArea = newCard;
         this.state.currentResponseCard = newCard;
@@ -1109,10 +1132,10 @@ class GameController {
         // Update display area
         this.updateDisplayArea(player, index);
         
-        // Update score
+        // Update score and declared kan count
         const scoreEl = document.querySelector(`#player${index}Area .player-score`);
         if (scoreEl) {
-            scoreEl.textContent = `得分：${player.score}`;
+            scoreEl.textContent = `得分：${player.score} | 坎：${player.declaredKanCount}`;
         }
     }
 

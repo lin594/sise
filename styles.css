@@ -347,15 +347,15 @@ body {
     margin: 10px 0;
 }
 
-/* Card Styles */
+/* Card Styles - Reduced to nearly square for space saving */
 .card {
-    width: 50px;
-    height: 70px;
-    border-radius: 5px;
+    width: 45px;
+    height: 50px;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
@@ -464,9 +464,9 @@ body {
 }
 
 .card-group .card {
-    width: 40px;
-    height: 60px;
-    font-size: 16px;
+    width: 38px;
+    height: 42px;
+    font-size: 14px;
 }
 
 /* Action Panel */
@@ -730,9 +730,9 @@ body {
     }
     
     .card {
-        width: 40px;
-        height: 56px;
-        font-size: 14px;
+        width: 38px;
+        height: 45px;
+        font-size: 13px;
     }
     
     .player-info {
