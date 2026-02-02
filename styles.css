@@ -183,9 +183,9 @@ body {
     bottom: 0;
     display: grid;
     grid-template-areas:
-        ". top ."
+        "top top top"
         "left center right"
-        ". bottom .";
+        "bottom bottom bottom";
     grid-template-columns: 180px 1fr 180px;
     grid-template-rows: 140px 1fr 180px;
     gap: 5px;

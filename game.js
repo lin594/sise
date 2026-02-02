@@ -23,7 +23,7 @@ const RANKS = {
 const GOLD_BARS = ['公', '侯', '伯', '子', '男'];
 
 // AI decision constants
-const AI_CHI_THRESHOLD = 0.3; // Probability threshold for AI to choose chi over grab/pass
+const AI_CHI_THRESHOLD = 0.3; // Probability for AI to choose chi when possible (30% chance)
 
 const PHASES = {
     DECLARE: 'declare',
@@ -1247,8 +1247,8 @@ class GameController {
         
         const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
         
-        // Simple AI logic: chi if possible and beneficial
-        if (canChi && Math.random() > AI_CHI_THRESHOLD) {
+        // Simple AI logic: chi if possible and random check passes (30% chance)
+        if (canChi && Math.random() < AI_CHI_THRESHOLD) {
             // AI chooses to chi
             setTimeout(() => {
                 this.executeAIChi(aiPlayer, responseCard);
@@ -1278,8 +1278,8 @@ class GameController {
         
         const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
         
-        // Simple AI logic: chi if possible and beneficial
-        if (canChi && Math.random() > AI_CHI_THRESHOLD) {
+        // Simple AI logic: chi if possible and random check passes (30% chance)
+        if (canChi && Math.random() < AI_CHI_THRESHOLD) {
             // AI chooses to chi
             setTimeout(() => {
                 this.executeAIChi(aiPlayer, responseCard);
