@@ -77,6 +77,7 @@
       :player-hand="playerHand"
       :response-card="getCurrentResponseCard()"
       @action="handleAction"
+      @show-chi-options="showChiModal = true"
     />
 
     <!-- Declare Panel -->
@@ -93,6 +94,61 @@
         />
         <button class="btn-primary" @click="confirmDeclare" style="width: 100%;">
           确认声明
+        </button>
+      </div>
+    </div>
+
+    <!-- Chi Modal -->
+    <div v-if="showChiModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>选择吃牌组合</h3>
+        <p>请选择要吃的牌组：</p>
+        <div class="chi-options">
+          <button 
+            v-for="option in chiOptions" 
+            :key="option.name"
+            class="btn-chi-option"
+            @click="selectChiOption(option)"
+          >
+            <div class="chi-name">{{ option.name }}</div>
+            <div class="chi-score">得分: {{ option.score }}</div>
+          </button>
+        </div>
+        <button class="btn-secondary mt-2" @click="showChiModal = false" style="width: 100%;">
+          取消
+        </button>
+      </div>
+    </div>
+
+    <!-- Game End Modal -->
+    <div v-if="gameEndData" class="modal-overlay">
+      <div class="modal-content modal-large">
+        <h2>🎉 游戏结束</h2>
+        <div v-if="gameEndData.winnerId" class="winner-announce">
+          <p class="winner-text">
+            {{ getPlayerName(gameEndData.winnerId) }} 胡牌！
+          </p>
+        </div>
+        <table class="settlement-table">
+          <thead>
+            <tr>
+              <th>玩家</th>
+              <th>得分变化</th>
+              <th>当前总分</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="[playerId, score] in gameEndData.playerScores" :key="playerId">
+              <td>{{ getPlayerName(playerId) }}</td>
+              <td :class="score >= 0 ? 'score-positive' : 'score-negative'">
+                {{ score >= 0 ? '+' : '' }}{{ score }}
+              </td>
+              <td>{{ getPlayerScore(playerId) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="btn-primary mt-2" @click="handleExitGame" style="width: 100%;">
+          退出游戏
         </button>
       </div>
     </div>
@@ -121,6 +177,9 @@ const playerHand = ref<any[]>([]);
 const selectedCards = ref<string[]>([]);
 const declareKongCount = ref(0);
 const showDeclarePanel = ref(false);
+const showChiModal = ref(false);
+const chiOptions = ref<any[]>([]);
+const gameEndData = ref<any>(null);
 
 const players = computed(() => {
   if (!gameState.value || !gameState.value.players) {
@@ -181,6 +240,33 @@ function handleAction(action: string, data?: any) {
   selectedCards.value = [];
 }
 
+function selectChiOption(option: any) {
+  // Send chi action with selected cards
+  props.room?.send('action', {
+    action: 'chi',
+    data: {
+      groupType: option.name,
+      cardIds: option.cardIds
+    }
+  });
+  showChiModal.value = false;
+  chiOptions.value = [];
+}
+
+function getPlayerName(playerId: string): string {
+  const player = gameState.value?.players?.get(playerId);
+  return player?.name || '未知玩家';
+}
+
+function getPlayerScore(playerId: string): number {
+  const player = gameState.value?.players?.get(playerId);
+  return player?.score || 0;
+}
+
+function handleExitGame() {
+  emit('leave');
+}
+
 function confirmDeclare() {
   props.room?.send('declare_kong', { count: declareKongCount.value });
   showDeclarePanel.value = false;
@@ -205,6 +291,12 @@ onMounted(() => {
   props.room.onMessage('private_hand', (hand) => {
     playerHand.value = hand;
     console.log('Hand updated:', hand);
+  });
+
+  // Listen to game end
+  props.room.onMessage('game_end', (data) => {
+    console.log('Game ended:', data);
+    gameEndData.value = data;
   });
 
   // Listen to errors
@@ -303,5 +395,91 @@ onMounted(() => {
   border-radius: 8px;
   font-weight: 600;
   font-size: 16px;
+}
+
+/* Chi Modal Styles */
+.chi-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.btn-chi-option {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-chi-option:hover {
+  border-color: gold;
+  transform: translateY(-2px);
+}
+
+.chi-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.chi-score {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Game End Modal Styles */
+.modal-large {
+  max-width: 600px;
+}
+
+.winner-announce {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  padding: 20px;
+  border-radius: 8px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.winner-text {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.settlement-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+.settlement-table th,
+.settlement-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.settlement-table th {
+  background: rgba(30, 136, 229, 0.1);
+  font-weight: 600;
+}
+
+.score-positive {
+  color: #43a047;
+  font-weight: 600;
+}
+
+.score-negative {
+  color: #e53935;
+  font-weight: 600;
+}
+
+.mt-2 {
+  margin-top: 20px;
 }
 </style>

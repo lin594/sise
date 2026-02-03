@@ -13,7 +13,7 @@
       <button 
         class="btn-action btn-hu"
         :disabled="!canHu"
-        @click="$emit('action', 'hu')"
+        @click="handleHu"
       >
         胡
       </button>
@@ -21,7 +21,7 @@
       <button 
         class="btn-action btn-kai"
         :disabled="!canKai"
-        @click="$emit('action', 'kai')"
+        @click="handleKai"
       >
         开
       </button>
@@ -29,7 +29,7 @@
       <button 
         class="btn-action btn-peng"
         :disabled="!canPeng"
-        @click="$emit('action', 'peng')"
+        @click="handlePeng"
       >
         碰
       </button>
@@ -38,7 +38,7 @@
         class="btn-action btn-chi"
         v-if="isMyTurn"
         :disabled="!canChi"
-        @click="$emit('action', 'chi')"
+        @click="handleChi"
       >
         吃
       </button>
@@ -76,8 +76,9 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-defineEmits<{
+const emit = defineEmits<{
   action: [action: string, data?: any];
+  showChiOptions: [];
 }>();
 
 const isMyTurn = computed(() => {
@@ -98,11 +99,39 @@ const canHu = computed(() => {
 });
 
 const canKai = computed(() => {
-  return props.responsePhase === 'collective' && props.responseCard;
+  if (props.responsePhase !== 'collective' || !props.responseCard) return false;
+  
+  // Check if we have 3 matching cards in hand
+  if (props.responseCard.isGoldBar) {
+    const goldCount = props.playerHand.filter(c => c.isGoldBar).length;
+    return goldCount >= 3;
+  } else if (props.responseCard.rank !== '将') {
+    const matchCount = props.playerHand.filter(
+      c => c.color === props.responseCard.color && 
+           c.rank === props.responseCard.rank &&
+           !c.isGoldBar
+    ).length;
+    return matchCount >= 3;
+  }
+  
+  return false;
 });
 
 const canPeng = computed(() => {
-  return props.responsePhase === 'collective' && props.responseCard;
+  if (props.responsePhase !== 'collective' || !props.responseCard) return false;
+  
+  // Jiang and Gold cannot be peng
+  if (props.responseCard.rank === '将' || props.responseCard.isGoldBar) {
+    return false;
+  }
+  
+  const matchCount = props.playerHand.filter(
+    c => c.color === props.responseCard.color && 
+         c.rank === props.responseCard.rank &&
+         !c.isGoldBar
+  ).length;
+  
+  return matchCount >= 2;
 });
 
 const canChi = computed(() => {
@@ -113,6 +142,24 @@ const canChi = computed(() => {
 const canGrab = computed(() => {
   return isMyTurn.value && props.responsePhase === 'self_mode1';
 });
+
+function handleHu() {
+  emit('action', 'hu');
+}
+
+function handleKai() {
+  emit('action', 'kai');
+}
+
+function handlePeng() {
+  emit('action', 'peng');
+}
+
+function handleChi() {
+  // Emit event to show chi options modal
+  emit('showChiOptions');
+}
+
 </script>
 
 <style scoped>

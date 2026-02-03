@@ -16,6 +16,17 @@ import {
   getNextPlayerIndex,
   ICard
 } from '../utils/cardUtils';
+import {
+  validateHu,
+  canKai,
+  canPeng,
+  canFormChiGroup,
+  CardGroup
+} from '../utils/validator';
+import {
+  calculateSettlement,
+  SettlementResult
+} from '../utils/scoring';
 
 interface PlayerHand {
   [clientId: string]: ICard[];
@@ -27,6 +38,7 @@ export class GameRoom extends Room<GameState> {
   private playerOrder: string[] = []; // Client IDs in turn order
   private pendingResponses: Map<string, string> = new Map(); // clientId -> action
   private responseTimerInterval: any = null;
+  private playerGroups: Map<string, CardGroup[]> = new Map(); // Player card groups for scoring
 
   onCreate(options: any) {
     this.setState(new GameState());
@@ -378,23 +390,163 @@ export class GameRoom extends Room<GameState> {
     const currentPlayer = this.state.players.get(this.state.currentPlayerId)!;
     
     // Get the response card
-    const responseCard = currentPlayer.responseArea[0];
+    const responseCardSchema = currentPlayer.responseArea[0];
+    if (!responseCardSchema) return;
     
-    // Move response card from current player response area to winner's discard
+    const responseCard: ICard = {
+      id: responseCardSchema.id,
+      color: responseCardSchema.color,
+      rank: responseCardSchema.rank,
+      isGoldBar: responseCardSchema.isGoldBar
+    };
+    
+    // Move response card from current player response area to winner's discard (temporarily)
     currentPlayer.responseArea.clear();
-    currentPlayer.discardPile.push(responseCard);
-
-    // TODO: Execute specific action (Hu/Kai/Peng logic)
-    this.state.lastAction = `${player.name} ${action}!`;
-
-    // For now, just move to next player
-    // This is simplified - actual implementation needs full game logic
-    const nextIndex = getNextPlayerIndex(
-      this.playerOrder.indexOf(playerId),
-      this.playerOrder.length
-    );
-    this.state.currentPlayerId = this.playerOrder[nextIndex];
-    this.state.responsePhase = "";
+    
+    if (action === ACTIONS.HU) {
+      // Hu - Win
+      const hand = this.playerHands[playerId];
+      const huResult = validateHu(hand, responseCard);
+      
+      if (huResult.valid && huResult.groups) {
+        // Add response card to player's exposed area with all groups
+        for (const group of huResult.groups) {
+          for (const card of group.cards) {
+            const schemaCard = toSchemaCard(card);
+            if (card.id === responseCard.id) {
+              schemaCard.isResponseCard = true;
+            }
+            player.exposedArea.push(schemaCard);
+          }
+        }
+        
+        // Store groups for scoring
+        this.playerGroups.set(playerId, huResult.groups);
+        
+        // Clear player hand
+        this.playerHands[playerId] = [];
+        player.handCount = 0;
+        this.sendHandToClient(
+          this.clients.find(c => c.sessionId === playerId)!,
+          []
+        );
+        
+        this.state.lastAction = `${player.name} 胡牌！得分：${huResult.score}`;
+        
+        // End game
+        this.handleGameEnd(playerId);
+      } else {
+        // Invalid hu, treat as pass
+        currentPlayer.discardPile.push(toSchemaCard(responseCard));
+        this.state.lastAction = `${player.name} 胡牌失败`;
+        this.enterSelfMode1();
+      }
+      
+    } else if (action === ACTIONS.KAI) {
+      // Kai - Open (dark kong + 4th card)
+      const hand = this.playerHands[playerId];
+      
+      if (canKai(hand, responseCard)) {
+        // Find the 3 matching cards in hand
+        let matchingCards: ICard[];
+        
+        if (responseCard.isGoldBar) {
+          matchingCards = hand.filter(c => c.isGoldBar).slice(0, 3);
+        } else {
+          matchingCards = hand.filter(
+            c => c.color === responseCard.color && 
+                 c.rank === responseCard.rank && 
+                 !c.isGoldBar
+          ).slice(0, 3);
+        }
+        
+        // Remove from hand
+        for (const card of matchingCards) {
+          const index = hand.indexOf(card);
+          if (index > -1) {
+            hand.splice(index, 1);
+          }
+        }
+        
+        // Add to exposed area
+        for (const card of matchingCards) {
+          player.exposedArea.push(toSchemaCard(card));
+        }
+        
+        const responseSchemaCard = toSchemaCard(responseCard);
+        responseSchemaCard.isResponseCard = true;
+        player.exposedArea.push(responseSchemaCard);
+        
+        player.handCount = hand.length;
+        this.sendHandToClient(
+          this.clients.find(c => c.sessionId === playerId)!,
+          hand
+        );
+        
+        this.state.lastAction = `${player.name} 开！`;
+        
+        // Player needs to discard
+        this.state.currentPlayerId = playerId;
+        this.state.responsePhase = "";
+        
+        if (player.isAI) {
+          this.handleAIAction(playerId);
+        }
+      } else {
+        // Invalid kai
+        currentPlayer.discardPile.push(toSchemaCard(responseCard));
+        this.enterSelfMode1();
+      }
+      
+    } else if (action === ACTIONS.PENG) {
+      // Peng - similar to kai but only 2 cards in hand
+      const hand = this.playerHands[playerId];
+      
+      if (canPeng(hand, responseCard)) {
+        const matchingCards = hand.filter(
+          c => c.color === responseCard.color && 
+               c.rank === responseCard.rank && 
+               !c.isGoldBar
+        ).slice(0, 2);
+        
+        // Remove from hand
+        for (const card of matchingCards) {
+          const index = hand.indexOf(card);
+          if (index > -1) {
+            hand.splice(index, 1);
+          }
+        }
+        
+        // Add to exposed area
+        for (const card of matchingCards) {
+          player.exposedArea.push(toSchemaCard(card));
+        }
+        
+        const responseSchemaCard = toSchemaCard(responseCard);
+        responseSchemaCard.isResponseCard = true;
+        player.exposedArea.push(responseSchemaCard);
+        
+        player.handCount = hand.length;
+        this.sendHandToClient(
+          this.clients.find(c => c.sessionId === playerId)!,
+          hand
+        );
+        
+        this.state.lastAction = `${player.name} 碰！`;
+        
+        // Player needs to discard
+        this.state.currentPlayerId = playerId;
+        this.state.responsePhase = "";
+        
+        if (player.isAI) {
+          this.handleAIAction(playerId);
+        }
+      } else {
+        // Invalid peng
+        currentPlayer.discardPile.push(toSchemaCard(responseCard));
+        this.enterSelfMode1();
+      }
+    }
   }
 
   private enterSelfMode1() {
@@ -409,9 +561,74 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  private handleChi(client: Client, data: any) {
-    // TODO: Implement chi logic
-    console.log("Handle chi", data);
+  private handleChi(client: Client, data: { groupType: string; cardIds: string[] }) {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || this.state.currentPlayerId !== client.sessionId) {
+      return;
+    }
+
+    if (this.state.responsePhase !== RESPONSE_PHASES.SELF_MODE1 && 
+        this.state.responsePhase !== RESPONSE_PHASES.SELF_MODE2) {
+      return;
+    }
+
+    // Get response card
+    if (player.responseArea.length === 0) {
+      return;
+    }
+
+    const responseCard = player.responseArea[0];
+    const hand = this.playerHands[client.sessionId];
+
+    // Verify the cards exist in hand
+    const selectedCards = data.cardIds.map(id => hand.find(c => c.id === id)).filter(c => c);
+    if (selectedCards.length !== data.cardIds.length) {
+      client.send("error", { message: "选择的牌不在手牌中" });
+      return;
+    }
+
+    // Remove cards from hand
+    for (const card of selectedCards) {
+      const index = hand.indexOf(card!);
+      if (index > -1) {
+        hand.splice(index, 1);
+      }
+    }
+
+    // Add response card to exposed area
+    const allCards = [...selectedCards, { 
+      id: responseCard.id,
+      color: responseCard.color,
+      rank: responseCard.rank,
+      isGoldBar: responseCard.isGoldBar
+    }];
+
+    // Mark response card
+    const exposedCard = toSchemaCard(allCards[allCards.length - 1]);
+    exposedCard.isResponseCard = true;
+
+    // Add all cards to exposed area
+    for (let i = 0; i < allCards.length - 1; i++) {
+      player.exposedArea.push(toSchemaCard(allCards[i]));
+    }
+    player.exposedArea.push(exposedCard);
+
+    // Clear response area
+    player.responseArea.clear();
+
+    // Update hand count
+    player.handCount = hand.length;
+    this.sendHandToClient(client, hand);
+
+    this.state.lastAction = `${player.name} 吃 ${data.groupType}`;
+
+    // Player needs to discard a card
+    this.state.responsePhase = "";
+    
+    // If AI, auto-discard
+    if (player.isAI) {
+      this.handleAIAction(client.sessionId);
+    }
   }
 
   private handleGrab(client: Client) {
@@ -528,5 +745,51 @@ export class GameRoom extends Room<GameState> {
         { cardId: discardableCard.id }
       );
     }
+  }
+
+  private handleGameEnd(winnerId: string | null) {
+    this.state.phase = PHASES.ENDED;
+    
+    // Collect all player groups for scoring
+    for (const [playerId, player] of this.state.players) {
+      if (!this.playerGroups.has(playerId)) {
+        // Convert exposed area to groups (simplified)
+        this.playerGroups.set(playerId, []);
+      }
+    }
+    
+    // Calculate settlement
+    const settlement = calculateSettlement(
+      this.playerOrder,
+      this.playerGroups,
+      winnerId
+    );
+    
+    // Update player scores
+    for (const [playerId, scoreChange] of settlement.playerScores) {
+      const player = this.state.players.get(playerId);
+      if (player) {
+        player.score += scoreChange;
+      }
+    }
+    
+    // Broadcast settlement results
+    this.broadcast("game_end", {
+      winnerId,
+      playerScores: Array.from(settlement.playerScores.entries()),
+      details: Array.from(settlement.details.entries()).map(([id, detail]) => ({
+        playerId: id,
+        ...detail
+      }))
+    });
+    
+    this.state.lastAction = winnerId 
+      ? `${this.state.players.get(winnerId)?.name} 胡牌！游戏结束`
+      : "游戏结束";
+    
+    // Schedule room disposal after 30 seconds
+    setTimeout(() => {
+      this.disconnect();
+    }, 30000);
   }
 }
