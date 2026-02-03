@@ -6,7 +6,8 @@ import {
   ACTIONS, 
   HAND_SIZE_DEALER, 
   HAND_SIZE_NORMAL,
-  RESPONSE_TIMEOUT 
+  RESPONSE_TIMEOUT,
+  RANKS
 } from '../utils/constants';
 import { 
   createDeck, 
@@ -153,16 +154,22 @@ export class GameRoom extends Room<GameState> {
   }
 
   private dealCards(dealerId: string, dealerRevealedCard: ICard) {
-    // Deal 20 cards to each player, 21 to dealer
+    // Deal 20 cards to each player
+    // Dealer gets 20 cards + the revealed card = 21 total
     for (const clientId of this.playerOrder) {
       const isDealer = clientId === dealerId;
-      const count = isDealer ? HAND_SIZE_DEALER : HAND_SIZE_NORMAL;
+      const count = HAND_SIZE_NORMAL;  // Everyone gets 20 first
       
       const hand: ICard[] = [];
       for (let i = 0; i < count; i++) {
         if (this.deck.length > 0) {
           hand.push(this.deck.pop()!);
         }
+      }
+      
+      // Dealer gets the revealed card as 21st card
+      if (isDealer) {
+        hand.push(dealerRevealedCard);
       }
       
       this.playerHands[clientId] = hand;
@@ -178,8 +185,7 @@ export class GameRoom extends Room<GameState> {
       }
     }
 
-    // The dealer's revealed card is part of their hand
-    // Add it to dealer's revealed cards in state (for display)
+    // Add dealer's revealed card to dealerRevealedCards (for display)
     const dealerSchemaCard = toSchemaCard(dealerRevealedCard);
     this.state.dealerRevealedCards.push(dealerSchemaCard);
     this.state.lastAction = `庄家亮出: ${dealerRevealedCard.rank}`;
@@ -189,6 +195,7 @@ export class GameRoom extends Room<GameState> {
   }
 
   private sendHandToClient(client: Client, hand: ICard[]) {
+    console.log(`Sending hand to client ${client.sessionId}: ${hand.length} cards`);
     client.send("private_hand", hand);
   }
 
@@ -209,6 +216,27 @@ export class GameRoom extends Room<GameState> {
     if (allDeclared) {
       // Don't start playing yet, wait for fish revealing
       this.state.lastAction = "所有玩家已声明暗坎，可以亮鱼（可选）";
+      this.checkReadyToStart();
+    } else {
+      // Auto-declare for AI players
+      for (const [playerId, p] of this.state.players) {
+        if (p.isAI && !p.hasDeclared) {
+          // AI declares 0-2 kongs randomly
+          const aiKongCount = Math.floor(Math.random() * 3);
+          p.declaredKongs = aiKongCount;
+          p.hasDeclared = true;
+          this.state.lastAction = `${p.name} 声明 ${aiKongCount} 个暗坎`;
+        }
+      }
+      
+      // Check again after AI declarations
+      const allDeclaredAfterAI = Array.from(this.state.players.values())
+        .every(p => p.hasDeclared);
+      
+      if (allDeclaredAfterAI) {
+        this.state.lastAction = "所有玩家已声明暗坎，可以亮鱼（可选）";
+        this.checkReadyToStart();
+      }
     }
   }
 
@@ -314,9 +342,29 @@ export class GameRoom extends Room<GameState> {
       .find(p => p.isDealer);
     
     if (dealer) {
-      // Dealer starts by discarding a card (not Jiang or Gold Bar)
+      const dealerHand = this.playerHands[dealer.clientId];
+      
+      if (dealerHand && dealerHand.length > 0) {
+        // Remove last card from dealer hand
+        const firstCard = dealerHand.pop()!;
+        
+        // Put in dealer's response area
+        dealer.responseArea.push(toSchemaCard(firstCard));
+        dealer.handCount = dealerHand.length;
+        
+        // Update dealer's hand (only if not AI or if client exists)
+        const dealerClient = this.clients.find(c => c.sessionId === dealer.clientId);
+        if (dealerClient) {
+          this.sendHandToClient(dealerClient, dealerHand);
+        }
+      }
+      
+      // Dealer starts  
       this.state.currentPlayerId = dealer.clientId;
-      this.state.responsePhase = "";
+      this.state.responsePhase = RESPONSE_PHASES.COLLECTIVE;
+      
+      // Start collective inquiry
+      this.startCollectiveInquiry();
       
       // If dealer is AI, auto-discard
       if (dealer.isAI) {
@@ -524,9 +572,12 @@ export class GameRoom extends Room<GameState> {
         // Violation! Player loses hu bonus but settlement continues
         this.state.lastAction = `${player.name} ${kongCheck.message}`;
         
-        client.send("error", { 
-          message: `${kongCheck.message}\n胡牌得分将被取消，但互结分照常结算` 
-        });
+        const playerClient = this.clients.find(c => c.sessionId === playerId);
+        if (playerClient) {
+          playerClient.send("error", { 
+            message: `${kongCheck.message}\n胡牌得分将被取消，但互结分照常结算` 
+          });
+        }
         
         // Still validate and end game, but mark as violated
         const huResult = validateHu(hand, responseCard);
