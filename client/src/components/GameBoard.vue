@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Room } from 'colyseus.js';
 import PlayerArea from './PlayerArea.vue';
 import ActionPanel from './ActionPanel.vue';
@@ -235,6 +235,71 @@ const showChiModal = ref(false);
 const chiOptions = ref<any[]>([]);
 const gameEndData = ref<any>(null);
 const fishSelectedCards = ref<string[]>([]);
+
+// Function to check if we should show declare panel
+function checkAndShowDeclarePanel() {
+  console.log('checkAndShowDeclarePanel called');
+  console.log('- gameState:', !!gameState.value);
+  console.log('- phase:', gameState.value?.phase);
+  console.log('- players count:', players.value.length);
+  console.log('- players[0]:', !!players.value[0]);
+  console.log('- hasDeclared:', players.value[0]?.hasDeclared);
+  console.log('- playerHand length:', playerHand.value.length);
+  console.log('- showDeclarePanel current:', showDeclarePanel.value);
+  
+  // Check all conditions:
+  // 1. Phase is declaring
+  // 2. We have a player (current user)
+  // 3. Player hasn't declared yet
+  // 4. We have received our hand cards
+  if (gameState.value && 
+      gameState.value.phase === 'declaring' && 
+      players.value.length > 0 &&
+      players.value[0] && 
+      !players.value[0].hasDeclared &&
+      playerHand.value.length > 0) {
+    console.log('✅ Showing declare panel - all conditions met');
+    showDeclarePanel.value = true;
+  } else {
+    console.log('❌ Not showing panel - conditions not met');
+  }
+}
+
+// Watch for room prop and set up listeners immediately
+watch(() => props.room, (room) => {
+  if (!room) return;
+  
+  console.log('Setting up room listeners...');
+  
+  // Listen to state changes
+  room.onStateChange((state) => {
+    gameState.value = state;
+    console.log('State updated:', state);
+    
+    // Try to show declare panel when in declaring phase
+    checkAndShowDeclarePanel();
+  });
+
+  // Listen to private hand updates
+  room.onMessage('private_hand', (hand) => {
+    playerHand.value = hand;
+    console.log('Hand updated:', hand.length, 'cards');
+    
+    // Try to show declare panel after receiving hand
+    checkAndShowDeclarePanel();
+  });
+
+  // Listen to game end
+  room.onMessage('game_end', (data) => {
+    console.log('Game ended:', data);
+    gameEndData.value = data;
+  });
+
+  // Listen to errors
+  room.onMessage('error', (message) => {
+    alert(message.message || '操作失败');
+  });
+}, { immediate: true });
 
 const players = computed(() => {
   if (!gameState.value || !gameState.value.players) {
@@ -351,68 +416,7 @@ function skipFish() {
   showDeclarePanel.value = false;
 }
 
-// Set up room listeners
-onMounted(() => {
-  if (!props.room) return;
 
-  // Listen to state changes
-  props.room.onStateChange((state) => {
-    gameState.value = state;
-    console.log('State updated:', state);
-    
-    // Try to show declare panel when in declaring phase
-    checkAndShowDeclarePanel();
-  });
-
-  // Listen to private hand updates
-  props.room.onMessage('private_hand', (hand) => {
-    playerHand.value = hand;
-    console.log('Hand updated:', hand.length, 'cards');
-    
-    // Try to show declare panel after receiving hand
-    checkAndShowDeclarePanel();
-  });
-  
-  // Function to check if we should show declare panel
-  function checkAndShowDeclarePanel() {
-    console.log('checkAndShowDeclarePanel called');
-    console.log('- gameState:', !!gameState.value);
-    console.log('- phase:', gameState.value?.phase);
-    console.log('- players count:', players.value.length);
-    console.log('- players[0]:', !!players.value[0]);
-    console.log('- hasDeclared:', players.value[0]?.hasDeclared);
-    console.log('- playerHand length:', playerHand.value.length);
-    console.log('- showDeclarePanel current:', showDeclarePanel.value);
-    
-    // Check all conditions:
-    // 1. Phase is declaring
-    // 2. We have a player (current user)
-    // 3. Player hasn't declared yet
-    // 4. We have received our hand cards
-    if (gameState.value && 
-        gameState.value.phase === 'declaring' && 
-        players.value.length > 0 &&
-        players.value[0] && 
-        !players.value[0].hasDeclared &&
-        playerHand.value.length > 0) {
-      console.log('✅ Showing declare panel - all conditions met');
-      showDeclarePanel.value = true;
-    } else {
-      console.log('❌ Not showing panel - conditions not met');
-    }
-  }
-
-  // Listen to game end
-  props.room.onMessage('game_end', (data) => {
-    console.log('Game ended:', data);
-    gameEndData.value = data;
-  });
-
-  // Listen to errors
-  props.room.onMessage('error', (message) => {
-    alert(message.message || '操作失败');
-  });
-});
 </script>
 
 <style scoped>
