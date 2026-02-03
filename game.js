@@ -1113,7 +1113,7 @@ class GameController {
 
     handleKai() {
         const humanPlayer = this.state.players[0];
-        const responseCard = humanPlayer.responseArea;
+        const responseCard = this.state.currentResponseCard;
         
         if (!responseCard) return;
         
@@ -1130,8 +1130,12 @@ class GameController {
         // Remove cards from hand
         matchingCards.forEach(card => humanPlayer.removeCard(card.id));
         
-        // Remove response card
-        humanPlayer.responseArea = null;
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area
         const group = {
@@ -1157,7 +1161,7 @@ class GameController {
 
     handlePeng() {
         const humanPlayer = this.state.players[0];
-        const responseCard = humanPlayer.responseArea;
+        const responseCard = this.state.currentResponseCard;
         
         if (!responseCard) return;
         
@@ -1174,8 +1178,12 @@ class GameController {
         // Remove cards from hand
         matchingCards.forEach(card => humanPlayer.removeCard(card.id));
         
-        // Remove response card
-        humanPlayer.responseArea = null;
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area (碰 forms a temporary group, waiting for 4th card to become 鱼)
         const group = {
@@ -1205,32 +1213,82 @@ class GameController {
         
         if (responseCard.isJiang()) {
             // Check for jiangshixiang
-            const canFormJia = GameLogic.canFormJiangShiXiangJia([...humanPlayer.hand, responseCard]);
-            if (canFormJia.length > 0 && this.verifyPlayerHasCards(humanPlayer, canFormJia[0])) {
+            const jiangShiXiangGroups = GameLogic.canFormJiangShiXiangJia([...humanPlayer.hand, responseCard]);
+            if (jiangShiXiangGroups.length > 0 && this.verifyPlayerHasCards(humanPlayer, jiangShiXiangGroups[0])) {
                 choices.push({
                     name: '将士象架',
                     score: 1,
-                    action: 'jiangshixiang'
+                    action: 'jiangshixiang',
+                    cardsNeeded: ['SHI', 'XIANG'],
+                    color: jiangShiXiangGroups[0].color
                 });
             }
             choices.push({
                 name: '单将组',
                 score: 1,
-                action: 'single-jiang'
+                action: 'single-jiang',
+                cardsNeeded: []
             });
         } else if (responseCard.isGoldBar) {
             choices.push({
                 name: '单金条组',
                 score: 3,
-                action: 'single-goldbar'
+                action: 'single-goldbar',
+                cardsNeeded: []
             });
         } else {
-            // Check for various combinations
-            choices.push({
-                name: '对子',
-                score: 0,
-                action: 'pair'
-            });
+            // Check for pair (对子) - need matching card
+            const matchingCards = humanPlayer.hand.filter(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCards.length > 0) {
+                choices.push({
+                    name: '对子 (需1张匹配牌)',
+                    score: 0,
+                    action: 'pair',
+                    cardsNeeded: [{ rank: responseCard.rank, color: responseCard.color, count: 1 }]
+                });
+            }
+            
+            // Check for che-ma-pao combinations
+            const cheMaPaoGroups = GameLogic.canFormCheMaPaoJia([...humanPlayer.hand, responseCard]);
+            if (cheMaPaoGroups.length > 0) {
+                cheMaPaoGroups.forEach((group, idx) => {
+                    const neededRanks = [];
+                    if (responseCard.rank === RANKS.CHE) {
+                        neededRanks.push('MA', 'PAO');
+                    } else if (responseCard.rank === RANKS.MA) {
+                        neededRanks.push('CHE', 'PAO');
+                    } else if (responseCard.rank === RANKS.PAO) {
+                        neededRanks.push('CHE', 'MA');
+                    }
+                    choices.push({
+                        name: `${group.color}车马炮架`,
+                        score: 1,
+                        action: 'chemapao',
+                        cardsNeeded: neededRanks,
+                        color: group.color
+                    });
+                });
+            }
+            
+            // Check for different color zu
+            const zuGroups = GameLogic.canFormDifferentColorZu([...humanPlayer.hand, responseCard]);
+            if (zuGroups.length > 0) {
+                zuGroups.forEach((group, idx) => {
+                    choices.push({
+                        name: `${responseCard.rank}四色组`,
+                        score: 1,
+                        action: 'zu',
+                        cardsNeeded: group.colors.filter(c => c !== responseCard.color).map(c => ({ rank: responseCard.rank, color: c, count: 1 }))
+                    });
+                });
+            }
+        }
+        
+        if (choices.length === 0) {
+            this.showNotification('无法吃该牌');
+            return;
         }
         
         this.showChoiceModal('选择吃牌方式', choices, (choice) => {
@@ -1461,13 +1519,66 @@ class GameController {
     executeChiAction(choice, responseCard) {
         const humanPlayer = this.state.players[0];
         
-        // Remove response card from response area
-        humanPlayer.responseArea = null;
+        // Remove matching cards from hand based on the choice
+        const cardsToAdd = [responseCard];
+        
+        if (choice.action === 'jiangshixiang') {
+            // Remove SHI and XIANG of the same color
+            const shiCard = humanPlayer.hand.find(c => c.rank === RANKS.SHI && c.color === choice.color);
+            const xiangCard = humanPlayer.hand.find(c => c.rank === RANKS.XIANG && c.color === choice.color);
+            if (shiCard) {
+                humanPlayer.removeCard(shiCard.id);
+                cardsToAdd.push(shiCard);
+            }
+            if (xiangCard) {
+                humanPlayer.removeCard(xiangCard.id);
+                cardsToAdd.push(xiangCard);
+            }
+        } else if (choice.action === 'pair') {
+            // Remove one matching card
+            const matchingCard = humanPlayer.hand.find(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCard) {
+                humanPlayer.removeCard(matchingCard.id);
+                cardsToAdd.push(matchingCard);
+            }
+        } else if (choice.action === 'chemapao') {
+            // Remove CHE, MA, PAO of same color (excluding response card)
+            const neededRanks = [];
+            if (responseCard.rank !== RANKS.CHE) neededRanks.push(RANKS.CHE);
+            if (responseCard.rank !== RANKS.MA) neededRanks.push(RANKS.MA);
+            if (responseCard.rank !== RANKS.PAO) neededRanks.push(RANKS.PAO);
+            
+            neededRanks.forEach(rank => {
+                const card = humanPlayer.hand.find(c => c.rank === rank && c.color === choice.color);
+                if (card) {
+                    humanPlayer.removeCard(card.id);
+                    cardsToAdd.push(card);
+                }
+            });
+        } else if (choice.action === 'zu') {
+            // Remove cards of different colors with same rank
+            choice.cardsNeeded.forEach(needed => {
+                const card = humanPlayer.hand.find(c => c.rank === needed.rank && c.color === needed.color);
+                if (card) {
+                    humanPlayer.removeCard(card.id);
+                    cardsToAdd.push(card);
+                }
+            });
+        }
+        
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area
         const group = {
             type: choice.action,
-            cards: [responseCard],
+            cards: cardsToAdd,
             score: choice.score,
             name: choice.name
         };
@@ -1544,7 +1655,13 @@ class GameController {
                 ).slice(0, 3);
                 
                 matchingCards.forEach(card => aiPlayer.removeCard(card.id));
-                aiPlayer.responseArea = null;
+                
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'kai',
@@ -1568,7 +1685,13 @@ class GameController {
                 ).slice(0, 2);
                 
                 matchingCards.forEach(card => aiPlayer.removeCard(card.id));
-                aiPlayer.responseArea = null;
+                
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'peng',
@@ -1584,7 +1707,12 @@ class GameController {
                 setTimeout(() => this.handleAITurn(aiPlayer), 1000);
             } else if (action === 'chi') {
                 // AI performs chi
-                aiPlayer.responseArea = null;
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'pair',
