@@ -95,20 +95,30 @@ describe('Shuffle Deck', () => {
     expect(deck[0]).toBe(originalFirst);
   });
 
-  test('shuffle produces different order (probabilistic)', () => {
+  test('shuffle produces different order with mocked randomness', () => {
     const deck = createDeck();
-    const shuffled1 = shuffleDeck(deck);
-    const shuffled2 = shuffleDeck(deck);
-    
-    // With 117 cards, the probability of getting the same order twice is infinitesimal
-    let sameOrder = true;
-    for (let i = 0; i < deck.length; i++) {
-      if (shuffled1[i].id !== shuffled2[i].id) {
-        sameOrder = false;
-        break;
-      }
-    }
-    expect(sameOrder).toBe(false);
+    const originalIds = deck.map(c => c.id);
+
+    // Mock Math.random to return descending values
+    const mockValues = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
+    let callIndex = 0;
+    const mathRandomSpy = jest.spyOn(Math, 'random').mockImplementation(() => {
+      const value = mockValues[callIndex % mockValues.length];
+      callIndex++;
+      return value;
+    });
+
+    const shuffled = shuffleDeck(deck);
+
+    mathRandomSpy.mockRestore();
+
+    const shuffledIds = shuffled.map(c => c.id);
+
+    // Deterministically expect the order to differ under the mocked randomness
+    expect(shuffledIds).not.toEqual(originalIds);
+    // Verify basic invariants still hold
+    expect(shuffled.length).toBe(deck.length);
+    expect(new Set(shuffledIds)).toEqual(new Set(originalIds));
   });
 });
 
