@@ -1,3 +1,41 @@
+# 四色牌游戏 - Four-Color Card Game
+
+## 🎮 技术架构 (Updated Architecture)
+
+本项目现已重构为 **Colyseus + Vue 3** 架构：
+
+- **后端**: Colyseus 实时多人游戏服务器 (TypeScript)
+- **前端**: Vue 3 + TypeScript + Vite  
+- **部署**: Docker + Docker Compose
+
+**详细开发文档请参考**: [README-COLYSEUS.md](./README-COLYSEUS.md)
+
+### 快速开始
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器 (同时启动前后端)
+npm run dev
+
+# 访问游戏
+# 打开浏览器访问 http://localhost:3000
+```
+
+### 项目结构
+
+```
+sise/
+├── server/        # Colyseus 后端服务器
+├── client/        # Vue 3 前端应用
+├── game.js        # 旧版纯前端实现 (已废弃)
+├── index.html     # 旧版HTML (已废弃)
+└── styles.css     # 旧版样式 (已废弃)
+```
+
+---
+
 # 四色牌游戏规则与软件需求规格说明书  
 
 ## 🌟 品牌标语  

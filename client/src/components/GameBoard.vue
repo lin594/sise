@@ -1,0 +1,307 @@
+<template>
+  <div class="game-board">
+    <!-- Header Info Bar -->
+    <div class="game-header">
+      <div class="header-left">
+        <span>阶段: {{ phaseText }}</span>
+        <span class="ml-2">牌堆: {{ gameState?.deckCount || 0 }}张</span>
+      </div>
+      <div class="header-center">
+        <span>{{ gameState?.lastAction || '等待开始' }}</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" @click="$emit('leave')">🚪</button>
+      </div>
+    </div>
+
+    <!-- Game Area -->
+    <div class="game-area">
+      <!-- Top Player (Opponent 3) -->
+      <PlayerArea 
+        v-if="players[2]"
+        :player="players[2]"
+        position="top"
+        :is-current="isCurrentPlayer(players[2])"
+      />
+
+      <!-- Left Player (Opponent 1) -->
+      <PlayerArea 
+        v-if="players[1]"
+        :player="players[1]"
+        position="left"
+        :is-current="isCurrentPlayer(players[1])"
+      />
+
+      <!-- Center Info -->
+      <div class="center-info">
+        <div v-if="gameState?.dealerRevealedCards.length" class="revealed-card-area">
+          <p>庄家亮出的牌</p>
+          <Card 
+            v-for="card in gameState.dealerRevealedCards" 
+            :key="card.id"
+            :card="card"
+          />
+        </div>
+        <div class="timer-display" v-if="gameState?.responseTimer > 0">
+          <span>响应倒计时: {{ gameState.responseTimer }}s</span>
+        </div>
+      </div>
+
+      <!-- Right Player (Opponent 2) -->
+      <PlayerArea 
+        v-if="players[3]"
+        :player="players[3]"
+        position="right"
+        :is-current="isCurrentPlayer(players[3])"
+      />
+
+      <!-- Bottom Player (Self) -->
+      <PlayerArea 
+        v-if="players[0]"
+        :player="players[0]"
+        :hand="playerHand"
+        position="bottom"
+        :is-current="isCurrentPlayer(players[0])"
+        :selected-cards="selectedCards"
+        @select-card="handleSelectCard"
+      />
+    </div>
+
+    <!-- Action Panel -->
+    <ActionPanel 
+      v-if="players[0] && gameState"
+      :current-player-id="gameState.currentPlayerId"
+      :my-player-id="players[0].clientId"
+      :response-phase="gameState.responsePhase"
+      :selected-cards="selectedCards"
+      :player-hand="playerHand"
+      :response-card="getCurrentResponseCard()"
+      @action="handleAction"
+    />
+
+    <!-- Declare Panel -->
+    <div v-if="showDeclarePanel" class="modal-overlay">
+      <div class="modal-content">
+        <h3>声明暗坎数量</h3>
+        <p>请声明您计划保留的暗坎数量（承诺）</p>
+        <input 
+          v-model.number="declareKongCount" 
+          type="number" 
+          min="0" 
+          max="10"
+          style="width: 100%; padding: 12px; font-size: 18px; margin: 20px 0; border-radius: 6px; border: 1px solid #ccc;"
+        />
+        <button class="btn-primary" @click="confirmDeclare" style="width: 100%;">
+          确认声明
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue';
+import type { Room } from 'colyseus.js';
+import PlayerArea from './PlayerArea.vue';
+import ActionPanel from './ActionPanel.vue';
+import Card from './Card.vue';
+
+interface Props {
+  room: Room | null;
+  playerName: string;
+}
+
+const props = defineProps<Props>();
+const emit = defineEmits<{
+  leave: [];
+}>();
+
+const gameState = ref<any>(null);
+const playerHand = ref<any[]>([]);
+const selectedCards = ref<string[]>([]);
+const declareKongCount = ref(0);
+const showDeclarePanel = ref(false);
+
+const players = computed(() => {
+  if (!gameState.value || !gameState.value.players) {
+    return [];
+  }
+  
+  // Get players as array, with current player first
+  const playersArray = Array.from(gameState.value.players.values());
+  const myIndex = playersArray.findIndex(p => !p.isAI);
+  
+  if (myIndex === -1) return playersArray;
+  
+  // Rotate so current player is at index 0
+  const rotated = [
+    playersArray[myIndex],
+    playersArray[(myIndex + 1) % 4],
+    playersArray[(myIndex + 2) % 4],
+    playersArray[(myIndex + 3) % 4]
+  ].filter(p => p); // Remove undefined
+  
+  return rotated;
+});
+
+const phaseText = computed(() => {
+  const phase = gameState.value?.phase;
+  const phaseMap: { [key: string]: string } = {
+    'waiting': '等待中',
+    'declaring': '声明暗坎',
+    'playing': '游戏中',
+    'ended': '已结束'
+  };
+  return phaseMap[phase] || phase;
+});
+
+function isCurrentPlayer(player: any): boolean {
+  return player && gameState.value && player.clientId === gameState.value.currentPlayerId;
+}
+
+function getCurrentResponseCard() {
+  if (!players.value[0] || !players.value[0].responseArea) {
+    return null;
+  }
+  return players.value[0].responseArea[0] || null;
+}
+
+function handleSelectCard(cardId: string) {
+  const index = selectedCards.value.indexOf(cardId);
+  if (index > -1) {
+    selectedCards.value.splice(index, 1);
+  } else {
+    selectedCards.value.push(cardId);
+  }
+}
+
+function handleAction(action: string, data?: any) {
+  console.log('Action:', action, data);
+  props.room?.send('action', { action, data });
+  selectedCards.value = [];
+}
+
+function confirmDeclare() {
+  props.room?.send('declare_kong', { count: declareKongCount.value });
+  showDeclarePanel.value = false;
+}
+
+// Set up room listeners
+onMounted(() => {
+  if (!props.room) return;
+
+  // Listen to state changes
+  props.room.onStateChange((state) => {
+    gameState.value = state;
+    console.log('State updated:', state);
+    
+    // Show declare panel when in declaring phase
+    if (state.phase === 'declaring' && players.value[0] && !players.value[0].hasDeclared) {
+      showDeclarePanel.value = true;
+    }
+  });
+
+  // Listen to private hand updates
+  props.room.onMessage('private_hand', (hand) => {
+    playerHand.value = hand;
+    console.log('Hand updated:', hand);
+  });
+
+  // Listen to errors
+  props.room.onMessage('error', (message) => {
+    alert(message.message || '操作失败');
+  });
+});
+</script>
+
+<style scoped>
+.game-board {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  font-size: 14px;
+}
+
+.header-left, .header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-center {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+}
+
+.ml-2 {
+  margin-left: 10px;
+}
+
+.btn-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-area {
+  flex: 1;
+  position: relative;
+  display: grid;
+  grid-template-areas:
+    ". top ."
+    "left center right"
+    ". bottom .";
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: 1fr 2fr 2fr;
+  padding: 10px;
+  gap: 10px;
+}
+
+.center-info {
+  grid-area: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  color: white;
+  text-align: center;
+}
+
+.revealed-card-area {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.revealed-card-area p {
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.timer-display {
+  background: rgba(255, 152, 0, 0.8);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 16px;
+}
+</style>
