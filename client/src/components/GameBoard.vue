@@ -82,41 +82,62 @@
 
     <!-- Declare Panel -->
     <div v-if="showDeclarePanel" class="modal-overlay">
-      <div class="modal-content">
-        <h3>声明暗坎数量</h3>
-        <p>请声明您计划保留的暗坎数量（承诺）</p>
-        <input 
-          v-model.number="declareKongCount" 
-          type="number" 
-          min="0" 
-          max="10"
-          style="width: 100%; padding: 12px; font-size: 18px; margin: 20px 0; border-radius: 6px; border: 1px solid #ccc;"
-        />
-        <button class="btn-primary" @click="confirmDeclare" style="width: 100%; margin-bottom: 10px;">
-          确认声明
-        </button>
+      <div class="modal-content modal-declare">
+        <h2>🎴 您的手牌</h2>
+        <div class="declare-hand-display">
+          <Card 
+            v-for="card in playerHand" 
+            :key="card.id"
+            :card="card"
+            :size="'medium'"
+          />
+        </div>
         
-        <div class="fish-section">
-          <h4>亮鱼（可选）</h4>
-          <p style="font-size: 12px; opacity: 0.8;">选择4张同色同字的牌或4/5张金条亮出</p>
+        <div class="declare-section">
+          <h3>1. 声明暗坎数量</h3>
+          <p>请声明您计划保留的暗坎数量（承诺保留，不可拆散）</p>
+          <input 
+            v-model.number="declareKongCount" 
+            type="number" 
+            min="0" 
+            max="10"
+            class="declare-input"
+          />
+          <button class="btn-primary" @click="confirmDeclare" style="width: 100%; margin-top: 10px;">
+            确认声明 {{ declareKongCount }} 个暗坎
+          </button>
+        </div>
+        
+        <div class="fish-section" v-if="declareKongCount >= 0">
+          <h3>2. 亮鱼（可选）</h3>
+          <p style="font-size: 13px; opacity: 0.9;">
+            如果有4张同色同字的牌或4/5张金条，可以选择亮出获得额外分数
+          </p>
           <div class="fish-selection">
             <Card 
               v-for="card in playerHand" 
-              :key="card.id"
+              :key="'fish-' + card.id"
               :card="card"
               :selected="fishSelectedCards.includes(card.id)"
               clickable
               @click="toggleFishCard(card.id)"
             />
           </div>
-          <button 
-            class="btn-secondary mt-2" 
-            @click="revealFish" 
-            :disabled="fishSelectedCards.length < 4 || fishSelectedCards.length > 5"
-            style="width: 100%;"
-          >
-            亮鱼 (已选{{ fishSelectedCards.length }}张)
-          </button>
+          <div class="fish-actions">
+            <button 
+              class="btn-secondary" 
+              @click="revealFish" 
+              :disabled="fishSelectedCards.length < 4 || fishSelectedCards.length > 5"
+            >
+              亮鱼 (已选{{ fishSelectedCards.length}}张)
+            </button>
+            <button 
+              class="btn-tertiary" 
+              @click="skipFish"
+            >
+              跳过亮鱼，直接开始游戏
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -315,6 +336,11 @@ function revealFish() {
   showDeclarePanel.value = false;
 }
 
+function skipFish() {
+  // Just close the panel, game will start after timeout
+  showDeclarePanel.value = false;
+}
+
 // Set up room listeners
 onMounted(() => {
   if (!props.room) return;
@@ -324,16 +350,28 @@ onMounted(() => {
     gameState.value = state;
     console.log('State updated:', state);
     
-    // Show declare panel when in declaring phase
+    // Show declare panel when in declaring phase AND we have hand cards
     if (state.phase === 'declaring' && players.value[0] && !players.value[0].hasDeclared) {
-      showDeclarePanel.value = true;
+      // Only show panel if we have received our hand
+      if (playerHand.value.length > 0) {
+        showDeclarePanel.value = true;
+      }
     }
   });
 
   // Listen to private hand updates
   props.room.onMessage('private_hand', (hand) => {
     playerHand.value = hand;
-    console.log('Hand updated:', hand);
+    console.log('Hand updated:', hand.length, 'cards');
+    
+    // If we're in declaring phase and just received hand, show panel
+    if (gameState.value && 
+        gameState.value.phase === 'declaring' && 
+        players.value[0] && 
+        !players.value[0].hasDeclared &&
+        hand.length > 0) {
+      showDeclarePanel.value = true;
+    }
   });
 
   // Listen to game end
@@ -526,16 +564,65 @@ onMounted(() => {
   margin-top: 20px;
 }
 
-/* Fish Selection Styles */
-.fish-section {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #ddd;
+/* Declare Panel Styles */
+.modal-declare {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-.fish-section h4 {
-  margin-bottom: 10px;
+.declare-hand-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  margin-bottom: 30px;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.declare-section {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.declare-section h3 {
   color: #333;
+  margin-bottom: 10px;
+  font-size: 20px;
+}
+
+.declare-section p {
+  color: #666;
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.declare-input {
+  width: 100%;
+  padding: 15px;
+  font-size: 24px;
+  text-align: center;
+  border-radius: 8px;
+  border: 2px solid #1E88E5;
+  font-weight: 600;
+}
+
+/* Fish Selection Styles */
+.fish-section {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.fish-section h3 {
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 20px;
 }
 
 .fish-selection {
@@ -546,8 +633,35 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 8px;
   min-height: 100px;
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
   margin: 15px 0;
+  justify-content: center;
+}
+
+.fish-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.fish-actions button {
+  flex: 1;
+}
+
+.btn-tertiary {
+  background: #757575;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-tertiary:hover {
+  background: #616161;
+  transform: translateY(-2px);
 }
 </style>

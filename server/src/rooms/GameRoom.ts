@@ -499,7 +499,8 @@ export class GameRoom extends Room<GameState> {
   }
 
   private resolveCollectiveInquiry() {
-    console.log("Resolving collective inquiry", this.pendingResponses);
+    console.log("Resolving collective inquiry. Pending responses:", this.pendingResponses.size, "/", this.clients.length);
+    console.log("Response map:", Array.from(this.pendingResponses.entries()));
 
     // Priority: Hu > Kai > Peng, with counter-clockwise polling
     const priorities = [ACTIONS.HU, ACTIONS.KAI, ACTIONS.PENG];
@@ -526,9 +527,11 @@ export class GameRoom extends Room<GameState> {
 
     if (winner && winningAction) {
       // Someone responded - handle the action
+      console.log(`Winner found: ${winner} with action: ${winningAction}`);
       this.executeResponseAction(winner, winningAction);
     } else {
       // No one responded - current player can chi or grab
+      console.log("No winner, entering self mode 1");
       this.enterSelfMode1();
     }
   }
