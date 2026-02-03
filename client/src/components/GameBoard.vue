@@ -219,6 +219,7 @@ import Card from './Card.vue';
 interface Props {
   room: Room | null;
   playerName: string;
+  initialHand: any[];
 }
 
 const props = defineProps<Props>();
@@ -235,6 +236,12 @@ const showChiModal = ref(false);
 const chiOptions = ref<any[]>([]);
 const gameEndData = ref<any>(null);
 const fishSelectedCards = ref<string[]>([]);
+
+// Initialize playerHand with initialHand if provided
+if (props.initialHand && props.initialHand.length > 0) {
+  console.log('[GameBoard] Using initialHand:', props.initialHand.length, 'cards');
+  playerHand.value = props.initialHand;
+}
 
 // Function to check if we should show declare panel
 function checkAndShowDeclarePanel() {
@@ -280,10 +287,10 @@ watch(() => props.room, (room) => {
     checkAndShowDeclarePanel();
   });
 
-  // Listen to private hand updates
+  // Listen to private hand updates (may receive updates after initial hand)
   room.onMessage('private_hand', (hand) => {
+    console.log('[GameBoard] Received private_hand update:', hand.length, 'cards');
     playerHand.value = hand;
-    console.log('Hand updated:', hand.length, 'cards');
     
     // Try to show declare panel after receiving hand
     checkAndShowDeclarePanel();
@@ -299,6 +306,15 @@ watch(() => props.room, (room) => {
   room.onMessage('error', (message) => {
     alert(message.message || '操作失败');
   });
+}, { immediate: true });
+
+// Also watch initialHand prop for changes
+watch(() => props.initialHand, (newHand) => {
+  if (newHand && newHand.length > 0 && playerHand.value.length === 0) {
+    console.log('[GameBoard] Received initialHand via props:', newHand.length, 'cards');
+    playerHand.value = newHand;
+    checkAndShowDeclarePanel();
+  }
 }, { immediate: true });
 
 const players = computed(() => {

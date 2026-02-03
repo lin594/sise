@@ -39,6 +39,7 @@
       v-else-if="screen === 'game'" 
       :room="room"
       :player-name="playerName"
+      :initial-hand="initialHand"
       @leave="handleLeave"
     />
   </div>
@@ -53,6 +54,7 @@ import GameBoard from './components/GameBoard.vue';
 const screen = ref<'loading' | 'room' | 'game'>('loading');
 const playerName = ref('玩家1');
 const room = ref<Colyseus.Room | null>(null);
+const initialHand = ref<any[]>([]);
 const client = new Colyseus.Client('ws://localhost:2567');
 
 function goToRoom() {
@@ -65,6 +67,12 @@ async function startGame() {
     const gameRoom = await client.joinOrCreate('game_room', {
       name: playerName.value,
       isAI: false
+    });
+
+    // CRITICAL: Register message handler immediately before any messages are sent
+    gameRoom.onMessage('private_hand', (hand) => {
+      console.log('[App.vue] Received private_hand:', hand.length, 'cards');
+      initialHand.value = hand;
     });
 
     // Create AI players if needed
