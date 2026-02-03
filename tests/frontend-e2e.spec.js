@@ -25,15 +25,27 @@ test.describe('Four Color Card Game E2E', () => {
     try {
       // Step 1: Navigate to game
       console.log('\n📱 Step 1: Opening game page...');
-      await page.goto(CLIENT_URL, { waitUntil: 'networkidle', timeout: 30000 });
-      console.log('✅ Page loaded');
+      // Use 'domcontentloaded' instead of 'networkidle' because WebSocket keeps network busy
+      await page.goto(CLIENT_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      console.log('✅ Page loaded (DOM ready)');
+      
+      // Take screenshot of initial page load for debugging
+      await page.screenshot({ path: 'test-results/01-page-loaded.png', fullPage: true });
+      console.log('📸 Screenshot: 01-page-loaded.png');
+      
+      // Wait for Vue app to mount by checking for the game container
+      await page.waitForSelector('.game-container', { timeout: 10000 });
+      console.log('✅ Vue app mounted');
       
       // Step 2: Click "开始游戏" button on landing page
       console.log('\n🎮 Step 2: Clicking start game button...');
-      const startButton = page.locator('button:has-text("开始游戏")').first();
+      // Wait for and click the button in the loading screen
+      const startButton = page.locator('.screen .btn-primary:has-text("开始游戏")');
       await expect(startButton).toBeVisible({ timeout: 10000 });
       await startButton.click();
       console.log('✅ Start button clicked');
+      await page.screenshot({ path: 'test-results/02-button-clicked.png', fullPage: true });
+      console.log('📸 Screenshot: 02-button-clicked.png');
       
       // Step 3: Enter player name in room setup
       console.log('\n👤 Step 3: Entering player name...');
@@ -41,13 +53,18 @@ test.describe('Four Color Card Game E2E', () => {
       await expect(nameInput).toBeVisible({ timeout: 10000 });
       await nameInput.fill('TestPlayer');
       console.log('✅ Player name entered');
+      await page.screenshot({ path: 'test-results/03-name-entered.png', fullPage: true });
+      console.log('📸 Screenshot: 03-name-entered.png');
       
       // Step 4: Click start game in room setup
       console.log('\n🚀 Step 4: Starting game...');
-      const roomStartButton = page.locator('button:has-text("开始游戏")').nth(1);
+      // Use a more specific selector to avoid ambiguity
+      const roomStartButton = page.locator('.screen .btn-primary:has-text("开始游戏")');
       await expect(roomStartButton).toBeVisible({ timeout: 5000 });
       await roomStartButton.click();
       console.log('✅ Game starting');
+      await page.screenshot({ path: 'test-results/04-game-starting.png', fullPage: true });
+      console.log('📸 Screenshot: 04-game-starting.png');
       
       // Step 5: Wait for declare panel modal to appear
       console.log('\n🎴 Step 5: Waiting for declare panel...');
