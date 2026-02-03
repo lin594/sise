@@ -92,9 +92,32 @@
           max="10"
           style="width: 100%; padding: 12px; font-size: 18px; margin: 20px 0; border-radius: 6px; border: 1px solid #ccc;"
         />
-        <button class="btn-primary" @click="confirmDeclare" style="width: 100%;">
+        <button class="btn-primary" @click="confirmDeclare" style="width: 100%; margin-bottom: 10px;">
           确认声明
         </button>
+        
+        <div class="fish-section">
+          <h4>亮鱼（可选）</h4>
+          <p style="font-size: 12px; opacity: 0.8;">选择4张同色同字的牌或4/5张金条亮出</p>
+          <div class="fish-selection">
+            <Card 
+              v-for="card in playerHand" 
+              :key="card.id"
+              :card="card"
+              :selected="fishSelectedCards.includes(card.id)"
+              clickable
+              @click="toggleFishCard(card.id)"
+            />
+          </div>
+          <button 
+            class="btn-secondary mt-2" 
+            @click="revealFish" 
+            :disabled="fishSelectedCards.length < 4 || fishSelectedCards.length > 5"
+            style="width: 100%;"
+          >
+            亮鱼 (已选{{ fishSelectedCards.length }}张)
+          </button>
+        </div>
       </div>
     </div>
 
@@ -180,6 +203,7 @@ const showDeclarePanel = ref(false);
 const showChiModal = ref(false);
 const chiOptions = ref<any[]>([]);
 const gameEndData = ref<any>(null);
+const fishSelectedCards = ref<string[]>([]);
 
 const players = computed(() => {
   if (!gameState.value || !gameState.value.players) {
@@ -269,6 +293,25 @@ function handleExitGame() {
 
 function confirmDeclare() {
   props.room?.send('declare_kong', { count: declareKongCount.value });
+  // Don't close panel yet, allow fish revealing
+}
+
+function toggleFishCard(cardId: string) {
+  const index = fishSelectedCards.value.indexOf(cardId);
+  if (index > -1) {
+    fishSelectedCards.value.splice(index, 1);
+  } else {
+    fishSelectedCards.value.push(cardId);
+  }
+}
+
+function revealFish() {
+  if (fishSelectedCards.value.length < 4 || fishSelectedCards.value.length > 5) {
+    return;
+  }
+  
+  props.room?.send('reveal_fish', { cardIds: fishSelectedCards.value });
+  fishSelectedCards.value = [];
   showDeclarePanel.value = false;
 }
 
@@ -481,5 +524,30 @@ onMounted(() => {
 
 .mt-2 {
   margin-top: 20px;
+}
+
+/* Fish Selection Styles */
+.fish-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+}
+
+.fish-section h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.fish-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 15px 0;
 }
 </style>

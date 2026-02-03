@@ -390,3 +390,73 @@ export function canPeng(handCards: ICard[], responseCard: ICard): boolean {
   
   return matchingCards.length >= 2;
 }
+
+/**
+ * 验证玩家是否保留了声明的暗坎数量
+ * 返回实际暗坎数量
+ */
+export function countDarkKongs(handCards: ICard[]): number {
+  const cardGroups = new Map<string, ICard[]>();
+  
+  // Group cards by color-rank
+  for (const card of handCards) {
+    if (card.isGoldBar) {
+      // Gold bars
+      const key = 'gold-bar';
+      if (!cardGroups.has(key)) {
+        cardGroups.set(key, []);
+      }
+      cardGroups.get(key)!.push(card);
+    } else {
+      // Regular cards
+      const key = `${card.color}-${card.rank}`;
+      if (!cardGroups.has(key)) {
+        cardGroups.set(key, []);
+      }
+      cardGroups.get(key)!.push(card);
+    }
+  }
+  
+  // Count groups with 3+ cards
+  let kongCount = 0;
+  for (const [key, cards] of cardGroups) {
+    if (cards.length >= 3) {
+      kongCount++;
+    }
+  }
+  
+  return kongCount;
+}
+
+/**
+ * 检查玩家是否违反了暗坎承诺
+ * @param handCards 当前手牌
+ * @param exposedCards 明示区的牌
+ * @param declaredKongs 声明的暗坎数量
+ * @returns 是否违规
+ */
+export function checkKongViolation(
+  handCards: ICard[],
+  exposedCards: ICard[],
+  declaredKongs: number
+): {
+  violated: boolean;
+  actualKongs: number;
+  message?: string;
+} {
+  if (declaredKongs === 0) {
+    return { violated: false, actualKongs: 0 };
+  }
+  
+  const actualKongs = countDarkKongs(handCards);
+  
+  if (actualKongs < declaredKongs) {
+    return {
+      violated: true,
+      actualKongs,
+      message: `违规！声明保留${declaredKongs}个暗坎，实际只有${actualKongs}个`
+    };
+  }
+  
+  return { violated: false, actualKongs };
+}

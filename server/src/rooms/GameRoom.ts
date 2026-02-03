@@ -21,7 +21,8 @@ import {
   canKai,
   canPeng,
   canFormChiGroup,
-  CardGroup
+  CardGroup,
+  checkKongViolation
 } from '../utils/validator';
 import {
   calculateSettlement,
@@ -96,6 +97,11 @@ export class GameRoom extends Room<GameState> {
     // Declare kong count
     this.onMessage("declare_kong", (client, message: { count: number }) => {
       this.handleDeclareKong(client, message.count);
+    });
+
+    // Reveal fish (亮鱼)
+    this.onMessage("reveal_fish", (client, message: { cardIds: string[] }) => {
+      this.handleRevealFish(client, message.cardIds);
     });
 
     // Player action
@@ -201,7 +207,101 @@ export class GameRoom extends Room<GameState> {
       .every(p => p.hasDeclared);
 
     if (allDeclared) {
-      this.startPlayingPhase();
+      // Don't start playing yet, wait for fish revealing
+      this.state.lastAction = "所有玩家已声明暗坎，可以亮鱼（可选）";
+    }
+  }
+
+  private handleRevealFish(client: Client, cardIds: string[]) {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || this.state.phase !== PHASES.DECLARING) {
+      return;
+    }
+
+    const hand = this.playerHands[client.sessionId];
+    
+    // Validate cards exist in hand
+    const fishCards = cardIds
+      .map(id => hand.find(c => c.id === id))
+      .filter((c): c is ICard => c !== undefined);
+
+    if (fishCards.length !== cardIds.length) {
+      client.send("error", { message: "选择的牌不在手牌中" });
+      return;
+    }
+
+    // Validate fish combination (4 or 5 same color+rank, or 4/5 gold bars)
+    const isValidFish = this.validateFishCards(fishCards);
+    
+    if (!isValidFish) {
+      client.send("error", { message: "无效的鱼牌组合！需要4张同色同字或4/5张金条" });
+      return;
+    }
+
+    // Remove cards from hand
+    for (const card of fishCards) {
+      const index = hand.indexOf(card);
+      if (index > -1) {
+        hand.splice(index, 1);
+      }
+    }
+
+    // Add to fish area
+    for (const card of fishCards) {
+      player.fishArea.push(toSchemaCard(card));
+    }
+
+    // Update hand count and send updated hand
+    player.handCount = hand.length;
+    this.sendHandToClient(client, hand);
+
+    const fishType = fishCards[0].isGoldBar ? '金条鱼' : `${fishCards[0].rank}鱼`;
+    this.state.lastAction = `${player.name} 亮出 ${fishType}`;
+
+    // Check if all players ready to start
+    this.checkReadyToStart();
+  }
+
+  private validateFishCards(cards: ICard[]): boolean {
+    if (cards.length !== 4 && cards.length !== 5) {
+      return false;
+    }
+
+    // Check gold bar fish (4 or 5 gold bars)
+    if (cards.every(c => c.isGoldBar)) {
+      return true;
+    }
+
+    // Check normal fish (4 same color+rank, not Jiang)
+    if (cards.length === 4) {
+      const first = cards[0];
+      if (first.rank === RANKS.JIANG) {
+        return false;  // Jiang cannot form fish
+      }
+      
+      return cards.every(c => 
+        c.color === first.color && 
+        c.rank === first.rank && 
+        !c.isGoldBar
+      );
+    }
+
+    return false;
+  }
+
+  private checkReadyToStart() {
+    // Give players some time to reveal fish, then auto-start
+    // For now, start immediately after all declared
+    const allDeclared = Array.from(this.state.players.values())
+      .every(p => p.hasDeclared);
+
+    if (allDeclared) {
+      // Start after a short delay to allow more fish reveals
+      setTimeout(() => {
+        if (this.state.phase === PHASES.DECLARING) {
+          this.startPlayingPhase();
+        }
+      }, 3000);
     }
   }
 
@@ -406,6 +506,66 @@ export class GameRoom extends Room<GameState> {
     if (action === ACTIONS.HU) {
       // Hu - Win
       const hand = this.playerHands[playerId];
+      
+      // Check kong violation BEFORE validating hu
+      const exposedCards: ICard[] = [];
+      for (const card of player.exposedArea) {
+        exposedCards.push({
+          id: card.id,
+          color: card.color,
+          rank: card.rank,
+          isGoldBar: card.isGoldBar
+        });
+      }
+      
+      const kongCheck = checkKongViolation(hand, exposedCards, player.declaredKongs);
+      
+      if (kongCheck.violated) {
+        // Violation! Player loses hu bonus but settlement continues
+        this.state.lastAction = `${player.name} ${kongCheck.message}`;
+        
+        client.send("error", { 
+          message: `${kongCheck.message}\n胡牌得分将被取消，但互结分照常结算` 
+        });
+        
+        // Still validate and end game, but mark as violated
+        const huResult = validateHu(hand, responseCard);
+        
+        if (huResult.valid && huResult.groups) {
+          // Add cards to exposed area
+          for (const group of huResult.groups) {
+            for (const card of group.cards) {
+              const schemaCard = toSchemaCard(card);
+              if (card.id === responseCard.id) {
+                schemaCard.isResponseCard = true;
+              }
+              player.exposedArea.push(schemaCard);
+            }
+          }
+          
+          // Store groups but mark as violated
+          this.playerGroups.set(playerId, huResult.groups);
+          
+          // Clear player hand
+          this.playerHands[playerId] = [];
+          player.handCount = 0;
+          this.sendHandToClient(
+            this.clients.find(c => c.sessionId === playerId)!,
+            []
+          );
+          
+          // End game with null winner (violation)
+          this.handleGameEnd(null, playerId);  // Pass violator ID
+        } else {
+          // Invalid hu
+          currentPlayer.discardPile.push(toSchemaCard(responseCard));
+          this.state.lastAction = `${player.name} 胡牌失败`;
+          this.enterSelfMode1();
+        }
+        return;
+      }
+      
+      // Normal hu without violation
       const huResult = validateHu(hand, responseCard);
       
       if (huResult.valid && huResult.groups) {
@@ -577,11 +737,26 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    const responseCard = player.responseArea[0];
+    const responseCardSchema = player.responseArea[0];
+    if (!responseCardSchema) {
+      return;
+    }
+    
     const hand = this.playerHands[client.sessionId];
 
+    // Convert schema card to ICard
+    const responseCardICard: ICard = {
+      id: responseCardSchema.id,
+      color: responseCardSchema.color,
+      rank: responseCardSchema.rank,
+      isGoldBar: responseCardSchema.isGoldBar
+    };
+
     // Verify the cards exist in hand
-    const selectedCards = data.cardIds.map(id => hand.find(c => c.id === id)).filter(c => c);
+    const selectedCards = data.cardIds
+      .map(id => hand.find(c => c.id === id))
+      .filter((c): c is ICard => c !== undefined);
+    
     if (selectedCards.length !== data.cardIds.length) {
       client.send("error", { message: "选择的牌不在手牌中" });
       return;
@@ -589,19 +764,14 @@ export class GameRoom extends Room<GameState> {
 
     // Remove cards from hand
     for (const card of selectedCards) {
-      const index = hand.indexOf(card!);
+      const index = hand.indexOf(card);
       if (index > -1) {
         hand.splice(index, 1);
       }
     }
 
     // Add response card to exposed area
-    const allCards = [...selectedCards, { 
-      id: responseCard.id,
-      color: responseCard.color,
-      rank: responseCard.rank,
-      isGoldBar: responseCard.isGoldBar
-    }];
+    const allCards = [...selectedCards, responseCardICard];
 
     // Mark response card
     const exposedCard = toSchemaCard(allCards[allCards.length - 1]);
@@ -644,6 +814,8 @@ export class GameRoom extends Room<GameState> {
     // Move current response card to discard pile
     if (player.responseArea.length > 0) {
       const card = player.responseArea[0];
+      if (!card) return;
+      
       player.responseArea.clear();
       player.discardPile.push(card);
     }
@@ -681,6 +853,8 @@ export class GameRoom extends Room<GameState> {
     // Move response card to discard and next player's response area
     if (player.responseArea.length > 0) {
       const card = player.responseArea[0];
+      if (!card) return;
+      
       player.responseArea.clear();
       player.discardPile.push(card);
 
@@ -690,14 +864,17 @@ export class GameRoom extends Room<GameState> {
         this.playerOrder.length
       );
       const nextPlayerId = this.playerOrder[nextIndex];
-      const nextPlayer = this.state.players.get(nextPlayerId)!;
-      nextPlayer.responseArea.push(card);
+      const nextPlayer = this.state.players.get(nextPlayerId);
+      
+      if (nextPlayer) {
+        nextPlayer.responseArea.push(card);
 
-      this.state.currentPlayerId = nextPlayerId;
-      this.state.responsePhase = RESPONSE_PHASES.COLLECTIVE;
-      this.state.lastAction = `${player.name} 过`;
+        this.state.currentPlayerId = nextPlayerId;
+        this.state.responsePhase = RESPONSE_PHASES.COLLECTIVE;
+        this.state.lastAction = `${player.name} 过`;
 
-      this.startCollectiveInquiry();
+        this.startCollectiveInquiry();
+      }
     }
   }
 
@@ -747,7 +924,7 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  private handleGameEnd(winnerId: string | null) {
+  private handleGameEnd(winnerId: string | null, violatorId?: string) {
     this.state.phase = PHASES.ENDED;
     
     // Collect all player groups for scoring
@@ -762,8 +939,21 @@ export class GameRoom extends Room<GameState> {
     const settlement = calculateSettlement(
       this.playerOrder,
       this.playerGroups,
-      winnerId
+      violatorId ? null : winnerId  // No winner if violation
     );
+    
+    // If there's a violation, penalize the violator
+    if (violatorId) {
+      const penaltyPerPlayer = 10;  // Fixed penalty
+      for (const playerId of this.playerOrder) {
+        if (playerId !== violatorId) {
+          const current = settlement.playerScores.get(playerId) || 0;
+          settlement.playerScores.set(playerId, current + penaltyPerPlayer);
+        }
+      }
+      const current = settlement.playerScores.get(violatorId) || 0;
+      settlement.playerScores.set(violatorId, current - penaltyPerPlayer * 3);
+    }
     
     // Update player scores
     for (const [playerId, scoreChange] of settlement.playerScores) {
@@ -775,7 +965,8 @@ export class GameRoom extends Room<GameState> {
     
     // Broadcast settlement results
     this.broadcast("game_end", {
-      winnerId,
+      winnerId: violatorId ? null : winnerId,
+      violatorId: violatorId || null,
       playerScores: Array.from(settlement.playerScores.entries()),
       details: Array.from(settlement.details.entries()).map(([id, detail]) => ({
         playerId: id,
@@ -783,9 +974,13 @@ export class GameRoom extends Room<GameState> {
       }))
     });
     
-    this.state.lastAction = winnerId 
-      ? `${this.state.players.get(winnerId)?.name} 胡牌！游戏结束`
-      : "游戏结束";
+    if (violatorId) {
+      this.state.lastAction = `${this.state.players.get(violatorId)?.name} 违规！拆散暗坎。游戏结束`;
+    } else {
+      this.state.lastAction = winnerId 
+        ? `${this.state.players.get(winnerId)?.name} 胡牌！游戏结束`
+        : "游戏结束";
+    }
     
     // Schedule room disposal after 30 seconds
     setTimeout(() => {
