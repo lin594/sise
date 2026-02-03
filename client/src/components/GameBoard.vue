@@ -350,13 +350,8 @@ onMounted(() => {
     gameState.value = state;
     console.log('State updated:', state);
     
-    // Show declare panel when in declaring phase AND we have hand cards
-    if (state.phase === 'declaring' && players.value[0] && !players.value[0].hasDeclared) {
-      // Only show panel if we have received our hand
-      if (playerHand.value.length > 0) {
-        showDeclarePanel.value = true;
-      }
-    }
+    // Try to show declare panel when in declaring phase
+    checkAndShowDeclarePanel();
   });
 
   // Listen to private hand updates
@@ -364,15 +359,26 @@ onMounted(() => {
     playerHand.value = hand;
     console.log('Hand updated:', hand.length, 'cards');
     
-    // If we're in declaring phase and just received hand, show panel
+    // Try to show declare panel after receiving hand
+    checkAndShowDeclarePanel();
+  });
+  
+  // Function to check if we should show declare panel
+  function checkAndShowDeclarePanel() {
+    // Check all conditions:
+    // 1. Phase is declaring
+    // 2. We have a player (current user)
+    // 3. Player hasn't declared yet
+    // 4. We have received our hand cards
     if (gameState.value && 
         gameState.value.phase === 'declaring' && 
         players.value[0] && 
         !players.value[0].hasDeclared &&
-        hand.length > 0) {
+        playerHand.value.length > 0) {
+      console.log('Showing declare panel - conditions met');
       showDeclarePanel.value = true;
     }
-  });
+  }
 
   // Listen to game end
   props.room.onMessage('game_end', (data) => {
