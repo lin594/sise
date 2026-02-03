@@ -53,6 +53,7 @@
                     </div>
                 </div>
                 <button id="startGameButton" class="btn-primary">开始游戏</button>
+                <button id="testGameButton" class="btn-secondary">四AI自动测试</button>
                 <button id="backButton" class="btn-secondary">返回</button>
             </div>
         </div>
@@ -86,6 +87,10 @@
                 </div>
                 <div class="player-response-area" id="player2Response"></div>
                 <div class="player-display-area" id="player2Display"></div>
+                <div class="player-discard-area" id="player2Discard">
+                    <div class="discard-label">弃牌区</div>
+                    <div class="discard-cards"></div>
+                </div>
             </div>
 
             <!-- Opponent 1 (Left) -->
@@ -97,6 +102,10 @@
                 </div>
                 <div class="player-response-area" id="player1Response"></div>
                 <div class="player-display-area" id="player1Display"></div>
+                <div class="player-discard-area" id="player1Discard">
+                    <div class="discard-label">弃牌区</div>
+                    <div class="discard-cards"></div>
+                </div>
             </div>
 
             <!-- Center Area -->
@@ -136,6 +145,10 @@
                 </div>
                 <div class="player-response-area" id="player3Response"></div>
                 <div class="player-display-area" id="player3Display"></div>
+                <div class="player-discard-area" id="player3Discard">
+                    <div class="discard-label">弃牌区</div>
+                    <div class="discard-cards"></div>
+                </div>
             </div>
 
             <!-- Current Player (Bottom) -->
@@ -146,6 +159,10 @@
                 <div class="player-info">
                     <span class="player-name">玩家1 (你)</span>
                     <span class="player-score">得分：0</span>
+                </div>
+                <div class="player-discard-area" id="player0Discard">
+                    <div class="discard-label">弃牌区</div>
+                    <div class="discard-cards"></div>
                 </div>
             </div>
         </div>
@@ -158,7 +175,8 @@
                 <button id="kaiButton" class="btn-action btn-kai" disabled>开</button>
                 <button id="pengButton" class="btn-action btn-peng" disabled>碰</button>
                 <button id="chiButton" class="btn-action btn-chi" disabled>吃</button>
-                <button id="passButton" class="btn-action btn-pass">过</button>
+                <button id="grabButton" class="btn-action btn-grab" disabled>抓</button>
+                <button id="passButton" class="btn-action btn-pass" disabled>过</button>
             </div>
         </div>
 

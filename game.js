@@ -22,6 +22,9 @@ const RANKS = {
 
 const GOLD_BARS = ['公', '侯', '伯', '子', '男'];
 
+// AI decision constants
+const AI_CHI_THRESHOLD = 0.3; // Probability for AI to choose chi when possible (30% chance)
+
 const PHASES = {
     DECLARE: 'declare',
     PLAYING: 'playing',
@@ -42,6 +45,7 @@ class GameState {
         this.selectedCards = [];  // Cards selected from hand
         this.responseTimer = null;
         this.responseTimeRemaining = 0;
+        this.isDrawnCard = false;  // Track if current response card is drawn (mode 2) vs initial (mode 1)
     }
 
     reset() {
@@ -55,6 +59,7 @@ class GameState {
             this.responseTimer = null;
         }
         this.responseTimeRemaining = 0;
+        this.isDrawnCard = false;
     }
 }
 
@@ -491,6 +496,10 @@ class GameController {
             this.startNewGame();
         });
 
+        document.getElementById('testGameButton').addEventListener('click', () => {
+            this.startTestGame();
+        });
+
         document.getElementById('backButton').addEventListener('click', () => {
             this.showScreen('loadingScreen');
         });
@@ -510,6 +519,7 @@ class GameController {
         document.getElementById('kaiButton').addEventListener('click', () => this.handleAction('kai'));
         document.getElementById('pengButton').addEventListener('click', () => this.handleAction('peng'));
         document.getElementById('chiButton').addEventListener('click', () => this.handleAction('chi'));
+        document.getElementById('grabButton').addEventListener('click', () => this.handleAction('grab'));
         document.getElementById('passButton').addEventListener('click', () => this.handleAction('pass'));
 
         // Declare panel
@@ -553,6 +563,44 @@ class GameController {
         this.showScreen('gameScreen');
         this.setupPlayers();
         this.initializeGame();
+    }
+
+    startTestGame() {
+        // Start a test game with 4 AI players
+        this.showScreen('gameScreen');
+        this.setupTestPlayers();
+        this.initializeGame();
+        
+        // Auto-complete declare phase for all AI players
+        setTimeout(() => {
+            this.autoCompleteDeclarePhase();
+        }, 1000);
+    }
+
+    setupTestPlayers() {
+        this.state.players = [];
+        this.aiPlayers = [];
+
+        // Create 4 AI players
+        for (let i = 0; i < 4; i++) {
+            const aiPlayer = new Player(i, `AI玩家${i + 1}`, true, 'normal');
+            this.state.players.push(aiPlayer);
+            this.aiPlayers.push(new AIPlayer(aiPlayer, 'normal'));
+        }
+    }
+
+    autoCompleteDeclarePhase() {
+        // Auto-declare for all AI players
+        this.state.players.forEach(player => {
+            player.declaredKanCount = Math.floor(Math.random() * 3); // 0-2 kans
+        });
+        
+        this.state.phase = PHASES.PLAYING;
+        this.updateAllPlayerAreas();
+        this.updateGameInfo();
+        
+        // Start the game from dealer
+        this.handleAITurn(this.state.players[this.state.dealerIndex]);
     }
 
     setupPlayers() {
@@ -787,6 +835,7 @@ class GameController {
         // Update current player to be the next player (they now have card in response area)
         this.state.currentPlayerIndex = nextPlayerIndex;
         this.state.currentResponseCard = card;
+        this.state.isDrawnCard = false; // Reset flag - this is an initial card for next player
         this.updateAllPlayerAreas();
         this.updateCenterStatus();
         
@@ -910,38 +959,79 @@ class GameController {
         panel.classList.remove('hidden');
         panel.classList.add('response-mode');
         
-        // Hide discard button, show response buttons
-        document.getElementById('discardButton').classList.add('hidden');
-        document.getElementById('huButton').classList.remove('hidden');
-        document.getElementById('kaiButton').classList.remove('hidden');
-        document.getElementById('pengButton').classList.remove('hidden');
-        document.getElementById('chiButton').classList.remove('hidden');
-        document.getElementById('passButton').classList.remove('hidden');
-        
         const humanPlayer = this.state.players[0];
+        const isCurrentPlayer = (humanPlayer.responseArea === responseCard);
         
-        // Check for possible actions
-        const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
-        const canKai = humanPlayer.declaredKanCount > 0 && 
-                       humanPlayer.hand.filter(c => 
-                           c.rank === responseCard.rank && 
-                           c.color === responseCard.color
-                       ).length >= 3;
-        const canPeng = humanPlayer.hand.filter(c => 
-                           c.rank === responseCard.rank && 
-                           c.color === responseCard.color
-                       ).length >= 2;
+        // Hide discard button
+        document.getElementById('discardButton').classList.add('hidden');
         
-        // KEY FIX: 吃 is ONLY allowed if the card is in the player's OWN response area
-        // This means the player can only 吃 their own response area card
-        const canChi = (humanPlayer.responseArea === responseCard);
-        
-        // Enable/disable buttons based on possible actions
-        document.getElementById('huButton').disabled = !canHu;
-        document.getElementById('kaiButton').disabled = !canKai;
-        document.getElementById('pengButton').disabled = !canPeng;
-        document.getElementById('chiButton').disabled = !canChi;
-        document.getElementById('passButton').disabled = false;
+        if (!isCurrentPlayer) {
+            // Others' response phase: show 胡/开/碰/过
+            document.getElementById('huButton').classList.remove('hidden');
+            document.getElementById('kaiButton').classList.remove('hidden');
+            document.getElementById('pengButton').classList.remove('hidden');
+            document.getElementById('chiButton').classList.add('hidden');
+            document.getElementById('grabButton').classList.add('hidden');
+            document.getElementById('passButton').classList.remove('hidden');
+            
+            // Check for possible actions
+            const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
+            const canKai = humanPlayer.declaredKanCount > 0 && 
+                           humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 3;
+            const canPeng = humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 2;
+            
+            document.getElementById('huButton').disabled = !canHu;
+            document.getElementById('kaiButton').disabled = !canKai;
+            document.getElementById('pengButton').disabled = !canPeng;
+            document.getElementById('passButton').disabled = false;
+        } else {
+            // Own response phase: show 胡/开/碰/吃/抓 (mode 1) or 胡/开/碰/吃/过 (mode 2)
+            // During collective inquiry, 吃/抓 or 吃/过 are greyed out
+            document.getElementById('huButton').classList.remove('hidden');
+            document.getElementById('kaiButton').classList.remove('hidden');
+            document.getElementById('pengButton').classList.remove('hidden');
+            document.getElementById('chiButton').classList.remove('hidden');
+            
+            if (this.state.isDrawnCard) {
+                // Mode 2: show 过 instead of 抓
+                document.getElementById('grabButton').classList.add('hidden');
+                document.getElementById('passButton').classList.remove('hidden');
+            } else {
+                // Mode 1: show 抓 instead of 过
+                document.getElementById('grabButton').classList.remove('hidden');
+                document.getElementById('passButton').classList.add('hidden');
+            }
+            
+            // Check for possible actions
+            const canHu = GameLogic.checkWinCondition(humanPlayer.hand, responseCard);
+            const canKai = humanPlayer.declaredKanCount > 0 && 
+                           humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 3;
+            const canPeng = humanPlayer.hand.filter(c => 
+                               c.rank === responseCard.rank && 
+                               c.color === responseCard.color
+                           ).length >= 2;
+            
+            document.getElementById('huButton').disabled = !canHu;
+            document.getElementById('kaiButton').disabled = !canKai;
+            document.getElementById('pengButton').disabled = !canPeng;
+            
+            // During collective inquiry, chi/grab/pass are disabled
+            document.getElementById('chiButton').disabled = true;
+            if (this.state.isDrawnCard) {
+                document.getElementById('passButton').disabled = true;
+            } else {
+                document.getElementById('grabButton').disabled = true;
+            }
+        }
     }
 
     handleAction(action) {
@@ -960,6 +1050,8 @@ class GameController {
         
         if (action === 'pass') {
             this.handlePass();
+        } else if (action === 'grab') {
+            this.handleGrab();
         } else if (action === 'chi') {
             this.handleChi();
         } else if (action === 'hu') {
@@ -974,8 +1066,39 @@ class GameController {
     }
 
     handlePass() {
-        // No response - draw a card
-        this.drawCard();
+        // Player chooses to pass on a drawn card (Mode 2)
+        // Move the card to discard pile and next player's response area
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+        const cardToPass = currentPlayer.responseArea;
+        
+        if (cardToPass) {
+            // Add to player's discard pile
+            currentPlayer.discardPile.push(cardToPass);
+            currentPlayer.responseArea = null;
+            
+            // Move to next player's response area
+            const nextPlayerIndex = (this.state.currentPlayerIndex + 1) % 4;
+            const nextPlayer = this.state.players[nextPlayerIndex];
+            nextPlayer.responseArea = cardToPass;
+            this.state.currentResponseCard = cardToPass;
+            this.state.isDrawnCard = false; // Reset for next player (initial card for them)
+            
+            this.updateAllPlayerAreas();
+            this.showNotification(`${currentPlayer.name} 选择过牌`);
+            
+            // Next player becomes current player
+            this.state.currentPlayerIndex = nextPlayerIndex;
+            
+            // Check for responses from all players
+            this.checkForResponses(nextPlayerIndex);
+        }
+    }
+
+    handleGrab() {
+        // Player chooses to grab (draw a new card) - Mode 1
+        // Current card in response area goes to discard pile
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+        this.drawCardForPlayer(currentPlayer);
     }
 
     handleChi() {
@@ -990,7 +1113,7 @@ class GameController {
 
     handleKai() {
         const humanPlayer = this.state.players[0];
-        const responseCard = humanPlayer.responseArea;
+        const responseCard = this.state.currentResponseCard;
         
         if (!responseCard) return;
         
@@ -1007,8 +1130,12 @@ class GameController {
         // Remove cards from hand
         matchingCards.forEach(card => humanPlayer.removeCard(card.id));
         
-        // Remove response card
-        humanPlayer.responseArea = null;
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area
         const group = {
@@ -1034,7 +1161,7 @@ class GameController {
 
     handlePeng() {
         const humanPlayer = this.state.players[0];
-        const responseCard = humanPlayer.responseArea;
+        const responseCard = this.state.currentResponseCard;
         
         if (!responseCard) return;
         
@@ -1051,8 +1178,12 @@ class GameController {
         // Remove cards from hand
         matchingCards.forEach(card => humanPlayer.removeCard(card.id));
         
-        // Remove response card
-        humanPlayer.responseArea = null;
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area (碰 forms a temporary group, waiting for 4th card to become 鱼)
         const group = {
@@ -1082,32 +1213,82 @@ class GameController {
         
         if (responseCard.isJiang()) {
             // Check for jiangshixiang
-            const canFormJia = GameLogic.canFormJiangShiXiangJia([...humanPlayer.hand, responseCard]);
-            if (canFormJia.length > 0 && this.verifyPlayerHasCards(humanPlayer, canFormJia[0])) {
+            const jiangShiXiangGroups = GameLogic.canFormJiangShiXiangJia([...humanPlayer.hand, responseCard]);
+            if (jiangShiXiangGroups.length > 0 && this.verifyPlayerHasCards(humanPlayer, jiangShiXiangGroups[0])) {
                 choices.push({
                     name: '将士象架',
                     score: 1,
-                    action: 'jiangshixiang'
+                    action: 'jiangshixiang',
+                    cardsNeeded: ['SHI', 'XIANG'],
+                    color: jiangShiXiangGroups[0].color
                 });
             }
             choices.push({
                 name: '单将组',
                 score: 1,
-                action: 'single-jiang'
+                action: 'single-jiang',
+                cardsNeeded: []
             });
         } else if (responseCard.isGoldBar) {
             choices.push({
                 name: '单金条组',
                 score: 3,
-                action: 'single-goldbar'
+                action: 'single-goldbar',
+                cardsNeeded: []
             });
         } else {
-            // Check for various combinations
-            choices.push({
-                name: '对子',
-                score: 0,
-                action: 'pair'
-            });
+            // Check for pair (对子) - need matching card
+            const matchingCards = humanPlayer.hand.filter(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCards.length > 0) {
+                choices.push({
+                    name: '对子 (需1张匹配牌)',
+                    score: 0,
+                    action: 'pair',
+                    cardsNeeded: [{ rank: responseCard.rank, color: responseCard.color, count: 1 }]
+                });
+            }
+            
+            // Check for che-ma-pao combinations
+            const cheMaPaoGroups = GameLogic.canFormCheMaPaoJia([...humanPlayer.hand, responseCard]);
+            if (cheMaPaoGroups.length > 0) {
+                cheMaPaoGroups.forEach((group, idx) => {
+                    const neededRanks = [];
+                    if (responseCard.rank === RANKS.CHE) {
+                        neededRanks.push('MA', 'PAO');
+                    } else if (responseCard.rank === RANKS.MA) {
+                        neededRanks.push('CHE', 'PAO');
+                    } else if (responseCard.rank === RANKS.PAO) {
+                        neededRanks.push('CHE', 'MA');
+                    }
+                    choices.push({
+                        name: `${group.color}车马炮架`,
+                        score: 1,
+                        action: 'chemapao',
+                        cardsNeeded: neededRanks,
+                        color: group.color
+                    });
+                });
+            }
+            
+            // Check for different color zu
+            const zuGroups = GameLogic.canFormDifferentColorZu([...humanPlayer.hand, responseCard]);
+            if (zuGroups.length > 0) {
+                zuGroups.forEach((group, idx) => {
+                    choices.push({
+                        name: `${responseCard.rank}四色组`,
+                        score: 1,
+                        action: 'zu',
+                        cardsNeeded: group.colors.filter(c => c !== responseCard.color).map(c => ({ rank: responseCard.rank, color: c, count: 1 }))
+                    });
+                });
+            }
+        }
+        
+        if (choices.length === 0) {
+            this.showNotification('无法吃该牌');
+            return;
         }
         
         this.showChoiceModal('选择吃牌方式', choices, (choice) => {
@@ -1124,6 +1305,186 @@ class GameController {
             return hasJiang && hasShi && hasXiang;
         }
         return true;
+    }
+
+    canFormGroupWithCard(player, card) {
+        // Check if player can form any valid group with the card
+        if (card.isJiang()) {
+            // Can always form single jiang group
+            return true;
+        } else if (card.isGoldBar) {
+            // Can always form single gold bar group
+            return true;
+        } else {
+            // Check if can form pair (need 1 matching card in hand)
+            const matching = player.hand.filter(c => 
+                c.rank === card.rank && c.color === card.color
+            );
+            if (matching.length >= 1) return true;
+            
+            // Check for chemapao or jiangshixiang
+            const jiangShiXiangJiaGroups = GameLogic.canFormJiangShiXiangJia([...player.hand, card]);
+            if (jiangShiXiangJiaGroups.length > 0) return true;
+            
+            const cheMaPaoGroups = GameLogic.canFormCheMaPaoJia([...player.hand, card]);
+            if (cheMaPaoGroups.length > 0) return true;
+            
+            // Check for zu groups
+            const zuGroups = GameLogic.canFormDifferentColorZu([...player.hand, card]);
+            if (zuGroups.length > 0) return true;
+        }
+        return false;
+    }
+
+    handleAIChiOrGrabOrPass(aiPlayer) {
+        // AI decides whether to chi, grab (mode 1), or pass (mode 2)
+        const responseCard = aiPlayer.responseArea;
+        if (!responseCard) {
+            if (this.state.isDrawnCard) {
+                // Mode 2: pass to next player
+                this.executeAIPass(aiPlayer);
+            } else {
+                // Mode 1: draw card
+                this.drawCardForPlayer(aiPlayer);
+            }
+            return;
+        }
+        
+        const canChi = this.canFormGroupWithCard(aiPlayer, responseCard);
+        
+        // Simple AI logic: chi if possible and random check passes (30% chance)
+        if (canChi && Math.random() < AI_CHI_THRESHOLD) {
+            // AI chooses to chi
+            setTimeout(() => {
+                this.executeAIChi(aiPlayer, responseCard);
+            }, 1000);
+        } else if (this.state.isDrawnCard) {
+            // Mode 2: AI chooses to pass
+            setTimeout(() => {
+                this.executeAIPass(aiPlayer);
+            }, 1000);
+        } else {
+            // Mode 1: AI chooses to grab
+            setTimeout(() => {
+                this.showNotification(`${aiPlayer.name} 选择抓牌`);
+                this.drawCardForPlayer(aiPlayer);
+            }, 1000);
+        }
+    }
+
+    executeAIPass(aiPlayer) {
+        const cardToPass = aiPlayer.responseArea;
+        
+        if (cardToPass) {
+            this.showNotification(`${aiPlayer.name} 选择过牌`);
+            
+            // Add to player's discard pile
+            aiPlayer.discardPile.push(cardToPass);
+            aiPlayer.responseArea = null;
+            
+            // Move to next player's response area
+            const currentIndex = this.state.players.indexOf(aiPlayer);
+            const nextPlayerIndex = (currentIndex + 1) % 4;
+            const nextPlayer = this.state.players[nextPlayerIndex];
+            nextPlayer.responseArea = cardToPass;
+            this.state.currentResponseCard = cardToPass;
+            this.state.isDrawnCard = false; // Reset for next player
+            
+            this.updateAllPlayerAreas();
+            
+            // Next player becomes current player
+            this.state.currentPlayerIndex = nextPlayerIndex;
+            
+            // Check for responses from all players
+            this.checkForResponses(nextPlayerIndex);
+        }
+    }
+
+    executeAIChi(aiPlayer, responseCard) {
+        this.showNotification(`${aiPlayer.name} 选择吃牌`);
+        
+        // Remove from response area
+        aiPlayer.responseArea = null;
+        
+        // Determine best group to form and remove required cards from hand
+        let group;
+        if (responseCard.isJiang()) {
+            const jiangShiXiangJiaGroups = GameLogic.canFormJiangShiXiangJia([...aiPlayer.hand, responseCard]);
+            if (jiangShiXiangJiaGroups.length > 0) {
+                const groupInfo = jiangShiXiangJiaGroups[0];
+                if (this.verifyPlayerHasCards(aiPlayer, groupInfo)) {
+                    // Remove SHI and XIANG from hand for JiangShiXiang group
+                    const shiCard = aiPlayer.hand.find(c => c.rank === RANKS.SHI && c.color === groupInfo.color);
+                    const xiangCard = aiPlayer.hand.find(c => c.rank === RANKS.XIANG && c.color === groupInfo.color);
+                    if (shiCard) aiPlayer.removeCard(shiCard.id);
+                    if (xiangCard) aiPlayer.removeCard(xiangCard.id);
+                    
+                    group = {
+                        type: 'jiangshixiang',
+                        cards: [responseCard, shiCard, xiangCard].filter(c => c),
+                        score: 1,
+                        name: '将士象架'
+                    };
+                } else {
+                    group = {
+                        type: 'single-jiang',
+                        cards: [responseCard],
+                        score: 1,
+                        name: '单将组'
+                    };
+                }
+            } else {
+                group = {
+                    type: 'single-jiang',
+                    cards: [responseCard],
+                    score: 1,
+                    name: '单将组'
+                };
+            }
+        } else if (responseCard.isGoldBar) {
+            group = {
+                type: 'single-goldbar',
+                cards: [responseCard],
+                score: 3,
+                name: '单金条组'
+            };
+        } else {
+            // For pair, remove one matching card from hand
+            const matchingCard = aiPlayer.hand.find(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCard) {
+                aiPlayer.removeCard(matchingCard.id);
+                group = {
+                    type: 'pair',
+                    cards: [responseCard, matchingCard],
+                    score: 0,
+                    name: '对子'
+                };
+            } else {
+                // Fallback: treat as single card group
+                group = {
+                    type: 'single',
+                    cards: [responseCard],
+                    score: 0,
+                    name: '单牌'
+                };
+            }
+        }
+        
+        aiPlayer.displayArea.push(group);
+        aiPlayer.score += group.score;
+        
+        this.updateAllPlayerAreas();
+        
+        // Set current player index to this AI before it continues its turn
+        const aiIndex = this.state.players.indexOf(aiPlayer);
+        if (aiIndex !== -1) {
+            this.state.currentPlayerIndex = aiIndex;
+        }
+        
+        // AI continues turn by discarding
+        this.handleAITurn(aiPlayer);
     }
 
     showChoiceModal(title, choices, callback) {
@@ -1158,13 +1519,66 @@ class GameController {
     executeChiAction(choice, responseCard) {
         const humanPlayer = this.state.players[0];
         
-        // Remove response card from response area
-        humanPlayer.responseArea = null;
+        // Remove matching cards from hand based on the choice
+        const cardsToAdd = [responseCard];
+        
+        if (choice.action === 'jiangshixiang') {
+            // Remove SHI and XIANG of the same color
+            const shiCard = humanPlayer.hand.find(c => c.rank === RANKS.SHI && c.color === choice.color);
+            const xiangCard = humanPlayer.hand.find(c => c.rank === RANKS.XIANG && c.color === choice.color);
+            if (shiCard) {
+                humanPlayer.removeCard(shiCard.id);
+                cardsToAdd.push(shiCard);
+            }
+            if (xiangCard) {
+                humanPlayer.removeCard(xiangCard.id);
+                cardsToAdd.push(xiangCard);
+            }
+        } else if (choice.action === 'pair') {
+            // Remove one matching card
+            const matchingCard = humanPlayer.hand.find(c => 
+                c.rank === responseCard.rank && c.color === responseCard.color
+            );
+            if (matchingCard) {
+                humanPlayer.removeCard(matchingCard.id);
+                cardsToAdd.push(matchingCard);
+            }
+        } else if (choice.action === 'chemapao') {
+            // Remove CHE, MA, PAO of same color (excluding response card)
+            const neededRanks = [];
+            if (responseCard.rank !== RANKS.CHE) neededRanks.push(RANKS.CHE);
+            if (responseCard.rank !== RANKS.MA) neededRanks.push(RANKS.MA);
+            if (responseCard.rank !== RANKS.PAO) neededRanks.push(RANKS.PAO);
+            
+            neededRanks.forEach(rank => {
+                const card = humanPlayer.hand.find(c => c.rank === rank && c.color === choice.color);
+                if (card) {
+                    humanPlayer.removeCard(card.id);
+                    cardsToAdd.push(card);
+                }
+            });
+        } else if (choice.action === 'zu') {
+            // Remove cards of different colors with same rank
+            choice.cardsNeeded.forEach(needed => {
+                const card = humanPlayer.hand.find(c => c.rank === needed.rank && c.color === needed.color);
+                if (card) {
+                    humanPlayer.removeCard(card.id);
+                    cardsToAdd.push(card);
+                }
+            });
+        }
+        
+        // Find and remove response card from whoever has it in their response area
+        this.state.players.forEach(player => {
+            if (player.responseArea === responseCard) {
+                player.responseArea = null;
+            }
+        });
         
         // Add to display area
         const group = {
             type: choice.action,
-            cards: [responseCard],
+            cards: cardsToAdd,
             score: choice.score,
             name: choice.name
         };
@@ -1197,6 +1611,7 @@ class GameController {
         document.getElementById('kaiButton').classList.add('hidden');
         document.getElementById('pengButton').classList.add('hidden');
         document.getElementById('chiButton').classList.add('hidden');
+        document.getElementById('grabButton').classList.add('hidden');
         document.getElementById('passButton').classList.add('hidden');
     }
 
@@ -1241,7 +1656,13 @@ class GameController {
                 ).slice(0, 3);
                 
                 matchingCards.forEach(card => aiPlayer.removeCard(card.id));
-                aiPlayer.responseArea = null;
+                
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'kai',
@@ -1265,7 +1686,13 @@ class GameController {
                 ).slice(0, 2);
                 
                 matchingCards.forEach(card => aiPlayer.removeCard(card.id));
-                aiPlayer.responseArea = null;
+                
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'peng',
@@ -1281,7 +1708,12 @@ class GameController {
                 setTimeout(() => this.handleAITurn(aiPlayer), 1000);
             } else if (action === 'chi') {
                 // AI performs chi
-                aiPlayer.responseArea = null;
+                // Find and remove response card from whoever has it in their response area
+                this.state.players.forEach(player => {
+                    if (player.responseArea === responseCard) {
+                        player.responseArea = null;
+                    }
+                });
                 
                 const group = {
                     type: 'pair',
@@ -1300,36 +1732,42 @@ class GameController {
     }
 
     drawCard() {
+        // Wrapper for backward compatibility
+        this.drawCardForPlayer(this.state.players[this.state.currentPlayerIndex]);
+    }
+
+    drawCardForPlayer(player) {
         if (this.state.deck.length === 0) {
             this.showNotification('流局！');
             this.endGame(-1);
             return;
         }
         
-        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         const newCard = this.state.deck.pop();
         
         // KEY FIX: Old card goes to PLAYER'S OWN discard pile, new card becomes response card
-        if (currentPlayer.responseArea) {
-            currentPlayer.discardPile.push(currentPlayer.responseArea);
+        if (player.responseArea) {
+            player.discardPile.push(player.responseArea);
         }
-        currentPlayer.responseArea = newCard;
+        player.responseArea = newCard;
         this.state.currentResponseCard = newCard;
+        this.state.isDrawnCard = true; // Mark this as a drawn card (Mode 2)
         
         this.updateAllPlayerAreas();
-        this.showNotification(`${currentPlayer.name} 抓了一张牌`);
+        this.showNotification(`${player.name} 抓了一张牌`);
         
         // If it's jiang or goldbar, current player MUST handle it
         if (newCard.isJiang() || newCard.isGoldBar) {
-            if (currentPlayer.isAI) {
-                this.handleAIJiangOrGoldBar(currentPlayer, newCard);
+            if (player.isAI) {
+                this.handleAIJiangOrGoldBar(player, newCard);
             } else {
                 this.showJiangGoldBarChoices(newCard);
             }
         } else {
-            // Check for responses (胡/开/碰/吃) to the new card
+            // Check for responses (胡/开/碰) to the new card
             // Start from current player
-            this.checkForResponses(this.state.currentPlayerIndex);
+            const playerIndex = this.state.players.indexOf(player);
+            this.checkForResponses(playerIndex);
         }
     }
 
@@ -1450,6 +1888,9 @@ class GameController {
         // Update display area
         this.updateDisplayArea(player, index);
         
+        // Update discard area (visible to all players)
+        this.updateDiscardArea(player, index);
+        
         // Update score and declared kan count
         const scoreEl = document.querySelector(`#player${index}Area .player-score`);
         if (scoreEl) {
@@ -1476,13 +1917,41 @@ class GameController {
     }
 
     handleNoResponse() {
-        // No one responded - draw a card
+        // No one responded (no hu/kai/peng)
+        // KEY FIX: Enable chi/grab or chi/pass buttons, disable hu/kai/peng
         this.state.waitingForResponse = false;
-        this.showNotification('无人响应，抓牌');
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         
-        setTimeout(() => {
-            this.drawCard();
-        }, 500);
+        // If current player is human (player 0), update button states
+        if (this.state.currentPlayerIndex === 0 && currentPlayer.responseArea) {
+            this.showNotification('无人响应');
+            this.updateActionPanelAfterNoResponse(currentPlayer.responseArea);
+        } else {
+            // AI player decides
+            this.handleAIChiOrGrabOrPass(currentPlayer);
+        }
+    }
+
+    updateActionPanelAfterNoResponse(responseCard) {
+        // Update panel to disable hu/kai/peng and enable chi/grab or chi/pass
+        const humanPlayer = this.state.players[0];
+        
+        // Disable hu/kai/peng
+        document.getElementById('huButton').disabled = true;
+        document.getElementById('kaiButton').disabled = true;
+        document.getElementById('pengButton').disabled = true;
+        
+        // Enable chi (if possible) and grab/pass
+        const canChi = this.canFormGroupWithCard(humanPlayer, responseCard);
+        document.getElementById('chiButton').disabled = !canChi;
+        
+        if (this.state.isDrawnCard) {
+            // Mode 2: enable pass
+            document.getElementById('passButton').disabled = false;
+        } else {
+            // Mode 1: enable grab
+            document.getElementById('grabButton').disabled = false;
+        }
     }
 
     updateHandArea(player) {
@@ -1577,6 +2046,24 @@ class GameController {
             });
             
             displayArea.appendChild(groupEl);
+        });
+    }
+
+    updateDiscardArea(player, index) {
+        const discardArea = document.getElementById(`player${index}Discard`);
+        if (!discardArea) return;
+        
+        const discardCards = discardArea.querySelector('.discard-cards');
+        if (!discardCards) return;
+        
+        discardCards.innerHTML = '';
+        
+        // Show discard pile in reverse order (newest on top)
+        const reversedPile = [...player.discardPile].reverse();
+        reversedPile.forEach(card => {
+            const cardEl = this.createCardElement(card, true);
+            cardEl.classList.add('discard-card');
+            discardCards.appendChild(cardEl);
         });
     }
 
