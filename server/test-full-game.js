@@ -66,8 +66,8 @@ class GamePlayer {
 
     // Collective inquiry phase - everyone can respond
     if (responsePhase === 'collective') {
-      // Check if I can HU (increased probability to help games complete)
-      if (responseCard && Math.random() > 0.85) {
+      // Check if I can HU (increased probability to 30% to help games complete)
+      if (responseCard && Math.random() > 0.70) {
         console.log(`[${this.name}] Attempting HU!`);
         this.room.send('action', { action: 'hu' });
         return;

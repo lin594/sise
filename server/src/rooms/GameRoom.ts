@@ -178,7 +178,7 @@ export class GameRoom extends Room<GameState> {
       const player = this.state.players.get(clientId)!;
       player.handCount = hand.length;
 
-      // Send private hand to client
+      // Send private hand to client (only if not AI or if client exists)
       const client = this.clients.find(c => c.sessionId === clientId);
       if (client) {
         this.sendHandToClient(client, hand);
