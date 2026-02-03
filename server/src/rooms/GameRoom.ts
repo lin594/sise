@@ -401,7 +401,12 @@ export class GameRoom extends Room<GameState> {
         this.handleGrab(client);
         break;
       case ACTIONS.PASS:
-        this.handlePass(client);
+        // Pass can be during collective inquiry or self mode 2
+        if (this.state.responsePhase === RESPONSE_PHASES.COLLECTIVE) {
+          this.handleResponse(client, ACTIONS.PASS);
+        } else {
+          this.handlePass(client);
+        }
         break;
     }
   }
