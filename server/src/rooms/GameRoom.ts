@@ -194,9 +194,47 @@ export class GameRoom extends Room<GameState> {
     this.state.deckCount = this.deck.length;
   }
 
+  private sortHand(hand: ICard[]): ICard[] {
+    // Sort cards by color first, then by rank
+    // Color priority: red > black > green > white
+    // Rank priority: Jiang > 10 > 9 > ... > 1, Gold bars at end
+    const colorOrder: { [key: string]: number } = {
+      'red': 0,
+      'black': 1,
+      'green': 2,
+      'white': 3,
+      'gold': 4  // Gold bars last
+    };
+
+    const rankOrder: { [key: string]: number } = {
+      [RANKS.JIANG]: 0,
+      '10': 1,
+      '9': 2,
+      '8': 3,
+      '7': 4,
+      '6': 5,
+      '5': 6,
+      '4': 7,
+      '3': 8,
+      '2': 9,
+      '1': 10,
+      'gold': 11  // Gold bars at end
+    };
+
+    return [...hand].sort((a, b) => {
+      // Sort by color first
+      const colorDiff = colorOrder[a.color] - colorOrder[b.color];
+      if (colorDiff !== 0) return colorDiff;
+      
+      // Then by rank
+      return rankOrder[a.rank] - rankOrder[b.rank];
+    });
+  }
+
   private sendHandToClient(client: Client, hand: ICard[]) {
-    console.log(`Sending hand to client ${client.sessionId}: ${hand.length} cards`);
-    client.send("private_hand", hand);
+    const sortedHand = this.sortHand(hand);
+    console.log(`Sending hand to client ${client.sessionId}: ${sortedHand.length} cards`);
+    client.send("private_hand", sortedHand);
   }
 
   private handleDeclareKong(client: Client, count: number) {
@@ -319,17 +357,16 @@ export class GameRoom extends Room<GameState> {
 
   private checkReadyToStart() {
     // Give players some time to reveal fish, then auto-start
-    // For now, start immediately after all declared
     const allDeclared = Array.from(this.state.players.values())
       .every(p => p.hasDeclared);
 
     if (allDeclared) {
-      // Start after a short delay to allow more fish reveals
+      // Start after a short delay (1 second) to allow more fish reveals
       setTimeout(() => {
         if (this.state.phase === PHASES.DECLARING) {
           this.startPlayingPhase();
         }
-      }, 3000);
+      }, 1000); // Reduced from 3000ms to 1000ms for better UX
     }
   }
 

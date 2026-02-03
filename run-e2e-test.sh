@@ -8,6 +8,9 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Create test-results directory if it doesn't exist
+mkdir -p test-results
+
 # Kill any existing processes on our ports
 echo "🧹 Cleaning up existing processes..."
 lsof -ti:2567 | xargs kill -9 2>/dev/null || true
