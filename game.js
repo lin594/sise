@@ -1611,6 +1611,7 @@ class GameController {
         document.getElementById('kaiButton').classList.add('hidden');
         document.getElementById('pengButton').classList.add('hidden');
         document.getElementById('chiButton').classList.add('hidden');
+        document.getElementById('grabButton').classList.add('hidden');
         document.getElementById('passButton').classList.add('hidden');
     }
 
