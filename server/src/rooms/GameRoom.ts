@@ -655,10 +655,24 @@ export class GameRoom extends Room<GameState> {
         // End game
         this.handleGameEnd(playerId);
       } else {
-        // Invalid hu, treat as pass
-        currentPlayer.discardPile.push(toSchemaCard(responseCard));
-        this.state.lastAction = `${player.name} 胡牌失败`;
-        this.enterSelfMode1();
+        // Invalid hu - restore response card and treat player as passing
+        console.log(`${player.name} attempted invalid HU, treating as PASS`);
+        currentPlayer.responseArea.push(toSchemaCard(responseCard));
+        this.state.lastAction = `${player.name} 无效胡牌`;
+        
+        // Send error to player
+        const playerClient = this.clients.find(c => c.sessionId === playerId);
+        if (playerClient) {
+          playerClient.send("error", { message: "无效的胡牌！手牌无法组成有效牌组" });
+        }
+        
+        // Mark this player as having responded with PASS
+        this.pendingResponses.set(playerId, ACTIONS.PASS);
+        
+        // Check if all players have now responded
+        if (this.pendingResponses.size === this.clients.length) {
+          this.resolveCollectiveInquiry();
+        }
       }
       
     } else if (action === ACTIONS.KAI) {
@@ -712,9 +726,21 @@ export class GameRoom extends Room<GameState> {
           this.handleAIAction(playerId);
         }
       } else {
-        // Invalid kai
-        currentPlayer.discardPile.push(toSchemaCard(responseCard));
-        this.enterSelfMode1();
+        // Invalid kai - restore response card and treat as PASS
+        console.log(`${player.name} attempted invalid KAI, treating as PASS`);
+        currentPlayer.responseArea.push(toSchemaCard(responseCard));
+        this.state.lastAction = `${player.name} 无效开牌`;
+        
+        const playerClient = this.clients.find(c => c.sessionId === playerId);
+        if (playerClient) {
+          playerClient.send("error", { message: "无效的开牌！需要3张相同的牌" });
+        }
+        
+        // Mark as PASS and continue
+        this.pendingResponses.set(playerId, ACTIONS.PASS);
+        if (this.pendingResponses.size === this.clients.length) {
+          this.resolveCollectiveInquiry();
+        }
       }
       
     } else if (action === ACTIONS.PENG) {
@@ -761,9 +787,21 @@ export class GameRoom extends Room<GameState> {
           this.handleAIAction(playerId);
         }
       } else {
-        // Invalid peng
-        currentPlayer.discardPile.push(toSchemaCard(responseCard));
-        this.enterSelfMode1();
+        // Invalid peng - restore response card and treat as PASS
+        console.log(`${player.name} attempted invalid PENG, treating as PASS`);
+        currentPlayer.responseArea.push(toSchemaCard(responseCard));
+        this.state.lastAction = `${player.name} 无效碰牌`;
+        
+        const playerClient = this.clients.find(c => c.sessionId === playerId);
+        if (playerClient) {
+          playerClient.send("error", { message: "无效的碰牌！需要2张相同的牌" });
+        }
+        
+        // Mark as PASS and continue
+        this.pendingResponses.set(playerId, ACTIONS.PASS);
+        if (this.pendingResponses.size === this.clients.length) {
+          this.resolveCollectiveInquiry();
+        }
       }
     }
   }

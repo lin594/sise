@@ -93,9 +93,14 @@ const canDiscard = computed(() => {
   return card.rank !== '将' && !card.isGoldBar;
 });
 
-// Simplified logic - in real implementation, check hand combinations
+// Simplified logic - check if hand can form valid groups with response card
 const canHu = computed(() => {
-  return props.responsePhase === 'collective' && props.responseCard;
+  if (props.responsePhase !== 'collective' || !props.responseCard) return false;
+  
+  // Basic check: need at least some cards to form groups
+  // A more complete check would validate actual group formations
+  // For now, just check we have cards (full validation happens on server)
+  return props.playerHand.length >= 2; // At minimum need 2 cards to form a group with response
 });
 
 const canKai = computed(() => {
