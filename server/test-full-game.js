@@ -66,8 +66,8 @@ class GamePlayer {
 
     // Collective inquiry phase - everyone can respond
     if (responsePhase === 'collective') {
-      // Check if I can HU (simplified - just random for now)
-      if (responseCard && Math.random() > 0.95) {
+      // Check if I can HU (increased probability to help games complete)
+      if (responseCard && Math.random() > 0.85) {
         console.log(`[${this.name}] Attempting HU!`);
         this.room.send('action', { action: 'hu' });
         return;
@@ -429,7 +429,9 @@ async function runFullGameSimulation() {
     if (gameEnded) {
       console.log('✅ FULL GAME SIMULATION SUCCESSFUL!');
     } else {
-      console.log('⚠️ GAME DID NOT COMPLETE NATURALLY');
+      console.log('❌ GAME DID NOT COMPLETE NATURALLY');
+      console.log('='.repeat(80));
+      throw new Error('Game failed to reach hu (win) or draw state naturally. This indicates a game flow issue.');
     }
     console.log('='.repeat(80));
 
