@@ -141,6 +141,16 @@
         </div>
       </div>
     </div>
+    
+    <!-- Debug Info (remove after testing) -->
+    <div v-if="gameState && gameState.phase === 'declaring'" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 10000;">
+      <div>Phase: {{ gameState?.phase }}</div>
+      <div>showDeclarePanel: {{ showDeclarePanel }}</div>
+      <div>playerHand: {{ playerHand.length }} cards</div>
+      <div>players.length: {{ players.length }}</div>
+      <div>players[0]: {{ players[0] ? 'exists' : 'null' }}</div>
+      <div>hasDeclared: {{ players[0]?.hasDeclared }}</div>
+    </div>
 
     <!-- Chi Modal -->
     <div v-if="showChiModal" class="modal-overlay">
@@ -365,6 +375,15 @@ onMounted(() => {
   
   // Function to check if we should show declare panel
   function checkAndShowDeclarePanel() {
+    console.log('checkAndShowDeclarePanel called');
+    console.log('- gameState:', !!gameState.value);
+    console.log('- phase:', gameState.value?.phase);
+    console.log('- players count:', players.value.length);
+    console.log('- players[0]:', !!players.value[0]);
+    console.log('- hasDeclared:', players.value[0]?.hasDeclared);
+    console.log('- playerHand length:', playerHand.value.length);
+    console.log('- showDeclarePanel current:', showDeclarePanel.value);
+    
     // Check all conditions:
     // 1. Phase is declaring
     // 2. We have a player (current user)
@@ -372,11 +391,14 @@ onMounted(() => {
     // 4. We have received our hand cards
     if (gameState.value && 
         gameState.value.phase === 'declaring' && 
+        players.value.length > 0 &&
         players.value[0] && 
         !players.value[0].hasDeclared &&
         playerHand.value.length > 0) {
-      console.log('Showing declare panel - conditions met');
+      console.log('✅ Showing declare panel - all conditions met');
       showDeclarePanel.value = true;
+    } else {
+      console.log('❌ Not showing panel - conditions not met');
     }
   }
 
