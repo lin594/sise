@@ -49,6 +49,29 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            exposedArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            fishArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            discardCount: number;
+            scoreBreakdown: {
+                key: string;
+                label: string;
+                count: number;
+                unit: number;
+                total: number;
+            }[];
+            totalScore: number;
         }[];
     } | null, RoundResultPayload | {
         winnerId: string | null;
@@ -63,6 +86,29 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            exposedArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            fishArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            discardCount: number;
+            scoreBreakdown: {
+                key: string;
+                label: string;
+                count: number;
+                unit: number;
+                total: number;
+            }[];
+            totalScore: number;
         }[];
     } | null>;
     debugApplied: import("vue").Ref<{
@@ -97,4 +143,6 @@ export declare function useRoom(playerName?: string): {
     declareKongs: (count: number) => void;
     debugSetup: (scenario: string) => void;
     startGame: () => void;
+    nextRound: () => void;
+    returnLobby: () => void;
 };

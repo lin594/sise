@@ -5,7 +5,7 @@ import DebugPanel from "@/components/DebugPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, actionLogs, sendAction, sendDiscardCard, debugSetup, startGame, } = useRoom("玩家");
+const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, actionLogs, sendAction, sendDiscardCard, debugSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
@@ -194,6 +194,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
@@ -401,6 +403,12 @@ if (__VLS_ctx.showEndPanel) {
                 ...{ class: "settlement-name" },
             });
             (p.name);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "settlement-meta" },
+            });
+            (p.exposedArea.length);
+            (p.fishArea.length);
+            (p.discardCount);
             if (p.hand.length) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                     ...{ class: "settlement-cards" },
@@ -423,8 +431,104 @@ if (__VLS_ctx.showEndPanel) {
                     ...{ class: "settlement-empty" },
                 });
             }
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "settlement-zone" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "zone-title" },
+            });
+            if (p.exposedArea.length) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "settlement-cards" },
+                });
+                for (const [card] of __VLS_getVForSourceType((p.exposedArea))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`settle-e-${p.clientId}-${card.id}`),
+                        card: (card),
+                    }));
+                    const __VLS_28 = __VLS_27({
+                        key: (`settle-e-${p.clientId}-${card.id}`),
+                        card: (card),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+                }
+            }
+            else {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "settlement-empty" },
+                });
+            }
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "settlement-zone" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "zone-title" },
+            });
+            if (p.fishArea.length) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "settlement-cards" },
+                });
+                for (const [card] of __VLS_getVForSourceType((p.fishArea))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`settle-f-${p.clientId}-${card.id}`),
+                        card: (card),
+                    }));
+                    const __VLS_31 = __VLS_30({
+                        key: (`settle-f-${p.clientId}-${card.id}`),
+                        card: (card),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+                }
+            }
+            else {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "settlement-empty" },
+                });
+            }
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "score-breakdown" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "zone-title" },
+            });
+            if (!p.scoreBreakdown.length) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "settlement-empty" },
+                });
+            }
+            else {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
+                for (const [line] of __VLS_getVForSourceType((p.scoreBreakdown))) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
+                        key: (`score-${p.clientId}-${line.key}`),
+                    });
+                    (line.label);
+                    (line.count);
+                    (line.unit);
+                    (line.total);
+                }
+            }
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "score-total" },
+            });
+            (p.totalScore);
         }
     }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "end-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.nextRound) },
+        ...{ class: "primary" },
+        disabled: (!__VLS_ctx.isHost || !__VLS_ctx.isEnded),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.returnLobby) },
+        ...{ class: "ghost" },
+        disabled: (!__VLS_ctx.isEnded),
+    });
 }
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
@@ -446,8 +550,24 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -469,8 +589,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendAction: sendAction,
             sendDiscardCard: sendDiscardCard,
             startGame: startGame,
+            nextRound: nextRound,
+            returnLobby: returnLobby,
             isWaiting: isWaiting,
             isPlaying: isPlaying,
+            isEnded: isEnded,
             isHost: isHost,
             isMyTurn: isMyTurn,
             canAct: canAct,

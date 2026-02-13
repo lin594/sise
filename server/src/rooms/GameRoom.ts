@@ -18,6 +18,19 @@ interface RoundResultPlayer {
   clientId: string;
   name: string;
   hand: Card[];
+  exposedArea: Card[];
+  fishArea: Card[];
+  discardCount: number;
+  scoreBreakdown: ScoreBreakdownItem[];
+  totalScore: number;
+}
+
+interface ScoreBreakdownItem {
+  key: string;
+  label: string;
+  count: number;
+  unit: number;
+  total: number;
 }
 
 type HuLogMode = "off" | "all" | "success" | "fail";
@@ -79,6 +92,14 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.onMessage("start_game", (client) => {
       this.handleStartGame(client);
+    });
+
+    this.onMessage("next_round", (client) => {
+      this.handleNextRound(client);
+    });
+
+    this.onMessage("return_lobby", (client) => {
+      this.handleReturnLobby(client);
     });
 
     this.onMessage("declare_kongs", (client, value: number) => {
@@ -188,6 +209,26 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.ensureBotSeatsForStart();
     this.bootstrapRound();
+  }
+
+  private handleNextRound(client: Client): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId || this.state.phase !== "ended") {
+      return;
+    }
+    if (seatId !== this.state.hostPlayerId) {
+      return;
+    }
+    this.ensureBotSeatsForStart();
+    this.bootstrapRound();
+  }
+
+  private handleReturnLobby(client: Client): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId || this.state.phase !== "ended") {
+      return;
+    }
+    this.backToLobby();
   }
 
   private createHumanSeat(client: Client, token: string, rawName: string): string {
@@ -941,27 +982,136 @@ export class FourColorGameRoom extends Room<GameState> {
     return schemaCard;
   }
 
-  private toPlainCard(card: Card): Card {
+  private toPlainCard(card: { id: string; color: string; type: string; source?: string }): Card {
     return {
       id: card.id,
-      color: card.color,
-      type: card.type,
-      source: card.source ?? "upper",
+      color: card.color as Card["color"],
+      type: card.type as Card["type"],
+      source: card.source === "draw" ? "draw" : "upper",
     };
   }
 
-  private buildRoundResultPlayers(): RoundResultPlayer[] {
+  private getScoreRules(): Record<string, { label: string; unit: number }> {
+    return {
+      Pair: { label: "对子", unit: 0 },
+      FrameJMP: { label: "车马炮架", unit: 1 },
+      FrameJSX: { label: "将士象架", unit: 1 },
+      TripleZu: { label: "三兵组", unit: 1 },
+      QuadZu: { label: "四兵组", unit: 2 },
+      Triplet: { label: "坎", unit: 3 },
+      GoldTriplet: { label: "金条坎", unit: 9 },
+      SingleJiang: { label: "单将组", unit: 1 },
+      SingleGold: { label: "单金条组", unit: 3 },
+    };
+  }
+
+  private buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownItem[]; total: number } {
+    const rules = this.getScoreRules();
+    const counter = new Map<string, number>();
+    for (const group of groups) {
+      counter.set(group, (counter.get(group) ?? 0) + 1);
+    }
+
+    const items: ScoreBreakdownItem[] = [];
+    let total = 0;
+    for (const [key, count] of counter.entries()) {
+      const rule = rules[key];
+      const unit = rule?.unit ?? 0;
+      const label = rule?.label ?? key;
+      const lineTotal = unit * count;
+      total += lineTotal;
+      items.push({
+        key,
+        label,
+        count,
+        unit,
+        total: lineTotal,
+      });
+    }
+    items.sort((a, b) => b.total - a.total || b.unit - a.unit || a.key.localeCompare(b.key));
+    return { items, total };
+  }
+
+  private buildRoundResultPlayers(winnerId: string | null, groups: string[]): RoundResultPlayer[] {
+    const winnerScore = winnerId ? this.buildScoreBreakdown(groups) : { items: [], total: 0 };
     const result: RoundResultPlayer[] = [];
     for (const seatId of this.playerOrder) {
       const player = this.state.players.get(seatId);
       const hand = this.playerHands.get(seatId) ?? [];
+      const exposedArea = [...(player?.exposedArea ?? [])].map((card) => this.toPlainCard(card));
+      const fishArea = [...(player?.fishArea ?? [])].map((card) => this.toPlainCard(card));
+      const discardCount = player?.discardPile.length ?? 0;
+      const isWinner = winnerId === seatId;
       result.push({
         clientId: seatId,
         name: player?.name ?? seatId,
         hand: hand.map((card) => this.toPlainCard(card)),
+        exposedArea,
+        fishArea,
+        discardCount,
+        scoreBreakdown: isWinner ? winnerScore.items : [],
+        totalScore: isWinner ? winnerScore.total : 0,
       });
     }
     return result;
+  }
+
+  private backToLobby(): void {
+    this.clearBotTimer();
+    this.deck = [];
+    this.pendingResponse = null;
+    this.publicGeneralPool = [];
+    this.awaitingDiscardOwnerId = null;
+    this.lastTerminalFingerprint = "";
+    this.huLogDedup.clear();
+    this.huChecksTotal = 0;
+    this.huChecksValid = 0;
+    this.huChecksBySeat.clear();
+
+    const humanSeats = this.playerOrder.filter((seatId) => !this.botIds.has(seatId));
+    const humanSet = new Set(humanSeats);
+
+    for (const seatId of this.playerOrder) {
+      if (humanSet.has(seatId)) {
+        continue;
+      }
+      this.state.players.delete(seatId);
+      this.playerHands.delete(seatId);
+      this.baseNameBySeat.delete(seatId);
+    }
+
+    this.playerOrder = humanSeats;
+    this.botIds.clear();
+
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (!player) {
+        continue;
+      }
+      player.declaredKongs = 0;
+      player.discardPile.clear();
+      player.exposedArea.clear();
+      player.fishArea.clear();
+      this.playerHands.set(seatId, []);
+      const online = [...this.seatBySession.values()].includes(seatId);
+      player.connected = online;
+      player.isBot = false;
+      player.name = this.baseNameBySeat.get(seatId) ?? player.name;
+    }
+
+    if (!this.state.players.has(this.state.hostPlayerId) && this.playerOrder.length > 0) {
+      this.state.hostPlayerId = this.playerOrder[0];
+    }
+
+    this.state.phase = "waiting";
+    this.state.currentPlayerId = "";
+    this.state.responsePhase = "collective";
+    this.state.deckCount = 0;
+    this.state.publicDiscardPile.clear();
+    this.state.responseCard = new CardSchema();
+    this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
+    this.syncAllPrivateHands();
+    this.broadcastAvailableActions();
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
@@ -977,7 +1127,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.broadcast("round_result", {
       winnerId,
       groups,
-      players: this.buildRoundResultPlayers(),
+      players: this.buildRoundResultPlayers(winnerId, groups),
     });
 
     this.broadcastAvailableActions();

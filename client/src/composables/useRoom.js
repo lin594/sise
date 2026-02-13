@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Client } from "colyseus.js";
+import { sortHandCards } from "@/utils/cardSort";
 const WS_URL = import.meta.env.VITE_SERVER_URL || "ws://localhost:2567";
 function asCardArray(input) {
     const isCard = (x) => x &&
@@ -164,9 +165,13 @@ export function useRoom(playerName = "Player") {
                 pushLog(lastAction);
                 lastFingerprint = fingerprint;
             }
+            if (state.value?.phase !== "ended") {
+                huResult.value = null;
+                roundResult.value = null;
+            }
         });
         joined.onMessage("private_hand", (payload) => {
-            privateHand.value = payload;
+            privateHand.value = sortHandCards(payload ?? []);
         });
         joined.onMessage("available_actions", (payload) => {
             availableActions.value = payload;
@@ -176,7 +181,18 @@ export function useRoom(playerName = "Player") {
             pushLog(`HU_RESULT ${payload.winnerId}`);
         });
         joined.onMessage("round_result", (payload) => {
-            roundResult.value = payload;
+            roundResult.value = {
+                ...payload,
+                players: (payload.players ?? []).map((p) => ({
+                    ...p,
+                    hand: sortHandCards(p.hand ?? []),
+                    exposedArea: sortHandCards(p.exposedArea ?? []),
+                    fishArea: sortHandCards(p.fishArea ?? []),
+                    discardCount: Number(p.discardCount ?? 0),
+                    scoreBreakdown: p.scoreBreakdown ?? [],
+                    totalScore: Number(p.totalScore ?? 0),
+                })),
+            };
             pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
         });
         joined.onMessage("debug_applied", (payload) => {
@@ -215,6 +231,12 @@ export function useRoom(playerName = "Player") {
     function startGame() {
         room.value?.send("start_game");
     }
+    function nextRound() {
+        room.value?.send("next_round");
+    }
+    function returnLobby() {
+        room.value?.send("return_lobby");
+    }
     onMounted(() => {
         void connect();
     });
@@ -243,5 +265,7 @@ export function useRoom(playerName = "Player") {
         declareKongs,
         debugSetup,
         startGame,
+        nextRound,
+        returnLobby,
     };
 }

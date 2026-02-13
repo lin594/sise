@@ -85,13 +85,50 @@
           <div class="settlement-list">
             <div v-for="p in settlementPlayers" :key="`settle-${p.clientId}`" class="settlement-item">
               <p class="settlement-name">{{ p.name }}</p>
+              <p class="settlement-meta">
+                明示区: {{ p.exposedArea.length }} 张 / 将牌区: {{ p.fishArea.length }} 张 / 弃牌: {{ p.discardCount }} 张
+              </p>
               <div class="settlement-cards" v-if="p.hand.length">
                 <CardComp v-for="card in p.hand" :key="`settle-${p.clientId}-${card.id}`" :card="card" />
               </div>
               <p v-else class="settlement-empty">（无手牌）</p>
+
+              <div class="settlement-zone">
+                <p class="zone-title">明示区</p>
+                <div class="settlement-cards" v-if="p.exposedArea.length">
+                  <CardComp v-for="card in p.exposedArea" :key="`settle-e-${p.clientId}-${card.id}`" :card="card" />
+                </div>
+                <p v-else class="settlement-empty">（无）</p>
+              </div>
+
+              <div class="settlement-zone">
+                <p class="zone-title">将牌区</p>
+                <div class="settlement-cards" v-if="p.fishArea.length">
+                  <CardComp v-for="card in p.fishArea" :key="`settle-f-${p.clientId}-${card.id}`" :card="card" />
+                </div>
+                <p v-else class="settlement-empty">（无）</p>
+              </div>
+
+              <div class="score-breakdown">
+                <p class="zone-title">分数明细</p>
+                <p v-if="!p.scoreBreakdown.length" class="settlement-empty">（无）</p>
+                <ul v-else>
+                  <li v-for="line in p.scoreBreakdown" :key="`score-${p.clientId}-${line.key}`">
+                    {{ line.label }} x{{ line.count }}（{{ line.unit }}分）= {{ line.total }}分
+                  </li>
+                </ul>
+                <p class="score-total">总分: {{ p.totalScore }}</p>
+              </div>
             </div>
           </div>
         </section>
+
+        <div class="end-actions">
+          <button class="primary" :disabled="!isHost || !isEnded" @click="nextRound">
+            下一局（房主）
+          </button>
+          <button class="ghost" :disabled="!isEnded" @click="returnLobby">返回大厅</button>
+        </div>
       </div>
     </div>
   </main>
@@ -130,6 +167,8 @@ const {
   sendDiscardCard,
   debugSetup,
   startGame,
+  nextRound,
+  returnLobby,
 } = useRoom("玩家");
 
 const isWaiting = computed(() => state.value?.phase === "waiting");
@@ -499,6 +538,12 @@ async function copyInviteLink() {
   font-weight: 600;
 }
 
+.settlement-meta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #334155;
+}
+
 .settlement-cards {
   display: flex;
   flex-wrap: wrap;
@@ -508,6 +553,46 @@ async function copyInviteLink() {
 .settlement-empty {
   margin: 0;
   color: #64748b;
+}
+
+.settlement-zone {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.zone-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.score-breakdown {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.score-breakdown ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.score-breakdown li {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.score-total {
+  margin: 6px 0 0;
+  font-weight: 700;
+}
+
+.end-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 @media (max-width: 767px) {

@@ -1,105 +1,96 @@
-# 四色牌（自用联机版）
+﻿# 四色牌（联机版）
 
-面向“朋友一起玩”的部署场景，当前版本重点能力：
+一个基于 `Colyseus + Vue 3` 的四人联机对局项目。当前版本已支持完整对局流程（开局、吃碰杠、胡牌/流局、结算、下一局、返回大厅），并支持机器人补位与托管。
 
-- 单房间（不做多房并发）
-- 房主手动开局
-- 开局不足 4 人自动补机器人
-- 断线立即 BOT 托管
-- 玩家可随时用 token 重连并夺回原座位
+## 快速开始
 
-## 文档导航
+### 1) 安装依赖
 
-- `docs/SRS_v4.0.md`：需求规格
-- `docs/ARCHITECTURE.md`：架构与状态流
-- `docs/test-cases.md`：测试用例
-
-## 本地运行
+在项目根目录执行：
 
 ```bash
-# 终端1
-cd server
 npm install
-npm run dev
+npm run install:all
+```
 
-# 终端2
-cd client
-npm install
+### 2) 一键启动（推荐）
+
+```bash
 npm run dev
 ```
 
-访问：
+该命令会在根目录同时启动：
+- `server`（默认 `:2567`）
+- `client`（默认 `:5173`）
 
+访问：
 - 前端：`http://localhost:5173`
-- 后端健康检查：`http://localhost:2567/health`
+- 健康检查：`http://localhost:2567/health`
 - Colyseus 监控：`http://localhost:2567/colyseus`
 
-## Docker 运行
+## 构建
+
+在根目录执行：
+
+```bash
+npm run build
+```
+
+也可分别构建：
+
+```bash
+npm run build:server
+npm run build:client
+```
+
+## Docker 部署
 
 ```bash
 docker compose up --build
 ```
 
 访问：
-
 - 前端：`http://localhost:3000`
-- 后端：`ws://localhost:2567`
+- 后端（WebSocket）：`ws://localhost:2567`
 
-## 核心机制
+## 业务结构（简版）
 
-### 1) 单房间 + 房主手动开始
+### 核心流程
+- `waiting`：大厅等待，房主开始。
+- `playing`：对局进行，状态机驱动（摸牌、响应、弃牌、轮转）。
+- `ended`：本局结束，输出结算与分数明细，可“下一局”或“返回大厅”。
 
-- 第一个进入房间的真人玩家成为房主（`hostPlayerId`）。
-- 处于 `waiting` 阶段时，仅房主可点击“开始游戏”。
-- 开始后进入 `playing`，不接受新玩家，仅允许“已存在 token”玩家重连。
+### 关键机制
+- 房主机制：仅房主可开始游戏和“下一局”。
+- 补位机制：人数不足时自动补 `BOT`。
+- 托管机制：真人断线后立即托管，重连可夺回座位。
+- 胡牌判定：服务端权威校验，前端只展示可操作按钮。
+- 结算数据：赢家、牌型组、每人手牌/明示区/将牌区/弃牌数、逐项计分明细。
 
-### 2) 人数不足自动补位
-
-- 房主开始时，如果真人座位不足 4，自动补 `BOT_3 / BOT_4 ...` 直到 4 座。
-
-### 3) 断线托管 + 夺回
-
-- 真人断线后，该座位立即切为 `isBot=true` 托管（不等待超时）。
-- 该座位 token 永久保留。
-- 玩家后续携带同一 token 重连时，立即恢复原座位和控制权。
-
-## Token 重连说明
-
-前端会自动把服务端下发的 `playerToken` 存入 `localStorage`（key: `four_player_token`），下次进入时自动携带。
-
-- 同一个浏览器：刷新后自动重连原座位
-- 不同设备：需要手动同步 token（当前版本未做 UI 导入）
-
-## 环境变量（服务端）
-
-- `MIN_PLAYERS`：最少真人玩家数（默认 `1`）
-
-## 代码结构（关键）
+## 目录结构
 
 ```text
-server/src/rooms/GameRoom.ts
-  - 房主/座位/token/重连
-  - 机器人补位与托管
-  - 主循环（collective/self_eat/self_grab）
-  - debug 场景注入
-
-server/src/schema/game-state.schema.ts
-  - GameState / PlayerState（含 isBot/connected/hostPlayerId）
-
-client/src/composables/useRoom.ts
-  - Colyseus 连接
-  - token 保存与重连
-  - 状态订阅与玩家归一化
-
-client/src/App.vue
-  - 等待大厅（房主开始、邀请链接、在线状态）
-  - 对局主界面
-  - debug 面板
+client/                         # Vue 前端
+server/                         # Colyseus 服务端
+server/src/rooms/GameRoom.ts    # 对局主状态机
+server/src/rules/               # 规则与胡牌算法
+server/src/schema/              # 房间同步状态 Schema
+docs/                           # 项目文档
 ```
 
-## 当前限制
+## 详细文档
 
-- 仅单房间模式（符合自用场景）
-- token 目前默认本地存储，不支持 UI 导出/导入
-- 仍建议在公网部署时加 HTTPS + WSS 反代
+- `docs/DEPLOYMENT.md`：部署与运行说明（本地 / Docker / 常见问题）
+- `docs/BUSINESS_ARCH.md`：业务结构与状态流（角色、回合、结算、关键消息）
 
+## 环境变量（常用）
+
+服务端：
+- `MIN_PLAYERS`：允许开始时最少真人玩家数（默认 `1`）
+- `BOT_THINK_MS`：机器人思考延时毫秒（默认 `200`）
+- `ROOM_LOG` / `HU_LOG`：日志开关
+
+## 当前里程碑
+
+- 已完成：对局流程闭环、胡牌检测、公共弃牌展示、结算面板、下一局/返回大厅。
+- 持续优化：细节牌型展示、测试场景覆盖、UI 交互打磨。

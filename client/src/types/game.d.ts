@@ -30,6 +30,17 @@ export interface RoundResultPlayer {
     clientId: string;
     name: string;
     hand: Card[];
+    exposedArea: Card[];
+    fishArea: Card[];
+    discardCount: number;
+    scoreBreakdown: Array<{
+        key: string;
+        label: string;
+        count: number;
+        unit: number;
+        total: number;
+    }>;
+    totalScore: number;
 }
 export interface RoundResultPayload {
     winnerId: string | null;
