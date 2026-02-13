@@ -20,6 +20,8 @@ const isMyTurn = computed(() => {
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value);
 const isCompactLandscape = ref(false);
+const resettingLobby = ref(false);
+const globalError = ref("");
 const updateCompactLandscape = () => {
     isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
 };
@@ -174,6 +176,32 @@ const dealerName = computed(() => {
     }
     return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
+async function rebuildLobby() {
+    if (resettingLobby.value) {
+        return;
+    }
+    resettingLobby.value = true;
+    globalError.value = "";
+    try {
+        const response = await fetch("/colyseus/reset-room", { method: "POST" });
+        if (!response.ok) {
+            throw new Error("重建大厅失败");
+        }
+        const payload = (await response.json());
+        if (!payload?.ok || !payload.roomId) {
+            throw new Error(payload?.message || "重建大厅失败");
+        }
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("new", "1");
+        nextUrl.searchParams.set("roomId", payload.roomId);
+        nextUrl.searchParams.delete("playerToken");
+        window.location.href = nextUrl.toString();
+    }
+    catch (error) {
+        globalError.value = error instanceof Error ? error.message : "重建大厅失败";
+        resettingLobby.value = false;
+    }
+}
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -242,6 +270,18 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 (__VLS_ctx.state?.hostPlayerId || "-");
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 (__VLS_ctx.dealerName);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.rebuildLobby) },
+    ...{ class: "ghost reset-btn" },
+    disabled: (__VLS_ctx.resettingLobby),
+});
+(__VLS_ctx.resettingLobby ? "重建中..." : "重建大厅");
+if (__VLS_ctx.globalError) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "error global-error" },
+    });
+    (__VLS_ctx.globalError);
+}
 if (__VLS_ctx.isWaiting) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "lobby" },
@@ -652,6 +692,10 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
@@ -733,6 +777,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             isCompactLandscape: isCompactLandscape,
+            resettingLobby: resettingLobby,
+            globalError: globalError,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
@@ -751,6 +797,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             turnHint: turnHint,
             currentPlayerName: currentPlayerName,
             dealerName: dealerName,
+            rebuildLobby: rebuildLobby,
         };
     },
 });

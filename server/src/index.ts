@@ -24,11 +24,23 @@ gameServer.define("four-color", FourColorGameRoom);
 app.use("/colyseus", monitor());
 
 let creatingSingletonRoom: Promise<string> | null = null;
+let singletonRoomId = "";
+
+async function listFourColorRooms() {
+  return await matchMaker.query({ name: "four-color" });
+}
+
+async function isRoomAlive(roomId: string): Promise<boolean> {
+  if (!roomId) {
+    return false;
+  }
+  const rooms = await listFourColorRooms();
+  return rooms.some((room) => room.roomId === roomId);
+}
 
 async function getOrCreateSingletonRoomId(): Promise<string> {
-  const rooms = await matchMaker.query({ name: "four-color" });
-  if (rooms.length > 0) {
-    return rooms[0].roomId;
+  if (singletonRoomId && (await isRoomAlive(singletonRoomId))) {
+    return singletonRoomId;
   }
 
   if (creatingSingletonRoom) {
@@ -36,8 +48,14 @@ async function getOrCreateSingletonRoomId(): Promise<string> {
   }
 
   creatingSingletonRoom = (async () => {
+    const rooms = await listFourColorRooms();
+    if (rooms.length > 0) {
+      singletonRoomId = rooms[0].roomId;
+      return singletonRoomId;
+    }
     const created = await matchMaker.createRoom("four-color", {});
-    return created.roomId;
+    singletonRoomId = created.roomId;
+    return singletonRoomId;
   })();
 
   try {
@@ -57,6 +75,17 @@ app.get("/room-id", async (_req, res) => {
     res.json({ ok: true, roomId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to get room id";
+    res.status(500).json({ ok: false, message });
+  }
+});
+
+app.post("/reset-room", async (_req, res) => {
+  try {
+    const created = await matchMaker.createRoom("four-color", {});
+    singletonRoomId = created.roomId;
+    res.json({ ok: true, roomId: singletonRoomId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "failed to reset room";
     res.status(500).json({ ok: false, message });
   }
 });

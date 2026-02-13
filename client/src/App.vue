@@ -8,8 +8,12 @@
         <span>座位ID: {{ mySeatId || "-" }}</span>
         <span>房主: {{ state?.hostPlayerId || "-" }}</span>
         <span>庄家: {{ dealerName }}</span>
+        <button class="ghost reset-btn" :disabled="resettingLobby" @click="rebuildLobby">
+          {{ resettingLobby ? "重建中..." : "重建大厅" }}
+        </button>
       </div>
     </header>
+    <p v-if="globalError" class="error global-error">{{ globalError }}</p>
 
     <section v-if="isWaiting" class="lobby">
       <h2>等待大厅</h2>
@@ -226,6 +230,8 @@ const canDiscard = computed(
   () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value,
 );
 const isCompactLandscape = ref(false);
+const resettingLobby = ref(false);
+const globalError = ref("");
 const updateCompactLandscape = () => {
   isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
 };
@@ -394,6 +400,32 @@ const dealerName = computed(() => {
   return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
 
+async function rebuildLobby() {
+  if (resettingLobby.value) {
+    return;
+  }
+  resettingLobby.value = true;
+  globalError.value = "";
+  try {
+    const response = await fetch("/colyseus/reset-room", { method: "POST" });
+    if (!response.ok) {
+      throw new Error("重建大厅失败");
+    }
+    const payload = (await response.json()) as { ok?: boolean; roomId?: string; message?: string };
+    if (!payload?.ok || !payload.roomId) {
+      throw new Error(payload?.message || "重建大厅失败");
+    }
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("new", "1");
+    nextUrl.searchParams.set("roomId", payload.roomId);
+    nextUrl.searchParams.delete("playerToken");
+    window.location.href = nextUrl.toString();
+  } catch (error) {
+    globalError.value = error instanceof Error ? error.message : "重建大厅失败";
+    resettingLobby.value = false;
+  }
+}
+
 </script>
 
 <style scoped>
@@ -408,6 +440,14 @@ const dealerName = computed(() => {
   padding: clamp(0.25rem, 0.8vh, 0.5rem);
   background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
   overflow: hidden;
+}
+
+.global-error {
+  margin: 0;
+}
+
+.reset-btn {
+  margin-left: 0.25rem;
 }
 
 .layout.playing {
