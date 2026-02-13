@@ -45,19 +45,6 @@
       />
     </template>
 
-    <section class="logs">
-      <h2>动作日志</h2>
-      <small>机器人思考延时默认 200ms（可用 BOT_THINK_MS 调整）</small>
-      <div class="log-list">
-        <p v-for="item in actionLogs" :key="item.id">
-          <span class="log-time">{{ item.at }}</span>
-          <span>{{ item.text }}</span>
-        </p>
-      </div>
-    </section>
-
-    <DebugPanel hint="测试场景：点击后会自动做 PASS/FAIL 断言。" :result="debugResult" @run="runDebugScenario" />
-
     <ActionPanel
       v-if="isPlaying"
       :actions="availableActions"
@@ -187,18 +174,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
-import DebugPanel from "@/components/DebugPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-import type { AvailableAction, RoundResultPlayer } from "@/types/game";
-
-type DebugResult = {
-  scenario: string;
-  ok: boolean;
-  summary: string;
-  errors: string[];
-};
+import type { RoundResultPlayer } from "@/types/game";
 
 const {
   connected,
@@ -209,14 +188,11 @@ const {
   availableActions,
   huResult,
   roundResult,
-  debugApplied,
   joinError,
   declareError,
-  actionLogs,
   sendAction,
   sendDiscardCard,
   declareSetup,
-  debugSetup,
   startGame,
   nextRound,
   returnLobby,
@@ -387,115 +363,6 @@ const currentPlayerName = computed(() => {
   return player?.name || playerId;
 });
 
-const debugResult = ref<DebugResult | null>(null);
-const debugMarkers: Record<string, string> = {
-  hu_ready_mode2: "DEBUG: hu_ready_mode2",
-  mode2_pass: "DEBUG: mode2_pass",
-  collective_no_actions: "DEBUG: collective_no_actions",
-  hu_fail_case: "DEBUG: hu_fail_case",
-  discard_public: "DEBUG: discard_public",
-};
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function enabled(action: string, actions: AvailableAction[]): boolean {
-  return actions.some((x) => x.action === action && x.enabled);
-}
-
-function exists(action: string, actions: AvailableAction[]): boolean {
-  return actions.some((x) => x.action === action);
-}
-
-function evaluate(scenario: string): string[] {
-  const actions = availableActions.value;
-  const errors: string[] = [];
-
-  if (scenario === "hu_ready_mode2") {
-    if (state.value?.responsePhase !== "self_grab") errors.push("responsePhase 应为 self_grab");
-    if (!enabled("hu", actions)) errors.push("胡按钮应可点击（预置可胡）");
-    if (!exists("pass", actions)) errors.push("模式2应包含过按钮");
-  }
-
-  if (scenario === "mode2_pass") {
-    if (state.value?.responsePhase !== "self_grab") errors.push("responsePhase 应为 self_grab");
-    if (!exists("pass", actions)) errors.push("模式2应包含过按钮");
-    if (!enabled("pass", actions)) errors.push("过按钮应可点击");
-    if (exists("grab", actions)) errors.push("模式2不应出现抓按钮");
-  }
-
-  if (scenario === "collective_no_actions") {
-    if (state.value?.responsePhase !== "collective") errors.push("responsePhase 应为 collective");
-    if (state.value?.currentPlayerId === mySeatId.value) errors.push("当前玩家不应是自己");
-    if (!exists("pass", actions)) errors.push("他人待响阶段应包含过按钮");
-    if (!enabled("pass", actions)) errors.push("他人待响阶段，过按钮应可点");
-    if (enabled("hu", actions) || enabled("open", actions) || enabled("peng", actions)) {
-      errors.push("当前样例中，胡/开/碰应灰显");
-    }
-  }
-
-  if (scenario === "hu_fail_case") {
-    if (state.value?.responsePhase !== "collective") errors.push("responsePhase 应为 collective");
-    if (!exists("hu", actions)) errors.push("应存在胡按钮");
-    if (enabled("hu", actions)) errors.push("胡按钮应灰显（胡牌失败样例）");
-  }
-
-  if (scenario === "discard_public") {
-    if (players.value.length < 4) errors.push("玩家展示数量应至少4（含机器人）");
-    const myPlayer = players.value.find((p) => p.clientId === mySeatId.value);
-    if (!myPlayer || (myPlayer.discardPile?.length ?? 0) < 2) {
-      errors.push(`自己弃牌区应至少2张牌（当前=${myPlayer?.discardPile?.length ?? 0}）`);
-    }
-    const everyoneHasDiscard = players.value.every((p) => (p.discardPile?.length ?? 0) >= 1);
-    if (!everyoneHasDiscard) {
-      const counts = players.value.map((p) => `${p.clientId}:${p.discardPile?.length ?? 0}`).join(", ");
-      errors.push(`所有玩家弃牌区应可见且至少1张（当前=${counts}）`);
-    }
-  }
-
-  return errors;
-}
-
-async function runDebugScenario(scenario: string) {
-  debugResult.value = { scenario, ok: false, summary: "断言中...", errors: [] };
-  debugSetup(scenario);
-
-  let ackSeen = false;
-  for (let i = 0; i < 20; i += 1) {
-    await wait(120);
-    const ack = debugApplied.value;
-    if (!ack || ack.scenario !== scenario) continue;
-    ackSeen = true;
-    if (!ack.ok) {
-      debugResult.value = { scenario, ok: false, summary: "服务端未应用场景", errors: ["debug_setup 返回 ok=false"] };
-      return;
-    }
-
-    const marker = debugMarkers[scenario];
-    for (let j = 0; j < 20; j += 1) {
-      await wait(80);
-      if (!String(state.value?.lastAction ?? "").startsWith(marker)) continue;
-      const errors = evaluate(scenario);
-      debugResult.value = {
-        scenario,
-        ok: errors.length === 0,
-        summary: errors.length === 0 ? "场景断言通过" : "场景断言失败，请看失败项",
-        errors,
-      };
-      return;
-    }
-    break;
-  }
-
-  debugResult.value = {
-    scenario,
-    ok: false,
-    summary: ackSeen ? "收到场景回执，但未等到状态同步" : "未等到场景状态刷新，请重试一次",
-    errors: [ackSeen ? `lastAction 未进入 ${debugMarkers[scenario]}` : "状态未进入目标 DEBUG 场景"],
-  };
-}
-
 async function copyInviteLink() {
   try {
     await navigator.clipboard.writeText(window.location.href);
@@ -607,34 +474,6 @@ async function copyInviteLink() {
 
 .error {
   color: #fca5a5;
-}
-
-.logs {
-  background: #0b1220;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  padding: 8px 10px;
-  color: #e2e8f0;
-}
-
-.log-list {
-  margin-top: 6px;
-  max-height: 180px;
-  overflow: auto;
-  border-top: 1px dashed #334155;
-  padding-top: 6px;
-}
-
-.log-list p {
-  margin: 0 0 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  color: #cbd5e1;
-}
-
-.log-time {
-  color: #93c5fd;
-  margin-right: 8px;
 }
 
 .hu-mask {

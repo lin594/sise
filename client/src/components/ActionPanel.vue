@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="panel" :class="{ locked: !canAct }">
     <p class="hint">{{ panelHint }}</p>
     <div class="actions">
@@ -45,9 +45,7 @@ const busy = ref(false);
 const defaultOrder: ActionType[] = ["hu", "open", "peng", "eat", "grab", "pass"];
 const normalized = computed(() => {
   const map = new Map(props.actions.map((x) => [x.action, x.enabled]));
-  return defaultOrder
-    .filter((action) => map.has(action))
-    .map((action) => ({ action, enabled: Boolean(map.get(action)) }));
+  return defaultOrder.map((action) => ({ action, enabled: Boolean(map.get(action)) }));
 });
 
 const panelHint = computed(() => {
@@ -55,7 +53,7 @@ const panelHint = computed(() => {
     return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
   }
   if (props.responsePhase === "collective" && !props.isCurrentTurn) {
-    return "他人待响阶段：你可以选择胡/开/碰/过";
+    return "他人待响阶段：你可以选择胡/开/碰/吃/过";
   }
   if (!normalized.value.some((x) => x.enabled)) {
     return "当前阶段没有可执行动作";
@@ -87,8 +85,8 @@ function onClick(action: ActionType): void {
 <style scoped>
 .panel {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 10px;
+  padding: 12px;
   background: #0f172a;
   border-top: 1px solid #1e293b;
 }
@@ -101,6 +99,7 @@ function onClick(action: ActionType): void {
   margin: 0;
   text-align: center;
   color: #93c5fd;
+  font-size: 15px;
 }
 
 .panel.locked .hint {
@@ -109,18 +108,21 @@ function onClick(action: ActionType): void {
 
 .actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
   justify-content: center;
 }
 
 .btn {
-  min-width: 56px;
-  min-height: 48px;
+  min-width: 88px;
+  min-height: 62px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #fff;
   background: #475569;
-  font-size: 16px;
+  font-size: 24px;
+  font-weight: 700;
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -136,5 +138,13 @@ function onClick(action: ActionType): void {
 
 .btn:not(:disabled):active {
   transform: scale(0.96);
+}
+
+@media (max-width: 767px) {
+  .btn {
+    min-width: 78px;
+    min-height: 56px;
+    font-size: 22px;
+  }
 }
 </style>

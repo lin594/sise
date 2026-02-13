@@ -10,16 +10,14 @@ const busy = ref(false);
 const defaultOrder = ["hu", "open", "peng", "eat", "grab", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x.enabled]));
-    return defaultOrder
-        .filter((action) => map.has(action))
-        .map((action) => ({ action, enabled: Boolean(map.get(action)) }));
+    return defaultOrder.map((action) => ({ action, enabled: Boolean(map.get(action)) }));
 });
 const panelHint = computed(() => {
     if (!props.canAct) {
         return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
     }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
-        return "他人待响阶段：你可以选择胡/开/碰/过";
+        return "他人待响阶段：你可以选择胡/开/碰/吃/过";
     }
     if (!normalized.value.some((x) => x.enabled)) {
         return "当前阶段没有可执行动作";
@@ -58,6 +56,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['locked']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;

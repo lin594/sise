@@ -1,72 +1,104 @@
 ﻿<template>
   <div class="board">
-    <div class="grid">
+    <div class="table">
       <section
-        v-for="player in players"
-        :key="player.clientId"
-        class="player"
-        :class="{ active: isCurrentTurn(player.clientId), me: isMe(player.clientId) }"
+        v-for="entry in seatEntries"
+        :key="entry.position"
+        class="seat"
+        :class="[entry.position, { active: isCurrentTurn(entry.player.clientId) }]"
       >
-        <header class="player-head">
-          <div class="head-left">
-            <strong>{{ player.name }}</strong>
-            <small>声明: {{ player.declaredKongs }} 坎</small>
-          </div>
-          <div class="tags">
-            <span v-if="isMe(player.clientId)" class="tag me">你</span>
-            <span v-if="isCurrentTurn(player.clientId)" class="tag turn">当前回合</span>
-            <span class="tag status">{{ statusText(player) }}</span>
+        <header class="seat-head">
+          <strong>{{ entry.player.name }}</strong>
+          <div class="seat-tags">
+            <span v-if="isCurrentTurn(entry.player.clientId)" class="tag turn">当前回合</span>
+            <span class="tag status">{{ statusText(entry.player) }}</span>
           </div>
         </header>
+        <p class="seat-meta">声明暗坎: {{ entry.player.declaredKongs }}</p>
 
-        <div class="areas">
-          <div class="exposed">
-            <h4>明示区</h4>
-            <div class="cards">
-              <CardComp v-for="card in player.exposedArea" :key="`exp-${card.id}`" :card="card" />
-            </div>
+        <div class="seat-zone" v-if="entry.player.exposedArea.length || entry.player.generalArea.length">
+          <p>明示区</p>
+          <div class="cards">
+            <CardComp
+              v-for="card in [...entry.player.exposedArea, ...entry.player.generalArea]"
+              :key="`exp-${entry.player.clientId}-${card.id}`"
+              :card="card"
+              size="sm"
+            />
+          </div>
+        </div>
 
-            <div v-if="player.generalArea.length" class="fish">
-              <h4>将牌区</h4>
-              <div class="cards">
-                <CardComp v-for="card in player.generalArea" :key="`general-${card.id}`" :card="card" />
-              </div>
-            </div>
-
-            <div v-if="player.fishArea.length" class="fish">
-              <h4>亮鱼区</h4>
-              <div class="cards">
-                <CardComp v-for="card in player.fishArea" :key="`fish-${card.id}`" :card="card" />
-              </div>
-            </div>
+        <div class="seat-zone" v-if="entry.player.fishArea.length">
+          <p>亮鱼区</p>
+          <div class="cards">
+            <CardComp
+              v-for="card in entry.player.fishArea"
+              :key="`fish-${entry.player.clientId}-${card.id}`"
+              :card="card"
+              size="sm"
+            />
           </div>
         </div>
       </section>
+
+      <section class="center">
+        <header class="center-head">
+          <h3>中区</h3>
+          <p>当前行动者: <strong>{{ currentPlayerName }}</strong><span v-if="isMyTurn">（你）</span></p>
+        </header>
+
+        <div class="response-wrap" v-if="responseCard">
+          <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" size="lg" />
+          <small>待响牌来源: {{ responseCard.source === "draw" ? "摸牌" : "他人弃牌" }}</small>
+        </div>
+
+        <p class="hint">{{ state?.lastAction || "等待中..." }}</p>
+      </section>
     </div>
 
-    <section class="center">
-      <h3>当前待响区</h3>
-      <p class="turn-line">当前行动者: <strong>{{ currentPlayerName }}</strong><span v-if="isMyTurn">（你）</span></p>
-      <DiscardZone title="公共弃牌区" :cards="publicDiscardCards" />
-      <div class="response-wrap" v-if="responseCard">
-        <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" />
-        <small>来源: {{ responseCard.source === "draw" ? "摸牌" : "他人弃牌" }}</small>
-      </div>
-      <p class="hint">{{ state?.lastAction || "等待中..." }}</p>
-    </section>
+    <section class="self-zone" v-if="selfPlayer">
+      <header class="self-head">
+        <div>
+          <h3>{{ selfPlayer.name }}（你）</h3>
+          <p>声明暗坎: {{ selfPlayer.declaredKongs }}</p>
+        </div>
+        <div class="seat-tags">
+          <span v-if="isMyTurn" class="tag turn">当前回合</span>
+          <span class="tag status">{{ statusText(selfPlayer) }}</span>
+        </div>
+      </header>
 
-    <section class="self">
-      <h3>我的手牌（私有）</h3>
+      <div class="self-areas">
+        <div class="self-area" v-if="selfPlayer.exposedArea.length || selfPlayer.generalArea.length">
+          <p>明示区</p>
+          <div class="cards">
+            <CardComp
+              v-for="card in [...selfPlayer.exposedArea, ...selfPlayer.generalArea]"
+              :key="`self-exp-${card.id}`"
+              :card="card"
+            />
+          </div>
+        </div>
+
+        <div class="self-area" v-if="selfPlayer.fishArea.length">
+          <p>亮鱼区</p>
+          <div class="cards">
+            <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" />
+          </div>
+        </div>
+      </div>
+
       <p v-if="canDiscard" class="discard-tip">点击手牌弃一张（将牌不可弃）</p>
       <div class="cards hand">
         <button
           v-for="card in privateHand"
           :key="`me-${card.id}`"
           class="hand-card"
+          :class="{ playable: canDiscardCard(card), blocked: !canDiscardCard(card) }"
           :disabled="!canDiscardCard(card)"
           @click="onDiscard(card.id)"
         >
-          <CardComp :card="card" />
+          <CardComp :card="card" size="xl" />
         </button>
       </div>
     </section>
@@ -76,7 +108,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import CardComp from "./Card.vue";
-import DiscardZone from "./DiscardZone.vue";
 import type { Card, PlayerState } from "@/types/game";
 
 const props = defineProps<{
@@ -90,6 +121,32 @@ const props = defineProps<{
 const emit = defineEmits<{
   discardCard: [cardId: string];
 }>();
+
+const orderedPlayers = computed<PlayerState[]>(() => {
+  const list = props.players ?? [];
+  if (!list.length) {
+    return [];
+  }
+  const idx = list.findIndex((p) => p.clientId === props.mySeatId);
+  if (idx < 0) {
+    return list;
+  }
+  return [...list.slice(idx), ...list.slice(0, idx)];
+});
+
+const selfPlayer = computed<PlayerState | null>(() => orderedPlayers.value[0] ?? null);
+const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?? null);
+const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
+const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
+
+const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState }>>(() => {
+  const entries: Array<{ position: "top" | "left" | "right"; player: PlayerState | null }> = [
+    { position: "top", player: topPlayer.value },
+    { position: "left", player: leftPlayer.value },
+    { position: "right", player: rightPlayer.value },
+  ];
+  return entries.filter((x): x is { position: "top" | "left" | "right"; player: PlayerState } => Boolean(x.player));
+});
 
 const latestDiscardFromAction = computed<Card | null>(() => {
   const match = String(props.state?.lastAction ?? "").match(/^(\S+)\s+DISCARD$/);
@@ -132,15 +189,6 @@ const responseCard = computed<Card | null>(() => {
   return latestDiscardFromAction.value;
 });
 
-const publicDiscardCards = computed<Card[]>(() => {
-  const cards = props.state?.publicDiscardPile;
-  if (Array.isArray(cards) && cards.length > 0) {
-    return cards as Card[];
-  }
-  const latest = latestDiscardFromAction.value;
-  return latest ? [latest] : [];
-});
-
 const currentPlayer = computed(() => {
   const playerId = props.state?.currentPlayerId;
   if (!playerId) {
@@ -170,10 +218,6 @@ function isCurrentTurn(playerId: string): boolean {
   return props.state?.currentPlayerId === playerId;
 }
 
-function isMe(playerId: string): boolean {
-  return props.mySeatId === playerId;
-}
-
 function statusText(player: PlayerState): string {
   if (player.isBot) {
     return "BOT托管";
@@ -198,52 +242,63 @@ function onDiscard(cardId: string): void {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: 1fr auto auto;
-  gap: 10px;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
 }
 
-.grid {
+.table {
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 260px minmax(0, 1fr) 260px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "top top top"
+    "left center right";
   gap: 10px;
 }
 
-.player {
+.seat {
   background: #0b1220;
   border: 1px solid #1e293b;
   border-radius: 12px;
   padding: 8px;
+  color: #e2e8f0;
 }
 
-.player.active {
+.seat.top {
+  grid-area: top;
+}
+
+.seat.left {
+  grid-area: left;
+}
+
+.seat.right {
+  grid-area: right;
+}
+
+.seat.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
 }
 
-.player.me {
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25) inset;
-}
-
-.player-head {
+.seat-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  color: #e2e8f0;
-  margin-bottom: 8px;
 }
 
-.head-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.seat-meta {
+  margin: 6px 0;
+  color: #93c5fd;
+  font-size: 12px;
 }
 
-.tags {
+.seat-tags {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .tag {
@@ -253,11 +308,6 @@ function onDiscard(cardId: string): void {
   line-height: 18px;
   border: 1px solid #334155;
   color: #cbd5e1;
-}
-
-.tag.me {
-  border-color: #0ea5e9;
-  color: #bae6fd;
 }
 
 .tag.turn {
@@ -270,39 +320,20 @@ function onDiscard(cardId: string): void {
   border-color: #334155;
 }
 
-.areas {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-}
-
-.exposed {
-  background: #111827;
-  border-radius: 10px;
-  border: 1px solid #334155;
-  padding: 8px;
-}
-
-.exposed h4,
-.fish h4 {
-  margin: 0 0 6px;
-  color: #cbd5e1;
-  font-size: 13px;
-}
-
-.cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.fish {
+.seat-zone {
   margin-top: 8px;
   border-top: 1px dashed #334155;
   padding-top: 8px;
 }
 
+.seat-zone p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
 .center {
+  grid-area: center;
   background: #0b1220;
   border: 1px solid #1e293b;
   border-radius: 12px;
@@ -310,16 +341,20 @@ function onDiscard(cardId: string): void {
   color: #e2e8f0;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.center-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
 }
 
-.center h3 {
+.center-head h3,
+.center-head p {
   margin: 0;
-}
-
-.turn-line {
-  margin: 0;
-  color: #93c5fd;
 }
 
 .response-wrap {
@@ -334,7 +369,12 @@ function onDiscard(cardId: string): void {
   font-size: 13px;
 }
 
-.self {
+.empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.self-zone {
   background: #0b1220;
   border: 1px solid #1e293b;
   border-radius: 12px;
@@ -342,20 +382,54 @@ function onDiscard(cardId: string): void {
   color: #e2e8f0;
 }
 
-.self h3 {
-  margin: 0 0 8px;
+.self-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.self-head h3,
+.self-head p {
+  margin: 0;
+}
+
+.self-areas {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.self-area {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.self-area p {
+  margin: 0 0 6px;
+  color: #cbd5e1;
+  font-size: 12px;
 }
 
 .discard-tip {
-  margin: 0 0 8px;
+  margin: 8px 0;
   color: #facc15;
   font-size: 13px;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .hand {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .hand-card {
@@ -363,15 +437,39 @@ function onDiscard(cardId: string): void {
   border: none;
   padding: 0;
   cursor: pointer;
+  border-radius: 10px;
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
-.hand-card:disabled {
+.hand-card.playable:hover {
+  transform: translateY(-4px);
+}
+
+.hand-card.blocked {
+  opacity: 0.45;
   cursor: not-allowed;
-  opacity: 0.65;
+  filter: grayscale(0.2);
+}
+
+@media (max-width: 1200px) {
+  .table {
+    grid-template-columns: 220px minmax(0, 1fr) 220px;
+  }
+
 }
 
 @media (max-width: 900px) {
-  .grid {
+  .table {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "top"
+      "left"
+      "right"
+      "center";
+  }
+
+  .self-areas {
     grid-template-columns: 1fr;
   }
 }

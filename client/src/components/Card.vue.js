@@ -24,6 +24,7 @@ const colorMap = {
 const label = computed(() => `${colorMap[props.card.color] ?? "?"}${labelMap[props.card.type] ?? props.card.type}`);
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
+const sizeClass = computed(() => props.size ?? "md");
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -34,7 +35,7 @@ let __VLS_directives;
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "card" },
-    ...{ class: ([__VLS_ctx.colorClass, { response: __VLS_ctx.isResponseCard }]) },
+    ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, { response: __VLS_ctx.isResponseCard }]) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text" },
@@ -55,6 +56,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             label: label,
             colorClass: colorClass,
             isResponseCard: isResponseCard,
+            sizeClass: sizeClass,
         };
     },
     __typeProps: {},

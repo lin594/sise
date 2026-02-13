@@ -1,11 +1,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
-import DebugPanel from "@/components/DebugPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, sendAction, sendDiscardCard, declareSetup, debugSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
+const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
@@ -155,117 +154,6 @@ const currentPlayerName = computed(() => {
     const player = players.value.find((x) => x.clientId === playerId);
     return player?.name || playerId;
 });
-const debugResult = ref(null);
-const debugMarkers = {
-    hu_ready_mode2: "DEBUG: hu_ready_mode2",
-    mode2_pass: "DEBUG: mode2_pass",
-    collective_no_actions: "DEBUG: collective_no_actions",
-    hu_fail_case: "DEBUG: hu_fail_case",
-    discard_public: "DEBUG: discard_public",
-};
-function wait(ms) {
-    return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-function enabled(action, actions) {
-    return actions.some((x) => x.action === action && x.enabled);
-}
-function exists(action, actions) {
-    return actions.some((x) => x.action === action);
-}
-function evaluate(scenario) {
-    const actions = availableActions.value;
-    const errors = [];
-    if (scenario === "hu_ready_mode2") {
-        if (state.value?.responsePhase !== "self_grab")
-            errors.push("responsePhase 应为 self_grab");
-        if (!enabled("hu", actions))
-            errors.push("胡按钮应可点击（预置可胡）");
-        if (!exists("pass", actions))
-            errors.push("模式2应包含过按钮");
-    }
-    if (scenario === "mode2_pass") {
-        if (state.value?.responsePhase !== "self_grab")
-            errors.push("responsePhase 应为 self_grab");
-        if (!exists("pass", actions))
-            errors.push("模式2应包含过按钮");
-        if (!enabled("pass", actions))
-            errors.push("过按钮应可点击");
-        if (exists("grab", actions))
-            errors.push("模式2不应出现抓按钮");
-    }
-    if (scenario === "collective_no_actions") {
-        if (state.value?.responsePhase !== "collective")
-            errors.push("responsePhase 应为 collective");
-        if (state.value?.currentPlayerId === mySeatId.value)
-            errors.push("当前玩家不应是自己");
-        if (!exists("pass", actions))
-            errors.push("他人待响阶段应包含过按钮");
-        if (!enabled("pass", actions))
-            errors.push("他人待响阶段，过按钮应可点");
-        if (enabled("hu", actions) || enabled("open", actions) || enabled("peng", actions)) {
-            errors.push("当前样例中，胡/开/碰应灰显");
-        }
-    }
-    if (scenario === "hu_fail_case") {
-        if (state.value?.responsePhase !== "collective")
-            errors.push("responsePhase 应为 collective");
-        if (!exists("hu", actions))
-            errors.push("应存在胡按钮");
-        if (enabled("hu", actions))
-            errors.push("胡按钮应灰显（胡牌失败样例）");
-    }
-    if (scenario === "discard_public") {
-        if (players.value.length < 4)
-            errors.push("玩家展示数量应至少4（含机器人）");
-        const myPlayer = players.value.find((p) => p.clientId === mySeatId.value);
-        if (!myPlayer || (myPlayer.discardPile?.length ?? 0) < 2) {
-            errors.push(`自己弃牌区应至少2张牌（当前=${myPlayer?.discardPile?.length ?? 0}）`);
-        }
-        const everyoneHasDiscard = players.value.every((p) => (p.discardPile?.length ?? 0) >= 1);
-        if (!everyoneHasDiscard) {
-            const counts = players.value.map((p) => `${p.clientId}:${p.discardPile?.length ?? 0}`).join(", ");
-            errors.push(`所有玩家弃牌区应可见且至少1张（当前=${counts}）`);
-        }
-    }
-    return errors;
-}
-async function runDebugScenario(scenario) {
-    debugResult.value = { scenario, ok: false, summary: "断言中...", errors: [] };
-    debugSetup(scenario);
-    let ackSeen = false;
-    for (let i = 0; i < 20; i += 1) {
-        await wait(120);
-        const ack = debugApplied.value;
-        if (!ack || ack.scenario !== scenario)
-            continue;
-        ackSeen = true;
-        if (!ack.ok) {
-            debugResult.value = { scenario, ok: false, summary: "服务端未应用场景", errors: ["debug_setup 返回 ok=false"] };
-            return;
-        }
-        const marker = debugMarkers[scenario];
-        for (let j = 0; j < 20; j += 1) {
-            await wait(80);
-            if (!String(state.value?.lastAction ?? "").startsWith(marker))
-                continue;
-            const errors = evaluate(scenario);
-            debugResult.value = {
-                scenario,
-                ok: errors.length === 0,
-                summary: errors.length === 0 ? "场景断言通过" : "场景断言失败，请看失败项",
-                errors,
-            };
-            return;
-        }
-        break;
-    }
-    debugResult.value = {
-        scenario,
-        ok: false,
-        summary: ackSeen ? "收到场景回执，但未等到状态同步" : "未等到场景状态刷新，请重试一次",
-        errors: [ackSeen ? `lastAction 未进入 ${debugMarkers[scenario]}` : "状态未进入目标 DEBUG 场景"],
-    };
-}
 async function copyInviteLink() {
     try {
         await navigator.clipboard.writeText(window.location.href);
@@ -282,7 +170,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
-/** @type {__VLS_StyleScopedClasses['log-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
@@ -392,48 +279,10 @@ else {
     };
     var __VLS_5;
 }
-__VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-    ...{ class: "logs" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "log-list" },
-});
-for (const [item] of __VLS_getVForSourceType((__VLS_ctx.actionLogs))) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        key: (item.id),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "log-time" },
-    });
-    (item.at);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (item.text);
-}
-/** @type {[typeof DebugPanel, ]} */ ;
-// @ts-ignore
-const __VLS_10 = __VLS_asFunctionalComponent(DebugPanel, new DebugPanel({
-    ...{ 'onRun': {} },
-    hint: "测试场景：点击后会自动做 PASS/FAIL 断言。",
-    result: (__VLS_ctx.debugResult),
-}));
-const __VLS_11 = __VLS_10({
-    ...{ 'onRun': {} },
-    hint: "测试场景：点击后会自动做 PASS/FAIL 断言。",
-    result: (__VLS_ctx.debugResult),
-}, ...__VLS_functionalComponentArgsRest(__VLS_10));
-let __VLS_13;
-let __VLS_14;
-let __VLS_15;
-const __VLS_16 = {
-    onRun: (__VLS_ctx.runDebugScenario)
-};
-var __VLS_12;
 if (__VLS_ctx.isPlaying) {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_17 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_10 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
@@ -441,21 +290,21 @@ if (__VLS_ctx.isPlaying) {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
     }));
-    const __VLS_18 = __VLS_17({
+    const __VLS_11 = __VLS_10({
         ...{ 'onSubmit': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_17));
-    let __VLS_20;
-    let __VLS_21;
-    let __VLS_22;
-    const __VLS_23 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_10));
+    let __VLS_13;
+    let __VLS_14;
+    let __VLS_15;
+    const __VLS_16 = {
         onSubmit: (__VLS_ctx.sendAction)
     };
-    var __VLS_19;
+    var __VLS_12;
 }
 if (__VLS_ctx.shouldShowDeclarePanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -510,12 +359,12 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_17 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (card),
             }));
-            const __VLS_25 = __VLS_24({
+            const __VLS_18 = __VLS_17({
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_17));
         }
     }
     else {
@@ -536,14 +385,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedFishCards))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_20 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
             }));
-            const __VLS_28 = __VLS_27({
+            const __VLS_21 = __VLS_20({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_20));
         }
     }
     else {
@@ -622,14 +471,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_23 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_31 = __VLS_30({
+                    const __VLS_24 = __VLS_23({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_23));
                 }
             }
             else {
@@ -650,14 +499,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType(([...p.exposedArea, ...p.generalArea]))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_26 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_34 = __VLS_33({
+                    const __VLS_27 = __VLS_26({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_26));
                 }
             }
             else {
@@ -678,14 +527,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.fishArea))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_36 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_29 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_37 = __VLS_36({
+                    const __VLS_30 = __VLS_29({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_36));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_29));
                 }
             }
             else {
@@ -747,9 +596,6 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
-/** @type {__VLS_StyleScopedClasses['logs']} */ ;
-/** @type {__VLS_StyleScopedClasses['log-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['log-time']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
@@ -799,7 +645,6 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             ActionPanel: ActionPanel,
             CardComp: CardComp,
-            DebugPanel: DebugPanel,
             GameBoard: GameBoard,
             OrientationGuard: OrientationGuard,
             connected: connected,
@@ -811,7 +656,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             huResult: huResult,
             joinError: joinError,
             declareError: declareError,
-            actionLogs: actionLogs,
             sendAction: sendAction,
             sendDiscardCard: sendDiscardCard,
             startGame: startGame,
@@ -840,8 +684,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             endSummary: endSummary,
             turnHint: turnHint,
             currentPlayerName: currentPlayerName,
-            debugResult: debugResult,
-            runDebugScenario: runDebugScenario,
             copyInviteLink: copyInviteLink,
         };
     },
