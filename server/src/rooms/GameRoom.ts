@@ -1,6 +1,6 @@
 import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { createDeck, isDiscardRestricted, isSameFace, shuffle } from "../rules/deck.js";
+import { createDeck, isDiscardRestricted, isGeneral, isSameFace, shuffle } from "../rules/deck.js";
 import { canEat, canOpen, canPeng, getEatCandidates } from "../rules/actions.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -14,25 +14,80 @@ interface PendingResponse {
   collectives: Map<string, ActionType>;
 }
 
+interface RoundResultPlayer {
+  clientId: string;
+  name: string;
+  hand: Card[];
+}
+
+type HuLogMode = "off" | "all" | "success" | "fail";
+type StateLogMode = "off" | "all" | "compact";
+
+const COMPACT_STATE_ACTIONS = new Set<string>([
+  "LOBBY",
+  "TAKEOVER",
+  "DEALER",
+  "TURN_START",
+  "KONG_DRAW",
+  "DISCARD",
+  "OPEN",
+  "PENG",
+  "EAT",
+  "GRAB",
+  "NO_DISCARD",
+  "NO_RESPONSE",
+  "HU",
+  "HU_INVALID",
+  "DECK_EMPTY",
+]);
+
 export class FourColorGameRoom extends Room<GameState> {
   maxClients = 4;
-  private minPlayersToStart = Math.max(1, Number(process.env.MIN_PLAYERS ?? 1));
-  private targetSeats = Math.max(1, Math.min(4, Number(process.env.TARGET_SEATS ?? 4)));
-  private autoBots = (process.env.AUTO_BOTS ?? "1") !== "0";
+
+  private readonly minPlayersToStart = Math.max(1, Number(process.env.MIN_PLAYERS ?? 1));
+  private readonly targetSeats = 4;
 
   private deck: Card[] = [];
-  private playerHands = new Map<string, Card[]>();
-  private playerOrder: string[] = [];
-  private botIds = new Set<string>();
+  private playerHands = new Map<string, Card[]>(); // seatId -> cards
+  private playerOrder: string[] = []; // seatIds in round order
+  private botIds = new Set<string>(); // currently bot-controlled seatIds
+  private seatBySession = new Map<string, string>(); // sessionId -> seatId
+  private seatByToken = new Map<string, string>(); // token -> seatId
+  private baseNameBySeat = new Map<string, string>(); // seatId -> human display name
   private pendingResponse: PendingResponse | null = null;
+  private publicGeneralPool: Card[] = [];
+  private awaitingDiscardOwnerId: string | null = null;
+  private readonly botThinkMs = Math.max(0, Number(process.env.BOT_THINK_MS ?? 200));
+  private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
+  private readonly roomLogCards = (process.env.ROOM_LOG_CARDS ?? "0") === "1";
+  private readonly huLogEnabled = (process.env.HU_LOG ?? "1") !== "0";
+  private readonly huLogCards = (process.env.HU_LOG_CARDS ?? "0") !== "0";
+  private readonly huLogMode: HuLogMode =
+    ((process.env.HU_LOG_MODE ?? "success") as HuLogMode) || "success";
+  private readonly stateLogMode: StateLogMode =
+    ((process.env.ROOM_STATE_LOG_MODE ?? "compact") as StateLogMode) || "compact";
+  private lastTerminalFingerprint = "";
+  private readonly huLogDedup = new Set<string>();
+  private huChecksTotal = 0;
+  private huChecksValid = 0;
+  private readonly huChecksBySeat = new Map<string, { total: number; valid: number }>();
+  private botTimer: ReturnType<typeof setTimeout> | null = null;
   private debugSeq = 0;
 
   onCreate(): void {
     this.setState(new GameState());
 
+    this.onMessage("start_game", (client) => {
+      this.handleStartGame(client);
+    });
+
     this.onMessage("declare_kongs", (client, value: number) => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player || this.state.phase !== "declaring") {
+      const seatId = this.seatBySession.get(client.sessionId);
+      if (!seatId || this.state.phase !== "declaring") {
+        return;
+      }
+      const player = this.state.players.get(seatId);
+      if (!player) {
         return;
       }
       player.declaredKongs = Math.max(0, Number(value) || 0);
@@ -42,65 +97,220 @@ export class FourColorGameRoom extends Room<GameState> {
       this.handleAction(client, action);
     });
 
+    this.onMessage("discard_card", (client, payload: { cardId?: string } | string) => {
+      this.handleDiscardCard(client, payload);
+    });
+
     this.onMessage("debug_setup", (client, scenario: string) => {
-      const ok = this.applyDebugScenario(client.sessionId, scenario);
+      const seatId = this.seatBySession.get(client.sessionId);
+      const ok = seatId ? this.applyDebugScenario(seatId, scenario) : false;
       client.send("debug_applied", { scenario, ok, ts: Date.now() });
     });
   }
 
-  onJoin(client: Client, options: { name?: string }): void {
-    const player = new PlayerState();
-    player.clientId = client.sessionId;
-    player.name = options?.name ?? `P${this.clients.length}`;
-    this.state.players.set(client.sessionId, player);
-    this.playerOrder.push(client.sessionId);
-    this.playerHands.set(client.sessionId, []);
+  onJoin(client: Client, options: { name?: string; playerToken?: string }): void {
+    const inputName = this.normalizeName(options?.name);
+    const inputToken = this.normalizeToken(options?.playerToken);
 
-    if (this.state.phase !== "playing" && this.clients.length >= this.minPlayersToStart) {
-      if (this.autoBots) {
-        this.ensureVirtualBots();
-      }
-      this.bootstrapRound();
-    } else {
-      this.state.phase = "waiting";
-      this.state.lastAction = `WAITING ${this.clients.length}/${this.minPlayersToStart}`;
+    if (inputToken && this.seatByToken.has(inputToken)) {
+      const seatId = this.seatByToken.get(inputToken)!;
+      this.reclaimSeat(client, seatId, inputToken, inputName);
+      return;
     }
+
+    if (this.state.phase !== "waiting") {
+      client.send("join_error", { message: "游戏已开始，当前仅支持重连玩家进入。" });
+      client.leave(4100);
+      return;
+    }
+
+    if (this.seatByToken.size >= this.targetSeats) {
+      client.send("join_error", { message: "房间已满（最多4名真人玩家）。" });
+      client.leave(4101);
+      return;
+    }
+
+    const token = inputToken || this.generateToken();
+    const seatId = this.createHumanSeat(client, token, inputName);
+    this.sendSessionToken(client, seatId, token, false);
+    this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
+    this.broadcastAvailableActions();
   }
 
   onLeave(client: Client): void {
-    this.state.players.delete(client.sessionId);
-    this.playerHands.delete(client.sessionId);
-    this.playerOrder = this.playerOrder.filter((id) => id !== client.sessionId);
-    this.botIds.delete(client.sessionId);
-    if (this.state.phase !== "ended") {
-      this.state.phase = "ended";
-      this.state.lastAction = `LEAVE ${client.sessionId}`;
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId) {
+      return;
+    }
+    this.seatBySession.delete(client.sessionId);
+
+    const player = this.state.players.get(seatId);
+    if (!player) {
+      return;
+    }
+
+    // Disconnect => immediate bot takeover; seat is always reclaimable by token.
+    player.connected = false;
+    player.isBot = true;
+    const baseName = this.baseNameBySeat.get(seatId) ?? player.name;
+    player.name = `${baseName} [BOT]`;
+    this.botIds.add(seatId);
+    this.state.lastAction = `TAKEOVER ${seatId}`;
+
+    if (this.state.phase === "playing" || this.state.phase === "declaring") {
+      this.tickBots();
+    } else {
+      this.broadcastAvailableActions();
     }
   }
 
-  private ensureVirtualBots(): void {
+  onDispose(): void {
+    this.clearBotTimer();
+  }
+
+  private handleStartGame(client: Client): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId) {
+      return;
+    }
+    if (this.state.phase !== "waiting") {
+      client.send("join_error", { message: "当前不在等待阶段，无法开始。" });
+      return;
+    }
+    if (seatId !== this.state.hostPlayerId) {
+      client.send("join_error", { message: "仅房主可开始游戏。" });
+      return;
+    }
+    if (this.seatByToken.size < this.minPlayersToStart) {
+      client.send("join_error", { message: `至少需要 ${this.minPlayersToStart} 名真人玩家。` });
+      return;
+    }
+
+    this.ensureBotSeatsForStart();
+    this.bootstrapRound();
+  }
+
+  private createHumanSeat(client: Client, token: string, rawName: string): string {
+    const seatId = `seat_${this.seatByToken.size + 1}`;
+    const name = rawName || `玩家${this.seatByToken.size + 1}`;
+
+    const player = new PlayerState();
+    player.clientId = seatId;
+    player.name = name;
+    player.isBot = false;
+    player.connected = true;
+    this.state.players.set(seatId, player);
+
+    this.playerOrder.push(seatId);
+    this.playerHands.set(seatId, []);
+    this.baseNameBySeat.set(seatId, name);
+    this.seatByToken.set(token, seatId);
+    this.seatBySession.set(client.sessionId, seatId);
+    this.botIds.delete(seatId);
+
+    if (!this.state.hostPlayerId) {
+      this.state.hostPlayerId = seatId;
+    }
+    return seatId;
+  }
+
+  private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
+    for (const [sessionId, mappedSeat] of this.seatBySession.entries()) {
+      if (mappedSeat !== seatId || sessionId === client.sessionId) {
+        continue;
+      }
+      this.seatBySession.delete(sessionId);
+      const oldClient = this.clients.find((c) => c.sessionId === sessionId);
+      oldClient?.leave(4102);
+    }
+
+    const player = this.state.players.get(seatId);
+    if (!player) {
+      client.send("join_error", { message: "重连失败：座位不存在。" });
+      client.leave(4103);
+      return;
+    }
+
+    const name = rawName || this.baseNameBySeat.get(seatId) || player.name;
+    this.baseNameBySeat.set(seatId, name);
+    player.name = name;
+    player.connected = true;
+    player.isBot = false;
+    this.botIds.delete(seatId);
+    this.seatBySession.set(client.sessionId, seatId);
+    this.seatByToken.set(token, seatId);
+
+    this.sendSessionToken(client, seatId, token, true);
+    this.syncAllPrivateHands();
+    this.broadcastAvailableActions();
+    this.tickBots();
+  }
+
+  private sendSessionToken(client: Client, seatId: string, token: string, reclaimed: boolean): void {
+    client.send("session_token", {
+      playerToken: token,
+      seatId,
+      hostPlayerId: this.state.hostPlayerId,
+      reclaimed,
+    });
+  }
+
+  private ensureBotSeatsForStart(): void {
     while (this.playerOrder.length < this.targetSeats) {
-      const id = `bot_${this.playerOrder.length + 1}`;
-      if (this.state.players.has(id)) {
+      const seatId = `bot_${this.playerOrder.length + 1}`;
+      if (this.state.players.has(seatId)) {
         continue;
       }
       const bot = new PlayerState();
-      bot.clientId = id;
+      bot.clientId = seatId;
       bot.name = `BOT_${this.playerOrder.length + 1}`;
-      this.state.players.set(id, bot);
-      this.playerOrder.push(id);
-      this.playerHands.set(id, []);
-      this.botIds.add(id);
+      bot.isBot = true;
+      bot.connected = false;
+      this.state.players.set(seatId, bot);
+      this.playerOrder.push(seatId);
+      this.playerHands.set(seatId, []);
+      this.botIds.add(seatId);
+    }
+
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (!player) {
+        continue;
+      }
+      if (player.isBot) {
+        this.botIds.add(seatId);
+      } else {
+        this.botIds.delete(seatId);
+      }
     }
   }
 
   private bootstrapRound(): void {
     this.state.phase = "declaring";
     this.deck = shuffle(createDeck());
+    this.publicGeneralPool = [];
+    this.pendingResponse = null;
+    this.awaitingDiscardOwnerId = null;
+    this.huLogDedup.clear();
+    this.huChecksTotal = 0;
+    this.huChecksValid = 0;
+    this.huChecksBySeat.clear();
+
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (!player) {
+        continue;
+      }
+      player.declaredKongs = 0;
+      player.discardPile.clear();
+      player.exposedArea.clear();
+      player.fishArea.clear();
+    }
+    this.state.publicDiscardPile.clear();
 
     const dealerId = this.playerOrder[0];
-    for (const playerId of this.playerOrder) {
-      const count = playerId === dealerId ? 21 : 20;
+    for (const seatId of this.playerOrder) {
+      const count = seatId === dealerId ? 21 : 20;
       const hand: Card[] = [];
       for (let i = 0; i < count; i += 1) {
         const card = this.deck.shift();
@@ -108,31 +318,120 @@ export class FourColorGameRoom extends Room<GameState> {
           hand.push(card);
         }
       }
-      this.playerHands.set(playerId, hand);
+      this.playerHands.set(seatId, hand);
+    }
+
+    // Rule v1.0: dealer flips one shared public general card from deck top.
+    const publicGeneral = this.deck.shift();
+    if (publicGeneral) {
+      this.publicGeneralPool.push(publicGeneral);
+      const dealer = this.state.players.get(dealerId);
+      dealer?.fishArea.unshift(this.toSchemaCard(publicGeneral, true, "upper"));
     }
 
     this.state.deckCount = this.deck.length;
     this.state.currentPlayerId = dealerId;
     this.state.phase = "playing";
-    this.state.responsePhase = "collective";
+    this.state.responsePhase = "self_grab";
     this.state.lastAction = `DEALER ${dealerId}`;
+    this.syncAllPrivateHands();
+    this.startTurn(dealerId, "TURN_START");
+  }
 
-    const dealerHand = this.playerHands.get(dealerId) ?? [];
-    const firstCard = dealerHand[0];
-    if (!firstCard) {
-      this.state.phase = "ended";
+  private startTurn(ownerId: string, tag: string): void {
+    if (this.state.phase !== "playing") {
+      return;
+    }
+    this.state.currentPlayerId = ownerId;
+    this.drawForOwner(ownerId, tag);
+  }
+
+  private drawForOwner(ownerId: string, tag: string): void {
+    if (this.state.phase !== "playing") {
       return;
     }
 
+    let drawn = this.deck.shift();
+    this.state.deckCount = this.deck.length;
+    if (!drawn) {
+      this.endRound("DECK_EMPTY");
+      return;
+    }
+
+    // Rule v1.0: drawing a general reveals it and immediately draws again.
+    while (drawn && isGeneral(drawn)) {
+      this.exposeGeneralCard(ownerId, drawn);
+      drawn = this.deck.shift();
+      this.state.deckCount = this.deck.length;
+      if (!drawn) {
+        this.endRound("DECK_EMPTY");
+        return;
+      }
+    }
+
+    const hand = this.playerHands.get(ownerId) ?? [];
+    hand.push(drawn);
+    this.playerHands.set(ownerId, hand);
+
     this.pendingResponse = {
-      ownerId: dealerId,
-      card: { ...firstCard, source: "upper" },
+      ownerId,
+      card: { ...drawn, source: "draw" },
+      mode: "mode2",
+      collectives: new Map(),
+    };
+    this.awaitingDiscardOwnerId = null;
+    this.state.responsePhase = "self_grab";
+    this.setResponseCard(drawn, "draw");
+    this.state.lastAction = `${ownerId} ${tag}`;
+    this.syncAllPrivateHands();
+    this.tickBots();
+  }
+
+  private exposeGeneralCard(ownerId: string, card: Card): void {
+    this.publicGeneralPool.push(card);
+    const player = this.state.players.get(ownerId);
+    player?.fishArea.unshift(this.toSchemaCard(card, true, "draw"));
+    this.state.lastAction = `${ownerId} DRAW_GENERAL`;
+  }
+
+  private discardFromAndCollective(ownerId: string): void {
+    this.awaitingDiscardOwnerId = null;
+    const discard = this.pickDiscardCard(ownerId);
+    if (!discard) {
+      this.endRound(`${ownerId} NO_DISCARD`);
+      return;
+    }
+
+    this.pushDiscard(ownerId, discard);
+    this.beginCollectiveFromDiscard(ownerId, discard);
+  }
+
+  private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
+    this.pendingResponse = {
+      ownerId,
+      card: { ...discard, source: "upper" },
       mode: "mode1",
       collectives: new Map(),
     };
-    this.setResponseCard(firstCard, "upper");
+    this.awaitingDiscardOwnerId = null;
+    this.state.responsePhase = "collective";
+    this.state.currentPlayerId = ownerId;
+    this.setResponseCard(discard, "upper");
+    this.state.lastAction = `${ownerId} DISCARD`;
     this.syncAllPrivateHands();
     this.tickBots();
+  }
+
+  private getHandWithoutPending(ownerId: string, pendingCard: Card): Card[] {
+    const hand = this.playerHands.get(ownerId) ?? [];
+    let removed = false;
+    return hand.filter((card) => {
+      if (!removed && card.id === pendingCard.id) {
+        removed = true;
+        return false;
+      }
+      return true;
+    });
   }
 
   private handleAction(client: Client, action: ActionType): void {
@@ -140,19 +439,26 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const clientId = client.sessionId;
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId) {
+      return;
+    }
+
     const pending = this.pendingResponse;
-    const isOwner = pending.ownerId === clientId;
-    const enabledActions = this.getAvailableActions(clientId).filter((x) => x.enabled).map((x) => x.action);
+    const isOwner = pending.ownerId === seatId;
+    const enabledActions = this.getAvailableActions(seatId).filter((x) => x.enabled).map((x) => x.action);
     if (!enabledActions.includes(action)) {
       return;
     }
 
     if (this.state.responsePhase === "collective") {
-      pending.collectives.set(clientId, action === "pass" ? "pass" : action);
+      if (seatId === pending.ownerId) {
+        return;
+      }
+      pending.collectives.set(seatId, action === "pass" ? "pass" : action);
       this.tickBots();
       if (this.state.responsePhase === "collective" && this.pendingResponse === pending) {
-        if (pending.collectives.size < this.playerOrder.length) {
+        if (!this.isCollectiveReady(pending)) {
           this.broadcastAvailableActions();
           return;
         }
@@ -165,19 +471,131 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
+    if (pending.mode === "mode2") {
+      if (action === "hu") {
+        const hand = this.getHandWithoutPending(seatId, pending.card);
+        const hu = explainHu(hand, pending.card, this.getHuWildcardCount());
+        this.logHuCheck("mode2_owner_click_hu", seatId, hand, pending.card, hu.valid);
+        if (hu.valid) {
+          this.endRound(`${seatId} HU`, seatId, hu.groups);
+        } else {
+          this.state.lastAction = "HU_INVALID";
+          this.broadcastAvailableActions();
+        }
+        return;
+      }
+
+      if (action === "open") {
+        const hand = this.getHandWithoutPending(seatId, pending.card);
+        if (!canOpen(hand, pending.card)) {
+          return;
+        }
+        this.removeFromHand(seatId, pending.card);
+        const taken = this.takeMatchingCards(seatId, pending.card, 3);
+        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
+        this.state.lastAction = `${seatId} OPEN`;
+        this.startTurn(seatId, "KONG_DRAW");
+        return;
+      }
+
+      if (action === "peng") {
+        const hand = this.getHandWithoutPending(seatId, pending.card);
+        if (!canPeng(hand, pending.card)) {
+          return;
+        }
+        this.removeFromHand(seatId, pending.card);
+        const taken = this.takeMatchingCards(seatId, pending.card, 2);
+        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
+        this.enterDiscardStage(seatId, "PENG");
+        return;
+      }
+
+      if (action === "eat") {
+        const hand = this.getHandWithoutPending(seatId, pending.card);
+        const candidates = getEatCandidates(hand, pending.card);
+        if (candidates.length === 0) {
+          return;
+        }
+        this.removeFromHand(seatId, pending.card);
+        for (const card of candidates[0]) {
+          this.removeFromHand(seatId, card);
+        }
+        this.pushExposedGroup(seatId, [pending.card, ...candidates[0]], true);
+        this.enterDiscardStage(seatId, "EAT");
+        return;
+      }
+
+      if (action === "pass") {
+        this.enterDiscardStage(seatId, "PASS");
+      }
+      return;
+    }
+
     if (action === "eat") {
-      this.executeEat(clientId);
+      this.executeEat(seatId);
       return;
     }
 
     if (action === "grab" && pending.mode === "mode1") {
-      this.executeGrab(clientId);
+      this.executeGrab(seatId);
       return;
     }
 
-    if (action === "pass" && pending.mode === "mode2") {
-      this.executePassToNext(clientId);
+    if (action === "pass") {
+      this.executePassToNext(seatId);
     }
+  }
+
+  private handleDiscardCard(client: Client, payload: { cardId?: string } | string): void {
+    if (!this.pendingResponse || this.state.phase !== "playing") {
+      return;
+    }
+
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId) {
+      return;
+    }
+
+    const pending = this.pendingResponse;
+    if (pending.ownerId !== seatId || pending.mode !== "mode2" || this.state.responsePhase === "collective") {
+      return;
+    }
+
+    const cardId = typeof payload === "string" ? payload : String(payload?.cardId ?? "");
+    if (!cardId) {
+      return;
+    }
+
+    const discard = this.discardCardById(seatId, cardId);
+    if (!discard) {
+      return;
+    }
+
+    this.pushDiscard(seatId, discard);
+    this.beginCollectiveFromDiscard(seatId, discard);
+  }
+
+  private enterDiscardStage(ownerId: string, tag: string): void {
+    const hand = this.playerHands.get(ownerId) ?? [];
+    const fallback = hand.find((card) => !isDiscardRestricted(card));
+    if (!fallback) {
+      this.endRound(`${ownerId} NO_DISCARD`);
+      return;
+    }
+
+    this.pendingResponse = {
+      ownerId,
+      card: { ...fallback, source: "draw" },
+      mode: "mode2",
+      collectives: new Map(),
+    };
+    this.awaitingDiscardOwnerId = ownerId;
+    this.state.responsePhase = "self_grab";
+    this.state.currentPlayerId = ownerId;
+    this.state.responseCard = new CardSchema();
+    this.state.lastAction = `${ownerId} ${tag}`;
+    this.syncAllPrivateHands();
+    this.tickBots();
   }
 
   private resolveCollectivePhase(): void {
@@ -186,18 +604,35 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const priority: ActionType[] = ["hu", "open", "peng"];
+    const order = this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId);
     let winner: { id: string; action: ActionType } | null = null;
 
-    for (const act of priority) {
-      for (const id of this.iterateFromNext(pending.ownerId)) {
-        if (pending.collectives.get(id) === act) {
+    for (const id of order) {
+      if ((pending.collectives.get(id) ?? "pass") === "hu") {
+        winner = { id, action: "hu" };
+        break;
+      }
+    }
+
+    if (!winner) {
+      for (const id of order) {
+        const act = pending.collectives.get(id) ?? "pass";
+        if (act === "open" || act === "peng") {
           winner = { id, action: act };
           break;
         }
       }
-      if (winner) {
-        break;
+    }
+
+    if (!winner) {
+      for (const id of order) {
+        if (!this.isEatResponder(pending.ownerId, id)) {
+          continue;
+        }
+        if ((pending.collectives.get(id) ?? "pass") === "eat") {
+          winner = { id, action: "eat" };
+          break;
+        }
       }
     }
 
@@ -206,9 +641,53 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    this.state.responsePhase = pending.mode === "mode1" ? "self_eat" : "self_grab";
+    const nextId = this.getNextPlayerId(pending.ownerId);
     this.state.lastAction = "NO_RESPONSE";
-    this.tickBots();
+    this.startTurn(nextId, "TURN_DRAW");
+  }
+
+  private isCollectiveReady(pending: PendingResponse): boolean {
+    let responded = 0;
+    for (const seatId of this.playerOrder) {
+      if (seatId === pending.ownerId) {
+        continue;
+      }
+      if (pending.collectives.has(seatId)) {
+        responded += 1;
+      }
+    }
+    return responded >= Math.max(0, this.playerOrder.length - 1);
+  }
+
+  private hasCollectiveActionBeyondPass(seatId: string): boolean {
+    const acts = this.getAvailableActions(seatId);
+    return acts.some((item) => item.enabled && item.action !== "pass");
+  }
+
+  private autoFillForcedCollectivePasses(): void {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") {
+      return;
+    }
+
+    for (const seatId of this.playerOrder) {
+      if (seatId === pending.ownerId) {
+        continue;
+      }
+      if (pending.collectives.has(seatId)) {
+        continue;
+      }
+
+      // If a seat has no legal response except pass, skip manual click.
+      if (!this.hasCollectiveActionBeyondPass(seatId)) {
+        pending.collectives.set(seatId, "pass");
+      }
+    }
+  }
+
+  private isEatResponder(ownerId: string, responderId: string): boolean {
+    // Rule v1.0: only one adjacent player can eat discarded card.
+    return this.getPreviousPlayerId(ownerId) === responderId;
   }
 
   private executeResponseWinner(winnerId: string, action: ActionType): void {
@@ -221,35 +700,65 @@ export class FourColorGameRoom extends Room<GameState> {
     const response = pending.card;
 
     if (action === "hu") {
-      const hu = explainHu(winnerHand, response);
+      const hu = explainHu(winnerHand, response, this.getHuWildcardCount());
+      this.logHuCheck("collective_winner_hu", winnerId, winnerHand, response, hu.valid);
       if (!hu.valid) {
         this.state.lastAction = "HU_INVALID";
         this.enterNoResponsePath();
         return;
       }
-      this.state.phase = "ended";
-      this.state.lastAction = `${winnerId} HU`;
-      this.broadcast("hu_result", { winnerId, groups: hu.groups });
+      this.endRound(`${winnerId} HU`, winnerId, hu.groups);
       return;
     }
 
     if (action === "open") {
-      this.consumeMatchingCards(winnerId, response, 3);
-      this.pushExposedGroup(winnerId, [response], true);
+      const taken = this.takeMatchingCards(winnerId, response, 3);
+      this.pushExposedGroup(winnerId, [response, ...taken], true);
+      this.state.lastAction = `${winnerId} OPEN`;
+      this.startTurn(winnerId, "KONG_DRAW");
+      return;
     }
 
     if (action === "peng") {
-      this.consumeMatchingCards(winnerId, response, 2);
-      this.pushExposedGroup(winnerId, [response], true);
+      const taken = this.takeMatchingCards(winnerId, response, 2);
+      this.pushExposedGroup(winnerId, [response, ...taken], true);
+      this.enterDiscardStage(winnerId, "PENG");
+      return;
     }
 
-    this.state.lastAction = `${winnerId} ${action.toUpperCase()}`;
-    this.finalizeWithDiscardFrom(winnerId);
+    if (action === "eat") {
+      if (!this.isEatResponder(pending.ownerId, winnerId)) {
+        const nextId = this.getNextPlayerId(pending.ownerId);
+        this.startTurn(nextId, "TURN_DRAW");
+        return;
+      }
+      const hand = this.playerHands.get(winnerId) ?? [];
+      const candidates = getEatCandidates(hand, response);
+      if (candidates.length === 0) {
+        const nextId = this.getNextPlayerId(pending.ownerId);
+        this.startTurn(nextId, "TURN_DRAW");
+        return;
+      }
+      for (const card of candidates[0]) {
+        this.removeFromHand(winnerId, card);
+      }
+      this.pushExposedGroup(winnerId, [response, ...candidates[0]], true);
+      this.enterDiscardStage(winnerId, "EAT");
+      return;
+    }
+
+    const nextId = this.getNextPlayerId(pending.ownerId);
+    this.startTurn(nextId, "TURN_DRAW");
   }
 
   private enterNoResponsePath(): void {
-    this.state.responsePhase = this.pendingResponse?.mode === "mode1" ? "self_eat" : "self_grab";
-    this.tickBots();
+    const ownerId = this.pendingResponse?.ownerId;
+    if (!ownerId) {
+      return;
+    }
+    const nextId = this.getNextPlayerId(ownerId);
+    this.state.lastAction = "NO_RESPONSE";
+    this.startTurn(nextId, "TURN_DRAW");
   }
 
   private executeEat(ownerId: string): void {
@@ -282,8 +791,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const newCard = this.deck.shift();
     this.state.deckCount = this.deck.length;
     if (!newCard) {
-      this.state.phase = "ended";
-      this.state.lastAction = "DECK_EMPTY";
+      this.endRound("DECK_EMPTY");
       return;
     }
 
@@ -317,11 +825,9 @@ export class FourColorGameRoom extends Room<GameState> {
   private finalizeWithDiscardFrom(playerId: string): void {
     const discard = this.pickDiscardCard(playerId);
     if (!discard) {
-      this.state.phase = "ended";
-      this.state.lastAction = `${playerId} NO_DISCARD`;
+      this.endRound(`${playerId} NO_DISCARD`);
       return;
     }
-
     this.pushDiscard(playerId, discard);
     this.advanceToNextOwner(playerId, discard);
   }
@@ -352,16 +858,37 @@ export class FourColorGameRoom extends Room<GameState> {
     return discard;
   }
 
+  private discardCardById(playerId: string, cardId: string): Card | null {
+    const hand = this.playerHands.get(playerId) ?? [];
+    const idx = hand.findIndex((card) => card.id === cardId);
+    if (idx < 0) {
+      return null;
+    }
+    const discard = hand[idx];
+    if (isDiscardRestricted(discard)) {
+      return null;
+    }
+    hand.splice(idx, 1);
+    this.playerHands.set(playerId, hand);
+    return discard;
+  }
+
   private consumeMatchingCards(playerId: string, target: Card, count: number): void {
+    this.takeMatchingCards(playerId, target, count);
+  }
+
+  private takeMatchingCards(playerId: string, target: Card, count: number): Card[] {
     const hand = this.playerHands.get(playerId) ?? [];
     let rest = count;
+    const removed: Card[] = [];
     for (let i = hand.length - 1; i >= 0 && rest > 0; i -= 1) {
       if (isSameFace(hand[i], target)) {
-        hand.splice(i, 1);
+        removed.push(...hand.splice(i, 1));
         rest -= 1;
       }
     }
     this.playerHands.set(playerId, hand);
+    return removed;
   }
 
   private removeFromHand(playerId: string, card: Card): void {
@@ -384,8 +911,9 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!player) {
       return;
     }
-    const schemaCard = this.toSchemaCard(card, false, card.source ?? "upper");
+    const schemaCard = this.toSchemaCard(card, false, "upper");
     player.discardPile.unshift(schemaCard);
+    this.state.publicDiscardPile.unshift(this.toSchemaCard(card, false, "upper"));
   }
 
   private pushExposedGroup(playerId: string, cards: Card[], highlight: boolean): void {
@@ -413,36 +941,94 @@ export class FourColorGameRoom extends Room<GameState> {
     return schemaCard;
   }
 
-  private getAvailableActions(clientId: string): Array<{ action: ActionType; enabled: boolean }> {
+  private toPlainCard(card: Card): Card {
+    return {
+      id: card.id,
+      color: card.color,
+      type: card.type,
+      source: card.source ?? "upper",
+    };
+  }
+
+  private buildRoundResultPlayers(): RoundResultPlayer[] {
+    const result: RoundResultPlayer[] = [];
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      const hand = this.playerHands.get(seatId) ?? [];
+      result.push({
+        clientId: seatId,
+        name: player?.name ?? seatId,
+        hand: hand.map((card) => this.toPlainCard(card)),
+      });
+    }
+    return result;
+  }
+
+  private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
+    this.state.phase = "ended";
+    this.state.lastAction = lastAction;
+    this.pendingResponse = null;
+    this.awaitingDiscardOwnerId = null;
+
+    if (winnerId) {
+      this.broadcast("hu_result", { winnerId, groups });
+    }
+
+    this.broadcast("round_result", {
+      winnerId,
+      groups,
+      players: this.buildRoundResultPlayers(),
+    });
+
+    this.broadcastAvailableActions();
+  }
+
+  private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
     const pending = this.pendingResponse;
     if (!pending) {
       return [];
     }
-    const hand = this.playerHands.get(clientId) ?? [];
-    const isOwner = pending.ownerId === clientId;
+    const hand = this.playerHands.get(seatId) ?? [];
+    const isOwner = pending.ownerId === seatId;
     const isCollective = this.state.responsePhase === "collective";
 
-    if (!isOwner) {
-      return [
-        { action: "hu", enabled: isCollective && explainHu(hand, pending.card).valid },
-        { action: "open", enabled: isCollective && canOpen(hand, pending.card) },
-        { action: "peng", enabled: isCollective && canPeng(hand, pending.card) },
-        { action: "pass", enabled: true },
-      ];
-    }
-
     if (isCollective) {
+      if (isOwner) {
+        return this.getDisabledPanel("mode1", "collective");
+      }
+      const huProbe = explainHu(hand, pending.card, this.getHuWildcardCount());
+      this.logHuCheck("collective", seatId, hand, pending.card, huProbe.valid);
       return [
-        { action: "hu", enabled: explainHu(hand, pending.card).valid },
+        { action: "hu", enabled: huProbe.valid },
         { action: "open", enabled: canOpen(hand, pending.card) },
         { action: "peng", enabled: canPeng(hand, pending.card) },
-        { action: "eat", enabled: false },
-        { action: pending.mode === "mode1" ? "grab" : "pass", enabled: false },
+        { action: "eat", enabled: this.isEatResponder(pending.ownerId, seatId) && canEat(hand, pending.card) },
         { action: "pass", enabled: true },
       ];
     }
 
-    if (pending.mode === "mode1") {
+    if (!isOwner) {
+      return this.getDisabledPanel(pending.mode, this.state.responsePhase);
+    }
+
+    if (pending.mode === "mode2") {
+      if (this.awaitingDiscardOwnerId === seatId) {
+        return [];
+      }
+      const handNoPending = this.getHandWithoutPending(seatId, pending.card);
+      const huProbe = explainHu(handNoPending, pending.card, this.getHuWildcardCount());
+      this.logHuCheck("mode2_owner", seatId, handNoPending, pending.card, huProbe.valid);
+      return [
+        { action: "hu", enabled: huProbe.valid },
+        { action: "open", enabled: canOpen(handNoPending, pending.card) },
+        { action: "peng", enabled: canPeng(handNoPending, pending.card) },
+        { action: "eat", enabled: canEat(handNoPending, pending.card) },
+        { action: "pass", enabled: true },
+      ];
+    }
+
+    // Legacy debug mode.
+    if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
       return [
         { action: "hu", enabled: false },
         { action: "open", enabled: false },
@@ -461,18 +1047,217 @@ export class FourColorGameRoom extends Room<GameState> {
     ];
   }
 
-  private broadcastAvailableActions(): void {
-    for (const client of this.clients) {
-      const actions = this.getAvailableActions(client.sessionId);
-      client.send("available_actions", actions);
+  private getDisabledPanel(
+    mode: ResponseMode,
+    responsePhase: "collective" | "self_eat" | "self_grab",
+  ): Array<{ action: ActionType; enabled: boolean }> {
+    if (responsePhase === "collective") {
+      return [
+        { action: "hu", enabled: false },
+        { action: "open", enabled: false },
+        { action: "peng", enabled: false },
+        { action: "eat", enabled: false },
+        { action: "pass", enabled: false },
+      ];
     }
+
+    if (mode === "mode2") {
+      return [
+        { action: "hu", enabled: false },
+        { action: "open", enabled: false },
+        { action: "peng", enabled: false },
+        { action: "eat", enabled: false },
+        { action: "pass", enabled: false },
+      ];
+    }
+
+    if (mode === "mode1") {
+      return [
+        { action: "hu", enabled: false },
+        { action: "open", enabled: false },
+        { action: "peng", enabled: false },
+        { action: "eat", enabled: false },
+        { action: "grab", enabled: false },
+      ];
+    }
+    return [
+      { action: "hu", enabled: false },
+      { action: "open", enabled: false },
+      { action: "peng", enabled: false },
+      { action: "eat", enabled: false },
+      { action: "pass", enabled: false },
+    ];
+  }
+
+  private broadcastAvailableActions(): void {
+    this.logStateSnapshot("STATE");
+    for (const client of this.clients) {
+      const seatId = this.seatBySession.get(client.sessionId);
+      if (!seatId) {
+        continue;
+      }
+      client.send("available_actions", this.getAvailableActions(seatId));
+    }
+  }
+
+  private logStateSnapshot(tag: string): void {
+    if (!this.logEnabled || !this.shouldLogStateSnapshot()) {
+      return;
+    }
+    const fp = `${this.state.phase}|${this.state.responsePhase}|${this.state.currentPlayerId}|${this.state.lastAction}|${this.state.deckCount}`;
+    if (fp === this.lastTerminalFingerprint) {
+      return;
+    }
+    this.lastTerminalFingerprint = fp;
+    const line =
+      `[${new Date().toISOString()}] ` +
+      `[room:${this.roomId}] ` +
+      `[${tag}] phase=${this.state.phase} response=${this.state.responsePhase} ` +
+      `current=${this.state.currentPlayerId || "-"} deck=${this.state.deckCount} action=${this.state.lastAction || "-"}`;
+    if (!this.roomLogCards) {
+      console.log(line);
+      if (this.state.phase === "ended") {
+        this.logHuSummary();
+      }
+      return;
+    }
+    console.log(`${line} | players=${this.summarizeAllPlayersCards()}`);
+    if (this.state.phase === "ended") {
+      this.logHuSummary();
+    }
+  }
+
+  private shouldLogStateSnapshot(): boolean {
+    if (this.stateLogMode === "off") {
+      return false;
+    }
+    if (this.stateLogMode === "all") {
+      return true;
+    }
+    const keyword = this.getStateActionKeyword(this.state.lastAction || "");
+    return COMPACT_STATE_ACTIONS.has(keyword);
+  }
+
+  private getStateActionKeyword(action: string): string {
+    const parts = action.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return "";
+    }
+    if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
+      return parts[1] ?? "";
+    }
+    return parts[0];
+  }
+
+  private summarizeAllPlayersCards(): string {
+    const parts: string[] = [];
+    for (const seatId of this.playerOrder) {
+      const hand = this.playerHands.get(seatId) ?? [];
+      const p = this.state.players.get(seatId);
+      const exposed = p?.exposedArea ?? [];
+      const discard = p?.discardPile ?? [];
+      const fish = p?.fishArea ?? [];
+      parts.push(
+        `${seatId}{h=${this.summarizeCards(hand)}|e=${this.summarizeSchemaCards(exposed)}|d=${this.summarizeSchemaCards(discard)}|f=${this.summarizeSchemaCards(fish)}}`,
+      );
+    }
+    return parts.join(" ; ");
+  }
+
+  private getHuWildcardCount(): number {
+    return this.publicGeneralPool.length;
+  }
+
+  private summarizeCards(cards: Card[]): string {
+    if (!cards.length) {
+      return "-";
+    }
+    const counter = new Map<string, number>();
+    for (const c of cards) {
+      const key = `${c.color}:${c.type}`;
+      counter.set(key, (counter.get(key) ?? 0) + 1);
+    }
+    return [...counter.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, n]) => `${k}x${n}`)
+      .join(",");
+  }
+
+  private summarizeSchemaCards(cards: Iterable<{ color: string; type: string }>): string {
+    const list = [...cards];
+    if (!list.length) {
+      return "-";
+    }
+    const counter = new Map<string, number>();
+    for (const c of list) {
+      const key = `${c.color}:${c.type}`;
+      counter.set(key, (counter.get(key) ?? 0) + 1);
+    }
+    return [...counter.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, n]) => `${k}x${n}`)
+      .join(",");
+  }
+
+  private logHuCheck(stage: string, seatId: string, hand: Card[], response: Card, valid: boolean): void {
+    this.huChecksTotal += 1;
+    if (valid) {
+      this.huChecksValid += 1;
+    }
+    const seatStats = this.huChecksBySeat.get(seatId) ?? { total: 0, valid: 0 };
+    seatStats.total += 1;
+    if (valid) {
+      seatStats.valid += 1;
+    }
+    this.huChecksBySeat.set(seatId, seatStats);
+
+    if (!this.logEnabled || !this.huLogEnabled || this.huLogMode === "off") {
+      return;
+    }
+    if (this.huLogMode === "success" && !valid) {
+      return;
+    }
+    if (this.huLogMode === "fail" && valid) {
+      return;
+    }
+
+    const fp = `${stage}|${seatId}|${response.id}|${response.color}:${response.type}|hand=${hand.length}|wild=${this.getHuWildcardCount()}|valid=${valid}|deck=${this.state.deckCount}|action=${this.state.lastAction}`;
+    if (this.huLogDedup.has(fp)) {
+      return;
+    }
+    this.huLogDedup.add(fp);
+    if (this.huLogDedup.size > 2000) {
+      this.huLogDedup.clear();
+    }
+    const cardsPart = this.huLogCards
+      ? `|seatCards=${this.summarizeCards(hand)}|players=${this.summarizeAllPlayersCards()}`
+      : "";
+    console.log(`[${new Date().toISOString()}] [room:${this.roomId}] [HU_CHECK] ${fp}${cardsPart}`);
+  }
+
+  private logHuSummary(): void {
+    if (!this.logEnabled) {
+      return;
+    }
+    const seatPart = this.playerOrder
+      .map((seatId) => {
+        const s = this.huChecksBySeat.get(seatId) ?? { total: 0, valid: 0 };
+        return `${seatId}:${s.valid}/${s.total}`;
+      })
+      .join(",");
+    console.log(
+      `[${new Date().toISOString()}] [room:${this.roomId}] [HU_SUMMARY] valid=${this.huChecksValid}/${this.huChecksTotal} bySeat=${seatPart}`,
+    );
   }
 
   private syncAllPrivateHands(): void {
     for (const client of this.clients) {
-      const hand = this.playerHands.get(client.sessionId) ?? [];
-      const payload = hand.map((card) => ({ ...card, isHidden: false }));
-      client.send("private_hand", payload);
+      const seatId = this.seatBySession.get(client.sessionId);
+      if (!seatId) {
+        continue;
+      }
+      const hand = this.playerHands.get(seatId) ?? [];
+      client.send("private_hand", hand.map((card) => ({ ...card, isHidden: false })));
     }
   }
 
@@ -499,7 +1284,105 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.playerOrder[(idx + 1) % this.playerOrder.length];
   }
 
+  private getPreviousPlayerId(playerId: string): string {
+    const idx = this.playerOrder.indexOf(playerId);
+    if (idx < 0) {
+      return this.playerOrder[0];
+    }
+    return this.playerOrder[(idx - 1 + this.playerOrder.length) % this.playerOrder.length];
+  }
+
   private tickBots(): void {
+    if (!this.pendingResponse || this.state.phase !== "playing") {
+      this.clearBotTimer();
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    if (this.state.responsePhase === "collective") {
+      if (this.isCollectiveReady(this.pendingResponse)) {
+        this.clearBotTimer();
+        this.resolveCollectivePhase();
+        return;
+      }
+      if (this.hasPendingCollectiveBotStep() || this.hasForcedCollectivePassCandidate()) {
+        this.scheduleBotStep();
+        this.broadcastAvailableActions();
+        return;
+      }
+      this.clearBotTimer();
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    const ownerId = this.pendingResponse.ownerId;
+    if (this.botIds.has(ownerId)) {
+      this.scheduleBotStep();
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    this.clearBotTimer();
+    this.broadcastAvailableActions();
+  }
+
+  private clearBotTimer(): void {
+    if (this.botTimer) {
+      clearTimeout(this.botTimer);
+      this.botTimer = null;
+    }
+  }
+
+  private scheduleBotStep(): void {
+    if (this.botThinkMs <= 0) {
+      this.runBotStepNow();
+      return;
+    }
+    if (this.botTimer) {
+      return;
+    }
+    this.botTimer = setTimeout(() => {
+      this.botTimer = null;
+      this.runBotStepNow();
+    }, this.botThinkMs);
+  }
+
+  private hasPendingCollectiveBotStep(): boolean {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") {
+      return false;
+    }
+    for (const botId of this.botIds) {
+      if (botId === pending.ownerId) {
+        continue;
+      }
+      if (!pending.collectives.has(botId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private hasForcedCollectivePassCandidate(): boolean {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") {
+      return false;
+    }
+    for (const seatId of this.playerOrder) {
+      if (seatId === pending.ownerId) {
+        continue;
+      }
+      if (pending.collectives.has(seatId)) {
+        continue;
+      }
+      if (!this.hasCollectiveActionBeyondPass(seatId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private runBotStepNow(): void {
     if (!this.pendingResponse || this.state.phase !== "playing") {
       this.broadcastAvailableActions();
       return;
@@ -507,6 +1390,9 @@ export class FourColorGameRoom extends Room<GameState> {
 
     if (this.state.responsePhase === "collective") {
       for (const botId of this.botIds) {
+        if (botId === this.pendingResponse.ownerId) {
+          continue;
+        }
         if (this.pendingResponse.collectives.has(botId)) {
           continue;
         }
@@ -515,10 +1401,15 @@ export class FourColorGameRoom extends Room<GameState> {
           acts.find((x) => x.action === "hu" && x.enabled)?.action ??
           acts.find((x) => x.action === "open" && x.enabled)?.action ??
           acts.find((x) => x.action === "peng" && x.enabled)?.action ??
+          acts.find((x) => x.action === "eat" && x.enabled)?.action ??
+          acts.find((x) => x.action === "pass" && x.enabled)?.action ??
           "pass";
         this.pendingResponse.collectives.set(botId, choose);
       }
-      if (this.pendingResponse.collectives.size >= this.playerOrder.length) {
+
+      this.autoFillForcedCollectivePasses();
+
+      if (this.isCollectiveReady(this.pendingResponse)) {
         this.resolveCollectivePhase();
         return;
       }
@@ -529,6 +1420,68 @@ export class FourColorGameRoom extends Room<GameState> {
     const ownerId = this.pendingResponse.ownerId;
     if (!this.botIds.has(ownerId)) {
       this.broadcastAvailableActions();
+      return;
+    }
+
+    if (this.awaitingDiscardOwnerId === ownerId) {
+      this.discardFromAndCollective(ownerId);
+      return;
+    }
+
+    if (this.pendingResponse.mode === "mode2") {
+      const acts = this.getAvailableActions(ownerId);
+      const choose =
+        acts.find((x) => x.action === "hu" && x.enabled)?.action ??
+        acts.find((x) => x.action === "open" && x.enabled)?.action ??
+        acts.find((x) => x.action === "peng" && x.enabled)?.action ??
+        acts.find((x) => x.action === "eat" && x.enabled)?.action ??
+        acts.find((x) => x.action === "pass" && x.enabled)?.action ??
+        "pass";
+
+      if (choose === "hu") {
+        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
+        const hu = explainHu(hand, this.pendingResponse.card, this.getHuWildcardCount());
+        this.logHuCheck("mode2_bot_hu", ownerId, hand, this.pendingResponse.card, hu.valid);
+        if (hu.valid) {
+          this.endRound(`${ownerId} HU`, ownerId, hu.groups);
+        } else {
+          this.discardFromAndCollective(ownerId);
+        }
+        return;
+      }
+
+      if (choose === "open") {
+        this.removeFromHand(ownerId, this.pendingResponse.card);
+        const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 3);
+        this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
+        this.state.lastAction = `${ownerId} OPEN`;
+        this.startTurn(ownerId, "KONG_DRAW");
+        return;
+      }
+
+      if (choose === "peng") {
+        this.removeFromHand(ownerId, this.pendingResponse.card);
+        const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 2);
+        this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
+        this.enterDiscardStage(ownerId, "PENG");
+        return;
+      }
+
+      if (choose === "eat") {
+        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
+        const candidates = getEatCandidates(hand, this.pendingResponse.card);
+        if (candidates.length > 0) {
+          this.removeFromHand(ownerId, this.pendingResponse.card);
+          for (const card of candidates[0]) {
+            this.removeFromHand(ownerId, card);
+          }
+          this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...candidates[0]], true);
+        }
+        this.enterDiscardStage(ownerId, "EAT");
+        return;
+      }
+
+      this.enterDiscardStage(ownerId, "PASS");
       return;
     }
 
@@ -554,31 +1507,45 @@ export class FourColorGameRoom extends Room<GameState> {
     this.broadcastAvailableActions();
   }
 
-  private applyDebugScenario(clientId: string, scenario: string): boolean {
-    if (!this.state.players.has(clientId)) {
+  private applyDebugScenario(seatId: string, scenario: string): boolean {
+    if (!this.state.players.has(seatId)) {
       return false;
     }
 
-    const hand = this.playerHands.get(clientId) ?? [];
+    const hand = this.playerHands.get(seatId) ?? [];
     hand.length = 0;
     const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
-
     const seq = ++this.debugSeq;
 
-    if (scenario === "eat_mode1") {
+    if (scenario === "hu_ready_mode2") {
+      add("h1", "red", "ju");
+      add("h2", "red", "ma");
+      add("h3", "red", "pao");
+      this.pendingResponse = {
+        ownerId: seatId,
+        card: { id: "h3", color: "red", type: "pao", source: "draw" },
+        mode: "mode2",
+        collectives: new Map(),
+      };
+      this.state.phase = "playing";
+      this.state.responsePhase = "self_grab";
+      this.state.currentPlayerId = seatId;
+      this.setResponseCard(this.pendingResponse.card, "draw");
+      this.state.lastAction = `DEBUG: hu_ready_mode2#${seq}`;
+    } else if (scenario === "eat_mode1") {
       add("d1", "red", "shi");
       add("d2", "red", "xiang");
       add("d3", "yellow", "ju");
       add("d4", "yellow", "ma");
       this.pendingResponse = {
-        ownerId: clientId,
+        ownerId: seatId,
         card: { id: "rj", color: "red", type: "jiang", source: "upper" },
         mode: "mode1",
         collectives: new Map(),
       };
       this.state.phase = "playing";
       this.state.responsePhase = "self_eat";
-      this.state.currentPlayerId = clientId;
+      this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "upper");
       this.state.lastAction = `DEBUG: eat_mode1#${seq}`;
     } else if (scenario === "mode2_pass") {
@@ -586,14 +1553,14 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d6", "white", "xiang");
       add("d7", "green", "zu");
       this.pendingResponse = {
-        ownerId: clientId,
+        ownerId: seatId,
         card: { id: "gy", color: "green", type: "pao", source: "draw" },
         mode: "mode2",
         collectives: new Map(),
       };
       this.state.phase = "playing";
       this.state.responsePhase = "self_grab";
-      this.state.currentPlayerId = clientId;
+      this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "draw");
       this.state.lastAction = `DEBUG: mode2_pass#${seq}`;
     } else if (scenario === "collective_no_actions") {
@@ -601,7 +1568,7 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d9", "green", "xiang");
       add("d10", "white", "zu");
       this.pendingResponse = {
-        ownerId: this.getNextPlayerId(clientId),
+        ownerId: this.getNextPlayerId(seatId),
         card: { id: "yj", color: "yellow", type: "ju", source: "upper" },
         mode: "mode1",
         collectives: new Map(),
@@ -612,11 +1579,16 @@ export class FourColorGameRoom extends Room<GameState> {
       this.setResponseCard(this.pendingResponse.card, "upper");
       this.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
     } else if (scenario === "hu_fail_case") {
+      // Make this scenario deterministic: no wildcard from exposed generals.
+      this.publicGeneralPool = [];
+      for (const id of this.playerOrder) {
+        this.state.players.get(id)?.fishArea.clear();
+      }
       add("d11", "red", "jiang");
       add("d12", "red", "shi");
       add("d13", "red", "xiang");
       this.pendingResponse = {
-        ownerId: this.getNextPlayerId(clientId),
+        ownerId: this.getNextPlayerId(seatId),
         card: { id: "rp", color: "red", type: "pao", source: "upper" },
         mode: "mode1",
         collectives: new Map(),
@@ -627,25 +1599,23 @@ export class FourColorGameRoom extends Room<GameState> {
       this.setResponseCard(this.pendingResponse.card, "upper");
       this.state.lastAction = `DEBUG: hu_fail_case#${seq}`;
     } else if (scenario === "discard_public") {
-      this.removeDebugOnlyBots();
-
+      this.state.publicDiscardPile.clear();
       for (const id of this.playerOrder) {
         const player = this.state.players.get(id);
         if (!player) {
           continue;
         }
         player.discardPile.clear();
-        player.discardPile.push(
-          this.toSchemaCard({ id: `${id}_d1_${seq}`, color: "yellow", type: "ma" }, false, "upper"),
-        );
+        const card = this.toSchemaCard({ id: `${id}_d1_${seq}`, color: "yellow", type: "ma" }, false, "upper");
+        player.discardPile.push(card);
+        this.state.publicDiscardPile.unshift(this.toSchemaCard({ id: `${id}_d1_${seq}`, color: "yellow", type: "ma" }, false, "upper"));
       }
-      const me = this.state.players.get(clientId);
+      const me = this.state.players.get(seatId);
       if (me) {
-        me.discardPile.push(
-          this.toSchemaCard({ id: `self_d2_${seq}`, color: "red", type: "ju" }, false, "upper"),
-        );
+        const card = this.toSchemaCard({ id: `self_d2_${seq}`, color: "red", type: "ju" }, false, "upper");
+        me.discardPile.push(card);
+        this.state.publicDiscardPile.unshift(this.toSchemaCard({ id: `self_d2_${seq}`, color: "red", type: "ju" }, false, "upper"));
       }
-
       this.pendingResponse = null;
       this.state.responseCard = new CardSchema();
       this.state.responsePhase = "collective";
@@ -654,9 +1624,13 @@ export class FourColorGameRoom extends Room<GameState> {
       return false;
     }
 
-    this.playerHands.set(clientId, hand);
+    this.playerHands.set(seatId, hand);
     this.syncAllPrivateHands();
     if (scenario === "discard_public") {
+      this.broadcastAvailableActions();
+      return true;
+    }
+    if (scenario === "collective_no_actions" || scenario === "hu_fail_case") {
       this.broadcastAvailableActions();
       return true;
     }
@@ -664,14 +1638,16 @@ export class FourColorGameRoom extends Room<GameState> {
     return true;
   }
 
-  private removeDebugOnlyBots(): void {
-    const debugBots = ["bot_a", "bot_b", "bot_c"];
-    for (const id of debugBots) {
-      this.state.players.delete(id);
-      this.playerHands.delete(id);
-      this.botIds.delete(id);
-      this.playerOrder = this.playerOrder.filter((x) => x !== id);
-    }
+  private normalizeName(input: unknown): string {
+    const name = String(input ?? "").trim();
+    return name.slice(0, 24);
   }
 
+  private normalizeToken(input: unknown): string {
+    return String(input ?? "").trim().slice(0, 128);
+  }
+
+  private generateToken(): string {
+    return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  }
 }

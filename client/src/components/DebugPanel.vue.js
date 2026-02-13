@@ -1,9 +1,9 @@
 const __VLS_props = defineProps();
 const __VLS_emit = defineEmits();
 const scenarios = [
-    { key: "eat_mode1", label: "模式1 吃前置" },
+    { key: "hu_ready_mode2", label: "开局可胡（模式2）" },
     { key: "mode2_pass", label: "模式2 过牌" },
-    { key: "collective_no_actions", label: "他人待响灰显" },
+    { key: "collective_no_actions", label: "他人待响可过" },
     { key: "hu_fail_case", label: "单将胡失败" },
     { key: "discard_public", label: "弃牌区公开演示" },
 ];

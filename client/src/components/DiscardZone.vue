@@ -30,6 +30,7 @@ const expanded = ref(true);
   background: #111827;
   padding: 8px;
 }
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -38,6 +39,7 @@ const expanded = ref(true);
   cursor: pointer;
   margin-bottom: 8px;
 }
+
 .cards {
   display: flex;
   gap: 6px;

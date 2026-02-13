@@ -1,8 +1,10 @@
-import type { ActionType, AvailableAction, Card, PlayerState } from "@/types/game";
+import type { ActionType, AvailableAction, Card, PlayerState, RoundResultPayload } from "@/types/game";
 export declare function useRoom(playerName?: string): {
     connected: import("vue").Ref<boolean, boolean>;
     myId: import("vue").Ref<string, string>;
-    state: import("vue").ShallowRef<any, any>;
+    mySeatId: import("vue").Ref<string, string>;
+    playerToken: import("vue").Ref<string, string>;
+    state: import("vue").Ref<any, any>;
     players: import("vue").ComputedRef<PlayerState[]>;
     privateHand: import("vue").Ref<{
         id: string;
@@ -34,6 +36,35 @@ export declare function useRoom(playerName?: string): {
         winnerId: string;
         groups: string[];
     } | null>;
+    roundResult: import("vue").Ref<{
+        winnerId: string | null;
+        groups: string[];
+        players: {
+            clientId: string;
+            name: string;
+            hand: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+    } | null, RoundResultPayload | {
+        winnerId: string | null;
+        groups: string[];
+        players: {
+            clientId: string;
+            name: string;
+            hand: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+    } | null>;
     debugApplied: import("vue").Ref<{
         scenario: string;
         ok: boolean;
@@ -47,7 +78,23 @@ export declare function useRoom(playerName?: string): {
         ok: boolean;
         ts: number;
     } | null>;
+    joinError: import("vue").Ref<string, string>;
+    actionLogs: import("vue").Ref<{
+        id: number;
+        at: string;
+        text: string;
+    }[], {
+        id: number;
+        at: string;
+        text: string;
+    }[] | {
+        id: number;
+        at: string;
+        text: string;
+    }[]>;
     sendAction: (action: ActionType) => void;
+    sendDiscardCard: (cardId: string) => void;
     declareKongs: (count: number) => void;
     debugSetup: (scenario: string) => void;
+    startGame: () => void;
 };

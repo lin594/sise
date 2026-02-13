@@ -1,15 +1,18 @@
 <template>
-  <div class="panel">
-    <button
-      v-for="item in normalized"
-      :key="item.action"
-      class="btn"
-      :class="{ enabled: item.enabled }"
-      :disabled="!item.enabled || busy"
-      @click="onClick(item.action)"
-    >
-      {{ text(item.action) }}
-    </button>
+  <div class="panel" :class="{ locked: !canAct }">
+    <p class="hint">{{ panelHint }}</p>
+    <div class="actions">
+      <button
+        v-for="item in normalized"
+        :key="item.action"
+        class="btn"
+        :class="{ enabled: item.enabled && canAct }"
+        :disabled="!canAct || !item.enabled || busy"
+        @click="onClick(item.action)"
+      >
+        {{ text(item.action) }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -17,9 +20,21 @@
 import { computed, ref } from "vue";
 import type { ActionType, AvailableAction } from "@/types/game";
 
-const props = defineProps<{
-  actions: AvailableAction[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    actions: AvailableAction[];
+    canAct?: boolean;
+    isCurrentTurn?: boolean;
+    responsePhase?: string;
+    currentPlayerName?: string;
+  }>(),
+  {
+    canAct: false,
+    isCurrentTurn: false,
+    responsePhase: "",
+    currentPlayerName: "-",
+  },
+);
 
 const emit = defineEmits<{
   submit: [action: ActionType];
@@ -33,6 +48,19 @@ const normalized = computed(() => {
   return defaultOrder
     .filter((action) => map.has(action))
     .map((action) => ({ action, enabled: Boolean(map.get(action)) }));
+});
+
+const panelHint = computed(() => {
+  if (!props.canAct) {
+    return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
+  }
+  if (props.responsePhase === "collective" && !props.isCurrentTurn) {
+    return "他人待响阶段：你可以选择胡/开/碰/过";
+  }
+  if (!normalized.value.some((x) => x.enabled)) {
+    return "当前阶段没有可执行动作";
+  }
+  return "请选择一个动作";
 });
 
 function text(action: ActionType): string {
@@ -58,13 +86,33 @@ function onClick(action: ActionType): void {
 
 <style scoped>
 .panel {
-  display: flex;
+  display: grid;
   gap: 8px;
-  justify-content: center;
   padding: 10px;
   background: #0f172a;
   border-top: 1px solid #1e293b;
 }
+
+.panel.locked {
+  background: #0b1220;
+}
+
+.hint {
+  margin: 0;
+  text-align: center;
+  color: #93c5fd;
+}
+
+.panel.locked .hint {
+  color: #fca5a5;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
 .btn {
   min-width: 56px;
   min-height: 48px;
@@ -76,13 +124,16 @@ function onClick(action: ActionType): void {
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
 .btn.enabled {
-  background: #4caf50;
+  background: #16a34a;
 }
+
 .btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
+
 .btn:not(:disabled):active {
   transform: scale(0.96);
 }

@@ -12,6 +12,8 @@ export class PlayerState extends Schema {
   @type("string") clientId: string = "";
   @type("string") name: string = "";
   @type("number") declaredKongs: number = 0;
+  @type("boolean") isBot: boolean = false;
+  @type("boolean") connected: boolean = true;
   @type([CardSchema]) discardPile = new ArraySchema<CardSchema>();
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
   @type([CardSchema]) fishArea = new ArraySchema<CardSchema>();
@@ -19,11 +21,12 @@ export class PlayerState extends Schema {
 
 export class GameState extends Schema {
   @type("string") phase: "waiting" | "declaring" | "playing" | "ended" = "waiting";
+  @type("string") hostPlayerId: string = "";
   @type("string") currentPlayerId: string = "";
   @type("string") responsePhase: "collective" | "self_eat" | "self_grab" = "collective";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
+  @type([CardSchema]) publicDiscardPile = new ArraySchema<CardSchema>();
   @type("string") lastAction: string = "";
   @type("number") deckCount: number = 0;
   @type(CardSchema) responseCard: CardSchema = new CardSchema();
 }
-

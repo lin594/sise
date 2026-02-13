@@ -1,120 +1,135 @@
-# 四色牌架构说明（阶段版）
+# 四色牌架构说明（单房自用版）
 
-## 1. 总体架构
+## 1. 架构概览
 
-- 前端：Vue 3 + TypeScript（Vite）
+- 前端：Vue 3 + TypeScript
 - 后端：Colyseus + TypeScript
-- 通信：WebSocket（Colyseus room message + state patch）
+- 通信：WebSocket（Room state patch + custom messages）
 
-数据原则：
+设计目标：
 
-- 私有数据（手牌）仅通过私有消息下发
-- 公共数据（弃牌区/明示区/待响牌）通过 Schema 同步
+- 单房间、房主手动开局
+- 远程联机可玩
+- 断线不阻塞流程（立即 BOT 托管）
+- 可随时重连夺回座位
 
-## 2. 关键目录与职责
+## 2. 核心状态模型
 
-### 2.1 服务端
+### 2.1 GameState（公开同步）
 
-- `server/src/index.ts`
-  - 启动 Colyseus 服务与监控页面
-- `server/src/schema/game-state.schema.ts`
-  - 定义房间公开状态（phase、players、responseCard、lastAction）
-- `server/src/rooms/GameRoom.ts`
-  - 核心回合逻辑
-  - 机器人补位与自动决策
-  - debug 场景注入与回执
-- `server/src/rules/*.ts`
-  - 吃/碰/开/胡等规则判定函数
-
-### 2.2 前端
-
-- `client/src/composables/useRoom.ts`
-  - 管理 Colyseus 连接、状态订阅、消息发送
-  - 归一化玩家数据（discard/exposed/fish）
-- `client/src/App.vue`
-  - 组合主页面
-  - debug 场景触发与自动断言
-- `client/src/components/*.vue`
-  - 视图组件（棋盘、按钮、弃牌区、测试面板）
-
-## 3. 公开状态模型
-
-`GameState`（公开）：
-
-- `phase`: waiting/declaring/playing/ended
-- `currentPlayerId`: 当前待响区所属玩家
-- `responsePhase`: collective/self_eat/self_grab
-- `players`: 每个玩家公开信息
+- `phase`: `waiting | declaring | playing | ended`
+- `hostPlayerId`: 房主 seatId
+- `currentPlayerId`: 当前待响区所属 seatId
+- `responsePhase`: `collective | self_eat | self_grab`
+- `players`: `MapSchema<PlayerState>`
+- `lastAction`: 流程提示 / debug 标记
+- `deckCount`: 牌堆剩余
 - `responseCard`: 当前待响牌
-- `lastAction`: 前端提示与 debug 标记
-- `deckCount`: 牌堆剩余数量
 
-`PlayerState`（公开）：
+### 2.2 PlayerState（公开同步）
 
-- `clientId`, `name`, `declaredKongs`
-- `discardPile`（公开）
-- `exposedArea`（公开）
-- `fishArea`（公开）
+- `clientId`: 这里承载 seatId（如 `seat_1`、`bot_3`）
+- `name`
+- `declaredKongs`
+- `isBot`
+- `connected`
+- `discardPile`
+- `exposedArea`
+- `fishArea`
 
-私有状态（不进 Schema）：
+### 2.3 私有状态（仅房间内存）
 
-- `playerHands: Map<clientId, Card[]>`
+- `playerHands: Map<seatId, Card[]>`
+- `seatBySession: Map<sessionId, seatId>`
+- `seatByToken: Map<playerToken, seatId>`
+- `botIds: Set<seatId>`（当前由 BOT 接管的座位）
 
-## 4. 主流程（简化）
+## 3. 座位与身份机制
 
-1. 开局：发牌 -> 设置庄家待响牌 -> 进入 `collective`
-2. 集体询问：所有座位提交（真人消息 + 机器人自动）
-3. 有人响应：按 `hu > open > peng` + 轮询优先级处理
-4. 无人响应：
-   - 模式1：进入 `self_eat`（吃/抓）
-   - 模式2：进入 `self_grab`（吃/过）
-5. 玩家弃牌后，牌移至下家待响区，回到 `collective`
+### 3.1 seatId 与 sessionId 分离
+
+- `sessionId` 是连接级别，断线会变
+- `seatId` 是座位级别，断线不变
+- 所有回合逻辑按 `seatId` 运转，确保重连可恢复
+
+### 3.2 token 重连
+
+流程：
+
+1. 首次加入：服务端分配 `playerToken + seatId`
+2. 前端保存 token 到 localStorage
+3. 断线后重连：带 token 加入，服务端定位原 seatId
+4. 恢复控制权，BOT 退出该座位
+
+## 4. 房间生命周期
+
+### 4.1 waiting（等待大厅）
+
+- 首位真人成为房主 `hostPlayerId`
+- 房主可发送 `start_game`
+- 开始前不补机器人
+
+### 4.2 start_game
+
+- 校验：仅房主可启动
+- 若真人少于 4，补齐 BOT 座位至 4
+- 发牌并进入 `playing`
+
+### 4.3 断线处理
+
+- 真人离线后座位立即切为 BOT 托管
+- `connected=false, isBot=true`
+- 流程继续，不等待超时
+
+### 4.4 重连夺回
+
+- 同 token 加入即 reclaim 原 seatId
+- `connected=true, isBot=false`
+- 私有手牌恢复同步
 
 ## 5. 机器人机制
 
-触发：
+### 5.1 补位机器人
 
-- 真人人数达到 `MIN_PLAYERS`，且 `AUTO_BOTS=1` 时
-- 自动补到 `TARGET_SEATS`（默认 4 座）
+- 仅在房主点击开始后，按空位补足到 4 座
 
-决策（`tickBots()`）：
+### 5.2 托管机器人
 
-- `collective`：`hu > open > peng > pass`
-- `self_eat`：可吃则吃，否则抓
-- `self_grab`：可吃则吃，否则过
+- 真人断线后立即接管该真人座位
 
-目的：
+### 5.3 决策策略（tickBots）
 
-- 单机可完整跑流程，不会卡在“等待他人响应”
+- `collective`: `hu > open > peng > pass`
+- `self_eat`: 可吃则吃，否则抓
+- `self_grab`: 可吃则吃，否则过
 
-## 6. Debug 测试链路
+## 6. 前端结构与职责
 
-场景：
+- `client/src/composables/useRoom.ts`
+  - 连接房间、订阅 state、发送消息
+  - 处理 `session_token`（存 token）
+  - 玩家数据归一化（数组/可迭代结构）
 
-- `eat_mode1`
-- `mode2_pass`
-- `collective_no_actions`
-- `hu_fail_case`
-- `discard_public`
+- `client/src/App.vue`
+  - waiting 大厅（玩家状态、房主开始、邀请链接）
+  - playing 对局界面
+  - debug 场景断言
 
-链路：
+- `client/src/components/*`
+  - 棋盘、弃牌区、操作面板、卡牌组件
 
-1. 前端发送 `debug_setup(scenario)`
-2. 服务端设置场景并返回 `debug_applied`
-3. 服务端将 `lastAction` 写为 `DEBUG: <scenario>#<seq>`
-4. 前端等待对应标记后执行自动断言
+## 7. Debug 场景链路
 
-## 7. 稳定性约束与修复点
+消息流程：
 
-- 不使用 `state.toJSON()` 做前端全量快照（避免 Schema 递归风险）
-- 使用 `shallowRef + triggerRef` 保证 patch 更新可响应
-- 卡牌数组统一归一化并过滤无效项，避免 `undefined` 牌
-- `discard_public` 场景不再注入临时 `BOT_A/B/C`，避免污染玩家集合
+1. 前端发 `debug_setup(scenario)`
+2. 服务端应用场景并回 `debug_applied`
+3. 服务端写入 `lastAction=DEBUG: <scenario>#<seq>`
+4. 前端等待 marker 后执行断言并显示 PASS/FAIL
 
-## 8. 后续演进建议
+## 8. 已知边界
 
-- 拆分 `GameRoom.ts`：状态机、动作执行器、机器人策略分层
-- 为规则判定补齐单测（hu/eat/open/peng）
-- 增加 e2e 场景回放（固定种子 + 指令脚本）
-- 将 debug 场景迁移为专用测试接口（非生产房间）
+- 单房间模式（符合当前自用目标）
+- token 暂仅本地存储（无 UI 导出/导入）
+- 非生产安全方案（部署时建议加 HTTPS/WSS、反向代理、基础鉴权）
 

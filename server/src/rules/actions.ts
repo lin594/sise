@@ -10,7 +10,7 @@ function findByFace(hand: Card[], color: Card["color"], type: Card["type"]): Car
 }
 
 export function canPeng(hand: Card[], response: Card): boolean {
-  if (isGeneral(response) || isGold(response)) {
+  if (isGeneral(response)) {
     return false;
   }
   return countMatching(hand, response) >= 2;
@@ -19,9 +19,6 @@ export function canPeng(hand: Card[], response: Card): boolean {
 export function canOpen(hand: Card[], response: Card): boolean {
   if (isGeneral(response)) {
     return false;
-  }
-  if (isGold(response)) {
-    return hand.filter((card) => isGold(card)).length >= 3;
   }
   return countMatching(hand, response) >= 3;
 }
@@ -66,15 +63,9 @@ export function getEatCandidates(hand: Card[], response: Card): Card[][] {
     }
   }
 
-  const pair = findByFace(hand, response.color, response.type);
-  if (pair) {
-    groups.push([pair]);
-  }
-
   return groups;
 }
 
 export function canEat(hand: Card[], response: Card): boolean {
   return getEatCandidates(hand, response).length > 0;
 }
-

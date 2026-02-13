@@ -42,6 +42,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
 }
+
 .panel {
   text-align: center;
   color: #fff;

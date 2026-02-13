@@ -56,37 +56,52 @@ const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
   background: #fff;
   transition: transform 0.2s ease;
 }
+
 .card:hover {
   transform: translateY(-2px);
 }
+
 .card.response {
   border: 2px solid #ffd54f;
   animation: pulse 1.5s infinite;
 }
+
 .star {
   position: absolute;
   right: 4px;
   top: 2px;
   color: #ffca28;
 }
+
 .color-yellow {
   background: #ffd700;
 }
+
 .color-red {
   background: #e53935;
 }
+
 .color-green {
   background: #43a047;
 }
+
 .color-white {
   background: #ffffff;
 }
+
 .color-gold {
   background: #ffd700;
 }
+
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(255, 213, 79, 0.8); }
-  70% { box-shadow: 0 0 0 10px rgba(255, 213, 79, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 213, 79, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0.8);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 213, 79, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0);
+  }
 }
 </style>
