@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="board">
     <div class="grid">
       <section
@@ -26,8 +26,15 @@
               <CardComp v-for="card in player.exposedArea" :key="`exp-${card.id}`" :card="card" />
             </div>
 
-            <div v-if="player.fishArea.length" class="fish">
+            <div v-if="player.generalArea.length" class="fish">
               <h4>将牌区</h4>
+              <div class="cards">
+                <CardComp v-for="card in player.generalArea" :key="`general-${card.id}`" :card="card" />
+              </div>
+            </div>
+
+            <div v-if="player.fishArea.length" class="fish">
+              <h4>亮鱼区</h4>
               <div class="cards">
                 <CardComp v-for="card in player.fishArea" :key="`fish-${card.id}`" :card="card" />
               </div>

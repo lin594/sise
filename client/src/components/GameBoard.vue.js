@@ -163,6 +163,27 @@ for (const [player] of __VLS_getVForSourceType((__VLS_ctx.players))) {
             card: (card),
         }, ...__VLS_functionalComponentArgsRest(__VLS_0));
     }
+    if (player.generalArea.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "fish" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h4, __VLS_intrinsicElements.h4)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((player.generalArea))) {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                key: (`general-${card.id}`),
+                card: (card),
+            }));
+            const __VLS_4 = __VLS_3({
+                key: (`general-${card.id}`),
+                card: (card),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+        }
+    }
     if (player.fishArea.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "fish" },
@@ -174,14 +195,14 @@ for (const [player] of __VLS_getVForSourceType((__VLS_ctx.players))) {
         for (const [card] of __VLS_getVForSourceType((player.fishArea))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`fish-${card.id}`),
                 card: (card),
             }));
-            const __VLS_4 = __VLS_3({
+            const __VLS_7 = __VLS_6({
                 key: (`fish-${card.id}`),
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_6));
         }
     }
 }
@@ -199,28 +220,28 @@ if (__VLS_ctx.isMyTurn) {
 }
 /** @type {[typeof DiscardZone, ]} */ ;
 // @ts-ignore
-const __VLS_6 = __VLS_asFunctionalComponent(DiscardZone, new DiscardZone({
+const __VLS_9 = __VLS_asFunctionalComponent(DiscardZone, new DiscardZone({
     title: "公共弃牌区",
     cards: (__VLS_ctx.publicDiscardCards),
 }));
-const __VLS_7 = __VLS_6({
+const __VLS_10 = __VLS_9({
     title: "公共弃牌区",
     cards: (__VLS_ctx.publicDiscardCards),
-}, ...__VLS_functionalComponentArgsRest(__VLS_6));
+}, ...__VLS_functionalComponentArgsRest(__VLS_9));
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "response-wrap" },
     });
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
-    const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+    const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
     }));
-    const __VLS_10 = __VLS_9({
+    const __VLS_13 = __VLS_12({
         key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     (__VLS_ctx.responseCard.source === "draw" ? "摸牌" : "他人弃牌");
 }
@@ -251,12 +272,12 @@ for (const [card] of __VLS_getVForSourceType((__VLS_ctx.privateHand))) {
     });
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
-    const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+    const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         card: (card),
     }));
-    const __VLS_13 = __VLS_12({
+    const __VLS_16 = __VLS_15({
         card: (card),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_15));
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['grid']} */ ;
@@ -272,6 +293,8 @@ for (const [card] of __VLS_getVForSourceType((__VLS_ctx.privateHand))) {
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
 /** @type {__VLS_StyleScopedClasses['areas']} */ ;
 /** @type {__VLS_StyleScopedClasses['exposed']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['fish']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['fish']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;

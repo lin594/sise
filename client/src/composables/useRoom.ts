@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from "vue";
+﻿import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Client, Room } from "colyseus.js";
 import type {
   ActionType,
@@ -100,10 +100,12 @@ function normalizePlayer(raw: any): PlayerState {
     clientId: String(raw?.clientId ?? ""),
     name: String(raw?.name ?? ""),
     declaredKongs: Number(raw?.declaredKongs ?? 0),
+    declaredReady: Boolean(raw?.declaredReady),
     isBot: Boolean(raw?.isBot),
     connected: Boolean(raw?.connected),
     discardPile: asCardArray(raw?.discardPile),
     exposedArea: asCardArray(raw?.exposedArea),
+    generalArea: asCardArray(raw?.generalArea),
     fishArea: asCardArray(raw?.fishArea),
   };
 }
@@ -125,6 +127,7 @@ export function useRoom(playerName = "Player") {
   const roundResult = ref<RoundResultPayload | null>(null);
   const debugApplied = ref<{ scenario: string; ok: boolean; ts: number } | null>(null);
   const joinError = ref("");
+  const declareError = ref("");
   const actionLogs = ref<Array<{ id: number; at: string; text: string }>>([]);
 
   let logSeq = 0;
@@ -185,6 +188,7 @@ export function useRoom(playerName = "Player") {
         deckCount: Number((next as any)?.deckCount ?? 0),
         responseCard: asCard((next as any)?.responseCard),
         publicDiscardPile: asCardArray((next as any)?.publicDiscardPile),
+        declareEndsAt: Number((next as any)?.declareEndsAt ?? 0),
         players: normalizedPlayers,
       };
 
@@ -217,6 +221,7 @@ export function useRoom(playerName = "Player") {
           ...p,
           hand: sortHandCards(p.hand ?? []),
           exposedArea: sortHandCards(p.exposedArea ?? []),
+          generalArea: sortHandCards(p.generalArea ?? []),
           fishArea: sortHandCards(p.fishArea ?? []),
           discardCount: Number(p.discardCount ?? 0),
           scoreBreakdown: p.scoreBreakdown ?? [],
@@ -236,8 +241,12 @@ export function useRoom(playerName = "Player") {
       pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
     });
     joined.onMessage("join_error", (payload: { message: string }) => {
-      joinError.value = payload?.message ?? "加入失败";
+      joinError.value = payload?.message ?? "鍔犲叆澶辫触";
       pushLog(`ERROR ${joinError.value}`);
+    });
+    joined.onMessage("declare_rejected", (payload: { reason?: string }) => {
+      declareError.value = payload?.reason ?? "声明提交失败";
+      pushLog(`DECLARE_REJECTED ${declareError.value}`);
     });
   }
 
@@ -257,6 +266,11 @@ export function useRoom(playerName = "Player") {
 
   function declareKongs(count: number) {
     room.value?.send("declare_kongs", count);
+  }
+
+  function declareSetup(payload: { declaredKongs: number; fishCardIds: string[] }) {
+    declareError.value = "";
+    room.value?.send("declare_setup", payload);
   }
 
   function debugSetup(scenario: string) {
@@ -300,13 +314,17 @@ export function useRoom(playerName = "Player") {
     roundResult,
     debugApplied,
     joinError,
+    declareError,
     actionLogs,
     sendAction,
     sendDiscardCard,
     declareKongs,
+    declareSetup,
     debugSetup,
     startGame,
     nextRound,
     returnLobby,
   };
 }
+
+

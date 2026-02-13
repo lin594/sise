@@ -68,6 +68,55 @@
       @submit="sendAction"
     />
 
+    <div v-if="shouldShowDeclarePanel" class="declare-mask">
+      <div class="declare-panel">
+        <h2>请声明暗坎数量并选择亮鱼</h2>
+        <p class="declare-desc">
+          声明超时将自动按 0 提交。亮鱼可不选。剩余 {{ declareSecondsLeft }} 秒
+        </p>
+        <div class="declare-progress">
+          <div class="declare-progress-fill" :style="{ width: `${declareProgressPercent}%` }"></div>
+        </div>
+
+        <label class="declare-input">
+          暗坎数量
+          <input v-model.number="declareKongsInput" type="number" min="0" step="1" />
+        </label>
+
+        <section class="declare-zone">
+          <p class="zone-title">选择亮鱼（点击手牌切换）</p>
+          <div class="declare-cards" v-if="privateHand.length">
+            <button
+              v-for="card in privateHand"
+              :key="`declare-hand-${card.id}`"
+              class="declare-card-btn"
+              :class="{ selected: selectedFishCardIds.has(card.id) }"
+              @click="toggleFish(card.id)"
+            >
+              <CardComp :card="card" />
+            </button>
+          </div>
+          <p v-else class="settlement-empty">（无可选手牌）</p>
+        </section>
+
+        <section class="declare-zone">
+          <p class="zone-title">已选亮鱼</p>
+          <div class="declare-cards" v-if="selectedFishCards.length">
+            <CardComp v-for="card in selectedFishCards" :key="`declare-fish-${card.id}`" :card="card" />
+          </div>
+          <p v-else class="settlement-empty">（未选择）</p>
+          <p v-if="!fishSelectionValid" class="error">亮鱼组合不合法：普通鱼需4张同牌；金条鱼需4或5张金条。</p>
+          <p v-if="declareError" class="error">{{ declareError }}</p>
+        </section>
+
+        <div class="end-actions">
+          <button class="primary" :disabled="!fishSelectionValid" @click="submitDeclaration">
+            确认声明
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showEndPanel" class="hu-mask">
       <div class="hu-panel">
         <h2>{{ endPanelTitle }}</h2>
@@ -86,7 +135,7 @@
             <div v-for="p in settlementPlayers" :key="`settle-${p.clientId}`" class="settlement-item">
               <p class="settlement-name">{{ p.name }}</p>
               <p class="settlement-meta">
-                明示区: {{ p.exposedArea.length }} 张 / 将牌区: {{ p.fishArea.length }} 张 / 弃牌: {{ p.discardCount }} 张
+                明示区: {{ p.exposedArea.length + p.generalArea.length }} 张 / 亮鱼区: {{ p.fishArea.length }} 张 / 弃牌: {{ p.discardCount }} 张
               </p>
               <div class="settlement-cards" v-if="p.hand.length">
                 <CardComp v-for="card in p.hand" :key="`settle-${p.clientId}-${card.id}`" :card="card" />
@@ -95,16 +144,16 @@
 
               <div class="settlement-zone">
                 <p class="zone-title">明示区</p>
-                <div class="settlement-cards" v-if="p.exposedArea.length">
-                  <CardComp v-for="card in p.exposedArea" :key="`settle-e-${p.clientId}-${card.id}`" :card="card" />
+                <div class="settlement-cards" v-if="p.exposedArea.length + p.generalArea.length">
+                  <CardComp v-for="card in [...p.exposedArea, ...p.generalArea]" :key="`settle-e-${p.clientId}-${card.id}`" :card="card" />
                 </div>
                 <p v-else class="settlement-empty">（无）</p>
               </div>
 
               <div class="settlement-zone">
-                <p class="zone-title">将牌区</p>
+                <p class="zone-title">亮鱼区</p>
                 <div class="settlement-cards" v-if="p.fishArea.length">
-                  <CardComp v-for="card in p.fishArea" :key="`settle-f-${p.clientId}-${card.id}`" :card="card" />
+                  <CardComp v-for="card in p.fishArea" :key="`settle-fish-${p.clientId}-${card.id}`" :card="card" />
                 </div>
                 <p v-else class="settlement-empty">（无）</p>
               </div>
@@ -135,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import DebugPanel from "@/components/DebugPanel.vue";
@@ -162,9 +211,11 @@ const {
   roundResult,
   debugApplied,
   joinError,
+  declareError,
   actionLogs,
   sendAction,
   sendDiscardCard,
+  declareSetup,
   debugSetup,
   startGame,
   nextRound,
@@ -172,6 +223,7 @@ const {
 } = useRoom("玩家");
 
 const isWaiting = computed(() => state.value?.phase === "waiting");
+const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
@@ -189,6 +241,102 @@ const canDiscard = computed(
 );
 
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
+const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
+const shouldShowDeclarePanel = computed(
+  () => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot) && !Boolean(mePlayer.value?.declaredReady),
+);
+
+const declareKongsInput = ref(0);
+const nowMs = ref(Date.now());
+let declareTick: number | null = null;
+const selectedFishCardIds = ref<Set<string>>(new Set());
+const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
+const declareSecondsLeft = computed(() => {
+  const endsAt = Number(state.value?.declareEndsAt ?? 0);
+  if (!endsAt) {
+    return 0;
+  }
+  return Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000));
+});
+const declareTotalMs = computed(() => {
+  const action = String(state.value?.lastAction ?? "");
+  const match = action.match(/DECLARING\s+(\d+)ms/);
+  if (match) {
+    return Math.max(1000, Number(match[1]) || 30000);
+  }
+  return 30000;
+});
+const declareProgressPercent = computed(() => {
+  const endsAt = Number(state.value?.declareEndsAt ?? 0);
+  if (!endsAt) {
+    return 0;
+  }
+  const remain = Math.max(0, endsAt - nowMs.value);
+  const percent = (remain / declareTotalMs.value) * 100;
+  return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
+});
+const fishSelectionValid = computed(() => {
+  const cards = selectedFishCards.value;
+  if (!cards.length) {
+    return true;
+  }
+  let goldCount = 0;
+  const nonGoldFaceCounter = new Map<string, number>();
+  for (const card of cards) {
+    if (card.color === "gold") {
+      goldCount += 1;
+      continue;
+    }
+    const key = `${card.color}:${card.type}`;
+    nonGoldFaceCounter.set(key, (nonGoldFaceCounter.get(key) ?? 0) + 1);
+  }
+  for (const count of nonGoldFaceCounter.values()) {
+    if (count !== 4) {
+      return false;
+    }
+  }
+  return goldCount === 0 || goldCount === 4 || goldCount === 5;
+});
+
+function toggleFish(cardId: string) {
+  const next = new Set(selectedFishCardIds.value);
+  if (next.has(cardId)) {
+    next.delete(cardId);
+  } else {
+    next.add(cardId);
+  }
+  selectedFishCardIds.value = next;
+}
+
+function submitDeclaration() {
+  if (!fishSelectionValid.value) {
+    return;
+  }
+  declareSetup({
+    declaredKongs: Math.max(0, Number(declareKongsInput.value) || 0),
+    fishCardIds: [...selectedFishCardIds.value],
+  });
+}
+
+watch(shouldShowDeclarePanel, (show) => {
+  if (show) {
+    selectedFishCardIds.value = new Set();
+    declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
+  }
+});
+
+onMounted(() => {
+  declareTick = window.setInterval(() => {
+    nowMs.value = Date.now();
+  }, 500);
+});
+
+onUnmounted(() => {
+  if (declareTick !== null) {
+    window.clearInterval(declareTick);
+    declareTick = null;
+  }
+});
 const endPanelTitle = computed(() => (huResult.value ? "胡牌结算" : "本局结束"));
 const winnerName = computed(() => {
   const winnerId = huResult.value?.winnerId ?? roundResult.value?.winnerId;
@@ -496,6 +644,85 @@ async function copyInviteLink() {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.declare-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 20;
+}
+
+.declare-panel {
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 18px 22px;
+  border-radius: 12px;
+  min-width: 320px;
+  max-width: min(92vw, 980px);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.declare-desc {
+  margin-top: 0;
+  color: #475569;
+}
+
+.declare-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.declare-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #84cc16);
+  transition: width 0.3s ease;
+}
+
+.declare-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.declare-input input {
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.declare-zone {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.declare-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.declare-card-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.declare-card-btn.selected {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
 }
 
 .hu-panel {

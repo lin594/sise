@@ -1,12 +1,13 @@
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import DebugPanel from "@/components/DebugPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, actionLogs, sendAction, sendDiscardCard, debugSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
+const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, sendAction, sendDiscardCard, declareSetup, debugSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
 const isWaiting = computed(() => state.value?.phase === "waiting");
+const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
@@ -20,6 +21,95 @@ const isMyTurn = computed(() => {
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value);
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
+const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
+const shouldShowDeclarePanel = computed(() => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot) && !Boolean(mePlayer.value?.declaredReady));
+const declareKongsInput = ref(0);
+const nowMs = ref(Date.now());
+let declareTick = null;
+const selectedFishCardIds = ref(new Set());
+const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
+const declareSecondsLeft = computed(() => {
+    const endsAt = Number(state.value?.declareEndsAt ?? 0);
+    if (!endsAt) {
+        return 0;
+    }
+    return Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000));
+});
+const declareTotalMs = computed(() => {
+    const action = String(state.value?.lastAction ?? "");
+    const match = action.match(/DECLARING\s+(\d+)ms/);
+    if (match) {
+        return Math.max(1000, Number(match[1]) || 30000);
+    }
+    return 30000;
+});
+const declareProgressPercent = computed(() => {
+    const endsAt = Number(state.value?.declareEndsAt ?? 0);
+    if (!endsAt) {
+        return 0;
+    }
+    const remain = Math.max(0, endsAt - nowMs.value);
+    const percent = (remain / declareTotalMs.value) * 100;
+    return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
+});
+const fishSelectionValid = computed(() => {
+    const cards = selectedFishCards.value;
+    if (!cards.length) {
+        return true;
+    }
+    let goldCount = 0;
+    const nonGoldFaceCounter = new Map();
+    for (const card of cards) {
+        if (card.color === "gold") {
+            goldCount += 1;
+            continue;
+        }
+        const key = `${card.color}:${card.type}`;
+        nonGoldFaceCounter.set(key, (nonGoldFaceCounter.get(key) ?? 0) + 1);
+    }
+    for (const count of nonGoldFaceCounter.values()) {
+        if (count !== 4) {
+            return false;
+        }
+    }
+    return goldCount === 0 || goldCount === 4 || goldCount === 5;
+});
+function toggleFish(cardId) {
+    const next = new Set(selectedFishCardIds.value);
+    if (next.has(cardId)) {
+        next.delete(cardId);
+    }
+    else {
+        next.add(cardId);
+    }
+    selectedFishCardIds.value = next;
+}
+function submitDeclaration() {
+    if (!fishSelectionValid.value) {
+        return;
+    }
+    declareSetup({
+        declaredKongs: Math.max(0, Number(declareKongsInput.value) || 0),
+        fishCardIds: [...selectedFishCardIds.value],
+    });
+}
+watch(shouldShowDeclarePanel, (show) => {
+    if (show) {
+        selectedFishCardIds.value = new Set();
+        declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
+    }
+});
+onMounted(() => {
+    declareTick = window.setInterval(() => {
+        nowMs.value = Date.now();
+    }, 500);
+});
+onUnmounted(() => {
+    if (declareTick !== null) {
+        window.clearInterval(declareTick);
+        declareTick = null;
+    }
+});
 const endPanelTitle = computed(() => (huResult.value ? "胡牌结算" : "本局结束"));
 const winnerName = computed(() => {
     const winnerId = huResult.value?.winnerId ?? roundResult.value?.winnerId;
@@ -193,6 +283,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
@@ -365,6 +457,120 @@ if (__VLS_ctx.isPlaying) {
     };
     var __VLS_19;
 }
+if (__VLS_ctx.shouldShowDeclarePanel) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "declare-mask" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "declare-panel" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "declare-desc" },
+    });
+    (__VLS_ctx.declareSecondsLeft);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "declare-progress" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "declare-progress-fill" },
+        ...{ style: ({ width: `${__VLS_ctx.declareProgressPercent}%` }) },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+        ...{ class: "declare-input" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "0",
+        step: "1",
+    });
+    (__VLS_ctx.declareKongsInput);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "declare-zone" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "zone-title" },
+    });
+    if (__VLS_ctx.privateHand.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "declare-cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.privateHand))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (...[$event]) => {
+                        if (!(__VLS_ctx.shouldShowDeclarePanel))
+                            return;
+                        if (!(__VLS_ctx.privateHand.length))
+                            return;
+                        __VLS_ctx.toggleFish(card.id);
+                    } },
+                key: (`declare-hand-${card.id}`),
+                ...{ class: "declare-card-btn" },
+                ...{ class: ({ selected: __VLS_ctx.selectedFishCardIds.has(card.id) }) },
+            });
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (card),
+            }));
+            const __VLS_25 = __VLS_24({
+                card: (card),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+        }
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "settlement-empty" },
+        });
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "declare-zone" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "zone-title" },
+    });
+    if (__VLS_ctx.selectedFishCards.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "declare-cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedFishCards))) {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                key: (`declare-fish-${card.id}`),
+                card: (card),
+            }));
+            const __VLS_28 = __VLS_27({
+                key: (`declare-fish-${card.id}`),
+                card: (card),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+        }
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "settlement-empty" },
+        });
+    }
+    if (!__VLS_ctx.fishSelectionValid) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "error" },
+        });
+    }
+    if (__VLS_ctx.declareError) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "error" },
+        });
+        (__VLS_ctx.declareError);
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "end-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.submitDeclaration) },
+        ...{ class: "primary" },
+        disabled: (!__VLS_ctx.fishSelectionValid),
+    });
+}
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "hu-mask" },
@@ -406,7 +612,7 @@ if (__VLS_ctx.showEndPanel) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
                 ...{ class: "settlement-meta" },
             });
-            (p.exposedArea.length);
+            (p.exposedArea.length + p.generalArea.length);
             (p.fishArea.length);
             (p.discardCount);
             if (p.hand.length) {
@@ -416,14 +622,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_25 = __VLS_24({
+                    const __VLS_31 = __VLS_30({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
                 }
             }
             else {
@@ -437,21 +643,21 @@ if (__VLS_ctx.showEndPanel) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
                 ...{ class: "zone-title" },
             });
-            if (p.exposedArea.length) {
+            if (p.exposedArea.length + p.generalArea.length) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                     ...{ class: "settlement-cards" },
                 });
-                for (const [card] of __VLS_getVForSourceType((p.exposedArea))) {
+                for (const [card] of __VLS_getVForSourceType(([...p.exposedArea, ...p.generalArea]))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_28 = __VLS_27({
+                    const __VLS_34 = __VLS_33({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
                 }
             }
             else {
@@ -472,14 +678,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.fishArea))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                        key: (`settle-f-${p.clientId}-${card.id}`),
+                    const __VLS_36 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_31 = __VLS_30({
-                        key: (`settle-f-${p.clientId}-${card.id}`),
+                    const __VLS_37 = __VLS_36({
+                        key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_36));
                 }
             }
             else {
@@ -544,6 +750,25 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['logs']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['log-time']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-progress']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-progress-fill']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
@@ -585,6 +810,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             availableActions: availableActions,
             huResult: huResult,
             joinError: joinError,
+            declareError: declareError,
             actionLogs: actionLogs,
             sendAction: sendAction,
             sendDiscardCard: sendDiscardCard,
@@ -599,6 +825,15 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             showEndPanel: showEndPanel,
+            shouldShowDeclarePanel: shouldShowDeclarePanel,
+            declareKongsInput: declareKongsInput,
+            selectedFishCardIds: selectedFishCardIds,
+            selectedFishCards: selectedFishCards,
+            declareSecondsLeft: declareSecondsLeft,
+            declareProgressPercent: declareProgressPercent,
+            fishSelectionValid: fishSelectionValid,
+            toggleFish: toggleFish,
+            submitDeclaration: submitDeclaration,
             endPanelTitle: endPanelTitle,
             winnerName: winnerName,
             settlementPlayers: settlementPlayers,

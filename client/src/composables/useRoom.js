@@ -85,10 +85,12 @@ function normalizePlayer(raw) {
         clientId: String(raw?.clientId ?? ""),
         name: String(raw?.name ?? ""),
         declaredKongs: Number(raw?.declaredKongs ?? 0),
+        declaredReady: Boolean(raw?.declaredReady),
         isBot: Boolean(raw?.isBot),
         connected: Boolean(raw?.connected),
         discardPile: asCardArray(raw?.discardPile),
         exposedArea: asCardArray(raw?.exposedArea),
+        generalArea: asCardArray(raw?.generalArea),
         fishArea: asCardArray(raw?.fishArea),
     };
 }
@@ -108,6 +110,7 @@ export function useRoom(playerName = "Player") {
     const roundResult = ref(null);
     const debugApplied = ref(null);
     const joinError = ref("");
+    const declareError = ref("");
     const actionLogs = ref([]);
     let logSeq = 0;
     let lastFingerprint = "";
@@ -157,6 +160,7 @@ export function useRoom(playerName = "Player") {
                 deckCount: Number(next?.deckCount ?? 0),
                 responseCard: asCard(next?.responseCard),
                 publicDiscardPile: asCardArray(next?.publicDiscardPile),
+                declareEndsAt: Number(next?.declareEndsAt ?? 0),
                 players: normalizedPlayers,
             };
             const lastAction = String(state.value?.lastAction ?? "").trim();
@@ -187,6 +191,7 @@ export function useRoom(playerName = "Player") {
                     ...p,
                     hand: sortHandCards(p.hand ?? []),
                     exposedArea: sortHandCards(p.exposedArea ?? []),
+                    generalArea: sortHandCards(p.generalArea ?? []),
                     fishArea: sortHandCards(p.fishArea ?? []),
                     discardCount: Number(p.discardCount ?? 0),
                     scoreBreakdown: p.scoreBreakdown ?? [],
@@ -206,8 +211,12 @@ export function useRoom(playerName = "Player") {
             pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
         });
         joined.onMessage("join_error", (payload) => {
-            joinError.value = payload?.message ?? "加入失败";
+            joinError.value = payload?.message ?? "鍔犲叆澶辫触";
             pushLog(`ERROR ${joinError.value}`);
+        });
+        joined.onMessage("declare_rejected", (payload) => {
+            declareError.value = payload?.reason ?? "声明提交失败";
+            pushLog(`DECLARE_REJECTED ${declareError.value}`);
         });
     }
     function sendAction(action) {
@@ -224,6 +233,10 @@ export function useRoom(playerName = "Player") {
     }
     function declareKongs(count) {
         room.value?.send("declare_kongs", count);
+    }
+    function declareSetup(payload) {
+        declareError.value = "";
+        room.value?.send("declare_setup", payload);
     }
     function debugSetup(scenario) {
         room.value?.send("debug_setup", scenario);
@@ -259,10 +272,12 @@ export function useRoom(playerName = "Player") {
         roundResult,
         debugApplied,
         joinError,
+        declareError,
         actionLogs,
         sendAction,
         sendDiscardCard,
         declareKongs,
+        declareSetup,
         debugSetup,
         startGame,
         nextRound,

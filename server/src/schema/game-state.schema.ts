@@ -12,10 +12,12 @@ export class PlayerState extends Schema {
   @type("string") clientId: string = "";
   @type("string") name: string = "";
   @type("number") declaredKongs: number = 0;
+  @type("boolean") declaredReady: boolean = false;
   @type("boolean") isBot: boolean = false;
   @type("boolean") connected: boolean = true;
   @type([CardSchema]) discardPile = new ArraySchema<CardSchema>();
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
+  @type([CardSchema]) generalArea = new ArraySchema<CardSchema>();
   @type([CardSchema]) fishArea = new ArraySchema<CardSchema>();
 }
 
@@ -28,5 +30,6 @@ export class GameState extends Schema {
   @type([CardSchema]) publicDiscardPile = new ArraySchema<CardSchema>();
   @type("string") lastAction: string = "";
   @type("number") deckCount: number = 0;
+  @type("number") declareEndsAt: number = 0;
   @type(CardSchema) responseCard: CardSchema = new CardSchema();
 }

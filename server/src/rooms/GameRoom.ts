@@ -14,11 +14,17 @@ interface PendingResponse {
   collectives: Map<string, ActionType>;
 }
 
+interface DeclareSetupPayload {
+  declaredKongs?: number;
+  fishCardIds?: string[];
+}
+
 interface RoundResultPlayer {
   clientId: string;
   name: string;
   hand: Card[];
   exposedArea: Card[];
+  generalArea: Card[];
   fishArea: Card[];
   discardCount: number;
   scoreBreakdown: ScoreBreakdownItem[];
@@ -71,6 +77,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private publicGeneralPool: Card[] = [];
   private awaitingDiscardOwnerId: string | null = null;
   private readonly botThinkMs = Math.max(0, Number(process.env.BOT_THINK_MS ?? 200));
+  private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly roomLogCards = (process.env.ROOM_LOG_CARDS ?? "0") === "1";
   private readonly huLogEnabled = (process.env.HU_LOG ?? "1") !== "0";
@@ -85,6 +92,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private huChecksValid = 0;
   private readonly huChecksBySeat = new Map<string, { total: number; valid: number }>();
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  private declareTimer: ReturnType<typeof setTimeout> | null = null;
   private debugSeq = 0;
 
   onCreate(): void {
@@ -107,11 +115,15 @@ export class FourColorGameRoom extends Room<GameState> {
       if (!seatId || this.state.phase !== "declaring") {
         return;
       }
-      const player = this.state.players.get(seatId);
-      if (!player) {
+      this.submitDeclaration(seatId, { declaredKongs: value, fishCardIds: [] });
+    });
+
+    this.onMessage("declare_setup", (client, payload: DeclareSetupPayload) => {
+      const seatId = this.seatBySession.get(client.sessionId);
+      if (!seatId || this.state.phase !== "declaring") {
         return;
       }
-      player.declaredKongs = Math.max(0, Number(value) || 0);
+      this.submitDeclaration(seatId, payload ?? {});
     });
 
     this.onMessage("action", (client, action: ActionType) => {
@@ -178,6 +190,10 @@ export class FourColorGameRoom extends Room<GameState> {
     this.botIds.add(seatId);
     this.state.lastAction = `TAKEOVER ${seatId}`;
 
+    if (this.state.phase === "declaring" && !player.declaredReady) {
+      this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
+    }
+
     if (this.state.phase === "playing" || this.state.phase === "declaring") {
       this.tickBots();
     } else {
@@ -187,6 +203,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   onDispose(): void {
     this.clearBotTimer();
+    this.clearDeclareTimer();
   }
 
   private handleStartGame(client: Client): void {
@@ -327,6 +344,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private bootstrapRound(): void {
+    this.clearDeclareTimer();
     this.state.phase = "declaring";
     this.deck = shuffle(createDeck());
     this.publicGeneralPool = [];
@@ -343,8 +361,10 @@ export class FourColorGameRoom extends Room<GameState> {
         continue;
       }
       player.declaredKongs = 0;
+      player.declaredReady = false;
       player.discardPile.clear();
       player.exposedArea.clear();
+      player.generalArea.clear();
       player.fishArea.clear();
     }
     this.state.publicDiscardPile.clear();
@@ -367,16 +387,161 @@ export class FourColorGameRoom extends Room<GameState> {
     if (publicGeneral) {
       this.publicGeneralPool.push(publicGeneral);
       const dealer = this.state.players.get(dealerId);
-      dealer?.fishArea.unshift(this.toSchemaCard(publicGeneral, true, "upper"));
+      dealer?.generalArea.unshift(this.toSchemaCard(publicGeneral, true, "upper"));
     }
 
     this.state.deckCount = this.deck.length;
     this.state.currentPlayerId = dealerId;
+    this.state.responsePhase = "collective";
+    this.state.declareEndsAt = Date.now() + this.declareTimeoutMs;
+    this.state.lastAction = `DECLARING ${this.declareTimeoutMs}ms`;
+    this.syncAllPrivateHands();
+    this.startDeclaringPhase();
+  }
+
+  private startDeclaringPhase(): void {
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (!player || player.declaredReady) {
+        continue;
+      }
+      if (player.isBot) {
+        this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
+      }
+    }
+
+    this.syncAllPrivateHands();
+    this.broadcastAvailableActions();
+    if (this.areAllDeclarationsReady()) {
+      this.finishDeclaringPhase();
+      return;
+    }
+    this.scheduleDeclareTimeout();
+  }
+
+  private scheduleDeclareTimeout(): void {
+    this.clearDeclareTimer();
+    this.declareTimer = setTimeout(() => {
+      this.declareTimer = null;
+      if (this.state.phase !== "declaring") {
+        return;
+      }
+      for (const seatId of this.playerOrder) {
+        const player = this.state.players.get(seatId);
+        if (!player || player.declaredReady) {
+          continue;
+        }
+        this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
+      }
+      if (this.areAllDeclarationsReady()) {
+        this.finishDeclaringPhase();
+      }
+    }, this.declareTimeoutMs);
+  }
+
+  private clearDeclareTimer(): void {
+    if (this.declareTimer) {
+      clearTimeout(this.declareTimer);
+      this.declareTimer = null;
+    }
+  }
+
+  private areAllDeclarationsReady(): boolean {
+    return this.playerOrder.every((seatId) => this.state.players.get(seatId)?.declaredReady);
+  }
+
+  private finishDeclaringPhase(): void {
+    this.clearDeclareTimer();
+    const dealerId = this.playerOrder[0];
+    this.state.declareEndsAt = 0;
     this.state.phase = "playing";
     this.state.responsePhase = "self_grab";
+    this.state.currentPlayerId = dealerId;
     this.state.lastAction = `DEALER ${dealerId}`;
     this.syncAllPrivateHands();
     this.startTurn(dealerId, "TURN_START");
+  }
+
+  private validateFishSelection(cards: Card[]): boolean {
+    if (!cards.length) {
+      return true;
+    }
+
+    let goldCount = 0;
+    const nonGoldFaceCount = new Map<string, number>();
+    for (const card of cards) {
+      if (card.color === "gold") {
+        goldCount += 1;
+        continue;
+      }
+      const key = `${card.color}:${card.type}`;
+      nonGoldFaceCount.set(key, (nonGoldFaceCount.get(key) ?? 0) + 1);
+    }
+
+    for (const count of nonGoldFaceCount.values()) {
+      if (count !== 4) {
+        return false;
+      }
+    }
+
+    if (goldCount !== 0 && goldCount !== 4 && goldCount !== 5) {
+      return false;
+    }
+    return true;
+  }
+
+  private pickCardsByIdsFromHand(hand: Card[], ids: string[]): Card[] {
+    const wanted = new Set(ids);
+    const selected: Card[] = [];
+    for (const card of hand) {
+      if (wanted.has(card.id)) {
+        selected.push(card);
+      }
+    }
+    return selected;
+  }
+
+  private submitDeclaration(seatId: string, payload: DeclareSetupPayload, force = false): void {
+    if (this.state.phase !== "declaring") {
+      return;
+    }
+    const player = this.state.players.get(seatId);
+    if (!player || player.declaredReady) {
+      return;
+    }
+
+    const hand = this.playerHands.get(seatId) ?? [];
+    const declaredKongs = Math.max(0, Number(payload?.declaredKongs) || 0);
+    const fishIds = Array.isArray(payload?.fishCardIds) ? payload.fishCardIds.map(String).filter(Boolean) : [];
+    const uniqueFishIds = [...new Set(fishIds)];
+    const selectedCards = this.pickCardsByIdsFromHand(hand, uniqueFishIds);
+    const idMatch = uniqueFishIds.length === selectedCards.length;
+    const fishValid = this.validateFishSelection(selectedCards);
+
+    if (!force && (!idMatch || !fishValid)) {
+      const target = this.clients.find((c) => this.seatBySession.get(c.sessionId) === seatId);
+      target?.send("declare_rejected", { reason: "亮鱼组合不合法或牌不在手中" });
+      return;
+    }
+
+    player.declaredKongs = declaredKongs;
+    player.declaredReady = true;
+
+    if (idMatch && fishValid && selectedCards.length > 0) {
+      const removeIds = new Set(selectedCards.map((card) => card.id));
+      const nextHand = hand.filter((card) => !removeIds.has(card.id));
+      this.playerHands.set(seatId, nextHand);
+      for (const card of selectedCards) {
+        player.fishArea.push(this.toSchemaCard(card, true, card.source ?? "upper"));
+      }
+    }
+
+    this.syncAllPrivateHands();
+    this.broadcastAvailableActions();
+
+    if (this.areAllDeclarationsReady()) {
+      this.finishDeclaringPhase();
+    }
   }
 
   private startTurn(ownerId: string, tag: string): void {
@@ -431,7 +596,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private exposeGeneralCard(ownerId: string, card: Card): void {
     this.publicGeneralPool.push(card);
     const player = this.state.players.get(ownerId);
-    player?.fishArea.unshift(this.toSchemaCard(card, true, "draw"));
+    player?.generalArea.unshift(this.toSchemaCard(card, true, "draw"));
     this.state.lastAction = `${ownerId} DRAW_GENERAL`;
   }
 
@@ -1039,6 +1204,7 @@ export class FourColorGameRoom extends Room<GameState> {
       const player = this.state.players.get(seatId);
       const hand = this.playerHands.get(seatId) ?? [];
       const exposedArea = [...(player?.exposedArea ?? [])].map((card) => this.toPlainCard(card));
+      const generalArea = [...(player?.generalArea ?? [])].map((card) => this.toPlainCard(card));
       const fishArea = [...(player?.fishArea ?? [])].map((card) => this.toPlainCard(card));
       const discardCount = player?.discardPile.length ?? 0;
       const isWinner = winnerId === seatId;
@@ -1047,6 +1213,7 @@ export class FourColorGameRoom extends Room<GameState> {
         name: player?.name ?? seatId,
         hand: hand.map((card) => this.toPlainCard(card)),
         exposedArea,
+        generalArea,
         fishArea,
         discardCount,
         scoreBreakdown: isWinner ? winnerScore.items : [],
@@ -1058,6 +1225,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private backToLobby(): void {
     this.clearBotTimer();
+    this.clearDeclareTimer();
     this.deck = [];
     this.pendingResponse = null;
     this.publicGeneralPool = [];
@@ -1089,8 +1257,10 @@ export class FourColorGameRoom extends Room<GameState> {
         continue;
       }
       player.declaredKongs = 0;
+      player.declaredReady = false;
       player.discardPile.clear();
       player.exposedArea.clear();
+      player.generalArea.clear();
       player.fishArea.clear();
       this.playerHands.set(seatId, []);
       const online = [...this.seatBySession.values()].includes(seatId);
@@ -1107,6 +1277,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.currentPlayerId = "";
     this.state.responsePhase = "collective";
     this.state.deckCount = 0;
+    this.state.declareEndsAt = 0;
     this.state.publicDiscardPile.clear();
     this.state.responseCard = new CardSchema();
     this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
@@ -1134,6 +1305,9 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
+    if (this.state.phase === "declaring") {
+      return [];
+    }
     const pending = this.pendingResponse;
     if (!pending) {
       return [];
@@ -1306,9 +1480,10 @@ export class FourColorGameRoom extends Room<GameState> {
       const p = this.state.players.get(seatId);
       const exposed = p?.exposedArea ?? [];
       const discard = p?.discardPile ?? [];
+      const generals = p?.generalArea ?? [];
       const fish = p?.fishArea ?? [];
       parts.push(
-        `${seatId}{h=${this.summarizeCards(hand)}|e=${this.summarizeSchemaCards(exposed)}|d=${this.summarizeSchemaCards(discard)}|f=${this.summarizeSchemaCards(fish)}}`,
+        `${seatId}{h=${this.summarizeCards(hand)}|e=${this.summarizeSchemaCards(exposed)}|g=${this.summarizeSchemaCards(generals)}|d=${this.summarizeSchemaCards(discard)}|f=${this.summarizeSchemaCards(fish)}}`,
       );
     }
     return parts.join(" ; ");
@@ -1732,7 +1907,7 @@ export class FourColorGameRoom extends Room<GameState> {
       // Make this scenario deterministic: no wildcard from exposed generals.
       this.publicGeneralPool = [];
       for (const id of this.playerOrder) {
-        this.state.players.get(id)?.fishArea.clear();
+        this.state.players.get(id)?.generalArea.clear();
       }
       add("d11", "red", "jiang");
       add("d12", "red", "shi");

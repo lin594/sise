@@ -56,6 +56,13 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            generalArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
             fishArea: {
                 id: string;
                 color: string;
@@ -87,6 +94,13 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
             exposedArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            generalArea: {
                 id: string;
                 color: string;
                 type: string;
@@ -125,6 +139,7 @@ export declare function useRoom(playerName?: string): {
         ts: number;
     } | null>;
     joinError: import("vue").Ref<string, string>;
+    declareError: import("vue").Ref<string, string>;
     actionLogs: import("vue").Ref<{
         id: number;
         at: string;
@@ -141,6 +156,10 @@ export declare function useRoom(playerName?: string): {
     sendAction: (action: ActionType) => void;
     sendDiscardCard: (cardId: string) => void;
     declareKongs: (count: number) => void;
+    declareSetup: (payload: {
+        declaredKongs: number;
+        fishCardIds: string[];
+    }) => void;
     debugSetup: (scenario: string) => void;
     startGame: () => void;
     nextRound: () => void;

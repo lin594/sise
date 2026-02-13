@@ -10,10 +10,12 @@ export interface PlayerState {
     clientId: string;
     name: string;
     declaredKongs: number;
+    declaredReady: boolean;
     isBot: boolean;
     connected: boolean;
     discardPile: Card[];
     exposedArea: Card[];
+    generalArea: Card[];
     fishArea: Card[];
 }
 export interface AvailableAction {
@@ -31,6 +33,7 @@ export interface RoundResultPlayer {
     name: string;
     hand: Card[];
     exposedArea: Card[];
+    generalArea: Card[];
     fishArea: Card[];
     discardCount: number;
     scoreBreakdown: Array<{
