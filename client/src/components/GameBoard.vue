@@ -5,7 +5,7 @@
         v-for="entry in seatEntries"
         :key="entry.position"
         class="seat"
-        :class="[entry.position, { active: isCurrentTurn(entry.player.clientId) }]"
+        :class="[entry.position, { active: isCurrentTurn(entry.player.clientId), 'with-fish': entry.player.fishArea.length > 0 }]"
       >
         <header class="seat-head">
           <strong>{{ entry.player.name }}</strong>
@@ -14,23 +14,25 @@
             <span class="tag status">{{ statusText(entry.player) }}</span>
           </div>
         </header>
+
         <p class="seat-meta">声明暗坎: {{ entry.player.declaredKongs }}</p>
 
-        <div class="seat-zone" v-if="entry.player.exposedArea.length || entry.player.generalArea.length">
+        <div class="seat-zone">
           <p>明示区</p>
-          <div class="cards">
+          <div class="cards" v-if="entry.openCards.length">
             <CardComp
-              v-for="card in [...entry.player.exposedArea, ...entry.player.generalArea]"
+              v-for="card in entry.openCards"
               :key="`exp-${entry.player.clientId}-${card.id}`"
               :card="card"
               size="sm"
             />
           </div>
+          <p v-else class="empty">（无）</p>
         </div>
 
         <div class="seat-zone" v-if="entry.player.fishArea.length">
           <p>亮鱼区</p>
-          <div class="cards">
+          <div class="cards" v-if="entry.player.fishArea.length">
             <CardComp
               v-for="card in entry.player.fishArea"
               :key="`fish-${entry.player.clientId}-${card.id}`"
@@ -38,18 +40,24 @@
               size="sm"
             />
           </div>
+          <p v-else class="empty">（无）</p>
         </div>
       </section>
 
       <section class="center">
         <header class="center-head">
-          <h3>中区</h3>
+          <h3>牌桌中区</h3>
           <p>当前行动者: <strong>{{ currentPlayerName }}</strong><span v-if="isMyTurn">（你）</span></p>
         </header>
 
         <div class="response-wrap" v-if="responseCard">
           <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" size="lg" />
           <small>待响牌来源: {{ responseCard.source === "draw" ? "摸牌" : "他人弃牌" }}</small>
+        </div>
+
+        <div class="response-wrap response-empty" v-else>
+          <div class="ghost-card">待响牌</div>
+          <small>暂无待响牌</small>
         </div>
 
         <p class="hint">{{ state?.lastAction || "等待中..." }}</p>
@@ -69,22 +77,20 @@
       </header>
 
       <div class="self-areas">
-        <div class="self-area" v-if="selfPlayer.exposedArea.length || selfPlayer.generalArea.length">
+        <div class="self-area">
           <p>明示区</p>
-          <div class="cards">
-            <CardComp
-              v-for="card in [...selfPlayer.exposedArea, ...selfPlayer.generalArea]"
-              :key="`self-exp-${card.id}`"
-              :card="card"
-            />
+          <div class="cards" v-if="selfOpenCards.length">
+            <CardComp v-for="card in selfOpenCards" :key="`self-exp-${card.id}`" :card="card" />
           </div>
+          <p v-else class="empty">（无）</p>
         </div>
 
         <div class="self-area" v-if="selfPlayer.fishArea.length">
           <p>亮鱼区</p>
-          <div class="cards">
+          <div class="cards" v-if="selfPlayer.fishArea.length">
             <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" />
           </div>
+          <p v-else class="empty">（无）</p>
         </div>
       </div>
 
@@ -139,13 +145,27 @@ const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?
 const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
 
-const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState }>>(() => {
+const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState; openCards: Card[] }>>(() => {
   const entries: Array<{ position: "top" | "left" | "right"; player: PlayerState | null }> = [
     { position: "top", player: topPlayer.value },
     { position: "left", player: leftPlayer.value },
     { position: "right", player: rightPlayer.value },
   ];
-  return entries.filter((x): x is { position: "top" | "left" | "right"; player: PlayerState } => Boolean(x.player));
+
+  return entries
+    .filter((x): x is { position: "top" | "left" | "right"; player: PlayerState } => Boolean(x.player))
+    .map((entry) => ({
+      ...entry,
+      openCards: [...entry.player.exposedArea, ...entry.player.generalArea],
+    }));
+});
+
+const selfOpenCards = computed<Card[]>(() => {
+  const player = selfPlayer.value;
+  if (!player) {
+    return [];
+  }
+  return [...player.exposedArea, ...player.generalArea];
 });
 
 const latestDiscardFromAction = computed<Card | null>(() => {
@@ -242,39 +262,68 @@ function onDiscard(cardId: string): void {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 12px;
-}
-
-.table {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 260px;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    "top top top"
-    "left center right";
+  grid-template-rows: minmax(300px, 1fr) auto;
   gap: 10px;
 }
 
-.seat {
-  background: #0b1220;
+.table {
+  width: min(100%, calc((100dvh - 210px) * 2.2));
+  aspect-ratio: 2.2 / 1;
+  height: auto;
+  min-height: 280px;
+  max-height: 460px;
+  margin: 0 auto;
+  border-radius: 34px;
   border: 1px solid #1e293b;
-  border-radius: 12px;
+  background:
+    radial-gradient(120% 90% at 50% 50%, rgba(6, 78, 59, 0.9), rgba(15, 23, 42, 0.96) 70%),
+    linear-gradient(160deg, #0b1220 0%, #020617 100%);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(196px, 25%) minmax(280px, 1fr) minmax(196px, 25%);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    ". top ."
+    "left center right";
+  column-gap: 16px;
+  row-gap: 12px;
+  padding: 12px;
+}
+
+.seat {
+  background: rgba(11, 18, 32, 0.88);
+  border: 1px solid #1e293b;
+  border-radius: 14px;
   padding: 8px;
   color: #e2e8f0;
+  display: grid;
+  grid-template-rows: auto auto minmax(86px, 1fr);
+  gap: 6px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.seat.with-fish {
+  grid-template-rows: auto auto minmax(62px, 1fr) minmax(62px, 1fr);
 }
 
 .seat.top {
   grid-area: top;
+  width: min(100%, 760px);
+  justify-self: center;
+  height: 136px;
 }
 
 .seat.left {
   grid-area: left;
+  width: 100%;
+  height: 100%;
 }
 
 .seat.right {
   grid-area: right;
+  width: 100%;
+  height: 100%;
 }
 
 .seat.active {
@@ -290,7 +339,7 @@ function onDiscard(cardId: string): void {
 }
 
 .seat-meta {
-  margin: 6px 0;
+  margin: 0;
   color: #93c5fd;
   font-size: 12px;
 }
@@ -321,9 +370,10 @@ function onDiscard(cardId: string): void {
 }
 
 .seat-zone {
-  margin-top: 8px;
+  margin: 0;
   border-top: 1px dashed #334155;
-  padding-top: 8px;
+  padding-top: 6px;
+  min-height: 0;
 }
 
 .seat-zone p {
@@ -332,24 +382,39 @@ function onDiscard(cardId: string): void {
   color: #cbd5e1;
 }
 
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.seat-zone .cards {
+  max-height: 62px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .center {
   grid-area: center;
-  background: #0b1220;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  padding: 10px;
-  color: #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  width: min(100%, 520px);
+  justify-self: center;
+  min-width: 280px;
   min-height: 0;
+  background: rgba(11, 18, 32, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
+  padding: 12px;
+  color: #e2e8f0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  text-align: center;
+  align-self: stretch;
 }
 
 .center-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
 }
 
 .center-head h3,
@@ -358,9 +423,35 @@ function onDiscard(cardId: string): void {
 }
 
 .response-wrap {
+  border: 1px dashed #334155;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.5);
   display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 8px;
+  min-height: 112px;
+}
+
+.response-wrap small {
+  color: #bfdbfe;
+}
+
+.response-empty {
+  color: #64748b;
+}
+
+.ghost-card {
+  width: 66px;
+  height: 92px;
+  border-radius: 10px;
+  border: 2px dashed #334155;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: #64748b;
 }
 
 .hint {
@@ -372,14 +463,20 @@ function onDiscard(cardId: string): void {
 .empty {
   margin: 0;
   color: #64748b;
+  font-size: 12px;
 }
 
 .self-zone {
   background: #0b1220;
   border: 1px solid #1e293b;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px;
   color: #e2e8f0;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 8px;
+  min-height: 0;
+  max-height: none;
 }
 
 .self-head {
@@ -395,9 +492,8 @@ function onDiscard(cardId: string): void {
 }
 
 .self-areas {
-  margin-top: 8px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
 }
 
@@ -406,6 +502,10 @@ function onDiscard(cardId: string): void {
   border: 1px solid #334155;
   border-radius: 8px;
   padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 96px;
+  overflow: hidden;
 }
 
 .self-area p {
@@ -414,22 +514,24 @@ function onDiscard(cardId: string): void {
   font-size: 12px;
 }
 
+.self-area .cards {
+  max-height: 68px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .discard-tip {
-  margin: 8px 0;
+  margin: 0;
   color: #facc15;
   font-size: 13px;
 }
 
-.cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .hand {
-  display: flex;
-  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow: visible;
+  padding-right: 4px;
   gap: 10px;
+  max-height: none;
 }
 
 .hand-card {
@@ -453,20 +555,151 @@ function onDiscard(cardId: string): void {
 
 @media (max-width: 1200px) {
   .table {
-    grid-template-columns: 220px minmax(0, 1fr) 220px;
+    width: min(100%, calc((100dvh - 190px) * 2.05));
+    max-height: 420px;
+    grid-template-columns: minmax(168px, 25%) minmax(240px, 1fr) minmax(168px, 25%);
+    padding: 10px;
+    column-gap: 10px;
+    row-gap: 8px;
   }
 
+  .center {
+    width: min(100%, 460px);
+  }
 }
 
-@media (max-width: 900px) {
+@media (orientation: landscape) and (max-height: 600px) {
+  .board {
+    grid-template-rows: minmax(220px, 1fr) auto;
+    gap: 6px;
+  }
+
   .table {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto;
-    grid-template-areas:
-      "top"
-      "left"
-      "right"
-      "center";
+    width: min(100%, calc((100dvh - 150px) * 2.1));
+    min-height: 210px;
+    max-height: 340px;
+    border-radius: 16px;
+    padding: 8px;
+    column-gap: 8px;
+    row-gap: 6px;
+  }
+
+  .seat {
+    padding: 5px;
+    gap: 4px;
+  }
+
+  .seat.top {
+    height: 92px;
+  }
+
+  .seat.left,
+  .seat.right {
+    min-width: 140px;
+  }
+
+  .center {
+    min-height: 0;
+    width: min(100%, 340px);
+    padding: 8px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+
+  .center-head h3 {
+    font-size: 14px;
+  }
+
+  .center-head p {
+    font-size: 12px;
+  }
+
+  .response-wrap {
+    padding: 6px;
+    min-height: 84px;
+  }
+
+  .response-wrap small {
+    font-size: 11px;
+  }
+
+  .hint {
+    font-size: 11px;
+  }
+
+  .ghost-card {
+    width: 46px;
+    height: 66px;
+    font-size: 11px;
+  }
+
+  .self-zone {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .self-head h3 {
+    font-size: 16px;
+  }
+
+  .self-head p {
+    font-size: 12px;
+  }
+
+  .hand {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  .board {
+    grid-template-rows: auto auto;
+  }
+
+  .table {
+    position: static;
+    height: auto;
+    min-height: 0;
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .seat,
+  .center {
+    position: static;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+  }
+
+  .center {
+    order: 4;
+    grid-template-rows: auto auto auto;
+  }
+
+  .seat.top {
+    order: 1;
+  }
+
+  .seat.left {
+    order: 2;
+  }
+
+  .seat.right {
+    order: 3;
+  }
+
+  .seat-zone .cards,
+  .self-area .cards {
+    max-height: 110px;
+  }
+
+  .self-zone {
+    min-height: 0;
+    max-height: none;
   }
 
   .self-areas {

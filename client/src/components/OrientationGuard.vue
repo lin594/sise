@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="portrait" class="guard">
     <div class="panel">
       <h2>请横屏</h2>

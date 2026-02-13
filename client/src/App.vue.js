@@ -166,6 +166,7 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
@@ -179,6 +180,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 /** @type {[typeof OrientationGuard, ]} */ ;

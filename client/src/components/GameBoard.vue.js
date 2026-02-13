@@ -23,7 +23,19 @@ const seatEntries = computed(() => {
         { position: "left", player: leftPlayer.value },
         { position: "right", player: rightPlayer.value },
     ];
-    return entries.filter((x) => Boolean(x.player));
+    return entries
+        .filter((x) => Boolean(x.player))
+        .map((entry) => ({
+        ...entry,
+        openCards: [...entry.player.exposedArea, ...entry.player.generalArea],
+    }));
+});
+const selfOpenCards = computed(() => {
+    const player = selfPlayer.value;
+    if (!player) {
+        return [];
+    }
+    return [...player.exposedArea, ...player.generalArea];
 });
 const latestDiscardFromAction = computed(() => {
     const match = String(props.state?.lastAction ?? "").match(/^(\S+)\s+DISCARD$/);
@@ -103,18 +115,60 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['right']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
@@ -128,7 +182,7 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         key: (entry.position),
         ...{ class: "seat" },
-        ...{ class: ([entry.position, { active: __VLS_ctx.isCurrentTurn(entry.player.clientId) }]) },
+        ...{ class: ([entry.position, { active: __VLS_ctx.isCurrentTurn(entry.player.clientId), 'with-fish': entry.player.fishArea.length > 0 }]) },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
@@ -151,15 +205,15 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
         ...{ class: "seat-meta" },
     });
     (entry.player.declaredKongs);
-    if (entry.player.exposedArea.length || entry.player.generalArea.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "seat-zone" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "seat-zone" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    if (entry.openCards.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "cards" },
         });
-        for (const [card] of __VLS_getVForSourceType(([...entry.player.exposedArea, ...entry.player.generalArea]))) {
+        for (const [card] of __VLS_getVForSourceType((entry.openCards))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
             const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -174,27 +228,39 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
             }, ...__VLS_functionalComponentArgsRest(__VLS_0));
         }
     }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "empty" },
+        });
+    }
     if (entry.player.fishArea.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "seat-zone" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "cards" },
-        });
-        for (const [card] of __VLS_getVForSourceType((entry.player.fishArea))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`fish-${entry.player.clientId}-${card.id}`),
-                card: (card),
-                size: "sm",
-            }));
-            const __VLS_4 = __VLS_3({
-                key: (`fish-${entry.player.clientId}-${card.id}`),
-                card: (card),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+        if (entry.player.fishArea.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "cards" },
+            });
+            for (const [card] of __VLS_getVForSourceType((entry.player.fishArea))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`fish-${entry.player.clientId}-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }));
+                const __VLS_4 = __VLS_3({
+                    key: (`fish-${entry.player.clientId}-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+            }
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "empty" },
+            });
         }
     }
 }
@@ -230,6 +296,15 @@ if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     (__VLS_ctx.responseCard.source === "draw" ? "摸牌" : "他人弃牌");
 }
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "response-wrap response-empty" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "ghost-card" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
     ...{ class: "hint" },
 });
@@ -261,15 +336,15 @@ if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-areas" },
     });
-    if (__VLS_ctx.selfPlayer.exposedArea.length || __VLS_ctx.selfPlayer.generalArea.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "self-area" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-area" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    if (__VLS_ctx.selfOpenCards.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "cards" },
         });
-        for (const [card] of __VLS_getVForSourceType(([...__VLS_ctx.selfPlayer.exposedArea, ...__VLS_ctx.selfPlayer.generalArea]))) {
+        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfOpenCards))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
             const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -282,25 +357,37 @@ if (__VLS_ctx.selfPlayer) {
             }, ...__VLS_functionalComponentArgsRest(__VLS_9));
         }
     }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "empty" },
+        });
+    }
     if (__VLS_ctx.selfPlayer.fishArea.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "self-area" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "cards" },
-        });
-        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.fishArea))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`self-fish-${card.id}`),
-                card: (card),
-            }));
-            const __VLS_13 = __VLS_12({
-                key: (`self-fish-${card.id}`),
-                card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+        if (__VLS_ctx.selfPlayer.fishArea.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "cards" },
+            });
+            for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.fishArea))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`self-fish-${card.id}`),
+                    card: (card),
+                }));
+                const __VLS_13 = __VLS_12({
+                    key: (`self-fish-${card.id}`),
+                    card: (card),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+            }
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "empty" },
+            });
         }
     }
     if (__VLS_ctx.canDiscard) {
@@ -347,11 +434,16 @@ if (__VLS_ctx.selfPlayer) {
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
@@ -363,8 +455,10 @@ if (__VLS_ctx.selfPlayer) {
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -376,6 +470,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             CardComp: CardComp,
             selfPlayer: selfPlayer,
             seatEntries: seatEntries,
+            selfOpenCards: selfOpenCards,
             responseCard: responseCard,
             currentPlayerName: currentPlayerName,
             isMyTurn: isMyTurn,

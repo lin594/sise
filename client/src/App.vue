@@ -379,8 +379,8 @@ async function copyInviteLink() {
   margin: 0 auto;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
 }
 
@@ -391,14 +391,21 @@ async function copyInviteLink() {
   background: #0b1220;
   border: 1px solid #1e293b;
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: 5px 10px;
   color: #e2e8f0;
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.1;
 }
 
 .meta {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   color: #93c5fd;
+  font-size: 12px;
 }
 
 .lobby {
@@ -459,11 +466,12 @@ async function copyInviteLink() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 1px solid #334155;
   border-radius: 10px;
   background: #111827;
   color: #bfdbfe;
+  font-size: 13px;
 }
 
 .turn-banner.mine {
@@ -680,6 +688,33 @@ async function copyInviteLink() {
 
   .settlement-list {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .layout {
+    min-height: 100dvh;
+    gap: 6px;
+    padding: 6px;
+    grid-template-rows: auto auto 1fr auto;
+  }
+
+  .top {
+    padding: 4px 8px;
+  }
+
+  .top h1 {
+    font-size: 15px;
+  }
+
+  .meta {
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .turn-banner {
+    padding: 4px 8px;
+    font-size: 12px;
   }
 }
 </style>
