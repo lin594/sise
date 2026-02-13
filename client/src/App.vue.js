@@ -174,18 +174,6 @@ const dealerName = computed(() => {
     }
     return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
-async function copyInviteLink() {
-    try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("playerToken");
-        url.searchParams.delete("playerName");
-        url.searchParams.delete("new");
-        await navigator.clipboard.writeText(url.toString());
-    }
-    catch {
-        // Ignore clipboard errors.
-    }
-}
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -269,10 +257,6 @@ if (__VLS_ctx.isWaiting) {
         disabled: (!__VLS_ctx.isHost),
     });
     (__VLS_ctx.isHost ? "开始游戏" : "等待房主开始");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.copyInviteLink) },
-        ...{ class: "ghost" },
-    });
     if (__VLS_ctx.joinError) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "error" },
@@ -671,7 +655,6 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['lobby']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-item']} */ ;
@@ -768,7 +751,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             turnHint: turnHint,
             currentPlayerName: currentPlayerName,
             dealerName: dealerName,
-            copyInviteLink: copyInviteLink,
         };
     },
 });

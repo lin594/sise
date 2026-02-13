@@ -18,7 +18,6 @@
         <button class="primary" :disabled="!isHost" @click="startGame">
           {{ isHost ? "开始游戏" : "等待房主开始" }}
         </button>
-        <button class="ghost" @click="copyInviteLink">复制邀请链接</button>
       </div>
       <p v-if="joinError" class="error">{{ joinError }}</p>
 
@@ -395,17 +394,6 @@ const dealerName = computed(() => {
   return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
 
-async function copyInviteLink() {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("playerToken");
-    url.searchParams.delete("playerName");
-    url.searchParams.delete("new");
-    await navigator.clipboard.writeText(url.toString());
-  } catch {
-    // Ignore clipboard errors.
-  }
-}
 </script>
 
 <style scoped>

@@ -77,7 +77,14 @@ export class FourColorGameRoom extends Room<GameState> {
   private pendingResponse: PendingResponse | null = null;
   private publicGeneralPool: Card[] = [];
   private awaitingDiscardOwnerId: string | null = null;
-  private readonly botThinkMs = Math.max(0, Number(process.env.BOT_THINK_MS ?? 200));
+  private readonly botThinkMinMs = Math.max(
+    0,
+    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 1200),
+  );
+  private readonly botThinkMaxMs = Math.max(
+    this.botThinkMinMs,
+    Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1000),
+  );
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly roomLogCards = (process.env.ROOM_LOG_CARDS ?? "0") === "1";
@@ -1676,17 +1683,25 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private scheduleBotStep(): void {
-    if (this.botThinkMs <= 0) {
+    if (this.botThinkMaxMs <= 0) {
       this.runBotStepNow();
       return;
     }
     if (this.botTimer) {
       return;
     }
+    const delayMs = this.randomBotThinkDelayMs();
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
       this.runBotStepNow();
-    }, this.botThinkMs);
+    }, delayMs);
+  }
+
+  private randomBotThinkDelayMs(): number {
+    if (this.botThinkMaxMs <= this.botThinkMinMs) {
+      return this.botThinkMinMs;
+    }
+    return this.botThinkMinMs + Math.floor(Math.random() * (this.botThinkMaxMs - this.botThinkMinMs + 1));
   }
 
   private hasPendingCollectiveBotStep(): boolean {
