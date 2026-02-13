@@ -85,6 +85,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.botThinkMinMs,
     Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1000),
   );
+  private readonly collectiveTimeoutMs = Math.max(1000, Number(process.env.COLLECTIVE_TIMEOUT_MS ?? 8000));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly roomLogCards = (process.env.ROOM_LOG_CARDS ?? "0") === "1";
@@ -101,6 +102,10 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly huChecksBySeat = new Map<string, { total: number; valid: number }>();
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
+  private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
+  private collectiveQueue: string[] = [];
+  private collectiveCursor = 0;
+  private collectiveResponderId: string | null = null;
   private debugSeq = 0;
   private roundDealerId: string | null = null;
 
@@ -219,11 +224,13 @@ export class FourColorGameRoom extends Room<GameState> {
   onDispose(): void {
     this.clearBotTimer();
     this.clearDeclareTimer();
+    this.clearCollectiveTimer();
   }
 
   private resetToFreshLobby(): void {
     this.clearBotTimer();
     this.clearDeclareTimer();
+    this.resetCollectivePolling();
     this.deck = [];
     this.pendingResponse = null;
     this.publicGeneralPool = [];
@@ -600,6 +607,7 @@ export class FourColorGameRoom extends Room<GameState> {
     if (this.state.phase !== "playing") {
       return;
     }
+    this.resetCollectivePolling();
     this.state.currentPlayerId = ownerId;
     this.drawForOwner(ownerId, tag);
   }
@@ -677,7 +685,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.setResponseCard(discard, "upper");
     this.state.lastAction = `${ownerId} DISCARD`;
     this.syncAllPrivateHands();
-    this.tickBots();
+    this.startCollectivePolling();
   }
 
   private getHandWithoutPending(ownerId: string, pendingCard: Card): Card[] {
@@ -710,17 +718,14 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "collective") {
-      if (seatId === pending.ownerId) {
+      if (seatId === pending.ownerId || seatId !== this.collectiveResponderId) {
         return;
       }
+      this.clearCollectiveTimer();
       pending.collectives.set(seatId, action === "pass" ? "pass" : action);
-      this.tickBots();
+      this.collectiveCursor += 1;
       if (this.state.responsePhase === "collective" && this.pendingResponse === pending) {
-        if (!this.isCollectiveReady(pending)) {
-          this.broadcastAvailableActions();
-          return;
-        }
-        this.resolveCollectivePhase();
+        this.advanceCollectivePolling();
       }
       return;
     }
@@ -848,6 +853,7 @@ export class FourColorGameRoom extends Room<GameState> {
       collectives: new Map(),
     };
     this.awaitingDiscardOwnerId = ownerId;
+    this.resetCollectivePolling();
     this.state.responsePhase = "self_grab";
     this.state.currentPlayerId = ownerId;
     this.state.responseCard = new CardSchema();
@@ -1067,7 +1073,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.setResponseCard(newCard, "draw");
     this.state.lastAction = `${ownerId} GRAB`;
     this.syncAllPrivateHands();
-    this.tickBots();
+    this.startCollectivePolling();
   }
 
   private executePassToNext(ownerId: string): void {
@@ -1102,7 +1108,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.responsePhase = "collective";
     this.setResponseCard(cardToNext, "upper");
     this.syncAllPrivateHands();
-    this.tickBots();
+    this.startCollectivePolling();
   }
 
   private pickDiscardCard(playerId: string): Card | null {
@@ -1283,6 +1289,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private backToLobby(): void {
     this.clearBotTimer();
     this.clearDeclareTimer();
+    this.resetCollectivePolling();
     this.deck = [];
     this.pendingResponse = null;
     this.publicGeneralPool = [];
@@ -1350,6 +1357,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.lastAction = lastAction;
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
+    this.resetCollectivePolling();
 
     if (winnerId) {
       this.broadcast("hu_result", { winnerId, groups });
@@ -1377,7 +1385,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const isCollective = this.state.responsePhase === "collective";
 
     if (isCollective) {
-      if (isOwner) {
+      if (isOwner || seatId !== this.collectiveResponderId) {
         return this.getDisabledPanel("mode1", "collective");
       }
       const huProbe = explainHu(hand, pending.card, this.getHuWildcardCount());
@@ -1685,17 +1693,16 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "collective") {
-      if (this.isCollectiveReady(this.pendingResponse)) {
-        this.clearBotTimer();
-        this.resolveCollectivePhase();
+      if (!this.collectiveResponderId) {
+        this.startCollectivePolling();
         return;
       }
-      if (this.hasPendingCollectiveBotStep() || this.hasForcedCollectivePassCandidate()) {
+      if (this.botIds.has(this.collectiveResponderId)) {
+        this.clearCollectiveTimer();
         this.scheduleBotStep();
-        this.broadcastAvailableActions();
-        return;
+      } else if (!this.collectiveTimer) {
+        this.scheduleCollectiveTimeout();
       }
-      this.clearBotTimer();
       this.broadcastAvailableActions();
       return;
     }
@@ -1716,6 +1723,94 @@ export class FourColorGameRoom extends Room<GameState> {
       clearTimeout(this.botTimer);
       this.botTimer = null;
     }
+  }
+
+  private clearCollectiveTimer(): void {
+    if (this.collectiveTimer) {
+      clearTimeout(this.collectiveTimer);
+      this.collectiveTimer = null;
+    }
+  }
+
+  private resetCollectivePolling(): void {
+    this.clearCollectiveTimer();
+    this.collectiveQueue = [];
+    this.collectiveCursor = 0;
+    this.collectiveResponderId = null;
+  }
+
+  private startCollectivePolling(): void {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") {
+      this.resetCollectivePolling();
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    this.clearBotTimer();
+    this.clearCollectiveTimer();
+    this.collectiveQueue = this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId);
+    this.collectiveCursor = 0;
+    this.collectiveResponderId = null;
+    this.advanceCollectivePolling();
+  }
+
+  private scheduleCollectiveTimeout(): void {
+    this.clearCollectiveTimer();
+    this.collectiveTimer = setTimeout(() => {
+      const pending = this.pendingResponse;
+      const responderId = this.collectiveResponderId;
+      this.collectiveTimer = null;
+      if (!pending || this.state.responsePhase !== "collective" || !responderId) {
+        return;
+      }
+      if (pending.collectives.has(responderId)) {
+        return;
+      }
+      pending.collectives.set(responderId, "pass");
+      this.collectiveCursor += 1;
+      this.state.lastAction = `${responderId} TIMEOUT_PASS`;
+      this.advanceCollectivePolling();
+    }, this.collectiveTimeoutMs);
+  }
+
+  private advanceCollectivePolling(): void {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") {
+      this.resetCollectivePolling();
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    this.clearBotTimer();
+    this.clearCollectiveTimer();
+
+    while (this.collectiveCursor < this.collectiveQueue.length) {
+      const seatId = this.collectiveQueue[this.collectiveCursor];
+      if (pending.collectives.has(seatId)) {
+        this.collectiveCursor += 1;
+        continue;
+      }
+
+      if (!this.hasCollectiveActionBeyondPass(seatId)) {
+        pending.collectives.set(seatId, "pass");
+        this.collectiveCursor += 1;
+        continue;
+      }
+
+      this.collectiveResponderId = seatId;
+      this.state.currentPlayerId = seatId;
+      if (this.botIds.has(seatId)) {
+        this.scheduleBotStep();
+      } else {
+        this.scheduleCollectiveTimeout();
+      }
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    this.collectiveResponderId = null;
+    this.resolveCollectivePhase();
   }
 
   private scheduleBotStep(): void {
@@ -1740,41 +1835,6 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.botThinkMinMs + Math.floor(Math.random() * (this.botThinkMaxMs - this.botThinkMinMs + 1));
   }
 
-  private hasPendingCollectiveBotStep(): boolean {
-    const pending = this.pendingResponse;
-    if (!pending || this.state.responsePhase !== "collective") {
-      return false;
-    }
-    for (const botId of this.botIds) {
-      if (botId === pending.ownerId) {
-        continue;
-      }
-      if (!pending.collectives.has(botId)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private hasForcedCollectivePassCandidate(): boolean {
-    const pending = this.pendingResponse;
-    if (!pending || this.state.responsePhase !== "collective") {
-      return false;
-    }
-    for (const seatId of this.playerOrder) {
-      if (seatId === pending.ownerId) {
-        continue;
-      }
-      if (pending.collectives.has(seatId)) {
-        continue;
-      }
-      if (!this.hasCollectiveActionBeyondPass(seatId)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   private runBotStepNow(): void {
     if (!this.pendingResponse || this.state.phase !== "playing") {
       this.broadcastAvailableActions();
@@ -1782,31 +1842,22 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "collective") {
-      for (const botId of this.botIds) {
-        if (botId === this.pendingResponse.ownerId) {
-          continue;
-        }
-        if (this.pendingResponse.collectives.has(botId)) {
-          continue;
-        }
-        const acts = this.getAvailableActions(botId);
-        const choose =
-          acts.find((x) => x.action === "hu" && x.enabled)?.action ??
-          acts.find((x) => x.action === "open" && x.enabled)?.action ??
-          acts.find((x) => x.action === "peng" && x.enabled)?.action ??
-          acts.find((x) => x.action === "eat" && x.enabled)?.action ??
-          acts.find((x) => x.action === "pass" && x.enabled)?.action ??
-          "pass";
-        this.pendingResponse.collectives.set(botId, choose);
-      }
-
-      this.autoFillForcedCollectivePasses();
-
-      if (this.isCollectiveReady(this.pendingResponse)) {
-        this.resolveCollectivePhase();
+      const responderId = this.collectiveResponderId;
+      if (!responderId || !this.botIds.has(responderId)) {
+        this.broadcastAvailableActions();
         return;
       }
-      this.broadcastAvailableActions();
+      const acts = this.getAvailableActions(responderId);
+      const choose =
+        acts.find((x) => x.action === "hu" && x.enabled)?.action ??
+        acts.find((x) => x.action === "open" && x.enabled)?.action ??
+        acts.find((x) => x.action === "peng" && x.enabled)?.action ??
+        acts.find((x) => x.action === "eat" && x.enabled)?.action ??
+        acts.find((x) => x.action === "pass" && x.enabled)?.action ??
+        "pass";
+      this.pendingResponse.collectives.set(responderId, choose);
+      this.collectiveCursor += 1;
+      this.advanceCollectivePolling();
       return;
     }
 
@@ -2020,11 +2071,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.playerHands.set(seatId, hand);
     this.syncAllPrivateHands();
     if (scenario === "discard_public") {
+      this.resetCollectivePolling();
       this.broadcastAvailableActions();
       return true;
     }
     if (scenario === "collective_no_actions" || scenario === "hu_fail_case") {
-      this.broadcastAvailableActions();
+      this.startCollectivePolling();
       return true;
     }
     this.tickBots();
