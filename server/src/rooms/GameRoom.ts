@@ -186,6 +186,12 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.seatBySession.delete(client.sessionId);
 
+    // Single-room mode: when no human session remains, reset room to fresh lobby.
+    if (this.seatBySession.size === 0) {
+      this.resetToFreshLobby();
+      return;
+    }
+
     const player = this.state.players.get(seatId);
     if (!player) {
       return;
@@ -213,6 +219,36 @@ export class FourColorGameRoom extends Room<GameState> {
   onDispose(): void {
     this.clearBotTimer();
     this.clearDeclareTimer();
+  }
+
+  private resetToFreshLobby(): void {
+    this.clearBotTimer();
+    this.clearDeclareTimer();
+    this.deck = [];
+    this.pendingResponse = null;
+    this.publicGeneralPool = [];
+    this.awaitingDiscardOwnerId = null;
+    this.roundDealerId = null;
+
+    this.playerHands.clear();
+    this.playerOrder = [];
+    this.botIds.clear();
+    this.seatBySession.clear();
+    this.seatByToken.clear();
+    this.baseNameBySeat.clear();
+
+    this.state.players.clear();
+    this.state.publicDiscardPile.clear();
+    this.state.phase = "waiting";
+    this.state.responsePhase = "collective";
+    this.state.currentPlayerId = "";
+    this.state.hostPlayerId = "";
+    this.state.dealerId = "";
+    this.state.deckCount = 0;
+    this.state.declareEndsAt = 0;
+    this.state.responseCard = new CardSchema();
+    this.state.lastAction = `LOBBY 0/${this.targetSeats}`;
+    this.broadcastAvailableActions();
   }
 
   private handleStartGame(client: Client): void {
