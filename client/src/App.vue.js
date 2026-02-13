@@ -19,9 +19,14 @@ const isMyTurn = computed(() => {
 });
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value);
+const isCompactLandscape = ref(false);
+const updateCompactLandscape = () => {
+    isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
+};
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
-const shouldShowDeclarePanel = computed(() => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot) && !Boolean(mePlayer.value?.declaredReady));
+const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
+const shouldShowDeclarePanel = computed(() => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot));
 const declareKongsInput = ref(0);
 const nowMs = ref(Date.now());
 let declareTick = null;
@@ -74,6 +79,9 @@ const fishSelectionValid = computed(() => {
     return goldCount === 0 || goldCount === 4 || goldCount === 5;
 });
 function toggleFish(cardId) {
+    if (isDeclareSubmitted.value) {
+        return;
+    }
     const next = new Set(selectedFishCardIds.value);
     if (next.has(cardId)) {
         next.delete(cardId);
@@ -84,7 +92,7 @@ function toggleFish(cardId) {
     selectedFishCardIds.value = next;
 }
 function submitDeclaration() {
-    if (!fishSelectionValid.value) {
+    if (!fishSelectionValid.value || isDeclareSubmitted.value) {
         return;
     }
     declareSetup({
@@ -102,12 +110,17 @@ onMounted(() => {
     declareTick = window.setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
+    updateCompactLandscape();
+    window.addEventListener("resize", updateCompactLandscape);
+    window.addEventListener("orientationchange", updateCompactLandscape);
 });
 onUnmounted(() => {
     if (declareTick !== null) {
         window.clearInterval(declareTick);
         declareTick = null;
     }
+    window.removeEventListener("resize", updateCompactLandscape);
+    window.removeEventListener("orientationchange", updateCompactLandscape);
 });
 const endPanelTitle = computed(() => (huResult.value ? "胡牌结算" : "本局结束"));
 const winnerName = computed(() => {
@@ -154,9 +167,20 @@ const currentPlayerName = computed(() => {
     const player = players.value.find((x) => x.clientId === playerId);
     return player?.name || playerId;
 });
+const dealerName = computed(() => {
+    const dealerId = String(state.value?.dealerId ?? "");
+    if (!dealerId) {
+        return "-";
+    }
+    return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
+});
 async function copyInviteLink() {
     try {
-        await navigator.clipboard.writeText(window.location.href);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("playerToken");
+        url.searchParams.delete("playerName");
+        url.searchParams.delete("new");
+        await navigator.clipboard.writeText(url.toString());
     }
     catch {
         // Ignore clipboard errors.
@@ -166,10 +190,20 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['playing']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
@@ -185,6 +219,16 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['playing']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
+/** @type {__VLS_StyleScopedClasses['playing']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 /** @type {[typeof OrientationGuard, ]} */ ;
@@ -193,6 +237,7 @@ const __VLS_0 = __VLS_asFunctionalComponent(OrientationGuard, new OrientationGua
 const __VLS_1 = __VLS_0({}, ...__VLS_functionalComponentArgsRest(__VLS_0));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
     ...{ class: "layout" },
+    ...{ class: ({ playing: __VLS_ctx.isPlaying, 'compact-landscape': __VLS_ctx.isCompactLandscape && __VLS_ctx.isPlaying }) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
@@ -207,6 +252,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 (__VLS_ctx.mySeatId || "-");
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 (__VLS_ctx.state?.hostPlayerId || "-");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+(__VLS_ctx.dealerName);
 if (__VLS_ctx.isWaiting) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "lobby" },
@@ -263,19 +310,35 @@ else {
     // @ts-ignore
     const __VLS_3 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
+        ...{ 'onSubmitAction': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
         mySeatId: (__VLS_ctx.mySeatId),
         canDiscard: (__VLS_ctx.canDiscard),
+        actions: (__VLS_ctx.availableActions),
+        canAct: (__VLS_ctx.canAct),
+        isCurrentTurn: (__VLS_ctx.isMyTurn),
+        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
+        currentPlayerName: (__VLS_ctx.currentPlayerName),
+        turnHint: (__VLS_ctx.turnHint),
+        embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
     }));
     const __VLS_4 = __VLS_3({
         ...{ 'onDiscardCard': {} },
+        ...{ 'onSubmitAction': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
         mySeatId: (__VLS_ctx.mySeatId),
         canDiscard: (__VLS_ctx.canDiscard),
+        actions: (__VLS_ctx.availableActions),
+        canAct: (__VLS_ctx.canAct),
+        isCurrentTurn: (__VLS_ctx.isMyTurn),
+        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
+        currentPlayerName: (__VLS_ctx.currentPlayerName),
+        turnHint: (__VLS_ctx.turnHint),
+        embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
     }, ...__VLS_functionalComponentArgsRest(__VLS_3));
     let __VLS_6;
     let __VLS_7;
@@ -283,12 +346,15 @@ else {
     const __VLS_9 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
+    const __VLS_10 = {
+        onSubmitAction: (__VLS_ctx.sendAction)
+    };
     var __VLS_5;
 }
-if (__VLS_ctx.isPlaying) {
+if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_10 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_11 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
@@ -296,21 +362,21 @@ if (__VLS_ctx.isPlaying) {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
     }));
-    const __VLS_11 = __VLS_10({
+    const __VLS_12 = __VLS_11({
         ...{ 'onSubmit': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_10));
-    let __VLS_13;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_11));
     let __VLS_14;
     let __VLS_15;
-    const __VLS_16 = {
+    let __VLS_16;
+    const __VLS_17 = {
         onSubmit: (__VLS_ctx.sendAction)
     };
-    var __VLS_12;
+    var __VLS_13;
 }
 if (__VLS_ctx.shouldShowDeclarePanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -324,6 +390,11 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ...{ class: "declare-desc" },
     });
     (__VLS_ctx.declareSecondsLeft);
+    if (__VLS_ctx.isDeclareSubmitted) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "declare-submitted" },
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "declare-progress" },
     });
@@ -338,6 +409,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         type: "number",
         min: "0",
         step: "1",
+        disabled: (__VLS_ctx.isDeclareSubmitted),
     });
     (__VLS_ctx.declareKongsInput);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -362,15 +434,16 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
                 key: (`declare-hand-${card.id}`),
                 ...{ class: "declare-card-btn" },
                 ...{ class: ({ selected: __VLS_ctx.selectedFishCardIds.has(card.id) }) },
+                disabled: (__VLS_ctx.isDeclareSubmitted),
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_17 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (card),
             }));
-            const __VLS_18 = __VLS_17({
+            const __VLS_19 = __VLS_18({
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_17));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
         }
     }
     else {
@@ -391,14 +464,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedFishCards))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_20 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
             }));
-            const __VLS_21 = __VLS_20({
+            const __VLS_22 = __VLS_21({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_20));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_21));
         }
     }
     else {
@@ -423,8 +496,9 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.submitDeclaration) },
         ...{ class: "primary" },
-        disabled: (!__VLS_ctx.fishSelectionValid),
+        disabled: (!__VLS_ctx.fishSelectionValid || __VLS_ctx.isDeclareSubmitted),
     });
+    (__VLS_ctx.isDeclareSubmitted ? "已提交" : "确认声明");
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -477,14 +551,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_23 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_24 = __VLS_23({
+                    const __VLS_25 = __VLS_24({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_23));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
                 }
             }
             else {
@@ -505,14 +579,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType(([...p.exposedArea, ...p.generalArea]))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_26 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_27 = __VLS_26({
+                    const __VLS_28 = __VLS_27({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_26));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
                 }
             }
             else {
@@ -533,14 +607,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.fishArea))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_29 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_30 = __VLS_29({
+                    const __VLS_31 = __VLS_30({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_29));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
                 }
             }
             else {
@@ -605,6 +679,7 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-submitted']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-progress']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-progress-fill']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
@@ -674,7 +749,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             isMyTurn: isMyTurn,
             canAct: canAct,
             canDiscard: canDiscard,
+            isCompactLandscape: isCompactLandscape,
             showEndPanel: showEndPanel,
+            isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
             declareKongsInput: declareKongsInput,
             selectedFishCardIds: selectedFishCardIds,
@@ -690,6 +767,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             endSummary: endSummary,
             turnHint: turnHint,
             currentPlayerName: currentPlayerName,
+            dealerName: dealerName,
             copyInviteLink: copyInviteLink,
         };
     },

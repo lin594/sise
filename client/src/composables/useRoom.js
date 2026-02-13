@@ -1,7 +1,10 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Client } from "colyseus.js";
 import { sortHandCards } from "@/utils/cardSort";
-const WS_URL = import.meta.env.VITE_SERVER_URL || "ws://localhost:2567";
+const DEFAULT_WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:2567`;
+const WS_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_WS_URL;
+const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
+const HTTP_URL = import.meta.env.VITE_SERVER_HTTP_URL || DEFAULT_HTTP_URL;
 function asCardArray(input) {
     const isCard = (x) => x &&
         typeof x === "object" &&
@@ -80,6 +83,32 @@ function asCard(input) {
         isResponseCard: Boolean(raw.isResponseCard),
     };
 }
+function asNumberArray(input) {
+    if (Array.isArray(input)) {
+        return input.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+    }
+    if (input && typeof input.toArray === "function") {
+        return input.toArray()
+            .map((x) => Number(x))
+            .filter((x) => Number.isFinite(x) && x > 0);
+    }
+    if (input && typeof input.forEach === "function") {
+        const out = [];
+        input.forEach((value) => {
+            const n = Number(value);
+            if (Number.isFinite(n) && n > 0) {
+                out.push(n);
+            }
+        });
+        return out;
+    }
+    if (input && typeof input === "object") {
+        return Object.values(input)
+            .map((x) => Number(x))
+            .filter((x) => Number.isFinite(x) && x > 0);
+    }
+    return [];
+}
 function normalizePlayer(raw) {
     return {
         clientId: String(raw?.clientId ?? ""),
@@ -90,11 +119,13 @@ function normalizePlayer(raw) {
         connected: Boolean(raw?.connected),
         discardPile: asCardArray(raw?.discardPile),
         exposedArea: asCardArray(raw?.exposedArea),
+        exposedGroupSizes: asNumberArray(raw?.exposedGroupSizes),
         generalArea: asCardArray(raw?.generalArea),
         fishArea: asCardArray(raw?.fishArea),
     };
 }
 export function useRoom(playerName = "Player") {
+    const ROOM_KEY = "four_room_id";
     const TOKEN_KEY = "four_player_token";
     const NAME_KEY = "four_player_name";
     const MAX_LOGS = 120;
@@ -114,6 +145,38 @@ export function useRoom(playerName = "Player") {
     const actionLogs = ref([]);
     let logSeq = 0;
     let lastFingerprint = "";
+    function readStored(key) {
+        return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+    }
+    function writeStored(key, value) {
+        window.localStorage.setItem(key, value);
+        window.sessionStorage.setItem(key, value);
+    }
+    function clearStored(key) {
+        window.localStorage.removeItem(key);
+        window.sessionStorage.removeItem(key);
+    }
+    function updateInviteUrl(roomId) {
+        if (!roomId) {
+            return;
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.set("roomId", roomId);
+        url.searchParams.delete("playerToken");
+        url.searchParams.delete("new");
+        window.history.replaceState(null, "", url.toString());
+    }
+    async function fetchSingletonRoomId() {
+        const response = await fetch(`${HTTP_URL}/room-id`, { method: "GET" });
+        if (!response.ok) {
+            throw new Error("获取房间失败，请稍后重试");
+        }
+        const payload = (await response.json());
+        if (!payload?.roomId) {
+            throw new Error("服务端未返回可用房间");
+        }
+        return payload.roomId;
+    }
     function pushLog(text) {
         const line = String(text ?? "").trim();
         if (!line) {
@@ -123,101 +186,139 @@ export function useRoom(playerName = "Player") {
     }
     async function connect() {
         const client = new Client(WS_URL);
-        const query = new URLSearchParams(window.location.search);
-        const forceNew = query.get("new") === "1";
-        if (forceNew) {
-            window.sessionStorage.removeItem(TOKEN_KEY);
-            window.sessionStorage.removeItem(NAME_KEY);
-        }
-        const queryToken = query.get("playerToken")?.trim() ?? "";
-        const queryName = query.get("playerName")?.trim() ?? "";
-        const cachedToken = window.sessionStorage.getItem(TOKEN_KEY) ?? "";
-        const cachedName = window.sessionStorage.getItem(NAME_KEY) ?? "";
-        const joined = await client.joinOrCreate("four-color", {
-            name: queryName || cachedName || playerName,
-            playerToken: queryToken || cachedToken,
-        });
-        room.value = joined;
-        myId.value = joined.sessionId;
-        connected.value = true;
-        joined.onStateChange((next) => {
-            const normalizedPlayers = [];
-            const playersMap = next?.players;
-            if (playersMap && typeof playersMap.forEach === "function") {
-                playersMap.forEach((value) => {
-                    normalizedPlayers.push(normalizePlayer(value));
+        try {
+            const query = new URLSearchParams(window.location.search);
+            const forceNew = query.get("new") === "1";
+            if (forceNew) {
+                clearStored(TOKEN_KEY);
+                clearStored(NAME_KEY);
+                clearStored(ROOM_KEY);
+            }
+            const queryRoomId = query.get("roomId")?.trim() ?? "";
+            const queryToken = query.get("playerToken")?.trim() ?? "";
+            const queryName = query.get("playerName")?.trim() ?? "";
+            const cachedRoomId = readStored(ROOM_KEY);
+            const cachedToken = readStored(TOKEN_KEY);
+            const cachedName = readStored(NAME_KEY);
+            const desiredName = queryName || cachedName || playerName;
+            const desiredToken = queryToken || cachedToken;
+            const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
+            let joined;
+            try {
+                joined = await client.joinById(initialRoomId, {
+                    name: desiredName,
+                    playerToken: desiredToken,
                 });
             }
-            else if (playersMap && typeof playersMap === "object") {
-                normalizedPlayers.push(...Object.values(playersMap).map((value) => normalizePlayer(value)));
+            catch {
+                if (queryRoomId) {
+                    throw new Error("房间不存在或已关闭，请让房主重新分享邀请链接。");
+                }
+                clearStored(ROOM_KEY);
+                const fallbackRoomId = await fetchSingletonRoomId();
+                joined = await client.joinById(fallbackRoomId, {
+                    name: desiredName,
+                    playerToken: desiredToken,
+                });
             }
-            state.value = {
-                phase: String(next?.phase ?? ""),
-                hostPlayerId: String(next?.hostPlayerId ?? ""),
-                currentPlayerId: String(next?.currentPlayerId ?? ""),
-                responsePhase: String(next?.responsePhase ?? ""),
-                lastAction: String(next?.lastAction ?? ""),
-                deckCount: Number(next?.deckCount ?? 0),
-                responseCard: asCard(next?.responseCard),
-                publicDiscardPile: asCardArray(next?.publicDiscardPile),
-                declareEndsAt: Number(next?.declareEndsAt ?? 0),
-                players: normalizedPlayers,
-            };
-            const lastAction = String(state.value?.lastAction ?? "").trim();
-            const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
-            if (lastAction && fingerprint !== lastFingerprint) {
-                pushLog(lastAction);
-                lastFingerprint = fingerprint;
+            room.value = joined;
+            myId.value = joined.sessionId;
+            connected.value = true;
+            if (joined.roomId) {
+                writeStored(ROOM_KEY, joined.roomId);
+                updateInviteUrl(joined.roomId);
             }
-            if (state.value?.phase !== "ended") {
-                huResult.value = null;
-                roundResult.value = null;
-            }
-        });
-        joined.onMessage("private_hand", (payload) => {
-            privateHand.value = sortHandCards(payload ?? []);
-        });
-        joined.onMessage("available_actions", (payload) => {
-            availableActions.value = payload;
-        });
-        joined.onMessage("hu_result", (payload) => {
-            huResult.value = payload;
-            pushLog(`HU_RESULT ${payload.winnerId}`);
-        });
-        joined.onMessage("round_result", (payload) => {
-            roundResult.value = {
-                ...payload,
-                players: (payload.players ?? []).map((p) => ({
-                    ...p,
-                    hand: sortHandCards(p.hand ?? []),
-                    exposedArea: sortHandCards(p.exposedArea ?? []),
-                    generalArea: sortHandCards(p.generalArea ?? []),
-                    fishArea: sortHandCards(p.fishArea ?? []),
-                    discardCount: Number(p.discardCount ?? 0),
-                    scoreBreakdown: p.scoreBreakdown ?? [],
-                    totalScore: Number(p.totalScore ?? 0),
-                })),
-            };
-            pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
-        });
-        joined.onMessage("debug_applied", (payload) => {
-            debugApplied.value = payload;
-        });
-        joined.onMessage("session_token", (payload) => {
-            playerToken.value = payload.playerToken;
-            mySeatId.value = payload.seatId;
-            window.sessionStorage.setItem(TOKEN_KEY, payload.playerToken);
-            window.sessionStorage.setItem(NAME_KEY, queryName || cachedName || playerName);
-            pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
-        });
-        joined.onMessage("join_error", (payload) => {
-            joinError.value = payload?.message ?? "鍔犲叆澶辫触";
-            pushLog(`ERROR ${joinError.value}`);
-        });
-        joined.onMessage("declare_rejected", (payload) => {
-            declareError.value = payload?.reason ?? "声明提交失败";
-            pushLog(`DECLARE_REJECTED ${declareError.value}`);
-        });
+            joined.onStateChange((next) => {
+                const normalizedPlayers = [];
+                const playersMap = next?.players;
+                if (playersMap && typeof playersMap.forEach === "function") {
+                    playersMap.forEach((value) => {
+                        normalizedPlayers.push(normalizePlayer(value));
+                    });
+                }
+                else if (playersMap && typeof playersMap === "object") {
+                    normalizedPlayers.push(...Object.values(playersMap).map((value) => normalizePlayer(value)));
+                }
+                state.value = {
+                    phase: String(next?.phase ?? ""),
+                    hostPlayerId: String(next?.hostPlayerId ?? ""),
+                    dealerId: String(next?.dealerId ?? ""),
+                    currentPlayerId: String(next?.currentPlayerId ?? ""),
+                    responsePhase: String(next?.responsePhase ?? ""),
+                    lastAction: String(next?.lastAction ?? ""),
+                    deckCount: Number(next?.deckCount ?? 0),
+                    responseCard: asCard(next?.responseCard),
+                    publicDiscardPile: asCardArray(next?.publicDiscardPile),
+                    declareEndsAt: Number(next?.declareEndsAt ?? 0),
+                    players: normalizedPlayers,
+                };
+                const lastAction = String(state.value?.lastAction ?? "").trim();
+                const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
+                if (lastAction && fingerprint !== lastFingerprint) {
+                    pushLog(lastAction);
+                    lastFingerprint = fingerprint;
+                }
+                if (state.value?.phase !== "ended") {
+                    huResult.value = null;
+                    roundResult.value = null;
+                }
+            });
+            joined.onMessage("private_hand", (payload) => {
+                privateHand.value = sortHandCards(payload ?? []);
+            });
+            joined.onMessage("available_actions", (payload) => {
+                availableActions.value = payload;
+            });
+            joined.onMessage("hu_result", (payload) => {
+                huResult.value = payload;
+                pushLog(`HU_RESULT ${payload.winnerId}`);
+            });
+            joined.onMessage("round_result", (payload) => {
+                roundResult.value = {
+                    ...payload,
+                    players: (payload.players ?? []).map((p) => ({
+                        ...p,
+                        hand: sortHandCards(p.hand ?? []),
+                        exposedArea: p.exposedArea ?? [],
+                        exposedGroupSizes: asNumberArray(p.exposedGroupSizes),
+                        generalArea: sortHandCards(p.generalArea ?? []),
+                        fishArea: sortHandCards(p.fishArea ?? []),
+                        discardCount: Number(p.discardCount ?? 0),
+                        scoreBreakdown: p.scoreBreakdown ?? [],
+                        totalScore: Number(p.totalScore ?? 0),
+                    })),
+                };
+                pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
+            });
+            joined.onMessage("debug_applied", (payload) => {
+                debugApplied.value = payload;
+            });
+            joined.onMessage("session_token", (payload) => {
+                playerToken.value = payload.playerToken;
+                mySeatId.value = payload.seatId;
+                writeStored(TOKEN_KEY, payload.playerToken);
+                writeStored(NAME_KEY, desiredName);
+                if (payload.roomId) {
+                    writeStored(ROOM_KEY, payload.roomId);
+                    updateInviteUrl(payload.roomId);
+                }
+                pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
+            });
+            joined.onMessage("join_error", (payload) => {
+                joinError.value = payload?.message ?? "鍔犲叆澶辫触";
+                pushLog(`ERROR ${joinError.value}`);
+            });
+            joined.onMessage("declare_rejected", (payload) => {
+                declareError.value = payload?.reason ?? "声明提交失败";
+                pushLog(`DECLARE_REJECTED ${declareError.value}`);
+            });
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "加入房间失败";
+            joinError.value = message;
+            pushLog(`ERROR ${message}`);
+            connected.value = false;
+        }
     }
     function sendAction(action) {
         if (!room.value) {

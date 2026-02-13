@@ -6,6 +6,7 @@ function update() {
 onMounted(() => {
     update();
     window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
     const orientation = screen.orientation;
     if (orientation?.lock) {
         orientation.lock("landscape").catch(() => {
@@ -15,11 +16,13 @@ onMounted(() => {
 });
 onUnmounted(() => {
     window.removeEventListener("resize", update);
+    window.removeEventListener("orientationchange", update);
 });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['guard']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 if (__VLS_ctx.portrait) {

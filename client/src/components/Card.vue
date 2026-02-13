@@ -1,6 +1,7 @@
-﻿<template>
+<template>
   <div class="card" :class="[colorClass, `size-${sizeClass}`, { response: isResponseCard }]">
-    <span class="text">{{ label }}</span>
+    <span class="text text-top">{{ label }}</span>
+    <span class="text text-bottom">{{ label }}</span>
     <span v-if="isResponseCard" class="star">★</span>
   </div>
 </template>
@@ -29,15 +30,7 @@ const labelMap: Record<string, string> = {
   nan: "男",
 };
 
-const colorMap: Record<string, string> = {
-  yellow: "黄",
-  red: "红",
-  green: "绿",
-  white: "白",
-  gold: "金",
-};
-
-const label = computed(() => `${colorMap[props.card.color] ?? "?"}${labelMap[props.card.type] ?? props.card.type}`);
+const label = computed(() => `${labelMap[props.card.type] ?? props.card.type}`);
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
@@ -46,43 +39,67 @@ const sizeClass = computed(() => props.size ?? "md");
 <style scoped>
 .card {
   position: relative;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid #111;
-  display: flex;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
   align-items: center;
-  justify-content: center;
+  justify-items: center;
   font-weight: 700;
   color: #111;
   background: #fff;
   transition: transform 0.2s ease;
+  padding: 2px 0;
+  overflow: hidden;
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.15);
 }
 
 .size-sm {
-  width: 44px;
-  height: 62px;
-  font-size: 14px;
+  width: clamp(1rem, 1.4vw, 1.45rem);
+  height: clamp(2.7rem, 3.4vw, 3.6rem);
+  font-size: clamp(0.6rem, 0.72vw, 0.78rem);
 }
 
 .size-md {
-  width: 52px;
-  height: 72px;
-  font-size: 16px;
+  width: clamp(1.15rem, 1.65vw, 1.78rem);
+  height: clamp(3rem, 4vw, 4.1rem);
+  font-size: clamp(0.66rem, 0.8vw, 0.88rem);
 }
 
 .size-lg {
-  width: 72px;
-  height: 102px;
-  font-size: 19px;
+  width: clamp(1.3rem, 2vw, 2rem);
+  height: clamp(3.5rem, 5vw, 5.2rem);
+  font-size: clamp(0.78rem, 1vw, 1rem);
 }
 
 .size-xl {
-  width: 86px;
-  height: 122px;
-  font-size: 22px;
+  width: clamp(1.5rem, 2.3vw, 2.35rem);
+  height: clamp(4rem, 6vw, 6.2rem);
+  font-size: clamp(0.88rem, 1.08vw, 1.12rem);
 }
 
 .card:hover {
   transform: translateY(-2px);
+}
+
+.text {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.text-top {
+  align-self: start;
+  padding-top: 3px;
+}
+
+.text-bottom {
+  align-self: end;
+  transform: rotate(180deg);
+  padding-bottom: 3px;
 }
 
 .card.response {
@@ -92,9 +109,10 @@ const sizeClass = computed(() => props.size ?? "md");
 
 .star {
   position: absolute;
-  right: 4px;
-  top: 2px;
+  right: 2px;
+  top: 1px;
   color: #ffca28;
+  font-size: 0.62em;
 }
 
 .color-yellow {

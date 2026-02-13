@@ -10,7 +10,10 @@ import type {
 } from "@/types/game";
 import { sortHandCards } from "@/utils/cardSort";
 
-const WS_URL = (import.meta.env.VITE_SERVER_URL as string) || "ws://localhost:2567";
+const DEFAULT_WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:2567`;
+const WS_URL = (import.meta.env.VITE_SERVER_URL as string) || DEFAULT_WS_URL;
+const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
+const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
 
 function asCardArray(input: unknown): Card[] {
   const isCard = (x: any): x is Card =>
@@ -95,6 +98,33 @@ function asCard(input: unknown): Card | null {
   };
 }
 
+function asNumberArray(input: unknown): number[] {
+  if (Array.isArray(input)) {
+    return input.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+  }
+  if (input && typeof (input as any).toArray === "function") {
+    return ((input as any).toArray() as unknown[])
+      .map((x) => Number(x))
+      .filter((x) => Number.isFinite(x) && x > 0);
+  }
+  if (input && typeof (input as any).forEach === "function") {
+    const out: number[] = [];
+    (input as any).forEach((value: unknown) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) {
+        out.push(n);
+      }
+    });
+    return out;
+  }
+  if (input && typeof input === "object") {
+    return Object.values(input as Record<string, unknown>)
+      .map((x) => Number(x))
+      .filter((x) => Number.isFinite(x) && x > 0);
+  }
+  return [];
+}
+
 function normalizePlayer(raw: any): PlayerState {
   return {
     clientId: String(raw?.clientId ?? ""),
@@ -105,12 +135,14 @@ function normalizePlayer(raw: any): PlayerState {
     connected: Boolean(raw?.connected),
     discardPile: asCardArray(raw?.discardPile),
     exposedArea: asCardArray(raw?.exposedArea),
+    exposedGroupSizes: asNumberArray(raw?.exposedGroupSizes),
     generalArea: asCardArray(raw?.generalArea),
     fishArea: asCardArray(raw?.fishArea),
   };
 }
 
 export function useRoom(playerName = "Player") {
+  const ROOM_KEY = "four_room_id";
   const TOKEN_KEY = "four_player_token";
   const NAME_KEY = "four_player_name";
   const MAX_LOGS = 120;
@@ -133,6 +165,43 @@ export function useRoom(playerName = "Player") {
   let logSeq = 0;
   let lastFingerprint = "";
 
+  function readStored(key: string): string {
+    return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+  }
+
+  function writeStored(key: string, value: string) {
+    window.localStorage.setItem(key, value);
+    window.sessionStorage.setItem(key, value);
+  }
+
+  function clearStored(key: string) {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  }
+
+  function updateInviteUrl(roomId: string) {
+    if (!roomId) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("roomId", roomId);
+    url.searchParams.delete("playerToken");
+    url.searchParams.delete("new");
+    window.history.replaceState(null, "", url.toString());
+  }
+
+  async function fetchSingletonRoomId(): Promise<string> {
+    const response = await fetch(`${HTTP_URL}/room-id`, { method: "GET" });
+    if (!response.ok) {
+      throw new Error("获取房间失败，请稍后重试");
+    }
+    const payload = (await response.json()) as { ok?: boolean; roomId?: string };
+    if (!payload?.roomId) {
+      throw new Error("服务端未返回可用房间");
+    }
+    return payload.roomId;
+  }
+
   function pushLog(text: string) {
     const line = String(text ?? "").trim();
     if (!line) {
@@ -146,25 +215,49 @@ export function useRoom(playerName = "Player") {
 
   async function connect() {
     const client = new Client(WS_URL);
-    const query = new URLSearchParams(window.location.search);
-    const forceNew = query.get("new") === "1";
-    if (forceNew) {
-      window.sessionStorage.removeItem(TOKEN_KEY);
-      window.sessionStorage.removeItem(NAME_KEY);
-    }
+    try {
+      const query = new URLSearchParams(window.location.search);
+      const forceNew = query.get("new") === "1";
+      if (forceNew) {
+        clearStored(TOKEN_KEY);
+        clearStored(NAME_KEY);
+        clearStored(ROOM_KEY);
+      }
 
-    const queryToken = query.get("playerToken")?.trim() ?? "";
-    const queryName = query.get("playerName")?.trim() ?? "";
-    const cachedToken = window.sessionStorage.getItem(TOKEN_KEY) ?? "";
-    const cachedName = window.sessionStorage.getItem(NAME_KEY) ?? "";
+      const queryRoomId = query.get("roomId")?.trim() ?? "";
+      const queryToken = query.get("playerToken")?.trim() ?? "";
+      const queryName = query.get("playerName")?.trim() ?? "";
+      const cachedRoomId = readStored(ROOM_KEY);
+      const cachedToken = readStored(TOKEN_KEY);
+      const cachedName = readStored(NAME_KEY);
+      const desiredName = queryName || cachedName || playerName;
+      const desiredToken = queryToken || cachedToken;
+      const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
 
-    const joined = await client.joinOrCreate("four-color", {
-      name: queryName || cachedName || playerName,
-      playerToken: queryToken || cachedToken,
-    });
-    room.value = joined;
-    myId.value = joined.sessionId;
-    connected.value = true;
+      let joined: Room;
+      try {
+        joined = await client.joinById(initialRoomId, {
+          name: desiredName,
+          playerToken: desiredToken,
+        });
+      } catch {
+        if (queryRoomId) {
+          throw new Error("房间不存在或已关闭，请让房主重新分享邀请链接。");
+        }
+        clearStored(ROOM_KEY);
+        const fallbackRoomId = await fetchSingletonRoomId();
+        joined = await client.joinById(fallbackRoomId, {
+          name: desiredName,
+          playerToken: desiredToken,
+        });
+      }
+      room.value = joined;
+      myId.value = joined.sessionId;
+      connected.value = true;
+      if (joined.roomId) {
+        writeStored(ROOM_KEY, joined.roomId);
+        updateInviteUrl(joined.roomId);
+      }
 
     joined.onStateChange((next) => {
       const normalizedPlayers: PlayerState[] = [];
@@ -182,6 +275,7 @@ export function useRoom(playerName = "Player") {
       state.value = {
         phase: String((next as any)?.phase ?? ""),
         hostPlayerId: String((next as any)?.hostPlayerId ?? ""),
+        dealerId: String((next as any)?.dealerId ?? ""),
         currentPlayerId: String((next as any)?.currentPlayerId ?? ""),
         responsePhase: String((next as any)?.responsePhase ?? ""),
         lastAction: String((next as any)?.lastAction ?? ""),
@@ -220,7 +314,8 @@ export function useRoom(playerName = "Player") {
         players: (payload.players ?? []).map((p) => ({
           ...p,
           hand: sortHandCards(p.hand ?? []),
-          exposedArea: sortHandCards(p.exposedArea ?? []),
+          exposedArea: p.exposedArea ?? [],
+          exposedGroupSizes: asNumberArray(p.exposedGroupSizes),
           generalArea: sortHandCards(p.generalArea ?? []),
           fishArea: sortHandCards(p.fishArea ?? []),
           discardCount: Number(p.discardCount ?? 0),
@@ -233,21 +328,31 @@ export function useRoom(playerName = "Player") {
     joined.onMessage("debug_applied", (payload: { scenario: string; ok: boolean; ts: number }) => {
       debugApplied.value = payload;
     });
-    joined.onMessage("session_token", (payload: SessionTokenPayload) => {
-      playerToken.value = payload.playerToken;
-      mySeatId.value = payload.seatId;
-      window.sessionStorage.setItem(TOKEN_KEY, payload.playerToken);
-      window.sessionStorage.setItem(NAME_KEY, queryName || cachedName || playerName);
-      pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
-    });
+      joined.onMessage("session_token", (payload: SessionTokenPayload) => {
+        playerToken.value = payload.playerToken;
+        mySeatId.value = payload.seatId;
+        writeStored(TOKEN_KEY, payload.playerToken);
+        writeStored(NAME_KEY, desiredName);
+        if (payload.roomId) {
+          writeStored(ROOM_KEY, payload.roomId);
+          updateInviteUrl(payload.roomId);
+        }
+        pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
+      });
     joined.onMessage("join_error", (payload: { message: string }) => {
       joinError.value = payload?.message ?? "鍔犲叆澶辫触";
       pushLog(`ERROR ${joinError.value}`);
     });
-    joined.onMessage("declare_rejected", (payload: { reason?: string }) => {
-      declareError.value = payload?.reason ?? "声明提交失败";
-      pushLog(`DECLARE_REJECTED ${declareError.value}`);
-    });
+      joined.onMessage("declare_rejected", (payload: { reason?: string }) => {
+        declareError.value = payload?.reason ?? "声明提交失败";
+        pushLog(`DECLARE_REJECTED ${declareError.value}`);
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "加入房间失败";
+      joinError.value = message;
+      pushLog(`ERROR ${message}`);
+      connected.value = false;
+    }
   }
 
   function sendAction(action: ActionType) {

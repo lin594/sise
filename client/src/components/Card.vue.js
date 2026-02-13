@@ -14,14 +14,7 @@ const labelMap = {
     zi: "子",
     nan: "男",
 };
-const colorMap = {
-    yellow: "黄",
-    red: "红",
-    green: "绿",
-    white: "白",
-    gold: "金",
-};
-const label = computed(() => `${colorMap[props.card.color] ?? "?"}${labelMap[props.card.type] ?? props.card.type}`);
+const label = computed(() => `${labelMap[props.card.type] ?? props.card.type}`);
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
@@ -38,7 +31,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, { response: __VLS_ctx.isResponseCard }]) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "text" },
+    ...{ class: "text text-top" },
+});
+(__VLS_ctx.label);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "text text-bottom" },
 });
 (__VLS_ctx.label);
 if (__VLS_ctx.isResponseCard) {
@@ -48,6 +45,9 @@ if (__VLS_ctx.isResponseCard) {
 }
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['text']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
 /** @type {__VLS_StyleScopedClasses['star']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({

@@ -19,6 +19,7 @@ function update() {
 onMounted(() => {
   update();
   window.addEventListener("resize", update);
+  window.addEventListener("orientationchange", update);
   const orientation = (screen as Screen & { orientation?: { lock?: (kind: string) => Promise<void> } }).orientation;
   if (orientation?.lock) {
     orientation.lock("landscape").catch(() => {
@@ -29,6 +30,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", update);
+  window.removeEventListener("orientationchange", update);
 });
 </script>
 
@@ -46,5 +48,11 @@ onUnmounted(() => {
 .panel {
   text-align: center;
   color: #fff;
+}
+
+@media (orientation: landscape) {
+  .guard {
+    display: none;
+  }
 }
 </style>

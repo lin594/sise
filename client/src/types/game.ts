@@ -17,6 +17,7 @@ export interface PlayerState {
   connected: boolean;
   discardPile: Card[];
   exposedArea: Card[];
+  exposedGroupSizes: number[];
   generalArea: Card[];
   fishArea: Card[];
 }
@@ -30,6 +31,7 @@ export interface SessionTokenPayload {
   playerToken: string;
   seatId: string;
   hostPlayerId: string;
+  roomId: string;
   reclaimed: boolean;
 }
 
@@ -38,6 +40,7 @@ export interface RoundResultPlayer {
   name: string;
   hand: Card[];
   exposedArea: Card[];
+  exposedGroupSizes: number[];
   generalArea: Card[];
   fishArea: Card[];
   discardCount: number;

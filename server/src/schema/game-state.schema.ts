@@ -17,6 +17,7 @@ export class PlayerState extends Schema {
   @type("boolean") connected: boolean = true;
   @type([CardSchema]) discardPile = new ArraySchema<CardSchema>();
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
+  @type(["number"]) exposedGroupSizes = new ArraySchema<number>();
   @type([CardSchema]) generalArea = new ArraySchema<CardSchema>();
   @type([CardSchema]) fishArea = new ArraySchema<CardSchema>();
 }
@@ -24,6 +25,7 @@ export class PlayerState extends Schema {
 export class GameState extends Schema {
   @type("string") phase: "waiting" | "declaring" | "playing" | "ended" = "waiting";
   @type("string") hostPlayerId: string = "";
+  @type("string") dealerId: string = "";
   @type("string") currentPlayerId: string = "";
   @type("string") responsePhase: "collective" | "self_eat" | "self_grab" = "collective";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();

@@ -1,7 +1,9 @@
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 const props = defineProps();
 const emit = defineEmits();
+const isCompactLandscape = ref(false);
 const orderedPlayers = computed(() => {
     const list = props.players ?? [];
     if (!list.length) {
@@ -17,6 +19,56 @@ const selfPlayer = computed(() => orderedPlayers.value[0] ?? null);
 const rightPlayer = computed(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed(() => orderedPlayers.value[3] ?? null);
+const expandedOpenGroups = ref({});
+const discardingCardId = ref(null);
+const lastLocalDiscardAt = ref(0);
+const flights = ref([]);
+const showDealAnimation = ref(false);
+const actionEffect = ref(null);
+const dealerReveal = ref(null);
+const dealerFlight = ref(null);
+const tableRef = ref(null);
+const responseLandingRef = ref(null);
+const deckAnchorRef = ref(null);
+const selfHandRef = ref(null);
+const selfZoneRef = ref(null);
+const selfOpenRef = ref(null);
+const selfOpenCompactRef = ref(null);
+const seatRefMap = new Map();
+let actionEffectSeq = 0;
+let dealerRevealSeq = 0;
+let dealerFlightSeq = 0;
+let flightSeq = 0;
+let dealRunSeq = 0;
+let dealTimer = null;
+let dealInterval = null;
+let actionTimer = null;
+let dealerTimer = null;
+let dealerIntroTimer = null;
+let dealAnimatingUntil = 0;
+function splitExposedGroups(cards, sizes, prefix) {
+    const cleanSizes = sizes.filter((size) => Number.isFinite(size) && size > 0);
+    const total = cleanSizes.reduce((sum, size) => sum + size, 0);
+    if (!cleanSizes.length || total !== cards.length) {
+        return cards.map((card, idx) => ({ id: `${prefix}-fallback-${idx}`, cards: [card] }));
+    }
+    const groups = [];
+    let offset = 0;
+    for (let idx = 0; idx < cleanSizes.length; idx += 1) {
+        const size = cleanSizes[idx];
+        const chunk = cards.slice(offset, offset + size);
+        offset += size;
+        if (chunk.length > 0) {
+            groups.push({ id: `${prefix}-${idx}`, cards: chunk });
+        }
+    }
+    return groups;
+}
+function buildOpenGroups(player, prefix) {
+    const exposed = splitExposedGroups(player.exposedArea ?? [], player.exposedGroupSizes ?? [], `${prefix}-exp`);
+    const generals = (player.generalArea ?? []).map((card, idx) => ({ id: `${prefix}-gen-${idx}`, cards: [card] }));
+    return [...exposed, ...generals];
+}
 const seatEntries = computed(() => {
     const entries = [
         { position: "top", player: topPlayer.value },
@@ -27,15 +79,15 @@ const seatEntries = computed(() => {
         .filter((x) => Boolean(x.player))
         .map((entry) => ({
         ...entry,
-        openCards: [...entry.player.exposedArea, ...entry.player.generalArea],
+        openGroups: buildOpenGroups(entry.player, `seat-${entry.player.clientId}`),
     }));
 });
-const selfOpenCards = computed(() => {
+const selfOpenGroups = computed(() => {
     const player = selfPlayer.value;
     if (!player) {
         return [];
     }
-    return [...player.exposedArea, ...player.generalArea];
+    return buildOpenGroups(player, `self-${player.clientId}`);
 });
 const latestDiscardFromAction = computed(() => {
     const match = String(props.state?.lastAction ?? "").match(/^(\S+)\s+DISCARD$/);
@@ -89,6 +141,13 @@ const isMyTurn = computed(() => Boolean(props.mySeatId) &&
     props.state?.currentPlayerId === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const dealerName = computed(() => {
+    const dealerId = String(props.state?.dealerId ?? "");
+    if (!dealerId) {
+        return "-";
+    }
+    return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
+});
 function isCurrentTurn(playerId) {
     return props.state?.currentPlayerId === playerId;
 }
@@ -98,15 +157,447 @@ function statusText(player) {
     }
     return player.connected ? "在线" : "离线";
 }
+function isDealer(playerId) {
+    return Boolean(playerId) && String(props.state?.dealerId ?? "") === playerId;
+}
 function canDiscardCard(card) {
     return canDiscard.value && card.type !== "jiang";
 }
-function onDiscard(cardId) {
-    if (!canDiscard.value) {
+function onDiscard(cardId, event) {
+    if (!canDiscard.value || discardingCardId.value) {
         return;
     }
-    emit("discardCard", cardId);
+    const picked = props.privateHand.find((card) => card.id === cardId);
+    if (picked && event?.currentTarget instanceof HTMLElement) {
+        triggerDiscardAnimationFromElement(event.currentTarget, picked);
+        lastLocalDiscardAt.value = Date.now();
+    }
+    discardingCardId.value = cardId;
+    window.setTimeout(() => {
+        emit("discardCard", cardId);
+    }, 220);
+    window.setTimeout(() => {
+        if (discardingCardId.value === cardId) {
+            discardingCardId.value = null;
+        }
+    }, 460);
 }
+function onSubmitAction(action) {
+    emit("submitAction", action);
+}
+function previewGroupCards(cards) {
+    return cards.slice(0, previewGroupSize(cards));
+}
+function previewGroupSize(cards) {
+    return Math.min(4, cards.length);
+}
+function fanCardStyle(index, total) {
+    const center = (total - 1) / 2;
+    const offset = index - center;
+    return {
+        zIndex: String(index + 1),
+        marginLeft: index === 0 ? "0" : "-0.68rem",
+        transform: `rotate(${offset * 8}deg) translateY(${Math.abs(offset) * 1.4}px)`,
+    };
+}
+function isOpenGroupExpanded(playerId, groupId) {
+    return expandedOpenGroups.value[playerId] === groupId;
+}
+function toggleOpenGroup(playerId, groupId) {
+    const current = expandedOpenGroups.value[playerId];
+    expandedOpenGroups.value = {
+        ...expandedOpenGroups.value,
+        [playerId]: current === groupId ? null : groupId,
+    };
+}
+function parseActionDescriptor(action) {
+    const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) {
+        return { actor: "", keyword: "" };
+    }
+    if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
+        return {
+            actor: parts[0],
+            keyword: parts[1] ?? "",
+        };
+    }
+    return {
+        actor: "",
+        keyword: parts[0],
+    };
+}
+function setSeatRef(playerId, el) {
+    if (!playerId) {
+        return;
+    }
+    if (el) {
+        seatRefMap.set(playerId, el);
+    }
+    else {
+        seatRefMap.delete(playerId);
+    }
+}
+function pointFromElement(el) {
+    if (!el) {
+        return null;
+    }
+    const rect = el.getBoundingClientRect();
+    return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+    };
+}
+function openAreaTargetForSelf() {
+    return pointFromElement(selfOpenCompactRef.value) ?? pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
+}
+function targetForPlayer(playerId) {
+    if (!playerId) {
+        return null;
+    }
+    if (selfPlayer.value?.clientId === playerId) {
+        return pointFromElement(selfHandRef.value) ?? pointFromElement(selfZoneRef.value);
+    }
+    return pointFromElement(seatRefMap.get(playerId) ?? null);
+}
+function responseLandingPoint() {
+    return pointFromElement(responseLandingRef.value) ?? pointFromElement(tableRef.value);
+}
+function dealStartPoint() {
+    return pointFromElement(deckAnchorRef.value) ?? responseLandingPoint();
+}
+function groupOffsets(count) {
+    if (count <= 1) {
+        return [{ x: 0, y: 0 }];
+    }
+    if (count === 3) {
+        return [
+            { x: -20, y: 6 },
+            { x: 0, y: -10 },
+            { x: 20, y: 6 },
+        ];
+    }
+    return [
+        { x: -28, y: 8 },
+        { x: -10, y: -10 },
+        { x: 10, y: -10 },
+        { x: 28, y: 8 },
+    ];
+}
+function spawnFlight(flight) {
+    const id = ++flightSeq;
+    flights.value.push({ id, ...flight });
+    const ttl = Math.max(120, flight.duration + flight.delay + 120);
+    window.setTimeout(() => {
+        flights.value = flights.value.filter((item) => item.id !== id);
+    }, ttl);
+}
+function flightStyle(flight) {
+    return {
+        "--sx": `${flight.sx}px`,
+        "--sy": `${flight.sy}px`,
+        "--ex": `${flight.ex}px`,
+        "--ey": `${flight.ey}px`,
+        "--dur": `${flight.duration}ms`,
+        "--delay": `${flight.delay}ms`,
+        width: `${flight.width}px`,
+        height: `${flight.height}px`,
+    };
+}
+function dealerFlightStyle(flight) {
+    return {
+        "--sx": `${flight.sx}px`,
+        "--sy": `${flight.sy}px`,
+        "--ex": `${flight.ex}px`,
+        "--ey": `${flight.ey}px`,
+    };
+}
+function triggerDealerFlight(dealerId) {
+    const start = pointFromElement(tableRef.value);
+    const end = targetForPlayer(dealerId);
+    if (!start || !end) {
+        return;
+    }
+    const id = ++dealerFlightSeq;
+    dealerFlight.value = {
+        id,
+        sx: start.x - 26,
+        sy: start.y - 18,
+        ex: end.x - 26,
+        ey: end.y - 18,
+    };
+    window.setTimeout(() => {
+        if (dealerFlight.value?.id === id) {
+            dealerFlight.value = null;
+        }
+    }, 980);
+}
+function triggerDiscardAnimationFromElement(sourceEl, card) {
+    const source = pointFromElement(sourceEl);
+    const target = responseLandingPoint();
+    if (!source || !target) {
+        return;
+    }
+    spawnFlight({
+        mode: "discard",
+        card,
+        sx: source.x - 12,
+        sy: source.y - 34,
+        ex: target.x - 14,
+        ey: target.y - 38,
+        width: 28,
+        height: 76,
+        duration: 260,
+        delay: 0,
+    });
+}
+function triggerDiscardAnimationFromSeat(actorId) {
+    const source = targetForPlayer(actorId);
+    const target = responseLandingPoint();
+    const card = responseCard.value ?? latestDiscardFromAction.value ?? undefined;
+    if (!source || !target || !card) {
+        return;
+    }
+    spawnFlight({
+        mode: "discard",
+        card,
+        sx: source.x - 12,
+        sy: source.y - 34,
+        ex: target.x - 14,
+        ey: target.y - 38,
+        width: 28,
+        height: 76,
+        duration: 300,
+        delay: 0,
+    });
+}
+function triggerMeldAnimation(actorId, keyword) {
+    const source = responseLandingPoint();
+    const target = selfPlayer.value?.clientId === actorId
+        ? openAreaTargetForSelf()
+        : pointFromElement(seatRefMap.get(actorId) ?? null);
+    if (!source || !target) {
+        return;
+    }
+    const baseCard = responseCard.value ?? latestDiscardFromAction.value ?? undefined;
+    if (!baseCard) {
+        return;
+    }
+    const count = keyword === "OPEN" ? 4 : 3;
+    const offsets = groupOffsets(count);
+    offsets.forEach((offset, index) => {
+        spawnFlight({
+            mode: "meld",
+            card: { ...baseCard, id: `${baseCard.id}-meld-${index}-${Date.now()}` },
+            sx: source.x - 11 + index * 3,
+            sy: source.y - 32 + index * 2,
+            ex: target.x - 13 + offset.x,
+            ey: target.y - 36 + offset.y,
+            width: 26,
+            height: 72,
+            duration: 330,
+            delay: index * 70,
+        });
+    });
+}
+function buildDealPlan() {
+    const players = orderedPlayers.value.map((p) => p.clientId);
+    if (players.length !== 4) {
+        return [];
+    }
+    const dealerId = String(props.state?.dealerId ?? "");
+    if (!dealerId || !players.includes(dealerId)) {
+        return [];
+    }
+    const dealerIdx = players.indexOf(dealerId);
+    const ring = Array.from({ length: players.length }, (_, idx) => players[(dealerIdx + idx) % players.length]);
+    const rest = new Map(players.map((id) => [id, id === dealerId ? 21 : 20]));
+    const plan = [];
+    let safe = 0;
+    while (safe < 120) {
+        safe += 1;
+        let progressed = false;
+        for (const id of ring) {
+            const left = rest.get(id) ?? 0;
+            if (left <= 0) {
+                continue;
+            }
+            plan.push(id);
+            rest.set(id, left - 1);
+            progressed = true;
+        }
+        if (!progressed) {
+            break;
+        }
+    }
+    return plan;
+}
+function clearDealAnimationRuntime() {
+    if (dealTimer) {
+        clearTimeout(dealTimer);
+        dealTimer = null;
+    }
+    if (dealInterval) {
+        clearInterval(dealInterval);
+        dealInterval = null;
+    }
+}
+function triggerDealAnimation() {
+    clearDealAnimationRuntime();
+    const plan = buildDealPlan();
+    const start = dealStartPoint();
+    if (!plan.length || !start) {
+        showDealAnimation.value = false;
+        dealAnimatingUntil = Date.now();
+        return 0;
+    }
+    const runId = ++dealRunSeq;
+    showDealAnimation.value = true;
+    let index = 0;
+    const finishMs = plan.length * 32 + 320;
+    dealAnimatingUntil = Date.now() + finishMs;
+    const dispatch = () => {
+        if (runId !== dealRunSeq) {
+            return;
+        }
+        const targetSeat = plan[index];
+        const end = targetForPlayer(targetSeat);
+        if (end) {
+            spawnFlight({
+                mode: "deal",
+                sx: start.x - 10,
+                sy: start.y - 28,
+                ex: end.x - 10,
+                ey: end.y - 28,
+                width: 20,
+                height: 56,
+                duration: 230,
+                delay: 0,
+            });
+        }
+        index += 1;
+        if (index >= plan.length) {
+            clearDealAnimationRuntime();
+            dealTimer = setTimeout(() => {
+                if (runId === dealRunSeq) {
+                    showDealAnimation.value = false;
+                }
+            }, 320);
+        }
+    };
+    dispatch();
+    dealInterval = setInterval(dispatch, 32);
+    return finishMs;
+}
+function clearDealerIntroTimer() {
+    if (dealerIntroTimer) {
+        clearTimeout(dealerIntroTimer);
+        dealerIntroTimer = null;
+    }
+}
+function triggerActionEffect(label) {
+    if (actionTimer) {
+        clearTimeout(actionTimer);
+        actionTimer = null;
+    }
+    actionEffect.value = { id: ++actionEffectSeq, label };
+    actionTimer = setTimeout(() => {
+        actionEffect.value = null;
+        actionTimer = null;
+    }, 760);
+}
+function triggerDealerReveal(name, dealerId) {
+    if (!name || name === "-") {
+        return;
+    }
+    if (dealerTimer) {
+        clearTimeout(dealerTimer);
+        dealerTimer = null;
+    }
+    dealerReveal.value = { id: ++dealerRevealSeq, name };
+    dealerTimer = setTimeout(() => {
+        dealerReveal.value = null;
+        dealerTimer = null;
+    }, 1400);
+    if (dealerId) {
+        triggerDealerFlight(dealerId);
+    }
+}
+function queueDealerIntro(name, dealerId) {
+    clearDealerIntroTimer();
+    const delay = Math.max(0, dealAnimatingUntil - Date.now());
+    dealerIntroTimer = setTimeout(() => {
+        dealerIntroTimer = null;
+        triggerDealerReveal(name, dealerId);
+    }, delay);
+}
+function updateCompactLandscape() {
+    const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
+    if (compact !== isCompactLandscape.value) {
+        isCompactLandscape.value = compact;
+    }
+}
+onMounted(() => {
+    updateCompactLandscape();
+    window.addEventListener("resize", updateCompactLandscape);
+    window.addEventListener("orientationchange", updateCompactLandscape);
+});
+onUnmounted(() => {
+    clearDealAnimationRuntime();
+    clearDealerIntroTimer();
+    if (actionTimer) {
+        clearTimeout(actionTimer);
+        actionTimer = null;
+    }
+    if (dealerTimer) {
+        clearTimeout(dealerTimer);
+        dealerTimer = null;
+    }
+    dealerFlight.value = null;
+    window.removeEventListener("resize", updateCompactLandscape);
+    window.removeEventListener("orientationchange", updateCompactLandscape);
+});
+watch(() => props.state?.phase, (phase, prev) => {
+    if (prev === "declaring" && phase === "playing") {
+        triggerDealAnimation();
+        queueDealerIntro(dealerName.value, String(props.state?.dealerId ?? ""));
+    }
+});
+watch(() => props.state?.lastAction, (action) => {
+    const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
+    if (dealerMatch) {
+        const dealerId = dealerMatch[1];
+        const name = props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
+        queueDealerIntro(name, dealerId);
+        return;
+    }
+    const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
+    const labelMap = {
+        PENG: "碰",
+        EAT: "吃",
+        OPEN: "开",
+        HU: "胡",
+        KONG_DRAW: "补牌",
+        GRAB: "抓",
+    };
+    const label = labelMap[keyword];
+    if (label) {
+        triggerActionEffect(label);
+    }
+    if (keyword === "DISCARD" && actor) {
+        if (!(actor === props.mySeatId && Date.now() - lastLocalDiscardAt.value < 650)) {
+            triggerDiscardAnimationFromSeat(actor);
+        }
+        return;
+    }
+    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN") && actor) {
+        triggerMeldAnimation(actor, keyword);
+    }
+});
+watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
+    if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
+        discardingCardId.value = null;
+    }
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -116,14 +607,24 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
@@ -131,6 +632,16 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -138,10 +649,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat']} */ ;
-/** @type {__VLS_StyleScopedClasses['left']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat']} */ ;
-/** @type {__VLS_StyleScopedClasses['right']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
@@ -153,6 +660,58 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
@@ -177,13 +736,112 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "table" },
+    ref: "tableRef",
 });
+/** @type {typeof __VLS_ctx.tableRef} */ ;
+if (__VLS_ctx.isCompactLandscape && __VLS_ctx.selfPlayer && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "self-open-left" },
+        ref: "selfOpenCompactRef",
+    });
+    /** @type {typeof __VLS_ctx.selfOpenCompactRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "grouped-cards" },
+    });
+    for (const [group] of __VLS_getVForSourceType((__VLS_ctx.selfOpenGroups))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.isCompactLandscape && __VLS_ctx.selfPlayer && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)))
+                        return;
+                    __VLS_ctx.toggleOpenGroup(__VLS_ctx.selfPlayer.clientId, group.id);
+                } },
+            key: (`self-open-left-${group.id}`),
+            ...{ class: "group-chip" },
+            ...{ class: ({ expanded: __VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id), stacked: !__VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id) }) },
+        });
+        if (__VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id)) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "expanded-preview cards" },
+            });
+            for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`self-open-left-card-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }));
+                const __VLS_1 = __VLS_0({
+                    key: (`self-open-left-card-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+            }
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "stacked-preview" },
+            });
+            for (const [card, idx] of __VLS_getVForSourceType((__VLS_ctx.previewGroupCards(group.cards)))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`self-open-left-stack-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                    ...{ class: "stack-item" },
+                    ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                }));
+                const __VLS_4 = __VLS_3({
+                    key: (`self-open-left-stack-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                    ...{ class: "stack-item" },
+                    ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+            }
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "stack-count" },
+            });
+            (group.cards.length);
+        }
+    }
+    for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.fishArea))) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            key: (`self-fish-left-${card.id}`),
+            card: (card),
+            size: "sm",
+        }));
+        const __VLS_7 = __VLS_6({
+            key: (`self-fish-left-${card.id}`),
+            card: (card),
+            size: "sm",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_6));
+    }
+}
 for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         key: (entry.position),
+        ref: ((el) => __VLS_ctx.setSeatRef(entry.player.clientId, el)),
         ...{ class: "seat" },
-        ...{ class: ([entry.position, { active: __VLS_ctx.isCurrentTurn(entry.player.clientId), 'with-fish': entry.player.fishArea.length > 0 }]) },
+        ...{ class: ([
+                entry.position,
+                {
+                    active: __VLS_ctx.isCurrentTurn(entry.player.clientId),
+                    'with-fish': entry.player.fishArea.length > 0,
+                    dealer: __VLS_ctx.isDealer(entry.player.clientId),
+                },
+            ]) },
     });
+    if (__VLS_ctx.isCurrentTurn(entry.player.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "turn-arrow" },
+            'aria-hidden': "true",
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -192,6 +850,11 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
+    if (__VLS_ctx.isDealer(entry.player.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "tag dealer" },
+        });
+    }
     if (__VLS_ctx.isCurrentTurn(entry.player.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "tag turn" },
@@ -205,67 +868,100 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
         ...{ class: "seat-meta" },
     });
     (entry.player.declaredKongs);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "seat-zone" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-    if (entry.openCards.length) {
+    if (entry.openGroups.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "cards" },
+            ...{ class: "seat-zone" },
         });
-        for (const [card] of __VLS_getVForSourceType((entry.openCards))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`exp-${entry.player.clientId}-${card.id}`),
-                card: (card),
-                size: "sm",
-            }));
-            const __VLS_1 = __VLS_0({
-                key: (`exp-${entry.player.clientId}-${card.id}`),
-                card: (card),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "grouped-cards" },
+        });
+        for (const [group] of __VLS_getVForSourceType((entry.openGroups))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (...[$event]) => {
+                        if (!(entry.openGroups.length))
+                            return;
+                        __VLS_ctx.toggleOpenGroup(entry.player.clientId, group.id);
+                    } },
+                key: (`exp-${entry.player.clientId}-${group.id}`),
+                ...{ class: "group-chip" },
+                ...{ class: ({ expanded: __VLS_ctx.isOpenGroupExpanded(entry.player.clientId, group.id), stacked: !__VLS_ctx.isOpenGroupExpanded(entry.player.clientId, group.id) }) },
+            });
+            if (__VLS_ctx.isOpenGroupExpanded(entry.player.clientId, group.id)) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "expanded-preview cards" },
+                });
+                for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`exp-card-${entry.player.clientId}-${card.id}`),
+                        card: (card),
+                        size: "sm",
+                    }));
+                    const __VLS_10 = __VLS_9({
+                        key: (`exp-card-${entry.player.clientId}-${card.id}`),
+                        card: (card),
+                        size: "sm",
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+                }
+            }
+            else {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "stacked-preview" },
+                });
+                for (const [card, idx] of __VLS_getVForSourceType((__VLS_ctx.previewGroupCards(group.cards)))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`exp-stack-${entry.player.clientId}-${card.id}`),
+                        card: (card),
+                        size: "sm",
+                        ...{ class: "stack-item" },
+                        ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                    }));
+                    const __VLS_13 = __VLS_12({
+                        key: (`exp-stack-${entry.player.clientId}-${card.id}`),
+                        card: (card),
+                        size: "sm",
+                        ...{ class: "stack-item" },
+                        ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+                }
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "stack-count" },
+                });
+                (group.cards.length);
+            }
         }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "empty" },
-        });
     }
     if (entry.player.fishArea.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "seat-zone" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        if (entry.player.fishArea.length) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "cards" },
-            });
-            for (const [card] of __VLS_getVForSourceType((entry.player.fishArea))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`fish-${entry.player.clientId}-${card.id}`),
-                    card: (card),
-                    size: "sm",
-                }));
-                const __VLS_4 = __VLS_3({
-                    key: (`fish-${entry.player.clientId}-${card.id}`),
-                    card: (card),
-                    size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_3));
-            }
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "empty" },
-            });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((entry.player.fishArea))) {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                key: (`fish-${entry.player.clientId}-${card.id}`),
+                card: (card),
+                size: "sm",
+            }));
+            const __VLS_16 = __VLS_15({
+                key: (`fish-${entry.player.clientId}-${card.id}`),
+                card: (card),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_15));
         }
     }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "center" },
+    ...{ class: ({ 'my-turn': __VLS_ctx.isMyTurn }) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "center-head" },
@@ -277,29 +973,55 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElement
 if (__VLS_ctx.isMyTurn) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 }
+if (__VLS_ctx.isMyTurn) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "my-turn-alert" },
+    });
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+    ...{ class: "center-turn-hint" },
+});
+(props.turnHint || "等待中...");
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "response-wrap" },
+        ref: "responseLandingRef",
     });
+    /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
+    const __VLS_18 = {}.Transition;
+    /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+    // @ts-ignore
+    const __VLS_19 = __VLS_asFunctionalComponent(__VLS_18, new __VLS_18({
+        name: "resp-move",
+        mode: "out-in",
+    }));
+    const __VLS_20 = __VLS_19({
+        name: "resp-move",
+        mode: "out-in",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_19));
+    __VLS_21.slots.default;
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
-    const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+    const __VLS_22 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
         size: "lg",
     }));
-    const __VLS_7 = __VLS_6({
+    const __VLS_23 = __VLS_22({
         key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
         size: "lg",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_6));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_22));
+    var __VLS_21;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     (__VLS_ctx.responseCard.source === "draw" ? "摸牌" : "他人弃牌");
 }
 else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "response-wrap response-empty" },
+        ref: "responseLandingRef",
     });
+    /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "ghost-card" },
     });
@@ -309,10 +1031,98 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
     ...{ class: "hint" },
 });
 (__VLS_ctx.state?.lastAction || "等待中...");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "deck-anchor" },
+    ref: "deckAnchorRef",
+});
+/** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
+const __VLS_25 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_26 = __VLS_asFunctionalComponent(__VLS_25, new __VLS_25({
+    name: "deal-fade",
+}));
+const __VLS_27 = __VLS_26({
+    name: "deal-fade",
+}, ...__VLS_functionalComponentArgsRest(__VLS_26));
+__VLS_28.slots.default;
+if (__VLS_ctx.showDealAnimation) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "deal-overlay" },
+    });
+}
+var __VLS_28;
+const __VLS_29 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_30 = __VLS_asFunctionalComponent(__VLS_29, new __VLS_29({
+    name: "dealer-reveal",
+}));
+const __VLS_31 = __VLS_30({
+    name: "dealer-reveal",
+}, ...__VLS_functionalComponentArgsRest(__VLS_30));
+__VLS_32.slots.default;
+if (__VLS_ctx.dealerReveal) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
+        ...{ class: "dealer-reveal" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "dealer-reveal-label" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.dealerReveal.name);
+}
+var __VLS_32;
+const __VLS_33 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_34 = __VLS_asFunctionalComponent(__VLS_33, new __VLS_33({
+    name: "dealer-flight",
+}));
+const __VLS_35 = __VLS_34({
+    name: "dealer-flight",
+}, ...__VLS_functionalComponentArgsRest(__VLS_34));
+__VLS_36.slots.default;
+if (__VLS_ctx.dealerFlight) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
+        ...{ class: "dealer-flight" },
+        ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
+    });
+}
+var __VLS_36;
+const __VLS_37 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_38 = __VLS_asFunctionalComponent(__VLS_37, new __VLS_37({
+    name: "action-pop",
+}));
+const __VLS_39 = __VLS_38({
+    name: "action-pop",
+}, ...__VLS_functionalComponentArgsRest(__VLS_38));
+__VLS_40.slots.default;
+if (__VLS_ctx.actionEffect) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        key: (`act-${__VLS_ctx.actionEffect.id}`),
+        ...{ class: "action-effect" },
+    });
+    (__VLS_ctx.actionEffect.label);
+}
+var __VLS_40;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-zone" },
+        ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId) }) },
+        ref: "selfZoneRef",
     });
+    /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
+    if (__VLS_ctx.isMyTurn) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "turn-arrow self-turn-arrow" },
+            'aria-hidden': "true",
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "self-head" },
     });
@@ -324,70 +1134,116 @@ if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
-    if (__VLS_ctx.isMyTurn) {
+    if (__VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "tag turn" },
+            ...{ class: "tag dealer" },
         });
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "tag status" },
-    });
-    (__VLS_ctx.statusText(__VLS_ctx.selfPlayer));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "self-areas" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "self-area" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-    if (__VLS_ctx.selfOpenCards.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "cards" },
+    if (!__VLS_ctx.isCompactLandscape) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "tag status" },
         });
-        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfOpenCards))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`self-exp-${card.id}`),
-                card: (card),
-            }));
-            const __VLS_10 = __VLS_9({
-                key: (`self-exp-${card.id}`),
-                card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+        (__VLS_ctx.statusText(__VLS_ctx.selfPlayer));
+    }
+    if (!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "self-areas" },
+            ref: "selfOpenRef",
+        });
+        /** @type {typeof __VLS_ctx.selfOpenRef} */ ;
+        if (__VLS_ctx.selfOpenGroups.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "self-area" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "grouped-cards" },
+            });
+            for (const [group] of __VLS_getVForSourceType((__VLS_ctx.selfOpenGroups))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                    ...{ onClick: (...[$event]) => {
+                            if (!(__VLS_ctx.selfPlayer))
+                                return;
+                            if (!(!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)))
+                                return;
+                            if (!(__VLS_ctx.selfOpenGroups.length))
+                                return;
+                            __VLS_ctx.toggleOpenGroup(__VLS_ctx.selfPlayer.clientId, group.id);
+                        } },
+                    key: (`self-exp-${group.id}`),
+                    ...{ class: "group-chip" },
+                    ...{ class: ({ expanded: __VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id), stacked: !__VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id) }) },
+                });
+                if (__VLS_ctx.isOpenGroupExpanded(__VLS_ctx.selfPlayer.clientId, group.id)) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                        ...{ class: "expanded-preview cards" },
+                    });
+                    for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                        /** @type {[typeof CardComp, ]} */ ;
+                        // @ts-ignore
+                        const __VLS_41 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            key: (`self-exp-card-${card.id}`),
+                            card: (card),
+                            size: "sm",
+                        }));
+                        const __VLS_42 = __VLS_41({
+                            key: (`self-exp-card-${card.id}`),
+                            card: (card),
+                            size: "sm",
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_41));
+                    }
+                }
+                else {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                        ...{ class: "stacked-preview" },
+                    });
+                    for (const [card, idx] of __VLS_getVForSourceType((__VLS_ctx.previewGroupCards(group.cards)))) {
+                        /** @type {[typeof CardComp, ]} */ ;
+                        // @ts-ignore
+                        const __VLS_44 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            key: (`self-exp-stack-${card.id}`),
+                            card: (card),
+                            size: "sm",
+                            ...{ class: "stack-item" },
+                            ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                        }));
+                        const __VLS_45 = __VLS_44({
+                            key: (`self-exp-stack-${card.id}`),
+                            card: (card),
+                            size: "sm",
+                            ...{ class: "stack-item" },
+                            ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+                    }
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        ...{ class: "stack-count" },
+                    });
+                    (group.cards.length);
+                }
+            }
         }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "empty" },
-        });
-    }
-    if (__VLS_ctx.selfPlayer.fishArea.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "self-area" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
         if (__VLS_ctx.selfPlayer.fishArea.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "self-area" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "cards" },
             });
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.fishArea))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_47 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`self-fish-${card.id}`),
                     card: (card),
+                    size: "sm",
                 }));
-                const __VLS_13 = __VLS_12({
+                const __VLS_48 = __VLS_47({
                     key: (`self-fish-${card.id}`),
                     card: (card),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+                    size: "sm",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_47));
             }
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "empty" },
-            });
         }
     }
     if (__VLS_ctx.canDiscard) {
@@ -397,88 +1253,205 @@ if (__VLS_ctx.selfPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "cards hand" },
+        ref: "selfHandRef",
     });
+    /** @type {typeof __VLS_ctx.selfHandRef} */ ;
     for (const [card] of __VLS_getVForSourceType((__VLS_ctx.privateHand))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    __VLS_ctx.onDiscard(card.id);
+                    __VLS_ctx.onDiscard(card.id, $event);
                 } },
             key: (`me-${card.id}`),
             ...{ class: "hand-card" },
             ...{ class: ({ playable: __VLS_ctx.canDiscardCard(card), blocked: !__VLS_ctx.canDiscardCard(card) }) },
-            disabled: (!__VLS_ctx.canDiscardCard(card)),
+            disabled: (!__VLS_ctx.canDiscardCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             size: "xl",
         }));
-        const __VLS_16 = __VLS_15({
+        const __VLS_51 = __VLS_50({
             card: (card),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_15));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_50));
+    }
+    if (props.embeddedActionPanel && props.state?.phase === 'playing') {
+        /** @type {[typeof ActionPanel, ]} */ ;
+        // @ts-ignore
+        const __VLS_53 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+            ...{ 'onSubmit': {} },
+            ...{ class: "embedded-actions" },
+            actions: (props.actions ?? []),
+            canAct: (Boolean(props.canAct)),
+            isCurrentTurn: (Boolean(props.isCurrentTurn)),
+            responsePhase: (props.responsePhase ?? ''),
+            currentPlayerName: (props.currentPlayerName ?? '-'),
+        }));
+        const __VLS_54 = __VLS_53({
+            ...{ 'onSubmit': {} },
+            ...{ class: "embedded-actions" },
+            actions: (props.actions ?? []),
+            canAct: (Boolean(props.canAct)),
+            isCurrentTurn: (Boolean(props.isCurrentTurn)),
+            responsePhase: (props.responsePhase ?? ''),
+            currentPlayerName: (props.currentPlayerName ?? '-'),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_53));
+        let __VLS_56;
+        let __VLS_57;
+        let __VLS_58;
+        const __VLS_59 = {
+            onSubmit: (__VLS_ctx.onSubmitAction)
+        };
+        var __VLS_55;
+    }
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "fx-layer" },
+});
+for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        key: (`fx-${flight.id}`),
+        ...{ class: "fx-card" },
+        ...{ class: (flight.mode) },
+        ...{ style: (__VLS_ctx.flightStyle(flight)) },
+    });
+    if (flight.mode === 'deal') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "card-back" },
+        });
+    }
+    else if (flight.card) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (flight.card),
+            size: "md",
+        }));
+        const __VLS_61 = __VLS_60({
+            card: (flight.card),
+            size: "md",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['expanded-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['expanded-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['my-turn-alert']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-turn-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-anchor']} */ ;
+/** @type {__VLS_StyleScopedClasses['deal-overlay']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-effect']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['expanded-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            ActionPanel: ActionPanel,
             CardComp: CardComp,
+            isCompactLandscape: isCompactLandscape,
             selfPlayer: selfPlayer,
+            discardingCardId: discardingCardId,
+            flights: flights,
+            showDealAnimation: showDealAnimation,
+            actionEffect: actionEffect,
+            dealerReveal: dealerReveal,
+            dealerFlight: dealerFlight,
+            tableRef: tableRef,
+            responseLandingRef: responseLandingRef,
+            deckAnchorRef: deckAnchorRef,
+            selfHandRef: selfHandRef,
+            selfZoneRef: selfZoneRef,
+            selfOpenRef: selfOpenRef,
+            selfOpenCompactRef: selfOpenCompactRef,
             seatEntries: seatEntries,
-            selfOpenCards: selfOpenCards,
+            selfOpenGroups: selfOpenGroups,
             responseCard: responseCard,
             currentPlayerName: currentPlayerName,
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
             isCurrentTurn: isCurrentTurn,
             statusText: statusText,
+            isDealer: isDealer,
             canDiscardCard: canDiscardCard,
             onDiscard: onDiscard,
+            onSubmitAction: onSubmitAction,
+            previewGroupCards: previewGroupCards,
+            previewGroupSize: previewGroupSize,
+            fanCardStyle: fanCardStyle,
+            isOpenGroupExpanded: isOpenGroupExpanded,
+            toggleOpenGroup: toggleOpenGroup,
+            setSeatRef: setSeatRef,
+            flightStyle: flightStyle,
+            dealerFlightStyle: dealerFlightStyle,
         };
     },
     __typeEmits: {},

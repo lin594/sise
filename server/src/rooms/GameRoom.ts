@@ -24,6 +24,7 @@ interface RoundResultPlayer {
   name: string;
   hand: Card[];
   exposedArea: Card[];
+  exposedGroupSizes: number[];
   generalArea: Card[];
   fishArea: Card[];
   discardCount: number;
@@ -94,6 +95,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
   private debugSeq = 0;
+  private roundDealerId: string | null = null;
 
   onCreate(): void {
     this.setState(new GameState());
@@ -309,6 +311,7 @@ export class FourColorGameRoom extends Room<GameState> {
       playerToken: token,
       seatId,
       hostPlayerId: this.state.hostPlayerId,
+      roomId: this.roomId,
       reclaimed,
     });
   }
@@ -364,12 +367,15 @@ export class FourColorGameRoom extends Room<GameState> {
       player.declaredReady = false;
       player.discardPile.clear();
       player.exposedArea.clear();
+      player.exposedGroupSizes.clear();
       player.generalArea.clear();
       player.fishArea.clear();
     }
     this.state.publicDiscardPile.clear();
 
-    const dealerId = this.playerOrder[0];
+    const dealerId = this.pickRandomDealerId();
+    this.roundDealerId = dealerId;
+    this.state.dealerId = dealerId;
     for (const seatId of this.playerOrder) {
       const count = seatId === dealerId ? 21 : 20;
       const hand: Card[] = [];
@@ -452,7 +458,10 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private finishDeclaringPhase(): void {
     this.clearDeclareTimer();
-    const dealerId = this.playerOrder[0];
+    const dealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
+      ? this.roundDealerId
+      : this.playerOrder[0];
+    this.state.dealerId = dealerId;
     this.state.declareEndsAt = 0;
     this.state.phase = "playing";
     this.state.responsePhase = "self_grab";
@@ -1127,6 +1136,9 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!player) {
       return;
     }
+    if (cards.length > 0) {
+      player.exposedGroupSizes.push(cards.length);
+    }
     for (const card of cards) {
       player.exposedArea.push(this.toSchemaCard(card, highlight, card.source ?? "upper"));
     }
@@ -1204,6 +1216,7 @@ export class FourColorGameRoom extends Room<GameState> {
       const player = this.state.players.get(seatId);
       const hand = this.playerHands.get(seatId) ?? [];
       const exposedArea = [...(player?.exposedArea ?? [])].map((card) => this.toPlainCard(card));
+      const exposedGroupSizes = [...(player?.exposedGroupSizes ?? [])];
       const generalArea = [...(player?.generalArea ?? [])].map((card) => this.toPlainCard(card));
       const fishArea = [...(player?.fishArea ?? [])].map((card) => this.toPlainCard(card));
       const discardCount = player?.discardPile.length ?? 0;
@@ -1213,6 +1226,7 @@ export class FourColorGameRoom extends Room<GameState> {
         name: player?.name ?? seatId,
         hand: hand.map((card) => this.toPlainCard(card)),
         exposedArea,
+        exposedGroupSizes,
         generalArea,
         fishArea,
         discardCount,
@@ -1235,6 +1249,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.huChecksTotal = 0;
     this.huChecksValid = 0;
     this.huChecksBySeat.clear();
+    this.roundDealerId = null;
 
     const humanSeats = this.playerOrder.filter((seatId) => !this.botIds.has(seatId));
     const humanSet = new Set(humanSeats);
@@ -1260,6 +1275,7 @@ export class FourColorGameRoom extends Room<GameState> {
       player.declaredReady = false;
       player.discardPile.clear();
       player.exposedArea.clear();
+      player.exposedGroupSizes.clear();
       player.generalArea.clear();
       player.fishArea.clear();
       this.playerHands.set(seatId, []);
@@ -1274,6 +1290,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     this.state.phase = "waiting";
+    this.state.dealerId = "";
     this.state.currentPlayerId = "";
     this.state.responsePhase = "collective";
     this.state.deckCount = 0;
@@ -1974,5 +1991,13 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private generateToken(): string {
     return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private pickRandomDealerId(): string {
+    if (!this.playerOrder.length) {
+      return "";
+    }
+    const idx = Math.floor(Math.random() * this.playerOrder.length);
+    return this.playerOrder[idx];
   }
 }

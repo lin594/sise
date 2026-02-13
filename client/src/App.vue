@@ -1,12 +1,13 @@
 ﻿<template>
   <OrientationGuard />
-  <main class="layout">
+  <main class="layout" :class="{ playing: isPlaying, 'compact-landscape': isCompactLandscape && isPlaying }">
     <header class="top">
       <h1>四色牌 v4.0</h1>
       <div class="meta">
         <span>{{ connected ? "已连接" : "连接中..." }}</span>
         <span>座位ID: {{ mySeatId || "-" }}</span>
         <span>房主: {{ state?.hostPlayerId || "-" }}</span>
+        <span>庄家: {{ dealerName }}</span>
       </div>
     </header>
 
@@ -41,12 +42,20 @@
         :private-hand="privateHand"
         :my-seat-id="mySeatId"
         :can-discard="canDiscard"
+        :actions="availableActions"
+        :can-act="canAct"
+        :is-current-turn="isMyTurn"
+        :response-phase="state?.responsePhase || ''"
+        :current-player-name="currentPlayerName"
+        :turn-hint="turnHint"
+        :embedded-action-panel="isCompactLandscape"
         @discard-card="sendDiscardCard"
+        @submit-action="sendAction"
       />
     </template>
 
     <ActionPanel
-      v-if="isPlaying"
+      v-if="isPlaying && !isCompactLandscape"
       :actions="availableActions"
       :can-act="canAct"
       :is-current-turn="isMyTurn"
@@ -61,13 +70,14 @@
         <p class="declare-desc">
           声明超时将自动按 0 提交。亮鱼可不选。剩余 {{ declareSecondsLeft }} 秒
         </p>
+        <p v-if="isDeclareSubmitted" class="declare-submitted">你已提交声明，等待其他玩家...</p>
         <div class="declare-progress">
           <div class="declare-progress-fill" :style="{ width: `${declareProgressPercent}%` }"></div>
         </div>
 
         <label class="declare-input">
           暗坎数量
-          <input v-model.number="declareKongsInput" type="number" min="0" step="1" />
+          <input v-model.number="declareKongsInput" type="number" min="0" step="1" :disabled="isDeclareSubmitted" />
         </label>
 
         <section class="declare-zone">
@@ -78,6 +88,7 @@
               :key="`declare-hand-${card.id}`"
               class="declare-card-btn"
               :class="{ selected: selectedFishCardIds.has(card.id) }"
+              :disabled="isDeclareSubmitted"
               @click="toggleFish(card.id)"
             >
               <CardComp :card="card" />
@@ -97,8 +108,8 @@
         </section>
 
         <div class="end-actions">
-          <button class="primary" :disabled="!fishSelectionValid" @click="submitDeclaration">
-            确认声明
+          <button class="primary" :disabled="!fishSelectionValid || isDeclareSubmitted" @click="submitDeclaration">
+            {{ isDeclareSubmitted ? "已提交" : "确认声明" }}
           </button>
         </div>
       </div>
@@ -215,11 +226,16 @@ const canAct = computed(() => isPlaying.value && availableActions.value.some((x)
 const canDiscard = computed(
   () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value,
 );
+const isCompactLandscape = ref(false);
+const updateCompactLandscape = () => {
+  isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
+};
 
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
+const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
 const shouldShowDeclarePanel = computed(
-  () => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot) && !Boolean(mePlayer.value?.declaredReady),
+  () => isDeclaring.value && Boolean(mySeatId.value) && !Boolean(mePlayer.value?.isBot),
 );
 
 const declareKongsInput = ref(0);
@@ -275,6 +291,9 @@ const fishSelectionValid = computed(() => {
 });
 
 function toggleFish(cardId: string) {
+  if (isDeclareSubmitted.value) {
+    return;
+  }
   const next = new Set(selectedFishCardIds.value);
   if (next.has(cardId)) {
     next.delete(cardId);
@@ -285,7 +304,7 @@ function toggleFish(cardId: string) {
 }
 
 function submitDeclaration() {
-  if (!fishSelectionValid.value) {
+  if (!fishSelectionValid.value || isDeclareSubmitted.value) {
     return;
   }
   declareSetup({
@@ -305,6 +324,9 @@ onMounted(() => {
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
+  updateCompactLandscape();
+  window.addEventListener("resize", updateCompactLandscape);
+  window.addEventListener("orientationchange", updateCompactLandscape);
 });
 
 onUnmounted(() => {
@@ -312,6 +334,8 @@ onUnmounted(() => {
     window.clearInterval(declareTick);
     declareTick = null;
   }
+  window.removeEventListener("resize", updateCompactLandscape);
+  window.removeEventListener("orientationchange", updateCompactLandscape);
 });
 const endPanelTitle = computed(() => (huResult.value ? "胡牌结算" : "本局结束"));
 const winnerName = computed(() => {
@@ -363,9 +387,21 @@ const currentPlayerName = computed(() => {
   return player?.name || playerId;
 });
 
+const dealerName = computed(() => {
+  const dealerId = String(state.value?.dealerId ?? "");
+  if (!dealerId) {
+    return "-";
+  }
+  return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
+});
+
 async function copyInviteLink() {
   try {
-    await navigator.clipboard.writeText(window.location.href);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("playerToken");
+    url.searchParams.delete("playerName");
+    url.searchParams.delete("new");
+    await navigator.clipboard.writeText(url.toString());
   } catch {
     // Ignore clipboard errors.
   }
@@ -374,14 +410,32 @@ async function copyInviteLink() {
 
 <style scoped>
 .layout {
-  min-height: 100vh;
-  max-width: 1600px;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
   margin: 0 auto;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 8px;
-  padding: 8px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: clamp(0.35rem, 1vh, 0.55rem);
+  padding: clamp(0.25rem, 0.8vh, 0.5rem);
   background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
+  overflow: hidden;
+}
+
+.layout.playing {
+  grid-template-rows: minmax(2.2rem, 8vh) minmax(2.1rem, 7vh) minmax(0, 1fr) minmax(3.4rem, 16vh);
+}
+
+.layout.compact-landscape.playing {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  padding: max(0.2rem, env(safe-area-inset-top)) max(0.2rem, env(safe-area-inset-right))
+    max(0.2rem, env(safe-area-inset-bottom)) max(0.2rem, env(safe-area-inset-left));
+}
+
+.layout.compact-landscape .top,
+.layout.compact-landscape .turn-banner {
+  display: none;
 }
 
 .top {
@@ -390,22 +444,28 @@ async function copyInviteLink() {
   align-items: center;
   background: #0b1220;
   border: 1px solid #1e293b;
-  border-radius: 12px;
-  padding: 5px 10px;
+  border-radius: 0.65rem;
+  padding: clamp(0.2rem, 0.8vh, 0.45rem) clamp(0.45rem, 1.2vw, 0.75rem);
   color: #e2e8f0;
+  min-height: 0;
 }
 
 .top h1 {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.1;
+  font-size: clamp(0.95rem, 2.2vh, 1.25rem);
+  line-height: 1;
 }
 
 .meta {
   display: flex;
-  gap: 10px;
+  gap: clamp(0.35rem, 1vw, 0.65rem);
   color: #93c5fd;
-  font-size: 12px;
+  font-size: clamp(0.6rem, 1.4vh, 0.78rem);
+  align-items: center;
+}
+
+.meta span {
+  white-space: nowrap;
 }
 
 .lobby {
@@ -466,12 +526,13 @@ async function copyInviteLink() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 10px;
+  padding: clamp(0.25rem, 0.8vh, 0.45rem) clamp(0.45rem, 1.2vw, 0.75rem);
   border: 1px solid #334155;
   border-radius: 10px;
   background: #111827;
   color: #bfdbfe;
-  font-size: 13px;
+  font-size: clamp(0.66rem, 1.5vh, 0.84rem);
+  min-height: 0;
 }
 
 .turn-banner.mine {
@@ -491,6 +552,7 @@ async function copyInviteLink() {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 80;
 }
 
 .declare-mask {
@@ -500,7 +562,7 @@ async function copyInviteLink() {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 20;
+  z-index: 90;
 }
 
 .declare-panel {
@@ -517,6 +579,12 @@ async function copyInviteLink() {
 .declare-desc {
   margin-top: 0;
   color: #475569;
+}
+
+.declare-submitted {
+  margin: 0 0 10px;
+  color: #16a34a;
+  font-weight: 600;
 }
 
 .declare-progress {
@@ -693,28 +761,67 @@ async function copyInviteLink() {
 
 @media (orientation: landscape) and (max-height: 600px) {
   .layout {
-    min-height: 100dvh;
-    gap: 6px;
-    padding: 6px;
-    grid-template-rows: auto auto 1fr auto;
+    gap: 0.3rem;
+    padding: 0.25rem;
   }
 
   .top {
-    padding: 4px 8px;
+    padding: 0.2rem 0.4rem;
   }
 
   .top h1 {
-    font-size: 15px;
+    font-size: clamp(0.86rem, 2vh, 1.05rem);
   }
 
   .meta {
-    gap: 8px;
-    font-size: 11px;
+    gap: 0.35rem;
+    font-size: clamp(0.55rem, 1.25vh, 0.68rem);
   }
 
   .turn-banner {
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 0.2rem 0.45rem;
+    font-size: clamp(0.6rem, 1.3vh, 0.74rem);
+  }
+}
+
+@media (orientation: landscape) and (max-width: 960px) {
+  .layout {
+    gap: 0.7vh;
+    padding: 0.7vh;
+  }
+
+  .layout.playing {
+    grid-template-rows: 8vh 8vh minmax(0, 1fr) 16vh;
+  }
+
+  .top {
+    border-radius: 1.2vh;
+    padding: 0.45vh 1.2vw;
+  }
+
+  .top h1 {
+    font-size: clamp(0.85rem, 2.2vh, 1.05rem);
+  }
+
+  .meta {
+    font-size: clamp(0.54rem, 1.3vh, 0.66rem);
+    gap: 1vw;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .turn-banner {
+    border-radius: 1.2vh;
+    padding: 0.45vh 1.2vw;
+    font-size: clamp(0.58rem, 1.35vh, 0.74rem);
+  }
+
+  .layout.compact-landscape.playing {
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    padding: max(0.15rem, env(safe-area-inset-top)) max(0.15rem, env(safe-area-inset-right))
+      max(0.15rem, env(safe-area-inset-bottom)) max(0.15rem, env(safe-area-inset-left));
   }
 }
 </style>

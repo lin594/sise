@@ -1,15 +1,58 @@
 ﻿<template>
   <div class="board">
-    <div class="table">
+    <div class="table" ref="tableRef">
+      <section
+        class="self-open-left"
+        v-if="isCompactLandscape && selfPlayer && (selfOpenGroups.length || selfPlayer.fishArea.length)"
+        ref="selfOpenCompactRef"
+      >
+        <p>你的明示区</p>
+        <div class="grouped-cards">
+          <button
+            v-for="group in selfOpenGroups"
+            :key="`self-open-left-${group.id}`"
+            class="group-chip"
+            :class="{ expanded: isOpenGroupExpanded(selfPlayer.clientId, group.id), stacked: !isOpenGroupExpanded(selfPlayer.clientId, group.id) }"
+            @click="toggleOpenGroup(selfPlayer.clientId, group.id)"
+          >
+            <div v-if="isOpenGroupExpanded(selfPlayer.clientId, group.id)" class="expanded-preview cards">
+              <CardComp v-for="card in group.cards" :key="`self-open-left-card-${card.id}`" :card="card" size="sm" />
+            </div>
+            <div v-else class="stacked-preview">
+              <CardComp
+                v-for="(card, idx) in previewGroupCards(group.cards)"
+                :key="`self-open-left-stack-${card.id}`"
+                :card="card"
+                size="sm"
+                class="stack-item"
+                :style="fanCardStyle(idx, previewGroupSize(group.cards))"
+              />
+              <span class="stack-count">x{{ group.cards.length }}</span>
+            </div>
+          </button>
+          <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-left-${card.id}`" :card="card" size="sm" />
+        </div>
+      </section>
+
       <section
         v-for="entry in seatEntries"
         :key="entry.position"
+        :ref="(el) => setSeatRef(entry.player.clientId, el as HTMLElement | null)"
         class="seat"
-        :class="[entry.position, { active: isCurrentTurn(entry.player.clientId), 'with-fish': entry.player.fishArea.length > 0 }]"
+        :class="[
+          entry.position,
+          {
+            active: isCurrentTurn(entry.player.clientId),
+            'with-fish': entry.player.fishArea.length > 0,
+            dealer: isDealer(entry.player.clientId),
+          },
+        ]"
       >
+        <div v-if="isCurrentTurn(entry.player.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
           <strong>{{ entry.player.name }}</strong>
           <div class="seat-tags">
+            <span v-if="isDealer(entry.player.clientId)" class="tag dealer">庄家</span>
             <span v-if="isCurrentTurn(entry.player.clientId)" class="tag turn">当前回合</span>
             <span class="tag status">{{ statusText(entry.player) }}</span>
           </div>
@@ -17,22 +60,42 @@
 
         <p class="seat-meta">声明暗坎: {{ entry.player.declaredKongs }}</p>
 
-        <div class="seat-zone">
+        <div class="seat-zone" v-if="entry.openGroups.length">
           <p>明示区</p>
-          <div class="cards" v-if="entry.openCards.length">
-            <CardComp
-              v-for="card in entry.openCards"
-              :key="`exp-${entry.player.clientId}-${card.id}`"
-              :card="card"
-              size="sm"
-            />
+          <div class="grouped-cards">
+            <button
+              v-for="group in entry.openGroups"
+              :key="`exp-${entry.player.clientId}-${group.id}`"
+              class="group-chip"
+              :class="{ expanded: isOpenGroupExpanded(entry.player.clientId, group.id), stacked: !isOpenGroupExpanded(entry.player.clientId, group.id) }"
+              @click="toggleOpenGroup(entry.player.clientId, group.id)"
+            >
+              <div v-if="isOpenGroupExpanded(entry.player.clientId, group.id)" class="expanded-preview cards">
+                <CardComp
+                  v-for="card in group.cards"
+                  :key="`exp-card-${entry.player.clientId}-${card.id}`"
+                  :card="card"
+                  size="sm"
+                />
+              </div>
+              <div v-else class="stacked-preview">
+                <CardComp
+                  v-for="(card, idx) in previewGroupCards(group.cards)"
+                  :key="`exp-stack-${entry.player.clientId}-${card.id}`"
+                  :card="card"
+                  size="sm"
+                  class="stack-item"
+                  :style="fanCardStyle(idx, previewGroupSize(group.cards))"
+                />
+                <span class="stack-count">x{{ group.cards.length }}</span>
+              </div>
+            </button>
           </div>
-          <p v-else class="empty">（无）</p>
         </div>
 
         <div class="seat-zone" v-if="entry.player.fishArea.length">
           <p>亮鱼区</p>
-          <div class="cards" v-if="entry.player.fishArea.length">
+          <div class="cards">
             <CardComp
               v-for="card in entry.player.fishArea"
               :key="`fish-${entry.player.clientId}-${card.id}`"
@@ -40,81 +103,196 @@
               size="sm"
             />
           </div>
-          <p v-else class="empty">（无）</p>
         </div>
       </section>
 
-      <section class="center">
+      <section class="center" :class="{ 'my-turn': isMyTurn }">
         <header class="center-head">
           <h3>牌桌中区</h3>
           <p>当前行动者: <strong>{{ currentPlayerName }}</strong><span v-if="isMyTurn">（你）</span></p>
+          <p v-if="isMyTurn" class="my-turn-alert">轮到你出牌</p>
+          <p class="center-turn-hint">{{ props.turnHint || "等待中..." }}</p>
         </header>
 
-        <div class="response-wrap" v-if="responseCard">
-          <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" size="lg" />
+        <div class="response-wrap" v-if="responseCard" ref="responseLandingRef">
+          <Transition name="resp-move" mode="out-in">
+            <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" size="lg" />
+          </Transition>
           <small>待响牌来源: {{ responseCard.source === "draw" ? "摸牌" : "他人弃牌" }}</small>
         </div>
 
-        <div class="response-wrap response-empty" v-else>
+        <div class="response-wrap response-empty" v-else ref="responseLandingRef">
           <div class="ghost-card">待响牌</div>
           <small>暂无待响牌</small>
         </div>
 
         <p class="hint">{{ state?.lastAction || "等待中..." }}</p>
+        <div class="deck-anchor" ref="deckAnchorRef"></div>
       </section>
+
+      <Transition name="deal-fade">
+        <div v-if="showDealAnimation" class="deal-overlay">发牌中...</div>
+      </Transition>
+
+      <Transition name="dealer-reveal">
+        <div v-if="dealerReveal" :key="`dealer-${dealerReveal.id}`" class="dealer-reveal">
+          <span class="dealer-reveal-label">本局庄家</span>
+          <strong>{{ dealerReveal.name }}</strong>
+        </div>
+      </Transition>
+
+      <Transition name="dealer-flight">
+        <div
+          v-if="dealerFlight"
+          :key="`dealer-flight-${dealerFlight.id}`"
+          class="dealer-flight"
+          :style="dealerFlightStyle(dealerFlight)"
+        >
+          庄家
+        </div>
+      </Transition>
+
+      <Transition name="action-pop">
+        <div v-if="actionEffect" :key="`act-${actionEffect.id}`" class="action-effect">
+          {{ actionEffect.label }}
+        </div>
+      </Transition>
     </div>
 
-    <section class="self-zone" v-if="selfPlayer">
+    <section
+      class="self-zone"
+      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId) }"
+      v-if="selfPlayer"
+      ref="selfZoneRef"
+    >
+      <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
           <h3>{{ selfPlayer.name }}（你）</h3>
           <p>声明暗坎: {{ selfPlayer.declaredKongs }}</p>
         </div>
         <div class="seat-tags">
-          <span v-if="isMyTurn" class="tag turn">当前回合</span>
-          <span class="tag status">{{ statusText(selfPlayer) }}</span>
+          <span v-if="isDealer(selfPlayer.clientId)" class="tag dealer">庄家</span>
+          <span v-if="!isCompactLandscape" class="tag status">{{ statusText(selfPlayer) }}</span>
         </div>
       </header>
 
-      <div class="self-areas">
-        <div class="self-area">
+      <div
+        class="self-areas"
+        v-if="!isCompactLandscape && (selfOpenGroups.length || selfPlayer.fishArea.length)"
+        ref="selfOpenRef"
+      >
+        <div class="self-area" v-if="selfOpenGroups.length">
           <p>明示区</p>
-          <div class="cards" v-if="selfOpenCards.length">
-            <CardComp v-for="card in selfOpenCards" :key="`self-exp-${card.id}`" :card="card" />
+          <div class="grouped-cards">
+            <button
+              v-for="group in selfOpenGroups"
+              :key="`self-exp-${group.id}`"
+              class="group-chip"
+              :class="{ expanded: isOpenGroupExpanded(selfPlayer.clientId, group.id), stacked: !isOpenGroupExpanded(selfPlayer.clientId, group.id) }"
+              @click="toggleOpenGroup(selfPlayer.clientId, group.id)"
+            >
+              <div v-if="isOpenGroupExpanded(selfPlayer.clientId, group.id)" class="expanded-preview cards">
+                <CardComp v-for="card in group.cards" :key="`self-exp-card-${card.id}`" :card="card" size="sm" />
+              </div>
+              <div v-else class="stacked-preview">
+                <CardComp
+                  v-for="(card, idx) in previewGroupCards(group.cards)"
+                  :key="`self-exp-stack-${card.id}`"
+                  :card="card"
+                  size="sm"
+                  class="stack-item"
+                  :style="fanCardStyle(idx, previewGroupSize(group.cards))"
+                />
+                <span class="stack-count">x{{ group.cards.length }}</span>
+              </div>
+            </button>
           </div>
-          <p v-else class="empty">（无）</p>
         </div>
 
         <div class="self-area" v-if="selfPlayer.fishArea.length">
           <p>亮鱼区</p>
-          <div class="cards" v-if="selfPlayer.fishArea.length">
-            <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" />
+          <div class="cards">
+            <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" size="sm" />
           </div>
-          <p v-else class="empty">（无）</p>
         </div>
       </div>
 
       <p v-if="canDiscard" class="discard-tip">点击手牌弃一张（将牌不可弃）</p>
-      <div class="cards hand">
+      <div class="cards hand" ref="selfHandRef">
         <button
           v-for="card in privateHand"
           :key="`me-${card.id}`"
           class="hand-card"
           :class="{ playable: canDiscardCard(card), blocked: !canDiscardCard(card) }"
-          :disabled="!canDiscardCard(card)"
-          @click="onDiscard(card.id)"
+          :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
+          @click="onDiscard(card.id, $event)"
         >
           <CardComp :card="card" size="xl" />
         </button>
       </div>
+
+      <ActionPanel
+        v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
+        class="embedded-actions"
+        :actions="props.actions ?? []"
+        :can-act="Boolean(props.canAct)"
+        :is-current-turn="Boolean(props.isCurrentTurn)"
+        :response-phase="props.responsePhase ?? ''"
+        :current-player-name="props.currentPlayerName ?? '-'"
+        @submit="onSubmitAction"
+      />
     </section>
+
+    <div class="fx-layer">
+      <div
+        v-for="flight in flights"
+        :key="`fx-${flight.id}`"
+        class="fx-card"
+        :class="flight.mode"
+        :style="flightStyle(flight)"
+      >
+        <div v-if="flight.mode === 'deal'" class="card-back"></div>
+        <CardComp v-else-if="flight.card" :card="flight.card" size="md" />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import type { Card, PlayerState } from "@/types/game";
+import type { ActionType, AvailableAction, Card, PlayerState } from "@/types/game";
+
+type ExposedGroup = {
+  id: string;
+  cards: Card[];
+};
+
+type FlightMode = "deal" | "discard" | "meld";
+
+type CardFlight = {
+  id: number;
+  mode: FlightMode;
+  card?: Card;
+  sx: number;
+  sy: number;
+  ex: number;
+  ey: number;
+  width: number;
+  height: number;
+  duration: number;
+  delay: number;
+};
+
+type DealerFlight = {
+  id: number;
+  sx: number;
+  sy: number;
+  ex: number;
+  ey: number;
+};
 
 const props = defineProps<{
   state: any;
@@ -122,11 +300,21 @@ const props = defineProps<{
   privateHand: Card[];
   mySeatId: string;
   canDiscard?: boolean;
+  actions?: AvailableAction[];
+  canAct?: boolean;
+  isCurrentTurn?: boolean;
+  responsePhase?: string;
+  currentPlayerName?: string;
+  turnHint?: string;
+  embeddedActionPanel?: boolean;
 }>();
 
 const emit = defineEmits<{
   discardCard: [cardId: string];
+  submitAction: [action: ActionType];
 }>();
+
+const isCompactLandscape = ref(false);
 
 const orderedPlayers = computed<PlayerState[]>(() => {
   const list = props.players ?? [];
@@ -144,8 +332,63 @@ const selfPlayer = computed<PlayerState | null>(() => orderedPlayers.value[0] ??
 const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
+const expandedOpenGroups = ref<Record<string, string | null>>({});
+const discardingCardId = ref<string | null>(null);
+const lastLocalDiscardAt = ref(0);
+const flights = ref<CardFlight[]>([]);
+const showDealAnimation = ref(false);
+const actionEffect = ref<{ id: number; label: string } | null>(null);
+const dealerReveal = ref<{ id: number; name: string } | null>(null);
+const dealerFlight = ref<DealerFlight | null>(null);
 
-const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState; openCards: Card[] }>>(() => {
+const tableRef = ref<HTMLElement | null>(null);
+const responseLandingRef = ref<HTMLElement | null>(null);
+const deckAnchorRef = ref<HTMLElement | null>(null);
+const selfHandRef = ref<HTMLElement | null>(null);
+const selfZoneRef = ref<HTMLElement | null>(null);
+const selfOpenRef = ref<HTMLElement | null>(null);
+const selfOpenCompactRef = ref<HTMLElement | null>(null);
+const seatRefMap = new Map<string, HTMLElement>();
+
+let actionEffectSeq = 0;
+let dealerRevealSeq = 0;
+let dealerFlightSeq = 0;
+let flightSeq = 0;
+let dealRunSeq = 0;
+let dealTimer: ReturnType<typeof setTimeout> | null = null;
+let dealInterval: ReturnType<typeof setInterval> | null = null;
+let actionTimer: ReturnType<typeof setTimeout> | null = null;
+let dealerTimer: ReturnType<typeof setTimeout> | null = null;
+let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
+let dealAnimatingUntil = 0;
+
+function splitExposedGroups(cards: Card[], sizes: number[], prefix: string): ExposedGroup[] {
+  const cleanSizes = sizes.filter((size) => Number.isFinite(size) && size > 0);
+  const total = cleanSizes.reduce((sum, size) => sum + size, 0);
+  if (!cleanSizes.length || total !== cards.length) {
+    return cards.map((card, idx) => ({ id: `${prefix}-fallback-${idx}`, cards: [card] }));
+  }
+
+  const groups: ExposedGroup[] = [];
+  let offset = 0;
+  for (let idx = 0; idx < cleanSizes.length; idx += 1) {
+    const size = cleanSizes[idx];
+    const chunk = cards.slice(offset, offset + size);
+    offset += size;
+    if (chunk.length > 0) {
+      groups.push({ id: `${prefix}-${idx}`, cards: chunk });
+    }
+  }
+  return groups;
+}
+
+function buildOpenGroups(player: PlayerState, prefix: string): ExposedGroup[] {
+  const exposed = splitExposedGroups(player.exposedArea ?? [], player.exposedGroupSizes ?? [], `${prefix}-exp`);
+  const generals = (player.generalArea ?? []).map((card, idx) => ({ id: `${prefix}-gen-${idx}`, cards: [card] }));
+  return [...exposed, ...generals];
+}
+
+const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState; openGroups: ExposedGroup[] }>>(() => {
   const entries: Array<{ position: "top" | "left" | "right"; player: PlayerState | null }> = [
     { position: "top", player: topPlayer.value },
     { position: "left", player: leftPlayer.value },
@@ -156,16 +399,16 @@ const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player:
     .filter((x): x is { position: "top" | "left" | "right"; player: PlayerState } => Boolean(x.player))
     .map((entry) => ({
       ...entry,
-      openCards: [...entry.player.exposedArea, ...entry.player.generalArea],
+      openGroups: buildOpenGroups(entry.player, `seat-${entry.player.clientId}`),
     }));
 });
 
-const selfOpenCards = computed<Card[]>(() => {
+const selfOpenGroups = computed<ExposedGroup[]>(() => {
   const player = selfPlayer.value;
   if (!player) {
     return [];
   }
-  return [...player.exposedArea, ...player.generalArea];
+  return buildOpenGroups(player, `self-${player.clientId}`);
 });
 
 const latestDiscardFromAction = computed<Card | null>(() => {
@@ -234,6 +477,14 @@ const isMyTurn = computed(
 
 const canDiscard = computed(() => Boolean(props.canDiscard));
 
+const dealerName = computed(() => {
+  const dealerId = String(props.state?.dealerId ?? "");
+  if (!dealerId) {
+    return "-";
+  }
+  return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
+});
+
 function isCurrentTurn(playerId: string): boolean {
   return props.state?.currentPlayerId === playerId;
 }
@@ -245,56 +496,542 @@ function statusText(player: PlayerState): string {
   return player.connected ? "在线" : "离线";
 }
 
+function isDealer(playerId: string): boolean {
+  return Boolean(playerId) && String(props.state?.dealerId ?? "") === playerId;
+}
+
 function canDiscardCard(card: Card): boolean {
   return canDiscard.value && card.type !== "jiang";
 }
 
-function onDiscard(cardId: string): void {
-  if (!canDiscard.value) {
+function onDiscard(cardId: string, event?: MouseEvent): void {
+  if (!canDiscard.value || discardingCardId.value) {
     return;
   }
-  emit("discardCard", cardId);
+  const picked = props.privateHand.find((card) => card.id === cardId);
+  if (picked && event?.currentTarget instanceof HTMLElement) {
+    triggerDiscardAnimationFromElement(event.currentTarget, picked);
+    lastLocalDiscardAt.value = Date.now();
+  }
+  discardingCardId.value = cardId;
+  window.setTimeout(() => {
+    emit("discardCard", cardId);
+  }, 220);
+  window.setTimeout(() => {
+    if (discardingCardId.value === cardId) {
+      discardingCardId.value = null;
+    }
+  }, 460);
 }
+
+function onSubmitAction(action: ActionType): void {
+  emit("submitAction", action);
+}
+
+function previewGroupCards(cards: Card[]): Card[] {
+  return cards.slice(0, previewGroupSize(cards));
+}
+
+function previewGroupSize(cards: Card[]): number {
+  return Math.min(4, cards.length);
+}
+
+function fanCardStyle(index: number, total: number): Record<string, string> {
+  const center = (total - 1) / 2;
+  const offset = index - center;
+  return {
+    zIndex: String(index + 1),
+    marginLeft: index === 0 ? "0" : "-0.68rem",
+    transform: `rotate(${offset * 8}deg) translateY(${Math.abs(offset) * 1.4}px)`,
+  };
+}
+
+function isOpenGroupExpanded(playerId: string, groupId: string): boolean {
+  return expandedOpenGroups.value[playerId] === groupId;
+}
+
+function toggleOpenGroup(playerId: string, groupId: string): void {
+  const current = expandedOpenGroups.value[playerId];
+  expandedOpenGroups.value = {
+    ...expandedOpenGroups.value,
+    [playerId]: current === groupId ? null : groupId,
+  };
+}
+
+function parseActionDescriptor(action: string): { actor: string; keyword: string } {
+  const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return { actor: "", keyword: "" };
+  }
+  if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
+    return {
+      actor: parts[0],
+      keyword: parts[1] ?? "",
+    };
+  }
+  return {
+    actor: "",
+    keyword: parts[0],
+  };
+}
+
+function setSeatRef(playerId: string, el: HTMLElement | null): void {
+  if (!playerId) {
+    return;
+  }
+  if (el) {
+    seatRefMap.set(playerId, el);
+  } else {
+    seatRefMap.delete(playerId);
+  }
+}
+
+function pointFromElement(el: HTMLElement | null): { x: number; y: number } | null {
+  if (!el) {
+    return null;
+  }
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function openAreaTargetForSelf(): { x: number; y: number } | null {
+  return pointFromElement(selfOpenCompactRef.value) ?? pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
+}
+
+function targetForPlayer(playerId: string): { x: number; y: number } | null {
+  if (!playerId) {
+    return null;
+  }
+  if (selfPlayer.value?.clientId === playerId) {
+    return pointFromElement(selfHandRef.value) ?? pointFromElement(selfZoneRef.value);
+  }
+  return pointFromElement(seatRefMap.get(playerId) ?? null);
+}
+
+function responseLandingPoint(): { x: number; y: number } | null {
+  return pointFromElement(responseLandingRef.value) ?? pointFromElement(tableRef.value);
+}
+
+function dealStartPoint(): { x: number; y: number } | null {
+  return pointFromElement(deckAnchorRef.value) ?? responseLandingPoint();
+}
+
+function groupOffsets(count: number): Array<{ x: number; y: number }> {
+  if (count <= 1) {
+    return [{ x: 0, y: 0 }];
+  }
+  if (count === 3) {
+    return [
+      { x: -20, y: 6 },
+      { x: 0, y: -10 },
+      { x: 20, y: 6 },
+    ];
+  }
+  return [
+    { x: -28, y: 8 },
+    { x: -10, y: -10 },
+    { x: 10, y: -10 },
+    { x: 28, y: 8 },
+  ];
+}
+
+function spawnFlight(flight: Omit<CardFlight, "id">): void {
+  const id = ++flightSeq;
+  flights.value.push({ id, ...flight });
+  const ttl = Math.max(120, flight.duration + flight.delay + 120);
+  window.setTimeout(() => {
+    flights.value = flights.value.filter((item) => item.id !== id);
+  }, ttl);
+}
+
+function flightStyle(flight: CardFlight): Record<string, string> {
+  return {
+    "--sx": `${flight.sx}px`,
+    "--sy": `${flight.sy}px`,
+    "--ex": `${flight.ex}px`,
+    "--ey": `${flight.ey}px`,
+    "--dur": `${flight.duration}ms`,
+    "--delay": `${flight.delay}ms`,
+    width: `${flight.width}px`,
+    height: `${flight.height}px`,
+  };
+}
+
+function dealerFlightStyle(flight: DealerFlight): Record<string, string> {
+  return {
+    "--sx": `${flight.sx}px`,
+    "--sy": `${flight.sy}px`,
+    "--ex": `${flight.ex}px`,
+    "--ey": `${flight.ey}px`,
+  };
+}
+
+function triggerDealerFlight(dealerId: string): void {
+  const start = pointFromElement(tableRef.value);
+  const end = targetForPlayer(dealerId);
+  if (!start || !end) {
+    return;
+  }
+  const id = ++dealerFlightSeq;
+  dealerFlight.value = {
+    id,
+    sx: start.x - 26,
+    sy: start.y - 18,
+    ex: end.x - 26,
+    ey: end.y - 18,
+  };
+  window.setTimeout(() => {
+    if (dealerFlight.value?.id === id) {
+      dealerFlight.value = null;
+    }
+  }, 980);
+}
+
+function triggerDiscardAnimationFromElement(sourceEl: HTMLElement, card: Card): void {
+  const source = pointFromElement(sourceEl);
+  const target = responseLandingPoint();
+  if (!source || !target) {
+    return;
+  }
+  spawnFlight({
+    mode: "discard",
+    card,
+    sx: source.x - 12,
+    sy: source.y - 34,
+    ex: target.x - 14,
+    ey: target.y - 38,
+    width: 28,
+    height: 76,
+    duration: 260,
+    delay: 0,
+  });
+}
+
+function triggerDiscardAnimationFromSeat(actorId: string): void {
+  const source = targetForPlayer(actorId);
+  const target = responseLandingPoint();
+  const card = responseCard.value ?? latestDiscardFromAction.value ?? undefined;
+  if (!source || !target || !card) {
+    return;
+  }
+  spawnFlight({
+    mode: "discard",
+    card,
+    sx: source.x - 12,
+    sy: source.y - 34,
+    ex: target.x - 14,
+    ey: target.y - 38,
+    width: 28,
+    height: 76,
+    duration: 300,
+    delay: 0,
+  });
+}
+
+function triggerMeldAnimation(actorId: string, keyword: string): void {
+  const source = responseLandingPoint();
+  const target =
+    selfPlayer.value?.clientId === actorId
+      ? openAreaTargetForSelf()
+      : pointFromElement(seatRefMap.get(actorId) ?? null);
+  if (!source || !target) {
+    return;
+  }
+  const baseCard = responseCard.value ?? latestDiscardFromAction.value ?? undefined;
+  if (!baseCard) {
+    return;
+  }
+  const count = keyword === "OPEN" ? 4 : 3;
+  const offsets = groupOffsets(count);
+  offsets.forEach((offset, index) => {
+    spawnFlight({
+      mode: "meld",
+      card: { ...baseCard, id: `${baseCard.id}-meld-${index}-${Date.now()}` },
+      sx: source.x - 11 + index * 3,
+      sy: source.y - 32 + index * 2,
+      ex: target.x - 13 + offset.x,
+      ey: target.y - 36 + offset.y,
+      width: 26,
+      height: 72,
+      duration: 330,
+      delay: index * 70,
+    });
+  });
+}
+
+function buildDealPlan(): string[] {
+  const players = orderedPlayers.value.map((p) => p.clientId);
+  if (players.length !== 4) {
+    return [];
+  }
+  const dealerId = String(props.state?.dealerId ?? "");
+  if (!dealerId || !players.includes(dealerId)) {
+    return [];
+  }
+  const dealerIdx = players.indexOf(dealerId);
+  const ring = Array.from({ length: players.length }, (_, idx) => players[(dealerIdx + idx) % players.length]);
+  const rest = new Map<string, number>(players.map((id) => [id, id === dealerId ? 21 : 20]));
+  const plan: string[] = [];
+  let safe = 0;
+  while (safe < 120) {
+    safe += 1;
+    let progressed = false;
+    for (const id of ring) {
+      const left = rest.get(id) ?? 0;
+      if (left <= 0) {
+        continue;
+      }
+      plan.push(id);
+      rest.set(id, left - 1);
+      progressed = true;
+    }
+    if (!progressed) {
+      break;
+    }
+  }
+  return plan;
+}
+
+function clearDealAnimationRuntime(): void {
+  if (dealTimer) {
+    clearTimeout(dealTimer);
+    dealTimer = null;
+  }
+  if (dealInterval) {
+    clearInterval(dealInterval);
+    dealInterval = null;
+  }
+}
+
+function triggerDealAnimation(): number {
+  clearDealAnimationRuntime();
+  const plan = buildDealPlan();
+  const start = dealStartPoint();
+  if (!plan.length || !start) {
+    showDealAnimation.value = false;
+    dealAnimatingUntil = Date.now();
+    return 0;
+  }
+
+  const runId = ++dealRunSeq;
+  showDealAnimation.value = true;
+  let index = 0;
+  const finishMs = plan.length * 32 + 320;
+  dealAnimatingUntil = Date.now() + finishMs;
+  const dispatch = () => {
+    if (runId !== dealRunSeq) {
+      return;
+    }
+    const targetSeat = plan[index];
+    const end = targetForPlayer(targetSeat);
+    if (end) {
+      spawnFlight({
+        mode: "deal",
+        sx: start.x - 10,
+        sy: start.y - 28,
+        ex: end.x - 10,
+        ey: end.y - 28,
+        width: 20,
+        height: 56,
+        duration: 230,
+        delay: 0,
+      });
+    }
+    index += 1;
+    if (index >= plan.length) {
+      clearDealAnimationRuntime();
+      dealTimer = setTimeout(() => {
+        if (runId === dealRunSeq) {
+          showDealAnimation.value = false;
+        }
+      }, 320);
+    }
+  };
+
+  dispatch();
+  dealInterval = setInterval(dispatch, 32);
+  return finishMs;
+}
+
+function clearDealerIntroTimer(): void {
+  if (dealerIntroTimer) {
+    clearTimeout(dealerIntroTimer);
+    dealerIntroTimer = null;
+  }
+}
+
+function triggerActionEffect(label: string) {
+  if (actionTimer) {
+    clearTimeout(actionTimer);
+    actionTimer = null;
+  }
+  actionEffect.value = { id: ++actionEffectSeq, label };
+  actionTimer = setTimeout(() => {
+    actionEffect.value = null;
+    actionTimer = null;
+  }, 760);
+}
+
+function triggerDealerReveal(name: string, dealerId?: string) {
+  if (!name || name === "-") {
+    return;
+  }
+  if (dealerTimer) {
+    clearTimeout(dealerTimer);
+    dealerTimer = null;
+  }
+  dealerReveal.value = { id: ++dealerRevealSeq, name };
+  dealerTimer = setTimeout(() => {
+    dealerReveal.value = null;
+    dealerTimer = null;
+  }, 1400);
+  if (dealerId) {
+    triggerDealerFlight(dealerId);
+  }
+}
+
+function queueDealerIntro(name: string, dealerId?: string): void {
+  clearDealerIntroTimer();
+  const delay = Math.max(0, dealAnimatingUntil - Date.now());
+  dealerIntroTimer = setTimeout(() => {
+    dealerIntroTimer = null;
+    triggerDealerReveal(name, dealerId);
+  }, delay);
+}
+
+function updateCompactLandscape() {
+  const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
+  if (compact !== isCompactLandscape.value) {
+    isCompactLandscape.value = compact;
+  }
+}
+
+onMounted(() => {
+  updateCompactLandscape();
+  window.addEventListener("resize", updateCompactLandscape);
+  window.addEventListener("orientationchange", updateCompactLandscape);
+});
+
+onUnmounted(() => {
+  clearDealAnimationRuntime();
+  clearDealerIntroTimer();
+  if (actionTimer) {
+    clearTimeout(actionTimer);
+    actionTimer = null;
+  }
+  if (dealerTimer) {
+    clearTimeout(dealerTimer);
+    dealerTimer = null;
+  }
+  dealerFlight.value = null;
+  window.removeEventListener("resize", updateCompactLandscape);
+  window.removeEventListener("orientationchange", updateCompactLandscape);
+});
+
+watch(
+  () => props.state?.phase,
+  (phase, prev) => {
+    if (prev === "declaring" && phase === "playing") {
+      triggerDealAnimation();
+      queueDealerIntro(dealerName.value, String(props.state?.dealerId ?? ""));
+    }
+  },
+);
+
+watch(
+  () => props.state?.lastAction,
+  (action) => {
+    const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
+    if (dealerMatch) {
+      const dealerId = dealerMatch[1];
+      const name = props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
+      queueDealerIntro(name, dealerId);
+      return;
+    }
+    const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
+    const labelMap: Record<string, string> = {
+      PENG: "碰",
+      EAT: "吃",
+      OPEN: "开",
+      HU: "胡",
+      KONG_DRAW: "补牌",
+      GRAB: "抓",
+    };
+    const label = labelMap[keyword];
+    if (label) {
+      triggerActionEffect(label);
+    }
+    if (keyword === "DISCARD" && actor) {
+      if (!(actor === props.mySeatId && Date.now() - lastLocalDiscardAt.value < 650)) {
+        triggerDiscardAnimationFromSeat(actor);
+      }
+      return;
+    }
+    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN") && actor) {
+      triggerMeldAnimation(actor, keyword);
+    }
+  },
+);
+
+watch(
+  () => props.privateHand.map((x) => x.id).join("|"),
+  () => {
+    if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
+      discardingCardId.value = null;
+    }
+  },
+);
 </script>
 
 <style scoped>
 .board {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: grid;
-  grid-template-rows: minmax(300px, 1fr) auto;
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: clamp(0.3rem, 0.9vh, 0.5rem);
+  overflow: hidden;
 }
 
 .table {
-  width: min(100%, calc((100dvh - 210px) * 2.2));
+  position: relative;
+  width: 100%;
   aspect-ratio: 2.2 / 1;
   height: auto;
-  min-height: 280px;
-  max-height: 460px;
+  min-height: 0;
+  max-height: 56vh;
   margin: 0 auto;
-  border-radius: 34px;
+  border-radius: clamp(0.5rem, 1.5vh, 1rem);
   border: 1px solid #1e293b;
   background:
     radial-gradient(120% 90% at 50% 50%, rgba(6, 78, 59, 0.9), rgba(15, 23, 42, 0.96) 70%),
     linear-gradient(160deg, #0b1220 0%, #020617 100%);
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(196px, 25%) minmax(280px, 1fr) minmax(196px, 25%);
+  grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 24%);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     ". top ."
     "left center right";
-  column-gap: 16px;
-  row-gap: 12px;
-  padding: 12px;
+  column-gap: clamp(0.3rem, 1vw, 0.75rem);
+  row-gap: clamp(0.25rem, 0.9vh, 0.6rem);
+  padding: clamp(0.25rem, 1vh, 0.7rem);
+}
+
+.self-open-left {
+  display: none;
 }
 
 .seat {
+  position: relative;
   background: rgba(11, 18, 32, 0.88);
   border: 1px solid #1e293b;
-  border-radius: 14px;
-  padding: 8px;
+  border-radius: clamp(0.4rem, 1vh, 0.8rem);
+  padding: clamp(0.25rem, 0.8vh, 0.5rem);
   color: #e2e8f0;
   display: grid;
   grid-template-rows: auto auto minmax(86px, 1fr);
@@ -309,9 +1046,9 @@ function onDiscard(cardId: string): void {
 
 .seat.top {
   grid-area: top;
-  width: min(100%, 760px);
+  width: 100%;
   justify-self: center;
-  height: 136px;
+  height: clamp(4.8rem, 15vh, 7rem);
 }
 
 .seat.left {
@@ -329,6 +1066,25 @@ function onDiscard(cardId: string): void {
 .seat.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
+  animation: seat-turn-pulse 1.45s ease-in-out infinite;
+}
+
+.seat.dealer {
+  border-color: rgba(245, 158, 11, 0.92);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.34) inset, 0 0 18px rgba(245, 158, 11, 0.2);
+}
+
+.turn-arrow {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  transform: translateX(-50%);
+  color: #22c55e;
+  font-size: clamp(0.9rem, 1.9vh, 1.2rem);
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.65);
+  animation: turn-arrow-bounce 0.85s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .seat-head {
@@ -355,6 +1111,7 @@ function onDiscard(cardId: string): void {
   padding: 2px 8px;
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
   border: 1px solid #334155;
   color: #cbd5e1;
 }
@@ -367,6 +1124,12 @@ function onDiscard(cardId: string): void {
 
 .tag.status {
   border-color: #334155;
+}
+
+.tag.dealer {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fde68a;
 }
 
 .seat-zone {
@@ -388,26 +1151,85 @@ function onDiscard(cardId: string): void {
   gap: 6px;
 }
 
+.grouped-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+.group-chip {
+  appearance: none;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.62);
+  border-radius: 8px;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+.group-chip.stacked {
+  padding-right: 6px;
+  overflow: visible;
+}
+
+.group-chip.expanded {
+  background: rgba(30, 41, 59, 0.65);
+  border-color: #64748b;
+}
+
+.group-chip:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 1px;
+}
+
+.stacked-preview {
+  display: inline-flex;
+  align-items: flex-end;
+  padding: 2px 2px 0 0;
+}
+
+.stack-item {
+  transform-origin: bottom center;
+  transition: transform 0.2s ease;
+}
+
+.stack-count {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #bfdbfe;
+  font-weight: 700;
+}
+
+.expanded-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
 .seat-zone .cards {
-  max-height: 62px;
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .center {
   grid-area: center;
-  width: min(100%, 520px);
+  width: min(100%, 66%);
   justify-self: center;
-  min-width: 280px;
+  min-width: 0;
   min-height: 0;
   background: rgba(11, 18, 32, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 20px;
-  padding: 12px;
+  border-radius: clamp(0.5rem, 1.4vh, 0.9rem);
+  padding: clamp(0.3rem, 0.95vh, 0.65rem);
   color: #e2e8f0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: clamp(0.25rem, 0.8vh, 0.55rem);
   text-align: center;
   align-self: stretch;
 }
@@ -422,21 +1244,49 @@ function onDiscard(cardId: string): void {
   margin: 0;
 }
 
+.my-turn-alert {
+  margin: 0;
+  color: #bbf7d0;
+  font-size: clamp(0.66rem, 1.55vh, 0.88rem);
+  font-weight: 700;
+  animation: blink-turn 1.1s steps(2, end) infinite;
+}
+
+.center-turn-hint {
+  margin: 0;
+  color: #bfdbfe;
+  font-size: clamp(0.58rem, 1.45vh, 0.78rem);
+}
+
 .response-wrap {
   border: 1px dashed #334155;
-  border-radius: 14px;
+  border-radius: clamp(0.35rem, 0.9vh, 0.7rem);
   background: rgba(15, 23, 42, 0.5);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  min-height: 112px;
+  gap: clamp(0.2rem, 0.65vh, 0.5rem);
+  padding: clamp(0.2rem, 0.7vh, 0.5rem);
+  min-height: clamp(3.8rem, 10vh, 5.2rem);
 }
 
 .response-wrap small {
   color: #bfdbfe;
+}
+
+.resp-move-enter-active {
+  transition: transform 0.28s ease, opacity 0.28s ease;
+}
+
+.resp-move-enter-from {
+  transform: translateY(38px) scale(0.86);
+  opacity: 0;
+}
+
+.resp-move-enter-to {
+  transform: translateY(0) scale(1);
+  opacity: 1;
 }
 
 .response-empty {
@@ -444,9 +1294,9 @@ function onDiscard(cardId: string): void {
 }
 
 .ghost-card {
-  width: 66px;
-  height: 92px;
-  border-radius: 10px;
+  width: clamp(2.1rem, 3vw, 2.7rem);
+  height: clamp(3rem, 4.2vw, 3.7rem);
+  border-radius: clamp(0.25rem, 0.7vh, 0.5rem);
   border: 2px dashed #334155;
   display: grid;
   place-items: center;
@@ -467,16 +1317,33 @@ function onDiscard(cardId: string): void {
 }
 
 .self-zone {
+  position: relative;
   background: #0b1220;
   border: 1px solid #1e293b;
-  border-radius: 14px;
-  padding: 10px;
+  border-radius: clamp(0.45rem, 1vh, 0.85rem);
+  padding: clamp(0.3rem, 0.9vh, 0.6rem);
   color: #e2e8f0;
-  display: grid;
-  grid-template-rows: auto auto auto auto;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.25rem, 0.8vh, 0.55rem);
   min-height: 0;
-  max-height: none;
+  overflow: hidden;
+}
+
+.self-zone.active {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
+  background: linear-gradient(180deg, rgba(8, 26, 19, 0.9), rgba(11, 18, 32, 0.95));
+  animation: self-turn-pulse 1.15s ease-in-out infinite;
+}
+
+.self-zone.dealer {
+  border-color: rgba(245, 158, 11, 0.95);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.38) inset, 0 0 24px rgba(245, 158, 11, 0.16);
+}
+
+.self-turn-arrow {
+  top: 2px;
 }
 
 .self-head {
@@ -493,18 +1360,20 @@ function onDiscard(cardId: string): void {
 
 .self-areas {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(34vw, 12rem), 1fr));
+  gap: clamp(0.2rem, 0.7vh, 0.5rem);
+  max-height: clamp(4rem, 11vh, 7rem);
+  overflow: hidden;
 }
 
 .self-area {
   background: #111827;
   border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 6px;
+  border-radius: clamp(0.3rem, 0.8vh, 0.55rem);
+  padding: clamp(0.2rem, 0.6vh, 0.4rem);
   display: flex;
   flex-direction: column;
-  min-height: 96px;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -515,8 +1384,8 @@ function onDiscard(cardId: string): void {
 }
 
 .self-area .cards {
-  max-height: 68px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 2px;
 }
 
@@ -527,11 +1396,12 @@ function onDiscard(cardId: string): void {
 }
 
 .hand {
+  flex: 1 1 auto;
+  min-height: 0;
   align-content: flex-start;
-  overflow: visible;
-  padding-right: 4px;
-  gap: 10px;
-  max-height: none;
+  overflow: hidden;
+  padding-right: 0;
+  gap: clamp(0.2rem, 0.7vh, 0.55rem);
 }
 
 .hand-card {
@@ -540,6 +1410,11 @@ function onDiscard(cardId: string): void {
   padding: 0;
   cursor: pointer;
   border-radius: 10px;
+  min-width: 48px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.2s ease, filter 0.2s ease;
 }
 
@@ -553,57 +1428,340 @@ function onDiscard(cardId: string): void {
   filter: grayscale(0.2);
 }
 
+.hand :deep(.size-xl) {
+  width: clamp(1.5rem, 2.3vw, 2.35rem);
+  height: clamp(4rem, 6vw, 6.2rem);
+}
+
+.embedded-actions {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.embedded-actions :deep(.panel) {
+  background: transparent;
+  border-top: none;
+  padding: 0;
+  gap: clamp(0.2rem, 0.5vh, 0.4rem);
+}
+
+.embedded-actions :deep(.hint) {
+  display: none;
+}
+
+.deck-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 58px;
+  transform: translate(-50%, -50%);
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: repeating-linear-gradient(
+    -35deg,
+    rgba(51, 65, 85, 0.9) 0px,
+    rgba(51, 65, 85, 0.9) 4px,
+    rgba(30, 41, 59, 0.95) 4px,
+    rgba(30, 41, 59, 0.95) 8px
+  );
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-card {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(var(--sx), var(--sy));
+  animation-name: fly-card;
+  animation-duration: var(--dur);
+  animation-delay: var(--delay);
+  animation-timing-function: cubic-bezier(0.2, 0.75, 0.2, 1);
+  animation-fill-mode: forwards;
+  filter: drop-shadow(0 8px 14px rgba(2, 6, 23, 0.36));
+}
+
+.fx-card.deal {
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.45));
+}
+
+.card-back {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.8);
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.95)),
+    repeating-linear-gradient(
+      -40deg,
+      rgba(71, 85, 105, 0.75) 0px,
+      rgba(71, 85, 105, 0.75) 4px,
+      rgba(30, 41, 59, 0.85) 4px,
+      rgba(30, 41, 59, 0.85) 8px
+    );
+}
+
+.deal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.32), rgba(2, 6, 23, 0.58));
+  color: #e2e8f0;
+  font-size: clamp(0.95rem, 2.1vh, 1.3rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px rgba(148, 163, 184, 0.55);
+}
+
+.action-effect {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  min-width: clamp(2.2rem, 5vw, 3.6rem);
+  min-height: clamp(2.2rem, 5vw, 3.6rem);
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.7);
+  background: rgba(15, 23, 42, 0.88);
+  color: #bbf7d0;
+  display: grid;
+  place-items: center;
+  font-size: clamp(0.88rem, 2.1vh, 1.2rem);
+  font-weight: 800;
+  pointer-events: none;
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.35);
+}
+
+.dealer-reveal {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  min-width: clamp(9rem, 24vw, 15rem);
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.85);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  box-shadow: 0 0 22px rgba(245, 158, 11, 0.32);
+  padding: clamp(0.38rem, 0.95vh, 0.62rem) clamp(0.65rem, 1.5vw, 1rem);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.dealer-reveal-label {
+  color: #fbbf24;
+  font-size: clamp(0.62rem, 1.45vh, 0.8rem);
+}
+
+.dealer-reveal strong {
+  color: #fef3c7;
+  font-size: clamp(0.84rem, 1.95vh, 1.08rem);
+  letter-spacing: 0.02em;
+}
+
+.dealer-flight {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 40;
+  min-width: 52px;
+  text-align: center;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.95);
+  background: rgba(15, 23, 42, 0.95);
+  color: #fbbf24;
+  font-size: clamp(0.78rem, 1.7vh, 0.96rem);
+  font-weight: 800;
+  padding: 0.18rem 0.55rem;
+  transform: translate(var(--sx), var(--sy));
+  animation: dealer-fly 0.9s cubic-bezier(0.22, 0.8, 0.24, 1) forwards;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.38);
+  pointer-events: none;
+}
+
+.deal-fade-enter-active,
+.deal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.deal-fade-enter-from,
+.deal-fade-leave-to {
+  opacity: 0;
+}
+
+.action-pop-enter-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.action-pop-leave-active {
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.action-pop-enter-from,
+.action-pop-leave-to {
+  transform: translate(-50%, -38%) scale(0.76);
+  opacity: 0;
+}
+
+.dealer-reveal-enter-active,
+.dealer-reveal-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.dealer-reveal-enter-from,
+.dealer-reveal-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px) scale(0.92);
+}
+
+.dealer-flight-enter-active,
+.dealer-flight-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.dealer-flight-enter-from,
+.dealer-flight-leave-to {
+  opacity: 0;
+}
+
+.center.my-turn {
+  border-color: rgba(34, 197, 94, 0.7);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
+}
+
+@keyframes blink-turn {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes seat-turn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.8) inset, 0 0 18px rgba(34, 197, 94, 0.25);
+  }
+}
+
+@keyframes self-turn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.85) inset, 0 0 22px rgba(34, 197, 94, 0.22);
+  }
+}
+
+@keyframes turn-arrow-bounce {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-50%) translateY(-4px);
+    opacity: 0.75;
+  }
+}
+
+@keyframes dealer-fly {
+  0% {
+    transform: translate(var(--sx), var(--sy)) scale(2.8);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--ex), var(--ey)) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fly-card {
+  0% {
+    transform: translate(var(--sx), var(--sy)) scale(1);
+    opacity: 0.98;
+  }
+  75% {
+    opacity: 0.98;
+  }
+  100% {
+    transform: translate(var(--ex), var(--ey)) scale(0.92);
+    opacity: 0.12;
+  }
+}
+
+@media (min-width: 961px) {
+  .table {
+    height: 100%;
+    max-height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .hand :deep(.size-xl) {
+    height: clamp(3.2rem, 4.8vw, 5.2rem);
+  }
+}
+
 @media (max-width: 1200px) {
   .table {
-    width: min(100%, calc((100dvh - 190px) * 2.05));
-    max-height: 420px;
-    grid-template-columns: minmax(168px, 25%) minmax(240px, 1fr) minmax(168px, 25%);
-    padding: 10px;
-    column-gap: 10px;
-    row-gap: 8px;
+    max-height: 50vh;
+    grid-template-columns: minmax(0, 25%) minmax(0, 1fr) minmax(0, 25%);
   }
 
   .center {
-    width: min(100%, 460px);
+    width: min(100%, 72%);
   }
 }
 
 @media (orientation: landscape) and (max-height: 600px) {
   .board {
-    grid-template-rows: minmax(220px, 1fr) auto;
-    gap: 6px;
+    gap: 0.25rem;
   }
 
   .table {
-    width: min(100%, calc((100dvh - 150px) * 2.1));
-    min-height: 210px;
-    max-height: 340px;
-    border-radius: 16px;
-    padding: 8px;
-    column-gap: 8px;
-    row-gap: 6px;
+    aspect-ratio: 2.35 / 1;
+    max-height: 52vh;
+    border-radius: 0.65rem;
+    padding: 0.25rem;
   }
 
   .seat {
-    padding: 5px;
-    gap: 4px;
+    padding: 0.2rem;
+    gap: 0.2rem;
   }
 
   .seat.top {
-    height: 92px;
-  }
-
-  .seat.left,
-  .seat.right {
-    min-width: 140px;
+    height: clamp(3.3rem, 11vh, 4.8rem);
   }
 
   .center {
-    min-height: 0;
-    width: min(100%, 340px);
-    padding: 8px;
-    gap: 6px;
-    border-radius: 14px;
+    width: min(100%, 74%);
+    padding: 0.25rem;
+    gap: 0.2rem;
   }
 
   .center-head h3 {
@@ -615,8 +1773,7 @@ function onDiscard(cardId: string): void {
   }
 
   .response-wrap {
-    padding: 6px;
-    min-height: 84px;
+    min-height: clamp(2.8rem, 8.8vh, 4.6rem);
   }
 
   .response-wrap small {
@@ -628,14 +1785,13 @@ function onDiscard(cardId: string): void {
   }
 
   .ghost-card {
-    width: 46px;
-    height: 66px;
-    font-size: 11px;
+    width: clamp(1.6rem, 2.2vw, 2.2rem);
+    height: clamp(2.1rem, 3.3vw, 3rem);
+    font-size: clamp(0.55rem, 1vh, 0.7rem);
   }
 
   .self-zone {
-    padding: 8px;
-    gap: 6px;
+    gap: 0.2rem;
   }
 
   .self-head h3 {
@@ -647,7 +1803,264 @@ function onDiscard(cardId: string): void {
   }
 
   .hand {
-    gap: 6px;
+    gap: 0.2rem;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 960px) {
+  .board {
+    grid-template-columns: minmax(0, 66%) minmax(0, 34%);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 1vh;
+  }
+
+  .table {
+    grid-column: 1;
+    grid-row: 1;
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+    padding: 1vh;
+    border-radius: 1.6vh;
+    grid-template-columns: minmax(0, 22%) minmax(0, 1fr) minmax(0, 22%);
+    grid-template-rows: minmax(0, 40%) minmax(0, 1fr);
+    grid-template-areas:
+      "selfopen top ."
+      "left center right";
+    column-gap: 1vh;
+    row-gap: 1vh;
+  }
+
+  .self-open-left {
+    grid-area: selfopen;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid #334155;
+    border-radius: 1.1vh;
+    background: rgba(11, 18, 32, 0.88);
+    padding: 0.35vh 0.5vh;
+    overflow: hidden;
+  }
+
+  .self-open-left p {
+    margin: 0 0 0.35vh;
+    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
+    color: #cbd5e1;
+  }
+
+  .self-open-left .cards {
+    gap: 0.35vh;
+    align-content: flex-start;
+    overflow: hidden;
+  }
+
+  .self-open-left .grouped-cards {
+    gap: 0.35vh;
+  }
+
+  .seat {
+    padding: 0.45vh 0.55vh;
+    gap: 0.35vh;
+  }
+
+  .seat.top {
+    height: auto;
+    min-height: 15vh;
+  }
+
+  .seat-head strong {
+    font-size: clamp(0.88rem, 2.1vh, 1.02rem);
+  }
+
+  .seat-meta {
+    font-size: clamp(0.56rem, 1.35vh, 0.68rem);
+  }
+
+  .tag {
+    padding: 0.1rem 0.35rem;
+    line-height: 1.1;
+    font-size: clamp(0.54rem, 1.25vh, 0.65rem);
+  }
+
+  .seat-zone {
+    padding-top: 0.35vh;
+  }
+
+  .seat-zone p {
+    margin-bottom: 0.35vh;
+    font-size: clamp(0.55rem, 1.3vh, 0.66rem);
+  }
+
+  .seat-zone .cards {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .grouped-cards {
+    gap: 0.35vh;
+  }
+
+  .group-chip {
+    padding: 0.24vh 0.28vh;
+    border-radius: 0.8vh;
+  }
+
+  .stack-count {
+    margin-left: 0.35vh;
+    font-size: clamp(0.5rem, 1.2vh, 0.62rem);
+  }
+
+  .center {
+    width: 100%;
+    padding: 0.7vh 0.9vh;
+    gap: 0.65vh;
+    border-radius: 1.4vh;
+  }
+
+  .center-head h3 {
+    font-size: clamp(0.9rem, 2.2vh, 1.06rem);
+  }
+
+  .center-head p {
+    font-size: clamp(0.64rem, 1.55vh, 0.78rem);
+  }
+
+  .response-wrap {
+    min-height: 8.8vh;
+    padding: 0.45vh;
+  }
+
+  .response-wrap small {
+    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
+  }
+
+  .hint {
+    font-size: clamp(0.54rem, 1.3vh, 0.68rem);
+  }
+
+  .self-zone {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    align-content: stretch;
+    max-height: none;
+    border-radius: 1.4vh;
+    padding: 0.65vh 1vw;
+    gap: 0.55vh;
+  }
+
+  .self-head {
+    align-items: flex-start;
+    gap: 0.4vh;
+    flex-wrap: wrap;
+  }
+
+  .self-head h3 {
+    font-size: clamp(0.92rem, 2.25vh, 1.08rem);
+    line-height: 1.08;
+  }
+
+  .self-head p {
+    font-size: clamp(0.58rem, 1.45vh, 0.72rem);
+  }
+
+  .self-head .seat-tags {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.35vh;
+  }
+
+  .self-areas {
+    max-height: 10.8vh;
+    gap: 0.45vh;
+    overflow: hidden;
+  }
+
+  .self-area {
+    border-radius: 1.1vh;
+    padding: 0.35vh 0.55vh;
+  }
+
+  .self-area p {
+    margin-bottom: 0.2vh;
+    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
+  }
+
+  .self-area .cards {
+    max-height: 6.4vh;
+    overflow: hidden;
+  }
+
+  .self-area .grouped-cards {
+    gap: 0.35vh;
+  }
+
+  .discard-tip {
+    font-size: clamp(0.56rem, 1.35vh, 0.72rem);
+  }
+
+  .hand {
+    overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(clamp(1.7rem, 4.6vw, 2.4rem), 1fr));
+    column-gap: 0.08vh;
+    row-gap: 0.7vh;
+    min-height: 0;
+    align-content: start;
+    padding-bottom: 0.2vh;
+  }
+
+  .hand-card {
+    border-radius: 0.7vh;
+    min-width: 0;
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .hand :deep(.size-xl) {
+    width: min(100%, clamp(0.95rem, 2.45vw, 1.42rem));
+    height: clamp(3rem, 7.2vh, 4.1rem);
+    font-size: clamp(0.66rem, 1.7vh, 0.88rem);
+  }
+
+  .embedded-actions {
+    margin-top: 0;
+    border-top: 1px solid rgba(51, 65, 85, 0.8);
+    background: #0b1220;
+    position: relative;
+    z-index: 2;
+    padding-top: 0.35vh;
+  }
+
+  .embedded-actions :deep(.panel) {
+    background: #0b1220;
+    border-top: none;
+    gap: 0.35vh;
+  }
+
+  .embedded-actions :deep(.actions) {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(48px, 1fr));
+    gap: 0.45vh;
+    justify-content: initial;
+    align-items: stretch;
+    flex-wrap: nowrap;
+  }
+
+  .embedded-actions :deep(.btn) {
+    width: 100%;
+    flex: 0 0 auto;
+    min-width: 48px;
+    min-height: 48px;
+    font-size: clamp(0.84rem, 1.95vh, 1rem);
+    border-radius: 0.85vh;
+  }
+
+  .embedded-actions :deep(.btn:disabled) {
+    opacity: 0.58;
   }
 }
 

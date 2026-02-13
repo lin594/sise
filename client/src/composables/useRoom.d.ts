@@ -56,6 +56,7 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            exposedGroupSizes: number[];
             generalArea: {
                 id: string;
                 color: string;
@@ -100,6 +101,7 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            exposedGroupSizes: number[];
             generalArea: {
                 id: string;
                 color: string;
