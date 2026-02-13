@@ -193,6 +193,9 @@ import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
 import type { RoundResultPlayer } from "@/types/game";
 
+const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
+const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
+
 const {
   connected,
   mySeatId,
@@ -407,7 +410,7 @@ async function rebuildLobby() {
   resettingLobby.value = true;
   globalError.value = "";
   try {
-    const response = await fetch("/colyseus/reset-room", { method: "POST" });
+    const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
     if (!response.ok) {
       throw new Error("重建大厅失败");
     }

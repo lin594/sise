@@ -4,6 +4,8 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
+const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
+const HTTP_URL = import.meta.env.VITE_SERVER_HTTP_URL || DEFAULT_HTTP_URL;
 const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
@@ -183,7 +185,7 @@ async function rebuildLobby() {
     resettingLobby.value = true;
     globalError.value = "";
     try {
-        const response = await fetch("/colyseus/reset-room", { method: "POST" });
+        const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
         if (!response.ok) {
             throw new Error("重建大厅失败");
         }
