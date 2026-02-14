@@ -48,7 +48,7 @@ export function isGold(card: Card): boolean {
 }
 
 export function isDiscardRestricted(card: Card): boolean {
-  return isGeneral(card);
+  return isGeneral(card) || isGold(card);
 }
 
 export function isSameFace(a: Card, b: Card): boolean {

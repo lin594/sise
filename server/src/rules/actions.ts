@@ -10,14 +10,14 @@ function findByFace(hand: Card[], color: Card["color"], type: Card["type"]): Car
 }
 
 export function canPeng(hand: Card[], response: Card): boolean {
-  if (isGeneral(response)) {
+  if (isGeneral(response) || isGold(response)) {
     return false;
   }
   return countMatching(hand, response) >= 2;
 }
 
 export function canOpen(hand: Card[], response: Card): boolean {
-  if (isGeneral(response)) {
+  if (isGeneral(response) || isGold(response)) {
     return false;
   }
   return countMatching(hand, response) >= 3;

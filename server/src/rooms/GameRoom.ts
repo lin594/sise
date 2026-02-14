@@ -108,6 +108,9 @@ export class FourColorGameRoom extends Room<GameState> {
   private collectiveResponderId: string | null = null;
   private debugSeq = 0;
   private roundDealerId: string | null = null;
+  private lastRoundWinnerId: string | null = null;
+  private lastRoundWasBigHu = false;
+  private isFirstRound = true;
 
   onCreate(): void {
     this.setState(new GameState());
@@ -236,6 +239,9 @@ export class FourColorGameRoom extends Room<GameState> {
     this.publicGeneralPool = [];
     this.awaitingDiscardOwnerId = null;
     this.roundDealerId = null;
+    this.lastRoundWinnerId = null;
+    this.lastRoundWasBigHu = false;
+    this.isFirstRound = true;
 
     this.playerHands.clear();
     this.playerOrder = [];
@@ -423,7 +429,26 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.state.publicDiscardPile.clear();
 
-    const dealerId = this.pickRandomDealerId();
+    // Determine dealer based on game rules
+    let dealerId: string;
+    if (this.isFirstRound) {
+      // First game: random player flips card, color determines dealer
+      dealerId = this.pickDealerByFlippedCard();
+      this.isFirstRound = false;
+    } else if (this.lastRoundWinnerId) {
+      // After a win
+      if (this.lastRoundWasBigHu) {
+        // Big win (大胡): opponent (对家) of winner becomes dealer
+        dealerId = this.getOppositePlayerId(this.lastRoundWinnerId);
+      } else {
+        // Small win (小胡): dealer continues (连庄)
+        dealerId = this.roundDealerId ?? this.pickRandomDealerId();
+      }
+    } else {
+      // Fallback: keep current dealer or pick random
+      dealerId = this.roundDealerId ?? this.pickRandomDealerId();
+    }
+    
     this.roundDealerId = dealerId;
     this.state.dealerId = dealerId;
     for (const seatId of this.playerOrder) {
@@ -1300,6 +1325,9 @@ export class FourColorGameRoom extends Room<GameState> {
     this.huChecksValid = 0;
     this.huChecksBySeat.clear();
     this.roundDealerId = null;
+    this.lastRoundWinnerId = null;
+    this.lastRoundWasBigHu = false;
+    this.isFirstRound = true;
 
     const humanSeats = this.playerOrder.filter((seatId) => !this.botIds.has(seatId));
     const humanSet = new Set(humanSeats);
@@ -1358,6 +1386,25 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
     this.resetCollectivePolling();
+
+    // Track winner and determine if it's big or small hu
+    this.lastRoundWinnerId = winnerId;
+    if (winnerId && groups.length > 0) {
+      // Check if it's a big hu (has 鱼 or 开)
+      // A big hu contains at least one group that represents "鱼" (fish/4-of-kind shown) or "开" (kong)
+      // Since we don't have explicit "fish" or "kong" groups in the current scoring,
+      // we determine big hu by checking the score
+      const scoreResult = this.buildScoreBreakdown(groups);
+      
+      // Simple heuristic: if score > 10, it's likely a big hu
+      // This is a simplification. In the full rules:
+      // - Small hu (小胡): base 3 + components, no 鱼 or 开
+      // - Big hu (大胡): (base 3 + components) × 2, has at least 1 鱼 or 开
+      // For now, we'll use a threshold approach
+      this.lastRoundWasBigHu = scoreResult.total >= 10;
+    } else {
+      this.lastRoundWasBigHu = false;
+    }
 
     if (winnerId) {
       this.broadcast("hu_result", { winnerId, groups });
@@ -2094,6 +2141,56 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private generateToken(): string {
     return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private getColorValue(color: Card["color"]): number {
+    // 黄=1, 红=2, 绿=3, 白=4
+    // Gold cards are treated as red for dealer selection
+    switch (color) {
+      case "yellow": return 1;
+      case "red": return 2;
+      case "gold": return 2; // Gold cards treated as red
+      case "green": return 3;
+      case "white": return 4;
+      default: return 1;
+    }
+  }
+
+  private pickDealerByFlippedCard(): string {
+    if (!this.playerOrder.length) {
+      return "";
+    }
+    
+    // Pick a random player to flip the card
+    const flipperIdx = Math.floor(Math.random() * this.playerOrder.length);
+    const flipperId = this.playerOrder[flipperIdx];
+    
+    // Flip a card from the deck
+    const flippedCard = this.deck[0];
+    if (!flippedCard) {
+      // Fallback to random if no cards available
+      return this.playerOrder[flipperIdx];
+    }
+    
+    // Get color value: 黄=1, 红=2, 绿=3, 白=4
+    const colorValue = this.getColorValue(flippedCard.color);
+    
+    // Calculate dealer position: flipper's position + (colorValue - 1)
+    // If yellow (1), flipper is dealer
+    // If red (2), next player is dealer, etc.
+    const dealerIdx = (flipperIdx + colorValue - 1) % this.playerOrder.length;
+    
+    return this.playerOrder[dealerIdx];
+  }
+
+  private getOppositePlayerId(playerId: string): string {
+    // Get the player opposite to the given player (对家)
+    // In a 4-player game, opposite is 2 positions away
+    const idx = this.playerOrder.indexOf(playerId);
+    if (idx < 0 || this.playerOrder.length !== 4) {
+      return this.playerOrder[0] ?? "";
+    }
+    return this.playerOrder[(idx + 2) % 4];
   }
 
   private pickRandomDealerId(): string {
