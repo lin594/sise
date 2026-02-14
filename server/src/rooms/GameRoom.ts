@@ -930,9 +930,28 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const nextId = this.getNextPlayerId(pending.ownerId);
-    this.state.lastAction = "NO_RESPONSE";
-    this.startTurn(nextId, "TURN_DRAW");
+    // No one responded. Now give owner a chance to eat/grab (mode1) or eat/pass (mode2)
+    // Switch from collective phase to owner's self-action phase
+    if (pending.mode === "mode1") {
+      // Mode1: owner can eat or grab
+      this.state.responsePhase = "self_eat";
+      this.state.currentPlayerId = pending.ownerId;
+      this.state.lastAction = "NO_RESPONSE";
+      this.broadcastAvailableActions();
+      this.tickBots();
+    } else if (pending.mode === "mode2") {
+      // Mode2: owner can eat or pass (pass moves card to next player)
+      this.state.responsePhase = "self_grab";
+      this.state.currentPlayerId = pending.ownerId;
+      this.state.lastAction = "NO_RESPONSE";
+      this.broadcastAvailableActions();
+      this.tickBots();
+    } else {
+      // Fallback: move to next player
+      const nextId = this.getNextPlayerId(pending.ownerId);
+      this.state.lastAction = "NO_RESPONSE";
+      this.startTurn(nextId, "TURN_DRAW");
+    }
   }
 
   private isCollectiveReady(pending: PendingResponse): boolean {
@@ -1448,6 +1467,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return this.getDisabledPanel(pending.mode, this.state.responsePhase);
     }
 
+    // Mode2: Owner drew a card and it's in their hand
     if (pending.mode === "mode2") {
       if (this.awaitingDiscardOwnerId === seatId) {
         return [];
@@ -1455,17 +1475,32 @@ export class FourColorGameRoom extends Room<GameState> {
       const handNoPending = this.getHandWithoutPending(seatId, pending.card);
       const huProbe = explainHu(handNoPending, pending.card, this.getHuWildcardCount());
       this.logHuCheck("mode2_owner", seatId, handNoPending, pending.card, huProbe.valid);
-      return [
-        { action: "hu", enabled: huProbe.valid },
-        { action: "open", enabled: canOpen(handNoPending, pending.card) },
-        { action: "peng", enabled: canPeng(handNoPending, pending.card) },
-        { action: "eat", enabled: canEat(handNoPending, pending.card) },
-        { action: "pass", enabled: true },
-      ];
+      
+      // If still in collective phase, owner gets full actions
+      // If past collective (self_grab), owner only gets eat/pass
+      if (this.state.responsePhase === "collective") {
+        return [
+          { action: "hu", enabled: huProbe.valid },
+          { action: "open", enabled: canOpen(handNoPending, pending.card) },
+          { action: "peng", enabled: canPeng(handNoPending, pending.card) },
+          { action: "eat", enabled: canEat(handNoPending, pending.card) },
+          { action: "pass", enabled: true },
+        ];
+      } else {
+        // After collective phase, only eat/pass available
+        return [
+          { action: "hu", enabled: false },
+          { action: "open", enabled: false },
+          { action: "peng", enabled: false },
+          { action: "eat", enabled: canEat(handNoPending, pending.card) },
+          { action: "pass", enabled: true },
+        ];
+      }
     }
 
-    // Legacy debug mode.
+    // Mode1: Owner has a card from previous player's discard
     if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
+      // After collective phase, only eat/grab available
       return [
         { action: "hu", enabled: false },
         { action: "open", enabled: false },
