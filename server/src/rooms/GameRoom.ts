@@ -660,10 +660,8 @@ export class FourColorGameRoom extends Room<GameState> {
       }
     }
 
-    const hand = this.playerHands.get(ownerId) ?? [];
-    hand.push(drawn);
-    this.playerHands.set(ownerId, hand);
-
+    // IMPORTANT: Card stays in response area (待响区), NOT added to hand
+    // The card remains on the table in the owner's response area
     this.pendingResponse = {
       ownerId,
       card: { ...drawn, source: "draw" },
@@ -714,15 +712,10 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private getHandWithoutPending(ownerId: string, pendingCard: Card): Card[] {
+    // Since response cards are no longer added to hand (they stay in response area),
+    // we just return the hand as-is
     const hand = this.playerHands.get(ownerId) ?? [];
-    let removed = false;
-    return hand.filter((card) => {
-      if (!removed && card.id === pendingCard.id) {
-        removed = true;
-        return false;
-      }
-      return true;
-    });
+    return hand;
   }
 
   private handleAction(client: Client, action: ActionType): void {
@@ -778,7 +771,7 @@ export class FourColorGameRoom extends Room<GameState> {
         if (!canOpen(hand, pending.card)) {
           return;
         }
-        this.removeFromHand(seatId, pending.card);
+        // Response card is in response area, not hand - don't try to remove it from hand
         const taken = this.takeMatchingCards(seatId, pending.card, 3);
         this.pushExposedGroup(seatId, [pending.card, ...taken], true);
         this.state.lastAction = `${seatId} OPEN`;
@@ -791,7 +784,7 @@ export class FourColorGameRoom extends Room<GameState> {
         if (!canPeng(hand, pending.card)) {
           return;
         }
-        this.removeFromHand(seatId, pending.card);
+        // Response card is in response area, not hand - don't try to remove it from hand
         const taken = this.takeMatchingCards(seatId, pending.card, 2);
         this.pushExposedGroup(seatId, [pending.card, ...taken], true);
         this.enterDiscardStage(seatId, "PENG");
@@ -804,7 +797,7 @@ export class FourColorGameRoom extends Room<GameState> {
         if (candidates.length === 0) {
           return;
         }
-        this.removeFromHand(seatId, pending.card);
+        // Response card is in response area, not hand - don't try to remove it from hand
         for (const card of candidates[0]) {
           this.removeFromHand(seatId, card);
         }
@@ -1096,6 +1089,8 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
+    // Owner chooses NOT to eat the current response card X
+    // Move X to discard pile, then draw new card Y
     this.pushDiscard(ownerId, pending.card);
 
     const newCard = this.deck.shift();
@@ -1105,10 +1100,8 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const hand = this.playerHands.get(ownerId) ?? [];
-    hand.push(newCard);
-    this.playerHands.set(ownerId, hand);
-
+    // IMPORTANT: New card Y stays in response area (待响区), NOT added to hand
+    // The card remains on the table for collective inquiry
     this.pendingResponse = {
       ownerId,
       card: { ...newCard, source: "draw" },
@@ -1127,7 +1120,8 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
-    this.pushDiscard(ownerId, pending.card);
+    // Owner passes - card moves directly from owner's response area to next player's response area
+    // Do NOT add to discard pile (card stays on table, just changes ownership)
     this.state.lastAction = `${ownerId} PASS`;
     this.advanceToNextOwner(ownerId, pending.card);
   }
