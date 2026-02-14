@@ -807,7 +807,9 @@ export class FourColorGameRoom extends Room<GameState> {
       }
 
       if (action === "pass") {
-        this.enterDiscardStage(seatId, "PASS");
+        // Mode2 pass: Owner doesn't want the drawn card, pass it to next player
+        this.executePassToNext(seatId);
+        return;
       }
       return;
     }
@@ -2006,7 +2008,8 @@ export class FourColorGameRoom extends Room<GameState> {
         return;
       }
 
-      this.enterDiscardStage(ownerId, "PASS");
+      // Mode2 pass: Bot doesn't want the drawn card, pass it to next player
+      this.executePassToNext(ownerId);
       return;
     }
 
