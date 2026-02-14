@@ -1389,19 +1389,14 @@ export class FourColorGameRoom extends Room<GameState> {
 
     // Track winner and determine if it's big or small hu
     this.lastRoundWinnerId = winnerId;
-    if (winnerId && groups.length > 0) {
+    if (winnerId) {
       // Check if it's a big hu (has 鱼 or 开)
-      // A big hu contains at least one group that represents "鱼" (fish/4-of-kind shown) or "开" (kong)
-      // Since we don't have explicit "fish" or "kong" groups in the current scoring,
-      // we determine big hu by checking the score
-      const scoreResult = this.buildScoreBreakdown(groups);
+      // Big hu = has at least one 鱼 (fish, 4+ cards in fishArea) or 开 (kong, 4-card group in exposedArea)
+      const winner = this.state.players.get(winnerId);
+      const hasFish = (winner?.fishArea.length ?? 0) >= 4;
+      const hasKong = (winner?.exposedGroupSizes ?? []).some((size: number) => size === 4);
       
-      // Simple heuristic: if score > 10, it's likely a big hu
-      // This is a simplification. In the full rules:
-      // - Small hu (小胡): base 3 + components, no 鱼 or 开
-      // - Big hu (大胡): (base 3 + components) × 2, has at least 1 鱼 or 开
-      // For now, we'll use a threshold approach
-      this.lastRoundWasBigHu = scoreResult.total >= 10;
+      this.lastRoundWasBigHu = hasFish || hasKong;
     } else {
       this.lastRoundWasBigHu = false;
     }
