@@ -941,6 +941,8 @@ export class FourColorGameRoom extends Room<GameState> {
       this.tickBots();
     } else if (pending.mode === "mode2") {
       // Mode2: owner can eat or pass (pass moves card to next player)
+      // Note: "self_grab" phase name is historical; in mode2, owner already drew the card
+      // and can only eat (the drawn card) or pass (give it to next player)
       this.state.responsePhase = "self_grab";
       this.state.currentPlayerId = pending.ownerId;
       this.state.lastAction = "NO_RESPONSE";
@@ -1499,23 +1501,27 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     // Mode1: Owner has a card from previous player's discard
-    if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
-      // After collective phase, only eat/grab available
-      return [
-        { action: "hu", enabled: false },
-        { action: "open", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "eat", enabled: canEat(hand, pending.card) },
-        { action: "grab", enabled: true },
-      ];
+    if (pending.mode === "mode1") {
+      if (this.state.responsePhase === "self_eat") {
+        // After collective phase, only eat/grab available
+        return [
+          { action: "hu", enabled: false },
+          { action: "open", enabled: false },
+          { action: "peng", enabled: false },
+          { action: "eat", enabled: canEat(hand, pending.card) },
+          { action: "grab", enabled: true },
+        ];
+      }
+      // During collective phase, owner is disabled (handled by isCollective check above)
     }
 
+    // Fallback for unexpected states
     return [
       { action: "hu", enabled: false },
       { action: "open", enabled: false },
       { action: "peng", enabled: false },
-      { action: "eat", enabled: canEat(hand, pending.card) },
-      { action: "pass", enabled: true },
+      { action: "eat", enabled: false },
+      { action: "pass", enabled: false },
     ];
   }
 
