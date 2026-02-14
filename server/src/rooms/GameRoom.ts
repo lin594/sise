@@ -1394,7 +1394,8 @@ export class FourColorGameRoom extends Room<GameState> {
       // Big hu = has at least one 鱼 (fish, validated groups of 4-5 cards in fishArea) 
       // or 开 (kong, 4-card group in exposedArea)
       const winner = this.state.players.get(winnerId);
-      // Fish validation ensures groups are always 4 or 5 cards, so any fishArea content indicates a fish
+      // Fish validation ensures each group is 4 or 5 cards. If fishArea has any cards, 
+      // it means at least one complete fish group exists (minimum 4 cards).
       const hasFish = (winner?.fishArea.length ?? 0) >= 4;
       const hasKong = (winner?.exposedGroupSizes ?? []).some((size: number) => size === 4);
       
@@ -2172,9 +2173,11 @@ export class FourColorGameRoom extends Room<GameState> {
     // Get color value: 黄=1, 红=2, 绿=3, 白=4
     const colorValue = this.getColorValue(flippedCard.color);
     
-    // Calculate dealer position: flipper's position + (colorValue - 1)
-    // If yellow (1), flipper is dealer
-    // If red (2), next player is dealer, etc.
+    // Calculate dealer position based on color:
+    // Yellow (1): flipper is dealer (offset 0)
+    // Red (2): one position clockwise (offset 1)
+    // Green (3): two positions clockwise (offset 2)
+    // White (4): three positions clockwise (offset 3)
     const dealerIdx = (flipperIdx + colorValue - 1) % this.playerOrder.length;
     
     return this.playerOrder[dealerIdx];
