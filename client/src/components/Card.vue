@@ -132,7 +132,7 @@ const sizeClass = computed(() => props.size ?? "md");
 }
 
 .color-gold {
-  background: #ffd700;
+  background: #e53935;
 }
 
 @keyframes pulse {
