@@ -1089,8 +1089,9 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
-    // Owner chooses NOT to eat the current response card X
-    // Move X to discard pile, then draw new card Y
+    // Owner chooses "抓" (grab): discards current response card X, draws new card Y
+    // Card X goes to discard pile (owner chose not to use it)
+    // Card Y becomes new response card (stays in response area for collective inquiry)
     this.pushDiscard(ownerId, pending.card);
 
     const newCard = this.deck.shift();
@@ -1100,7 +1101,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    // IMPORTANT: New card Y stays in response area (待响区), NOT added to hand
+    // IMPORTANT: New card Y stays in response area (待响区 / response area), NOT added to hand
     // The card remains on the table for collective inquiry
     this.pendingResponse = {
       ownerId,
