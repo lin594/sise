@@ -1391,8 +1391,10 @@ export class FourColorGameRoom extends Room<GameState> {
     this.lastRoundWinnerId = winnerId;
     if (winnerId) {
       // Check if it's a big hu (has 鱼 or 开)
-      // Big hu = has at least one 鱼 (fish, 4+ cards in fishArea) or 开 (kong, 4-card group in exposedArea)
+      // Big hu = has at least one 鱼 (fish, validated groups of 4-5 cards in fishArea) 
+      // or 开 (kong, 4-card group in exposedArea)
       const winner = this.state.players.get(winnerId);
+      // Fish validation ensures groups are always 4 or 5 cards, so any fishArea content indicates a fish
       const hasFish = (winner?.fishArea.length ?? 0) >= 4;
       const hasKong = (winner?.exposedGroupSizes ?? []).some((size: number) => size === 4);
       
@@ -2160,7 +2162,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const flipperIdx = Math.floor(Math.random() * this.playerOrder.length);
     const flipperId = this.playerOrder[flipperIdx];
     
-    // Flip a card from the deck
+    // Peek at the top card from the deck (not removed - it will be drawn during gameplay)
     const flippedCard = this.deck[0];
     if (!flippedCard) {
       // Fallback to random if no cards available
@@ -2180,12 +2182,13 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private getOppositePlayerId(playerId: string): string {
     // Get the player opposite to the given player (对家)
-    // In a 4-player game, opposite is 2 positions away
+    // In an even-player game, opposite is half the table away
     const idx = this.playerOrder.indexOf(playerId);
-    if (idx < 0 || this.playerOrder.length !== 4) {
+    if (idx < 0 || this.playerOrder.length < 2) {
       return this.playerOrder[0] ?? "";
     }
-    return this.playerOrder[(idx + 2) % 4];
+    const halfTable = Math.floor(this.playerOrder.length / 2);
+    return this.playerOrder[(idx + halfTable) % this.playerOrder.length];
   }
 
   private pickRandomDealerId(): string {
