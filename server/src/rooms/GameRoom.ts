@@ -1975,7 +1975,7 @@ export class FourColorGameRoom extends Room<GameState> {
       }
 
       if (choose === "open") {
-        this.removeFromHand(ownerId, this.pendingResponse.card);
+        // Response card is in response area, not hand - don't try to remove it from hand
         const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 3);
         this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
         this.state.lastAction = `${ownerId} OPEN`;
@@ -1984,7 +1984,7 @@ export class FourColorGameRoom extends Room<GameState> {
       }
 
       if (choose === "peng") {
-        this.removeFromHand(ownerId, this.pendingResponse.card);
+        // Response card is in response area, not hand - don't try to remove it from hand
         const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 2);
         this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
         this.enterDiscardStage(ownerId, "PENG");
@@ -1995,7 +1995,7 @@ export class FourColorGameRoom extends Room<GameState> {
         const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
         const candidates = getEatCandidates(hand, this.pendingResponse.card);
         if (candidates.length > 0) {
-          this.removeFromHand(ownerId, this.pendingResponse.card);
+          // Response card is in response area, not hand - don't try to remove it from hand
           for (const card of candidates[0]) {
             this.removeFromHand(ownerId, card);
           }
