@@ -5,12 +5,9 @@ import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/acti
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 
-type ResponseMode = "mode1" | "mode2";
-
 interface PendingResponse {
   ownerId: string;
   card: Card;
-  mode: ResponseMode;
   collectives: Map<string, ActionType>;
 }
 
@@ -643,7 +640,6 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = {
       ownerId,
       card: { ...drawn, source: "draw" },
-      mode: "mode2",
       collectives: new Map(),
     };
     this.awaitingDiscardOwnerId = null;
@@ -692,7 +688,6 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = {
       ownerId,
       card: { ...discard, source: "upper" },
-      mode: "mode1",
       collectives: new Map(),
     };
     this.awaitingDiscardOwnerId = null;
@@ -817,7 +812,6 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = {
       ownerId,
       card: { ...fallback, source: "draw" },
-      mode: "mode2",
       collectives: new Map(),
     };
     this.awaitingDiscardOwnerId = ownerId;
@@ -1053,7 +1047,6 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = {
       ownerId,
       card: { ...newCard, source: "draw" },
-      mode: "mode2",
       collectives: new Map(),
     };
     this.state.responsePhase = "collective";
@@ -1094,7 +1087,6 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = {
       ownerId: nextId,
       card: { ...cardToNext, source: "upper" },
-      mode: "mode1",
       collectives: new Map(),
     };
     this.state.currentPlayerId = nextId;
@@ -1960,7 +1952,6 @@ export class FourColorGameRoom extends Room<GameState> {
       this.pendingResponse = {
         ownerId: seatId,
         card: { id: "h3", color: "red", type: "pao", source: "draw" },
-        mode: "mode2",
         collectives: new Map(),
       };
       this.state.phase = "playing";
@@ -1976,7 +1967,6 @@ export class FourColorGameRoom extends Room<GameState> {
       this.pendingResponse = {
         ownerId: seatId,
         card: { id: "rj", color: "red", type: "jiang", source: "upper" },
-        mode: "mode1",
         collectives: new Map(),
       };
       this.state.phase = "playing";
@@ -1991,7 +1981,6 @@ export class FourColorGameRoom extends Room<GameState> {
       this.pendingResponse = {
         ownerId: seatId,
         card: { id: "gy", color: "green", type: "pao", source: "draw" },
-        mode: "mode2",
         collectives: new Map(),
       };
       this.state.phase = "playing";
@@ -2006,7 +1995,6 @@ export class FourColorGameRoom extends Room<GameState> {
       this.pendingResponse = {
         ownerId: this.getNextPlayerId(seatId),
         card: { id: "yj", color: "yellow", type: "ju", source: "upper" },
-        mode: "mode1",
         collectives: new Map(),
       };
       this.state.phase = "playing";
@@ -2027,7 +2015,6 @@ export class FourColorGameRoom extends Room<GameState> {
       this.pendingResponse = {
         ownerId: this.getNextPlayerId(seatId),
         card: { id: "rp", color: "red", type: "pao", source: "upper" },
-        mode: "mode1",
         collectives: new Map(),
       };
       this.state.phase = "playing";
