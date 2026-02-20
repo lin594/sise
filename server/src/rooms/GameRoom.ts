@@ -5,6 +5,13 @@ import { canChi, canKai, canPeng } from "../rules/actions.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
+import { executeResponseWinner } from "./flow/response-winner.js";
+import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
+import {
+  iterateFromNext as iterateFromNextOrder,
+  getNextPlayerId as getNextPlayerIdOrder,
+  getPreviousPlayerId as getPreviousPlayerIdOrder,
+} from "./flow/turn-order.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -834,24 +841,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const order = this.getCollectiveOrder(pending);
-    let winner: { id: string; action: ActionType } | null = null;
-
-    for (const id of order) {
-      if ((pending.collectives.get(id) ?? "pass") === "hu") {
-        winner = { id, action: "hu" };
-        break;
-      }
-    }
-
-    if (!winner) {
-      for (const id of order) {
-        const act = pending.collectives.get(id) ?? "pass";
-        if (act === "kai" || act === "peng") {
-          winner = { id, action: act };
-          break;
-        }
-      }
-    }
+    const winner = pickCollectiveWinner(order, pending.collectives);
 
     if (winner) {
       this.executeResponseWinner(winner.id, winner.action);
@@ -905,60 +895,28 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
-
-    const winnerHand = this.playerHands.get(winnerId) ?? [];
-    const response = pending.card;
-
-    if (action === "hu") {
-      const hu = this.explainHuForSeat(winnerId, winnerHand, response);
-      this.logHuCheck("collective_winner_hu", winnerId, winnerHand, response, hu.valid);
-      if (!hu.valid) {
-        this.state.lastAction = "HU_INVALID";
-        this.enterNoResponsePath();
-        return;
-      }
-      this.endRound(`${winnerId} HU`, winnerId, hu.groups);
-      return;
-    }
-
-    if (action === "kai") {
-      if (!this.executeKaiOperation(winnerId, response)) {
-        const nextId = this.getNextPlayerId(pending.ownerId);
-        this.startTurn(nextId, "TURN_DRAW");
-        return;
-      }
-      this.state.lastAction = `${winnerId} KAI`;
-      this.startTurn(winnerId, "KONG_DRAW");
-      return;
-    }
-
-    if (action === "peng") {
-      if (!this.executePengOperation(winnerId, response)) {
-        const nextId = this.getNextPlayerId(pending.ownerId);
-        this.startTurn(nextId, "TURN_DRAW");
-        return;
-      }
-      this.enterDiscardStage(winnerId, "PENG");
-      return;
-    }
-
-    if (action === "chi") {
-      if (!this.isEatResponder(pending.ownerId, winnerId)) {
-        const nextId = this.getNextPlayerId(pending.ownerId);
-        this.startTurn(nextId, "TURN_DRAW");
-        return;
-      }
-      if (!this.executeChiOperation(winnerId, response)) {
-        const nextId = this.getNextPlayerId(pending.ownerId);
-        this.startTurn(nextId, "TURN_DRAW");
-        return;
-      }
-      this.enterDiscardStage(winnerId, "CHI");
-      return;
-    }
-
-    const nextId = this.getNextPlayerId(pending.ownerId);
-    this.startTurn(nextId, "TURN_DRAW");
+    executeResponseWinner(
+      {
+        getHand: (seatId) => this.playerHands.get(seatId) ?? [],
+        explainHuForSeat: (seatId, hand, responseCard) => this.explainHuForSeat(seatId, hand, responseCard),
+        logHuCheck: (stage, seatId, hand, response, valid) => this.logHuCheck(stage, seatId, hand, response, valid),
+        executeKaiOperation: (seatId, pendingCard) => this.executeKaiOperation(seatId, pendingCard),
+        executePengOperation: (seatId, pendingCard) => this.executePengOperation(seatId, pendingCard),
+        executeChiOperation: (seatId, pendingCard) => this.executeChiOperation(seatId, pendingCard),
+        isEatResponder: (ownerId, responderId) => this.isEatResponder(ownerId, responderId),
+        getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
+        setLastAction: (value) => {
+          this.state.lastAction = value;
+        },
+        startTurn: (ownerId, tag) => this.startTurn(ownerId, tag),
+        enterDiscardStage: (ownerId, tag) => this.enterDiscardStage(ownerId, tag),
+        enterNoResponsePath: () => this.enterNoResponsePath(),
+        endRound: (lastAction, winnerIdArg, groups) => this.endRound(lastAction, winnerIdArg, groups),
+      },
+      pending,
+      winnerId,
+      action,
+    );
   }
 
   private enterNoResponsePath(): void {
@@ -1718,31 +1676,15 @@ export class FourColorGameRoom extends Room<GameState> {
     if (this.playerOrder.length === 0) {
       return [];
     }
-    const idx = this.playerOrder.indexOf(startId);
-    if (idx < 0) {
-      return [...this.playerOrder];
-    }
-    const ordered: string[] = [];
-    for (let i = 1; i <= this.playerOrder.length; i += 1) {
-      ordered.push(this.playerOrder[(idx + i) % this.playerOrder.length]);
-    }
-    return ordered;
+    return iterateFromNextOrder(this.playerOrder, startId);
   }
 
   private getNextPlayerId(playerId: string): string {
-    const idx = this.playerOrder.indexOf(playerId);
-    if (idx < 0) {
-      return this.playerOrder[0];
-    }
-    return this.playerOrder[(idx + 1) % this.playerOrder.length];
+    return getNextPlayerIdOrder(this.playerOrder, playerId);
   }
 
   private getPreviousPlayerId(playerId: string): string {
-    const idx = this.playerOrder.indexOf(playerId);
-    if (idx < 0) {
-      return this.playerOrder[0];
-    }
-    return this.playerOrder[(idx - 1 + this.playerOrder.length) % this.playerOrder.length];
+    return getPreviousPlayerIdOrder(this.playerOrder, playerId);
   }
 
   private tickBots(): void {
@@ -1822,10 +1764,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private getCollectiveOrder(pending: PendingResponse): string[] {
-    if (pending.card.source === "draw") {
-      return [pending.ownerId, ...this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId)];
-    }
-    return this.iterateFromNext(pending.ownerId);
+    return getCollectiveOrder(this.playerOrder, pending);
   }
 
   private scheduleCollectiveTimeout(): void {
