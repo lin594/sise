@@ -530,7 +530,8 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.responseEndsAt = 0;
     this.state.lastAction = `DEALER ${dealerId}`;
     this.syncAllPrivateHands();
-    this.startTurn(dealerId, "TURN_START");
+    // Round opening: dealer must discard one legal card from own hand first.
+    this.enterDiscardStage(dealerId, "OPENING_DISCARD");
   }
 
   private validateFishSelection(cards: Card[]): boolean {
