@@ -121,8 +121,21 @@ function normalizePlayer(raw) {
         exposedArea: asCardArray(raw?.exposedArea),
         exposedGroupSizes: asNumberArray(raw?.exposedGroupSizes),
         generalArea: asCardArray(raw?.generalArea),
+        wildcardPool: asCardArray(raw?.wildcardPool),
         fishArea: asCardArray(raw?.fishArea),
     };
+}
+function normalizeAction(action) {
+    if (action === "open") {
+        return "kai";
+    }
+    if (action === "eat") {
+        return "chi";
+    }
+    if (action === "grab") {
+        return "pass";
+    }
+    return action;
 }
 export function useRoom(playerName = "Player") {
     const ROOM_KEY = "four_room_id";
@@ -267,7 +280,10 @@ export function useRoom(playerName = "Player") {
                 privateHand.value = sortHandCards(payload ?? []);
             });
             joined.onMessage("available_actions", (payload) => {
-                availableActions.value = payload;
+                availableActions.value = (payload ?? []).map((item) => ({
+                    action: normalizeAction(item.action),
+                    enabled: Boolean(item.enabled),
+                }));
             });
             joined.onMessage("hu_result", (payload) => {
                 huResult.value = payload;
@@ -324,7 +340,7 @@ export function useRoom(playerName = "Player") {
         if (!room.value) {
             return;
         }
-        room.value.send("action", action);
+        room.value.send("action", normalizeAction(action));
     }
     function sendDiscardCard(cardId) {
         if (!room.value || !cardId) {

@@ -253,6 +253,14 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.dealerId = "";
     this.state.deckCount = 0;
     this.state.declareEndsAt = 0;
+    this.state.targetCard = new CardSchema();
+    this.state.isMoCard = false;
+    this.state.previousPlayerId = "";
+    this.state.currentTurnPlayerId = "";
+    this.state.loopStage = "";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = "";
+    this.state.responseEndsAt = 0;
     this.state.responseCard = new CardSchema();
     this.state.lastAction = `LOBBY 0/${this.targetSeats}`;
     this.broadcastAvailableActions();
@@ -516,6 +524,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.phase = "playing";
     this.state.responsePhase = "self_grab";
     this.state.currentPlayerId = dealerId;
+    this.state.currentTurnPlayerId = dealerId;
+    this.state.previousPlayerId = this.getPreviousPlayerId(dealerId);
+    this.state.loopStage = "transition";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = "";
+    this.state.responseEndsAt = 0;
     this.state.lastAction = `DEALER ${dealerId}`;
     this.syncAllPrivateHands();
     this.startTurn(dealerId, "TURN_START");
@@ -609,6 +623,8 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.resetCollectivePolling();
     this.state.currentPlayerId = ownerId;
+    this.state.currentTurnPlayerId = ownerId;
+    this.state.loopStage = "transition";
     this.drawForOwner(ownerId, tag);
   }
 
@@ -648,6 +664,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.awaitingDiscardOwnerId = null;
     this.state.responsePhase = "self_grab";
     this.setResponseCard(drawn, "draw");
+    this.state.currentTurnPlayerId = ownerId;
+    this.state.previousPlayerId = this.getPreviousPlayerId(ownerId);
+    this.state.loopStage = "local_poll";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = ownerId;
+    this.state.responseEndsAt = 0;
     this.state.lastAction = `${ownerId} ${tag}`;
     this.syncAllPrivateHands();
     this.tickBots();
@@ -692,6 +714,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.responsePhase = "collective";
     this.state.currentPlayerId = ownerId;
     this.setResponseCard(discard, "upper");
+    this.state.currentTurnPlayerId = ownerId;
+    this.state.previousPlayerId = ownerId;
+    this.state.loopStage = "global_poll";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = ownerId;
+    this.state.responseEndsAt = 0;
     this.state.lastAction = `${ownerId} DISCARD`;
     this.syncAllPrivateHands();
     this.startCollectivePolling();
@@ -1081,6 +1109,12 @@ export class FourColorGameRoom extends Room<GameState> {
     };
     this.state.responsePhase = "collective";
     this.setResponseCard(newCard, "draw");
+    this.state.currentTurnPlayerId = ownerId;
+    this.state.previousPlayerId = ownerId;
+    this.state.loopStage = "global_poll";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = ownerId;
+    this.state.responseEndsAt = 0;
     this.state.lastAction = `${ownerId} PASS`;
     this.syncAllPrivateHands();
     this.startCollectivePolling();
@@ -1117,6 +1151,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.currentPlayerId = nextId;
     this.state.responsePhase = "collective";
     this.setResponseCard(cardToNext, "upper");
+    this.state.currentTurnPlayerId = nextId;
+    this.state.previousPlayerId = currentOwnerId;
+    this.state.loopStage = "global_poll";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = currentOwnerId;
+    this.state.responseEndsAt = 0;
     this.syncAllPrivateHands();
     this.startCollectivePolling();
   }
@@ -1240,6 +1280,8 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private setResponseCard(card: Card, source: "upper" | "draw"): void {
     this.state.responseCard = this.toSchemaCard(card, false, source);
+    this.state.targetCard = this.toSchemaCard(card, false, source);
+    this.state.isMoCard = source === "draw";
     this.state.currentPlayerId = this.pendingResponse?.ownerId ?? this.state.currentPlayerId;
   }
 
@@ -1406,6 +1448,14 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.responsePhase = "collective";
     this.state.deckCount = 0;
     this.state.declareEndsAt = 0;
+    this.state.targetCard = new CardSchema();
+    this.state.isMoCard = false;
+    this.state.previousPlayerId = "";
+    this.state.currentTurnPlayerId = "";
+    this.state.loopStage = "";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = "";
+    this.state.responseEndsAt = 0;
     this.state.publicDiscardPile.clear();
     this.state.responseCard = new CardSchema();
     this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
@@ -1419,6 +1469,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
     this.resetCollectivePolling();
+    this.clearBotTimer();
+    this.state.loopStage = "";
+    this.state.activeResponderId = "";
+    this.state.pollOriginPlayerId = "";
+    this.state.responseEndsAt = 0;
 
     if (winnerId) {
       this.broadcast("hu_result", { winnerId, groups });
@@ -1802,6 +1857,7 @@ export class FourColorGameRoom extends Room<GameState> {
       clearTimeout(this.collectiveTimer);
       this.collectiveTimer = null;
     }
+    this.state.responseEndsAt = 0;
   }
 
   private resetCollectivePolling(): void {
@@ -1809,6 +1865,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.collectiveQueue = [];
     this.collectiveCursor = 0;
     this.collectiveResponderId = null;
+    this.state.activeResponderId = "";
   }
 
   private startCollectivePolling(): void {
@@ -1819,6 +1876,10 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
+    this.state.loopStage = "global_poll";
+    if (!this.state.pollOriginPlayerId) {
+      this.state.pollOriginPlayerId = pending.ownerId;
+    }
     this.clearBotTimer();
     this.clearCollectiveTimer();
     this.collectiveQueue = this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId);
@@ -1829,6 +1890,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private scheduleCollectiveTimeout(): void {
     this.clearCollectiveTimer();
+    this.state.responseEndsAt = Date.now() + this.collectiveTimeoutMs;
     this.collectiveTimer = setTimeout(() => {
       const pending = this.pendingResponse;
       const responderId = this.collectiveResponderId;
@@ -1872,6 +1934,8 @@ export class FourColorGameRoom extends Room<GameState> {
 
       this.collectiveResponderId = seatId;
       this.state.currentPlayerId = seatId;
+      this.state.currentTurnPlayerId = seatId;
+      this.state.activeResponderId = seatId;
       if (this.botIds.has(seatId)) {
         this.scheduleBotStep();
       } else {
@@ -1882,6 +1946,8 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     this.collectiveResponderId = null;
+    this.state.activeResponderId = "";
+    this.state.responseEndsAt = 0;
     this.resolveCollectivePhase();
   }
 

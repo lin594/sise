@@ -7,7 +7,7 @@ const props = withDefaults(defineProps(), {
 });
 const emit = defineEmits();
 const busy = ref(false);
-const defaultOrder = ["hu", "open", "peng", "eat", "grab", "pass"];
+const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x.enabled]));
     return defaultOrder.map((action) => ({ action, enabled: Boolean(map.get(action)) }));
@@ -27,11 +27,13 @@ const panelHint = computed(() => {
 function text(action) {
     const map = {
         hu: "胡",
+        kai: "开",
+        chi: "吃",
+        pass: "过",
         open: "开",
         peng: "碰",
         eat: "吃",
         grab: "抓",
-        pass: "过",
     };
     return map[action];
 }
