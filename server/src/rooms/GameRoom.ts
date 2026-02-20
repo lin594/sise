@@ -1,13 +1,12 @@
 ﻿import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { createDeck, isDiscardRestricted, isGeneral, isGold, isSameFace, shuffle } from "../rules/deck.js";
-import { canChi, canKai, canPeng } from "../rules/actions.js";
+import { createDeck, isDiscardRestricted, isSameFace, shuffle } from "../rules/deck.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
 import { executeResponseWinner } from "./flow/response-winner.js";
 import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
-import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
+import { shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
 import { createPendingResponse } from "./flow/pending-response.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
 import { canReturnLobby, canStartNextRound, decideStartGame } from "./flow/match-entry.js";
@@ -25,7 +24,10 @@ import { planTickBots } from "./flow/bot-tick.js";
 import { runBotStep } from "./flow/bot-runner.js";
 import { advanceCollectiveFlow, startCollectiveFlow } from "./flow/collective-runtime.js";
 import { endRoundFlow } from "./flow/round-end.js";
-import { buildRoundResultPlayers as buildRoundResultPlayersFlow } from "./flow/round-result.js";
+import {
+  buildRoundResultPlayers as buildRoundResultPlayersFlow,
+  type RoundResultPlayer,
+} from "./flow/round-result.js";
 import { resetToLobby } from "./flow/lobby-reset.js";
 import {
   dealInitialHands as dealInitialHandsFlow,
@@ -47,6 +49,14 @@ import {
 } from "./flow/input-normalization.js";
 import { areAllDeclarationsReady as areAllDeclarationsReadyUtil, buildDeclarationSelection } from "./flow/declaration-utils.js";
 import { runDeclaringTimeoutFlow, startDeclaringFlow } from "./flow/declaring.js";
+import { getAvailableActionsFlow } from "./flow/action-panel.js";
+import { enterOwnerLocalPhaseAfterNoResponseFlow } from "./flow/owner-local-phase.js";
+import {
+  executeEatFlow,
+  executeGrabFlow,
+  executePassToNextFlow,
+  finalizeWithDiscardFlow,
+} from "./flow/owner-actions.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -62,27 +72,6 @@ interface PendingResponse {
 interface DeclareSetupPayload {
   declaredKongs?: number;
   fishCardIds?: string[];
-}
-
-interface RoundResultPlayer {
-  clientId: string;
-  name: string;
-  hand: Card[];
-  exposedArea: Card[];
-  exposedGroupSizes: number[];
-  generalArea: Card[];
-  fishArea: Card[];
-  discardCount: number;
-  scoreBreakdown: ScoreBreakdownItem[];
-  totalScore: number;
-}
-
-interface ScoreBreakdownItem {
-  key: string;
-  label: string;
-  count: number;
-  unit: number;
-  total: number;
 }
 
 type HuLogMode = "off" | "all" | "success" | "fail";
@@ -787,101 +776,118 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private enterOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
-    const pending = this.pendingResponse;
-    if (!pending || pending.ownerId !== ownerId) {
-      return;
-    }
-    const plan = planLocalPhaseAfterNoResponse(ownerId, pending.card.source, this.getNextPlayerId(ownerId));
-    if (plan.rebindPendingOwner) {
-      pending.ownerId = plan.localOwnerId;
-      this.state.currentPlayerId = plan.localOwnerId;
-    }
-    this.state.responsePhase = plan.responsePhase;
-    this.state.currentPlayerId = plan.localOwnerId;
-    this.state.currentTurnPlayerId = plan.localOwnerId;
-    this.state.loopStage = "local_poll";
-    this.state.activeResponderId = "";
-    this.state.responseEndsAt = 0;
-
-    if (plan.responsePhase === "local_draw" && (isGeneral(pending.card) || isGold(pending.card))) {
-      this.addWildcardCardToPlayer(plan.localOwnerId, pending.card, "draw");
-      this.state.lastAction = `${plan.localOwnerId} FORCE_TAKE`;
-      this.enterDiscardStage(plan.localOwnerId, "FORCE_TAKE");
-      return;
-    }
-
-    this.syncAllPrivateHands();
-    this.tickBots();
+    enterOwnerLocalPhaseAfterNoResponseFlow({
+      pending: this.pendingResponse,
+      ownerId,
+      getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
+      setPendingOwner: (nextOwnerId) => {
+        if (this.pendingResponse) {
+          this.pendingResponse.ownerId = nextOwnerId;
+        }
+      },
+      setResponsePhase: (phase) => {
+        this.state.responsePhase = phase;
+      },
+      setCurrentPlayer: (nextOwnerId) => {
+        this.state.currentPlayerId = nextOwnerId;
+      },
+      setCurrentTurnPlayer: (nextOwnerId) => {
+        this.state.currentTurnPlayerId = nextOwnerId;
+      },
+      setLoopStageLocal: () => {
+        this.state.loopStage = "local_poll";
+      },
+      clearActiveResponder: () => {
+        this.state.activeResponderId = "";
+      },
+      clearResponseEndsAt: () => {
+        this.state.responseEndsAt = 0;
+      },
+      addWildcardCardToPlayer: (nextOwnerId, card, source) => this.addWildcardCardToPlayer(nextOwnerId, card, source),
+      setLastAction: (action) => {
+        this.state.lastAction = action;
+      },
+      enterDiscardStage: (nextOwnerId, tag) => this.enterDiscardStage(nextOwnerId, tag),
+      syncAllPrivateHands: () => this.syncAllPrivateHands(),
+      tickBots: () => this.tickBots(),
+    });
   }
 
   private executeEat(ownerId: string): void {
-    const pending = this.pendingResponse;
-    if (!pending) {
-      return;
-    }
-    if (!this.executeChiOperation(ownerId, pending.card)) {
-      return;
-    }
-    this.state.lastAction = `${ownerId} CHI`;
-    this.finalizeWithDiscardFrom(ownerId);
+    executeEatFlow(
+      {
+        pending: this.pendingResponse,
+        executeChiOperation: (ownerIdArg, pendingCard) => this.executeChiOperation(ownerIdArg, pendingCard),
+        setLastAction: (action) => {
+          this.state.lastAction = action;
+        },
+        finalizeWithDiscardFrom: (ownerIdArg) => this.finalizeWithDiscardFrom(ownerIdArg),
+      },
+      ownerId,
+    );
   }
 
   private executeGrab(ownerId: string): void {
-    const pending = this.pendingResponse;
-    if (!pending) {
-      return;
-    }
-    this.pushDiscard(ownerId, pending.card);
-
-    // Rule (new loop): when passing on an upper card, deck reaching 8 triggers draw end.
-    if (shouldEndDrawAfterUpperPass(this.deck.length)) {
-      this.endRound("DRAW_GAME");
-      return;
-    }
-
-    const newCard = this.deck.shift();
-    this.state.deckCount = this.deck.length;
-    if (!newCard) {
-      this.endRound("DRAW_GAME");
-      return;
-    }
-
-    const hand = this.playerHands.get(ownerId) ?? [];
-    hand.push(newCard);
-    this.playerHands.set(ownerId, hand);
-
-    this.pendingResponse = createPendingResponse(ownerId, newCard, "draw");
-    this.state.responsePhase = "collective";
-    this.setResponseCard(newCard, "draw");
-    this.state.currentTurnPlayerId = ownerId;
-    this.state.previousPlayerId = ownerId;
-    this.state.loopStage = "global_poll";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = ownerId;
-    this.state.responseEndsAt = 0;
-    this.state.lastAction = `${ownerId} PASS`;
-    this.syncAllPrivateHands();
-    this.startCollectivePolling();
+    executeGrabFlow(
+      {
+        pending: this.pendingResponse,
+        deck: this.deck,
+        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        shouldEndDrawAfterUpperPass,
+        endRound: (lastAction) => this.endRound(lastAction),
+        setDeckCount: (deckCount) => {
+          this.state.deckCount = deckCount;
+        },
+        addCardToHand: (ownerIdArg, card) => {
+          const hand = this.playerHands.get(ownerIdArg) ?? [];
+          hand.push(card);
+          this.playerHands.set(ownerIdArg, hand);
+        },
+        setupCollectiveAfterGrab: (ownerIdArg, card) => {
+          this.pendingResponse = createPendingResponse(ownerIdArg, card, "draw");
+          this.state.responsePhase = "collective";
+          this.setResponseCard(card, "draw");
+          this.state.currentTurnPlayerId = ownerIdArg;
+          this.state.previousPlayerId = ownerIdArg;
+          this.state.loopStage = "global_poll";
+          this.state.activeResponderId = "";
+          this.state.pollOriginPlayerId = ownerIdArg;
+          this.state.responseEndsAt = 0;
+        },
+        setLastAction: (action) => {
+          this.state.lastAction = action;
+        },
+        syncAllPrivateHands: () => this.syncAllPrivateHands(),
+        startCollectivePolling: () => this.startCollectivePolling(),
+      },
+      ownerId,
+    );
   }
 
   private executePassToNext(ownerId: string): void {
-    const pending = this.pendingResponse;
-    if (!pending) {
-      return;
-    }
-    this.pushDiscard(ownerId, pending.card);
-    this.state.lastAction = `${ownerId} PASS`;
-    this.advanceToNextOwner(ownerId, pending.card);
+    executePassToNextFlow(
+      {
+        pending: this.pendingResponse,
+        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        setLastAction: (action) => {
+          this.state.lastAction = action;
+        },
+        advanceToNextOwner: (ownerIdArg, card) => this.advanceToNextOwner(ownerIdArg, card),
+      },
+      ownerId,
+    );
   }
 
   private finalizeWithDiscardFrom(playerId: string): void {
-    const discard = this.pickDiscardCard(playerId);
-    if (!discard) {
-      this.endRound(`${playerId} NO_DISCARD`);
-      return;
-    }
-    this.pushDiscard(playerId, discard);
-    this.advanceToNextOwner(playerId, discard);
+    finalizeWithDiscardFlow(
+      {
+        pickDiscardCard: (playerIdArg) => this.pickDiscardCard(playerIdArg),
+        pushDiscard: (playerIdArg, card) => this.pushDiscard(playerIdArg, card),
+        advanceToNextOwner: (playerIdArg, card) => this.advanceToNextOwner(playerIdArg, card),
+        endRound: (lastAction) => this.endRound(lastAction),
+      },
+      playerId,
+    );
   }
 
   private advanceToNextOwner(currentOwnerId: string, cardToNext: Card): void {
@@ -1167,77 +1173,21 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
-    if (this.state.phase === "declaring") {
-      return [];
-    }
-    const pending = this.pendingResponse;
-    if (!pending) {
-      return [];
-    }
     const hand = this.playerHands.get(seatId) ?? [];
-    const isOwner = pending.ownerId === seatId;
-    const isCollective = this.state.responsePhase === "collective";
-
-    if (isCollective) {
-      if (seatId !== this.collectiveResponderId) {
-        return this.getDisabledPanel("collective");
-      }
-      const wildcardPool = this.getWildcardPoolCards(seatId);
-      const huProbe = explainHu(hand, pending.card, {
-        wildcardCount: this.getHuWildcardCount(),
-        wildcardPool,
-      });
-      this.logHuCheck("collective", seatId, hand, pending.card, huProbe.valid);
-      return [
-        { action: "hu", enabled: huProbe.valid },
-        { action: "kai", enabled: canKai(hand, pending.card, wildcardPool) },
-        { action: "peng", enabled: canPeng(hand, pending.card) },
-        { action: "chi", enabled: false },
-        { action: "pass", enabled: true },
-      ];
-    }
-
-    if (!isOwner) {
-      return this.getDisabledPanel(this.state.responsePhase);
-    }
-
-    if (this.awaitingDiscardOwnerId === seatId) {
-      return [];
-    }
-
-    if (this.state.responsePhase === "local_upper" || this.state.responsePhase === "local_draw") {
-      const handNoPending = this.getHandWithoutPending(seatId, pending.card);
-      const wildcardPool = this.getWildcardPoolCards(seatId);
-      return [
-        { action: "hu", enabled: false },
-        { action: "kai", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "chi", enabled: canChi(handNoPending, pending.card, wildcardPool) },
-        { action: "pass", enabled: true },
-      ];
-    }
-
-    return this.getDisabledPanel(this.state.responsePhase);
-  }
-
-  private getDisabledPanel(responsePhase: "collective" | "local_upper" | "local_draw"): Array<{ action: ActionType; enabled: boolean }> {
-    if (responsePhase === "collective") {
-      return [
-        { action: "hu", enabled: false },
-        { action: "kai", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "chi", enabled: false },
-        { action: "pass", enabled: false },
-      ];
-    }
-
-    return [
-      { action: "hu", enabled: false },
-      { action: "kai", enabled: false },
-      { action: "peng", enabled: false },
-      { action: "chi", enabled: false },
-      { action: "pass", enabled: false },
-    ];
+    const wildcardPool = this.getWildcardPoolCards(seatId);
+    return getAvailableActionsFlow({
+      phase: this.state.phase,
+      seatId,
+      pending: this.pendingResponse,
+      responsePhase: this.state.responsePhase,
+      collectiveResponderId: this.collectiveResponderId,
+      awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
+      hand,
+      wildcardPool,
+      explainHuForSeat: (seatIdArg, handArg, responseCard) => this.explainHuForSeat(seatIdArg, handArg, responseCard),
+      logHuCheck: (stage, seatIdArg, handArg, response, valid) => this.logHuCheck(stage, seatIdArg, handArg, response, valid),
+      getHandWithoutPending: (seatIdArg, pendingCard) => this.getHandWithoutPending(seatIdArg, pendingCard),
+    });
   }
 
   private broadcastAvailableActions(): void {
