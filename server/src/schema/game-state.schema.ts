@@ -19,6 +19,8 @@ export class PlayerState extends Schema {
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
   @type(["number"]) exposedGroupSizes = new ArraySchema<number>();
   @type([CardSchema]) generalArea = new ArraySchema<CardSchema>();
+  // Unbound wildcards for the new rule flow. Kept separate from exposed groups.
+  @type([CardSchema]) wildcardPool = new ArraySchema<CardSchema>();
   @type([CardSchema]) fishArea = new ArraySchema<CardSchema>();
 }
 
@@ -33,5 +35,18 @@ export class GameState extends Schema {
   @type("string") lastAction: string = "";
   @type("number") deckCount: number = 0;
   @type("number") declareEndsAt: number = 0;
+  // New-loop fields (target-card based flow).
+  @type("boolean") isMoCard: boolean = false;
+  @type("string") previousPlayerId: string = "";
+  @type("string") currentTurnPlayerId: string = "";
+  @type(CardSchema) targetCard: CardSchema = new CardSchema();
+  // Optional flow hint for clients during transition.
+  @type("string") loopStage: "global_poll" | "local_poll" | "transition" | "discard" | "" = "";
+  // Current responder in global interrupt polling.
+  @type("string") activeResponderId: string = "";
+  // Polling origin seat (who produced targetCard).
+  @type("string") pollOriginPlayerId: string = "";
+  // Remaining response time for current poll (ms epoch).
+  @type("number") responseEndsAt: number = 0;
   @type(CardSchema) responseCard: CardSchema = new CardSchema();
 }

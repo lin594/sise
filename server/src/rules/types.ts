@@ -10,7 +10,15 @@ export interface Card {
   source?: "upper" | "draw";
 }
 
-export type ActionType = "hu" | "open" | "peng" | "eat" | "grab" | "pass";
+// Keep legacy actions for incremental migration. New flow should use kai/chi.
+export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass" | "open" | "eat" | "grab";
+
+export type ResponseSource = "draw" | "discard";
+
+export interface WildcardBudget {
+  fromHand: number;
+  fromPool: number;
+}
 
 export interface ActionAvailability {
   action: ActionType;
