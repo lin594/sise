@@ -10,6 +10,7 @@ import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logi
 import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
 import { resolveNextCollectiveResponder } from "./flow/collective-polling.js";
 import { pickCollectiveBotAction, pickLocalBotAction } from "./flow/bot-strategy.js";
+import { createPendingResponse } from "./flow/pending-response.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -650,11 +651,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    this.pendingResponse = {
-      ownerId,
-      card: { ...drawn, source: "draw" },
-      collectives: new Map(),
-    };
+    this.pendingResponse = createPendingResponse(ownerId, drawn, "draw");
     this.awaitingDiscardOwnerId = null;
     this.state.responsePhase = "collective";
     this.setResponseCard(drawn, "draw");
@@ -698,11 +695,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
-    this.pendingResponse = {
-      ownerId,
-      card: { ...discard, source: "upper" },
-      collectives: new Map(),
-    };
+    this.pendingResponse = createPendingResponse(ownerId, discard, "upper");
     this.awaitingDiscardOwnerId = null;
     this.state.responsePhase = "collective";
     this.state.currentPlayerId = ownerId;
@@ -822,11 +815,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    this.pendingResponse = {
-      ownerId,
-      card: { ...fallback, source: "draw" },
-      collectives: new Map(),
-    };
+    this.pendingResponse = createPendingResponse(ownerId, fallback, "draw");
     this.awaitingDiscardOwnerId = ownerId;
     this.resetCollectivePolling();
     this.state.responsePhase = "local_draw";
@@ -967,11 +956,7 @@ export class FourColorGameRoom extends Room<GameState> {
     hand.push(newCard);
     this.playerHands.set(ownerId, hand);
 
-    this.pendingResponse = {
-      ownerId,
-      card: { ...newCard, source: "draw" },
-      collectives: new Map(),
-    };
+    this.pendingResponse = createPendingResponse(ownerId, newCard, "draw");
     this.state.responsePhase = "collective";
     this.setResponseCard(newCard, "draw");
     this.state.currentTurnPlayerId = ownerId;
@@ -1007,11 +992,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private advanceToNextOwner(currentOwnerId: string, cardToNext: Card): void {
     const nextId = this.getNextPlayerId(currentOwnerId);
-    this.pendingResponse = {
-      ownerId: nextId,
-      card: { ...cardToNext, source: "upper" },
-      collectives: new Map(),
-    };
+    this.pendingResponse = createPendingResponse(nextId, cardToNext, "upper");
     this.state.currentPlayerId = nextId;
     this.state.responsePhase = "collective";
     this.setResponseCard(cardToNext, "upper");
@@ -1895,11 +1876,7 @@ export class FourColorGameRoom extends Room<GameState> {
       add("h1", "red", "ju");
       add("h2", "red", "ma");
       add("h3", "red", "pao");
-      this.pendingResponse = {
-        ownerId: seatId,
-        card: { id: "h3", color: "red", type: "pao", source: "draw" },
-        collectives: new Map(),
-      };
+      this.pendingResponse = createPendingResponse(seatId, { id: "h3", color: "red", type: "pao" }, "draw");
       this.state.phase = "playing";
       this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
@@ -1910,11 +1887,7 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d2", "red", "xiang");
       add("d3", "yellow", "ju");
       add("d4", "yellow", "ma");
-      this.pendingResponse = {
-        ownerId: seatId,
-        card: { id: "rj", color: "red", type: "jiang", source: "upper" },
-        collectives: new Map(),
-      };
+      this.pendingResponse = createPendingResponse(seatId, { id: "rj", color: "red", type: "jiang" }, "upper");
       this.state.phase = "playing";
       this.state.responsePhase = "local_upper";
       this.state.currentPlayerId = seatId;
@@ -1924,11 +1897,7 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d5", "yellow", "ju");
       add("d6", "white", "xiang");
       add("d7", "green", "zu");
-      this.pendingResponse = {
-        ownerId: seatId,
-        card: { id: "gy", color: "green", type: "pao", source: "draw" },
-        collectives: new Map(),
-      };
+      this.pendingResponse = createPendingResponse(seatId, { id: "gy", color: "green", type: "pao" }, "draw");
       this.state.phase = "playing";
       this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
@@ -1938,11 +1907,11 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d8", "red", "shi");
       add("d9", "green", "xiang");
       add("d10", "white", "zu");
-      this.pendingResponse = {
-        ownerId: this.getNextPlayerId(seatId),
-        card: { id: "yj", color: "yellow", type: "ju", source: "upper" },
-        collectives: new Map(),
-      };
+      this.pendingResponse = createPendingResponse(
+        this.getNextPlayerId(seatId),
+        { id: "yj", color: "yellow", type: "ju" },
+        "upper",
+      );
       this.state.phase = "playing";
       this.state.responsePhase = "collective";
       this.state.currentPlayerId = this.pendingResponse.ownerId;
@@ -1958,11 +1927,11 @@ export class FourColorGameRoom extends Room<GameState> {
       add("d11", "red", "jiang");
       add("d12", "red", "shi");
       add("d13", "red", "xiang");
-      this.pendingResponse = {
-        ownerId: this.getNextPlayerId(seatId),
-        card: { id: "rp", color: "red", type: "pao", source: "upper" },
-        collectives: new Map(),
-      };
+      this.pendingResponse = createPendingResponse(
+        this.getNextPlayerId(seatId),
+        { id: "rp", color: "red", type: "pao" },
+        "upper",
+      );
       this.state.phase = "playing";
       this.state.responsePhase = "collective";
       this.state.currentPlayerId = this.pendingResponse.ownerId;
