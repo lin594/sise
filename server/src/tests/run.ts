@@ -109,6 +109,59 @@ t("room: no-response on upper enters local_upper for next player", () => {
   assert.equal(room.state.currentPlayerId, "B");
 });
 
+t("room: collective conflict resolves by polling order for same priority", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("x", "red", "ju", "upper"),
+    collectives: new Map<string, string>([
+      ["B", "kai"],
+      ["C", "kai"],
+      ["D", "pass"],
+      ["A", "pass"],
+    ]),
+  };
+  let resolved: { id: string; action: string } | null = null;
+  room.executeResponseWinner = (id: string, action: string) => {
+    resolved = { id, action };
+  };
+  room.resolveCollectivePhase();
+  assert.deepEqual(resolved, { id: "B", action: "kai" });
+});
+
+t("room: collective priority uses hu over kai/peng", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("x", "red", "ju", "upper"),
+    collectives: new Map<string, string>([
+      ["B", "kai"],
+      ["C", "hu"],
+      ["D", "peng"],
+      ["A", "pass"],
+    ]),
+  };
+  let resolved: { id: string; action: string } | null = null;
+  room.executeResponseWinner = (id: string, action: string) => {
+    resolved = { id, action };
+  };
+  room.resolveCollectivePhase();
+  assert.deepEqual(resolved, { id: "C", action: "hu" });
+});
+
+t("room: force-take draw wildcard can directly end with NO_DISCARD", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("A", []);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("w1", "white", "jiang", "draw"),
+    collectives: new Map(),
+  };
+  room.enterOwnerLocalPhaseAfterNoResponse("A");
+  assert.equal(room.state.phase, "ended");
+  assert.match(String(room.state.lastAction), /^A NO_DISCARD$/);
+});
+
 let failed = 0;
 for (const item of tests) {
   try {

@@ -1,5 +1,6 @@
 // Keep legacy actions for transition compatibility.
 export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass" | "open" | "eat" | "grab";
+export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 
 export interface Card {
   id: string;
