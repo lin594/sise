@@ -757,75 +757,23 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    if (pending.mode === "mode2") {
-      if (action === "hu") {
-        const hand = this.getHandWithoutPending(seatId, pending.card);
-        const hu = this.explainHuForSeat(seatId, hand, pending.card);
-        this.logHuCheck("mode2_owner_click_hu", seatId, hand, pending.card, hu.valid);
-        if (hu.valid) {
-          this.endRound(`${seatId} HU`, seatId, hu.groups);
-        } else {
-          this.state.lastAction = "HU_INVALID";
-          this.broadcastAvailableActions();
-        }
-        return;
-      }
+    if (this.awaitingDiscardOwnerId === seatId) {
+      return;
+    }
 
-      if (action === "kai") {
-        const hand = this.getHandWithoutPending(seatId, pending.card);
-        const plan = findKaiPlan(hand, pending.card, this.getWildcardPoolCards(seatId));
-        if (!plan) {
-          return;
-        }
-        const taken = this.consumePlanCards(seatId, plan.handCards, plan.poolCards);
-        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
-        this.state.lastAction = `${seatId} KAI`;
-        this.startTurn(seatId, "KONG_DRAW");
-        return;
-      }
-
-      if (action === "peng") {
-        const hand = this.getHandWithoutPending(seatId, pending.card);
-        if (!canPeng(hand, pending.card)) {
-          return;
-        }
-        this.removeFromHand(seatId, pending.card);
-        const taken = this.takeMatchingCards(seatId, pending.card, 2);
-        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
-        this.enterDiscardStage(seatId, "PENG");
-        return;
-      }
-
+    if (this.state.responsePhase === "self_eat" || this.state.responsePhase === "self_grab") {
       if (action === "chi") {
-        const hand = this.getHandWithoutPending(seatId, pending.card);
-        const plans = getChiPlans(hand, pending.card, this.getWildcardPoolCards(seatId));
-        if (plans.length === 0) {
-          return;
-        }
-        const picked = plans[0];
-        const taken = this.consumePlanCards(seatId, picked.handCards, picked.poolCards);
-        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
-        this.enterDiscardStage(seatId, "CHI");
+        this.executeEat(seatId);
         return;
       }
-
       if (action === "pass") {
-        this.enterDiscardStage(seatId, "PASS");
+        if (this.state.responsePhase === "self_eat") {
+          this.executeGrab(seatId);
+        } else {
+          this.executePassToNext(seatId);
+        }
       }
       return;
-    }
-
-    if (action === "chi") {
-      this.executeEat(seatId);
-      return;
-    }
-
-    if (action === "pass") {
-      if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
-        this.executeGrab(seatId);
-      } else {
-        this.executePassToNext(seatId);
-      }
     }
   }
 
@@ -1524,10 +1472,11 @@ export class FourColorGameRoom extends Room<GameState> {
       return this.getDisabledPanel(pending.mode, this.state.responsePhase);
     }
 
-    if (pending.mode === "mode2") {
-      if (this.awaitingDiscardOwnerId === seatId) {
-        return [];
-      }
+    if (this.awaitingDiscardOwnerId === seatId) {
+      return [];
+    }
+
+    if (this.state.responsePhase === "self_eat" || this.state.responsePhase === "self_grab") {
       const handNoPending = this.getHandWithoutPending(seatId, pending.card);
       const wildcardPool = this.getWildcardPoolCards(seatId);
       return [
@@ -1539,26 +1488,7 @@ export class FourColorGameRoom extends Room<GameState> {
       ];
     }
 
-    // Legacy debug mode.
-    if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
-      const wildcardPool = this.getWildcardPoolCards(seatId);
-      return [
-        { action: "hu", enabled: false },
-        { action: "kai", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "chi", enabled: canChi(hand, pending.card, wildcardPool) },
-        { action: "pass", enabled: true },
-      ];
-    }
-
-    const wildcardPool = this.getWildcardPoolCards(seatId);
-    return [
-      { action: "hu", enabled: false },
-      { action: "kai", enabled: false },
-      { action: "peng", enabled: false },
-      { action: "chi", enabled: canChi(hand, pending.card, wildcardPool) },
-      { action: "pass", enabled: true },
-    ];
+    return this.getDisabledPanel(pending.mode, this.state.responsePhase);
   }
 
   private getDisabledPanel(
@@ -2010,29 +1940,6 @@ export class FourColorGameRoom extends Room<GameState> {
 
     if (this.awaitingDiscardOwnerId === ownerId) {
       this.discardFromAndCollective(ownerId);
-      return;
-    }
-
-    if (this.pendingResponse.mode === "mode2") {
-      const acts = this.getAvailableActions(ownerId);
-      const choose =
-        acts.find((x) => x.action === "chi" && x.enabled)?.action ??
-        acts.find((x) => x.action === "pass" && x.enabled)?.action ??
-        "pass";
-
-      if (choose === "chi") {
-        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
-        const plans = getChiPlans(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId));
-        if (plans.length > 0) {
-          const picked = plans[0];
-          const taken = this.consumePlanCards(ownerId, picked.handCards, picked.poolCards);
-          this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
-        }
-        this.enterDiscardStage(ownerId, "CHI");
-        return;
-      }
-
-      this.enterDiscardStage(ownerId, "PASS");
       return;
     }
 
