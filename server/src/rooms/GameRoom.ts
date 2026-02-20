@@ -1,7 +1,7 @@
 import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, isGeneral, isSameFace, shuffle } from "../rules/deck.js";
-import { canEat, canOpen, canPeng, getEatCandidates } from "../rules/actions.js";
+import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 
@@ -712,6 +712,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
     const pending = this.pendingResponse;
     const isOwner = pending.ownerId === seatId;
+    action = this.normalizeAction(action);
     const enabledActions = this.getAvailableActions(seatId).filter((x) => x.enabled).map((x) => x.action);
     if (!enabledActions.includes(action)) {
       return;
@@ -737,7 +738,7 @@ export class FourColorGameRoom extends Room<GameState> {
     if (pending.mode === "mode2") {
       if (action === "hu") {
         const hand = this.getHandWithoutPending(seatId, pending.card);
-        const hu = explainHu(hand, pending.card, this.getHuWildcardCount());
+        const hu = this.explainHuForSeat(seatId, hand, pending.card);
         this.logHuCheck("mode2_owner_click_hu", seatId, hand, pending.card, hu.valid);
         if (hu.valid) {
           this.endRound(`${seatId} HU`, seatId, hu.groups);
@@ -750,11 +751,11 @@ export class FourColorGameRoom extends Room<GameState> {
 
       if (action === "open") {
         const hand = this.getHandWithoutPending(seatId, pending.card);
-        if (!canOpen(hand, pending.card)) {
+        const plan = findKaiPlan(hand, pending.card, this.getWildcardPoolCards(seatId));
+        if (!plan) {
           return;
         }
-        this.removeFromHand(seatId, pending.card);
-        const taken = this.takeMatchingCards(seatId, pending.card, 3);
+        const taken = this.consumePlanCards(seatId, plan.handCards, plan.poolCards);
         this.pushExposedGroup(seatId, [pending.card, ...taken], true);
         this.state.lastAction = `${seatId} OPEN`;
         this.startTurn(seatId, "KONG_DRAW");
@@ -775,15 +776,13 @@ export class FourColorGameRoom extends Room<GameState> {
 
       if (action === "eat") {
         const hand = this.getHandWithoutPending(seatId, pending.card);
-        const candidates = getEatCandidates(hand, pending.card);
-        if (candidates.length === 0) {
+        const plans = getChiPlans(hand, pending.card, this.getWildcardPoolCards(seatId));
+        if (plans.length === 0) {
           return;
         }
-        this.removeFromHand(seatId, pending.card);
-        for (const card of candidates[0]) {
-          this.removeFromHand(seatId, card);
-        }
-        this.pushExposedGroup(seatId, [pending.card, ...candidates[0]], true);
+        const picked = plans[0];
+        const taken = this.consumePlanCards(seatId, picked.handCards, picked.poolCards);
+        this.pushExposedGroup(seatId, [pending.card, ...taken], true);
         this.enterDiscardStage(seatId, "EAT");
         return;
       }
@@ -964,7 +963,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const response = pending.card;
 
     if (action === "hu") {
-      const hu = explainHu(winnerHand, response, this.getHuWildcardCount());
+      const hu = this.explainHuForSeat(winnerId, winnerHand, response);
       this.logHuCheck("collective_winner_hu", winnerId, winnerHand, response, hu.valid);
       if (!hu.valid) {
         this.state.lastAction = "HU_INVALID";
@@ -976,7 +975,13 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (action === "open") {
-      const taken = this.takeMatchingCards(winnerId, response, 3);
+      const plan = findKaiPlan(winnerHand, response, this.getWildcardPoolCards(winnerId));
+      if (!plan) {
+        const nextId = this.getNextPlayerId(pending.ownerId);
+        this.startTurn(nextId, "TURN_DRAW");
+        return;
+      }
+      const taken = this.consumePlanCards(winnerId, plan.handCards, plan.poolCards);
       this.pushExposedGroup(winnerId, [response, ...taken], true);
       this.state.lastAction = `${winnerId} OPEN`;
       this.startTurn(winnerId, "KONG_DRAW");
@@ -997,16 +1002,15 @@ export class FourColorGameRoom extends Room<GameState> {
         return;
       }
       const hand = this.playerHands.get(winnerId) ?? [];
-      const candidates = getEatCandidates(hand, response);
-      if (candidates.length === 0) {
+      const plans = getChiPlans(hand, response, this.getWildcardPoolCards(winnerId));
+      if (plans.length === 0) {
         const nextId = this.getNextPlayerId(pending.ownerId);
         this.startTurn(nextId, "TURN_DRAW");
         return;
       }
-      for (const card of candidates[0]) {
-        this.removeFromHand(winnerId, card);
-      }
-      this.pushExposedGroup(winnerId, [response, ...candidates[0]], true);
+      const picked = plans[0];
+      const taken = this.consumePlanCards(winnerId, picked.handCards, picked.poolCards);
+      this.pushExposedGroup(winnerId, [response, ...taken], true);
       this.enterDiscardStage(winnerId, "EAT");
       return;
     }
@@ -1031,16 +1035,14 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
     const hand = this.playerHands.get(ownerId) ?? [];
-    const candidates = getEatCandidates(hand, pending.card);
-    if (candidates.length === 0) {
+    const plans = getChiPlans(hand, pending.card, this.getWildcardPoolCards(ownerId));
+    if (plans.length === 0) {
       return;
     }
 
-    const picked = candidates[0];
-    for (const card of picked) {
-      this.removeFromHand(ownerId, card);
-    }
-    this.pushExposedGroup(ownerId, [pending.card, ...picked], true);
+    const picked = plans[0];
+    const taken = this.consumePlanCards(ownerId, picked.handCards, picked.poolCards);
+    this.pushExposedGroup(ownerId, [pending.card, ...taken], true);
     this.state.lastAction = `${ownerId} EAT`;
     this.finalizeWithDiscardFrom(ownerId);
   }
@@ -1170,6 +1172,32 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  private removeFromWildcardPool(playerId: string, card: Card): void {
+    const player = this.state.players.get(playerId);
+    if (!player) {
+      return;
+    }
+    const idx = player.wildcardPool.findIndex((x) => x.id === card.id);
+    if (idx >= 0) {
+      player.wildcardPool.splice(idx, 1);
+      return;
+    }
+    const byFace = player.wildcardPool.findIndex((x) => x.color === card.color && x.type === card.type);
+    if (byFace >= 0) {
+      player.wildcardPool.splice(byFace, 1);
+    }
+  }
+
+  private consumePlanCards(playerId: string, handCards: Card[], poolCards: Card[]): Card[] {
+    for (const card of handCards) {
+      this.removeFromHand(playerId, card);
+    }
+    for (const card of poolCards) {
+      this.removeFromWildcardPool(playerId, card);
+    }
+    return [...handCards, ...poolCards];
+  }
+
   private pushDiscard(playerId: string, card: Card): void {
     const player = this.state.players.get(playerId);
     if (!player) {
@@ -1215,6 +1243,21 @@ export class FourColorGameRoom extends Room<GameState> {
       type: card.type as Card["type"],
       source: card.source === "draw" ? "draw" : "upper",
     };
+  }
+
+  private getWildcardPoolCards(seatId: string): Card[] {
+    const player = this.state.players.get(seatId);
+    if (!player) {
+      return [];
+    }
+    return player.wildcardPool.map((card) => this.toPlainCard(card));
+  }
+
+  private explainHuForSeat(seatId: string, hand: Card[], responseCard: Card) {
+    return explainHu(hand, responseCard, {
+      wildcardCount: this.getHuWildcardCount(),
+      wildcardPool: this.getWildcardPoolCards(seatId),
+    });
   }
 
   private getScoreRules(): Record<string, { label: string; unit: number }> {
@@ -1388,13 +1431,17 @@ export class FourColorGameRoom extends Room<GameState> {
       if (isOwner || seatId !== this.collectiveResponderId) {
         return this.getDisabledPanel("mode1", "collective");
       }
-      const huProbe = explainHu(hand, pending.card, this.getHuWildcardCount());
+      const wildcardPool = this.getWildcardPoolCards(seatId);
+      const huProbe = explainHu(hand, pending.card, {
+        wildcardCount: this.getHuWildcardCount(),
+        wildcardPool,
+      });
       this.logHuCheck("collective", seatId, hand, pending.card, huProbe.valid);
       return [
         { action: "hu", enabled: huProbe.valid },
-        { action: "open", enabled: canOpen(hand, pending.card) },
+        { action: "open", enabled: canKai(hand, pending.card, wildcardPool) },
         { action: "peng", enabled: canPeng(hand, pending.card) },
-        { action: "eat", enabled: this.isEatResponder(pending.ownerId, seatId) && canEat(hand, pending.card) },
+        { action: "eat", enabled: this.isEatResponder(pending.ownerId, seatId) && canChi(hand, pending.card, wildcardPool) },
         { action: "pass", enabled: true },
       ];
     }
@@ -1408,33 +1455,39 @@ export class FourColorGameRoom extends Room<GameState> {
         return [];
       }
       const handNoPending = this.getHandWithoutPending(seatId, pending.card);
-      const huProbe = explainHu(handNoPending, pending.card, this.getHuWildcardCount());
+      const wildcardPool = this.getWildcardPoolCards(seatId);
+      const huProbe = explainHu(handNoPending, pending.card, {
+        wildcardCount: this.getHuWildcardCount(),
+        wildcardPool,
+      });
       this.logHuCheck("mode2_owner", seatId, handNoPending, pending.card, huProbe.valid);
       return [
         { action: "hu", enabled: huProbe.valid },
-        { action: "open", enabled: canOpen(handNoPending, pending.card) },
+        { action: "open", enabled: canKai(handNoPending, pending.card, wildcardPool) },
         { action: "peng", enabled: canPeng(handNoPending, pending.card) },
-        { action: "eat", enabled: canEat(handNoPending, pending.card) },
+        { action: "eat", enabled: canChi(handNoPending, pending.card, wildcardPool) },
         { action: "pass", enabled: true },
       ];
     }
 
     // Legacy debug mode.
     if (pending.mode === "mode1" && this.state.responsePhase === "self_eat") {
+      const wildcardPool = this.getWildcardPoolCards(seatId);
       return [
         { action: "hu", enabled: false },
         { action: "open", enabled: false },
         { action: "peng", enabled: false },
-        { action: "eat", enabled: canEat(hand, pending.card) },
+        { action: "eat", enabled: canChi(hand, pending.card, wildcardPool) },
         { action: "grab", enabled: true },
       ];
     }
 
+    const wildcardPool = this.getWildcardPoolCards(seatId);
     return [
       { action: "hu", enabled: false },
       { action: "open", enabled: false },
       { action: "peng", enabled: false },
-      { action: "eat", enabled: canEat(hand, pending.card) },
+      { action: "eat", enabled: canChi(hand, pending.card, wildcardPool) },
       { action: "pass", enabled: true },
     ];
   }
@@ -1884,7 +1937,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
       if (choose === "hu") {
         const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
-        const hu = explainHu(hand, this.pendingResponse.card, this.getHuWildcardCount());
+        const hu = this.explainHuForSeat(ownerId, hand, this.pendingResponse.card);
         this.logHuCheck("mode2_bot_hu", ownerId, hand, this.pendingResponse.card, hu.valid);
         if (hu.valid) {
           this.endRound(`${ownerId} HU`, ownerId, hu.groups);
@@ -1895,8 +1948,13 @@ export class FourColorGameRoom extends Room<GameState> {
       }
 
       if (choose === "open") {
-        this.removeFromHand(ownerId, this.pendingResponse.card);
-        const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 3);
+        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
+        const plan = findKaiPlan(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId));
+        if (!plan) {
+          this.enterDiscardStage(ownerId, "PASS");
+          return;
+        }
+        const taken = this.consumePlanCards(ownerId, plan.handCards, plan.poolCards);
         this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
         this.state.lastAction = `${ownerId} OPEN`;
         this.startTurn(ownerId, "KONG_DRAW");
@@ -1913,13 +1971,11 @@ export class FourColorGameRoom extends Room<GameState> {
 
       if (choose === "eat") {
         const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
-        const candidates = getEatCandidates(hand, this.pendingResponse.card);
-        if (candidates.length > 0) {
-          this.removeFromHand(ownerId, this.pendingResponse.card);
-          for (const card of candidates[0]) {
-            this.removeFromHand(ownerId, card);
-          }
-          this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...candidates[0]], true);
+        const plans = getChiPlans(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId));
+        if (plans.length > 0) {
+          const picked = plans[0];
+          const taken = this.consumePlanCards(ownerId, picked.handCards, picked.poolCards);
+          this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
         }
         this.enterDiscardStage(ownerId, "EAT");
         return;
@@ -1931,7 +1987,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
     const hand = this.playerHands.get(ownerId) ?? [];
     if (this.state.responsePhase === "self_eat") {
-      if (canEat(hand, this.pendingResponse.card)) {
+      if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
         this.executeGrab(ownerId);
@@ -1940,7 +1996,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "self_grab") {
-      if (canEat(hand, this.pendingResponse.card)) {
+      if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
         this.executePassToNext(ownerId);
@@ -2081,6 +2137,16 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.tickBots();
     return true;
+  }
+
+  private normalizeAction(action: ActionType): ActionType {
+    if (action === "kai") {
+      return "open";
+    }
+    if (action === "chi") {
+      return "eat";
+    }
+    return action;
   }
 
   private normalizeName(input: unknown): string {
