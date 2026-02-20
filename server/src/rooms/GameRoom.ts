@@ -1,75 +1,73 @@
 ﻿import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { createDeck, isDiscardRestricted, isSameFace, shuffle } from "../rules/deck.js";
-import { explainHu } from "../rules/hu.js";
+import { createDeck, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
-import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
+import { tryExecuteChi } from "./flow/actions/chi.js";
+import { tryExecuteKai } from "./flow/actions/kai.js";
+import { tryExecutePeng } from "./flow/actions/peng.js";
 import { executeResponseWinner } from "./flow/response-winner.js";
-import { getCollectiveOrder } from "./flow/collective-logic.js";
-import { shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
-import { createPendingResponse } from "./flow/pending-response.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
-import { canReturnLobby, canStartNextRound, decideStartGame } from "./flow/match-entry.js";
-import { resetToFreshLobbyFlow } from "./flow/fresh-lobby.js";
-import { createHumanSeatFlow, reclaimSeatStateFlow } from "./flow/seat-lifecycle.js";
-import { decideActionDispatch } from "./flow/action-dispatch.js";
-import { canAcceptDiscardRequest, normalizeDiscardCardId } from "./flow/turn-cycle.js";
+import {
+  areAllDeclarationsReady as areAllDeclarationsReadyUtil,
+  buildDeclarationSelection,
+  buildRoundResultPlayers as buildRoundResultPlayersFlow,
+  canReturnLobby,
+  canStartNextRound,
+  createHumanSeatFlow,
+  dealInitialHands as dealInitialHandsFlow,
+  decideStartGame,
+  endRoundFlow,
+  ensureBotSeatsForStart as ensureBotSeatsForStartFlow,
+  reclaimSeatStateFlow,
+  resetRoundPlayers as resetRoundPlayersFlow,
+  resetToFreshLobbyFlow,
+  resetToLobby,
+  runDeclaringTimeoutFlow,
+  startDeclaringFlow,
+  type RoundResultPlayer,
+} from "./flow/match-runtime.js";
 import {
   applyCollectivePollState,
   applyEnterDiscardStageState,
   applyPlayingStartAfterDeclaring,
   applyTurnTransitionState,
-} from "./flow/state-transitions.js";
-import { planTickBots } from "./flow/bot-tick.js";
-import { runBotStep } from "./flow/bot-runner.js";
-import { advanceCollectiveFlow, startCollectiveFlow } from "./flow/collective-runtime.js";
-import { endRoundFlow } from "./flow/round-end.js";
-import {
-  buildRoundResultPlayers as buildRoundResultPlayersFlow,
-  type RoundResultPlayer,
-} from "./flow/round-result.js";
-import { resetToLobby } from "./flow/lobby-reset.js";
-import {
-  dealInitialHands as dealInitialHandsFlow,
-  ensureBotSeatsForStart as ensureBotSeatsForStartFlow,
-  resetRoundPlayers as resetRoundPlayersFlow,
-} from "./flow/round-bootstrap.js";
-import {
   buildHuSummaryBySeat,
-  shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
-  summarizeAllPlayersCards,
-  summarizeCards,
-} from "./flow/logging-utils.js";
-import {
+  canAcceptDiscardRequest,
+  createPendingResponse,
   generateToken as generateTokenUtil,
+  getCollectiveOrder,
+  getNextPlayerId as getNextPlayerIdOrder,
+  getPreviousPlayerId as getPreviousPlayerIdOrder,
   normalizeAction as normalizeActionUtil,
+  normalizeDiscardCardId,
   normalizeName as normalizeNameUtil,
   normalizeToken as normalizeTokenUtil,
   pickRandomDealerId as pickRandomDealerIdUtil,
-} from "./flow/input-normalization.js";
-import { areAllDeclarationsReady as areAllDeclarationsReadyUtil, buildDeclarationSelection } from "./flow/declaration-utils.js";
-import { runDeclaringTimeoutFlow, startDeclaringFlow } from "./flow/declaring.js";
-import { getAvailableActionsFlow } from "./flow/action-panel.js";
-import { enterOwnerLocalPhaseAfterNoResponseFlow } from "./flow/owner-local-phase.js";
+  shouldEndDrawAfterUpperPass,
+  shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
+  summarizeAllPlayersCards,
+  summarizeCards,
+} from "./flow/support.js";
 import {
+  decideActionDispatch,
+  getAvailableActionsFlow,
+  enterOwnerLocalPhaseAfterNoResponseFlow,
   executeEatFlow,
   executeGrabFlow,
   executePassToNextFlow,
   finalizeWithDiscardFlow,
-} from "./flow/owner-actions.js";
-import {
   advanceToNextOwnerFlow,
   beginCollectiveFromDiscardFlow,
   discardFromAndCollectiveFlow,
   drawForOwnerFlow,
   enterDiscardStageFlow,
-} from "./flow/turn-runtime.js";
-import { resolveCollectivePhaseFlow } from "./flow/collective-resolution.js";
-import {
-  iterateFromNext as iterateFromNextOrder,
-  getNextPlayerId as getNextPlayerIdOrder,
-  getPreviousPlayerId as getPreviousPlayerIdOrder,
-} from "./flow/turn-order.js";
+  resolveCollectivePhaseFlow,
+  planTickBots,
+  runBotStep,
+  startCollectiveFlow,
+  advanceCollectiveFlow,
+} from "./flow/playing-flow.js";
+import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -151,9 +149,18 @@ export class FourColorGameRoom extends Room<GameState> {
   private collectiveResponderId: string | null = null;
   private debugSeq = 0;
   private roundDealerId: string | null = null;
+  private stateOps: RoomStateOps | null = null;
+
+  private get ops(): RoomStateOps {
+    if (!this.stateOps) {
+      this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
+    }
+    return this.stateOps;
+  }
 
   onCreate(): void {
     this.setState(new GameState());
+    this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
 
     this.onMessage("start_game", (client) => {
       this.handleStartGame(client);
@@ -199,8 +206,8 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   onJoin(client: Client, options: { name?: string; playerToken?: string }): void {
-    const inputName = this.normalizeName(options?.name);
-    const inputToken = this.normalizeToken(options?.playerToken);
+    const inputName = normalizeNameUtil(options?.name);
+    const inputToken = normalizeTokenUtil(options?.playerToken);
 
     if (inputToken && this.seatByToken.has(inputToken)) {
       const seatId = this.seatByToken.get(inputToken)!;
@@ -220,7 +227,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const token = inputToken || this.generateToken();
+    const token = inputToken || generateTokenUtil();
     const seatId = this.createHumanSeat(client, token, inputName);
     this.sendSessionToken(client, seatId, token, false);
     this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
@@ -431,7 +438,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
 
-    const dealerId = this.pickRandomDealerId();
+    const dealerId = pickRandomDealerIdUtil(this.playerOrder);
     this.roundDealerId = dealerId;
     this.state.dealerId = dealerId;
     dealInitialHandsFlow(this.playerOrder, dealerId, this.deck, this.playerHands);
@@ -440,7 +447,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const publicGeneral = this.deck.shift();
     if (publicGeneral) {
       this.publicGeneralPool.push(publicGeneral);
-      this.addWildcardCardToPlayer(dealerId, publicGeneral, "upper");
+      this.ops.addWildcardCardToPlayer(dealerId, publicGeneral, "upper");
     }
 
     this.state.deckCount = this.deck.length;
@@ -530,7 +537,7 @@ export class FourColorGameRoom extends Room<GameState> {
       const nextHand = hand.filter((card) => !removeIds.has(card.id));
       this.playerHands.set(seatId, nextHand);
       for (const card of selectedCards) {
-        player.fishArea.push(this.toSchemaCard(card, true, card.source ?? "upper"));
+        player.fishArea.push(this.ops.toSchemaCard(card, true, card.source ?? "upper"));
       }
     }
 
@@ -567,7 +574,7 @@ export class FourColorGameRoom extends Room<GameState> {
         clearAwaitingDiscardOwner: () => {
           this.awaitingDiscardOwnerId = null;
         },
-        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
           applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
         },
@@ -582,25 +589,15 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private exposeGeneralCard(ownerId: string, card: Card): void {
     this.publicGeneralPool.push(card);
-    this.addWildcardCardToPlayer(ownerId, card, "draw");
+    this.ops.addWildcardCardToPlayer(ownerId, card, "draw");
     this.state.lastAction = `${ownerId} DRAW_GENERAL`;
-  }
-
-  private addWildcardCardToPlayer(ownerId: string, card: Card, source: "upper" | "draw"): void {
-    const player = this.state.players.get(ownerId);
-    if (!player) {
-      return;
-    }
-    const schemaCard = this.toSchemaCard(card, true, source);
-    player.generalArea.unshift(schemaCard);
-    player.wildcardPool.unshift(this.toSchemaCard(card, true, source));
   }
 
   private discardFromAndCollective(ownerId: string): void {
     discardFromAndCollectiveFlow(
       {
-        pickDiscardCard: (ownerIdArg) => this.pickDiscardCard(ownerIdArg),
-        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        pickDiscardCard: (ownerIdArg) => this.ops.pickDiscardCard(ownerIdArg),
+        pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         beginCollectiveFromDiscard: (ownerIdArg, discard) => this.beginCollectiveFromDiscard(ownerIdArg, discard),
         clearAwaitingDiscardOwner: () => {
           this.awaitingDiscardOwnerId = null;
@@ -621,7 +618,7 @@ export class FourColorGameRoom extends Room<GameState> {
         clearAwaitingDiscardOwner: () => {
           this.awaitingDiscardOwnerId = null;
         },
-        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
           applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
         },
@@ -631,18 +628,6 @@ export class FourColorGameRoom extends Room<GameState> {
       ownerId,
       discard,
     );
-  }
-
-  private getHandWithoutPending(ownerId: string, pendingCard: Card): Card[] {
-    const hand = this.playerHands.get(ownerId) ?? [];
-    let removed = false;
-    return hand.filter((card) => {
-      if (!removed && card.id === pendingCard.id) {
-        removed = true;
-        return false;
-      }
-      return true;
-    });
   }
 
   private handleAction(client: Client, action: ActionType): void {
@@ -656,7 +641,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const pending = this.pendingResponse;
-    action = this.normalizeAction(action);
+    action = normalizeActionUtil(action);
     const enabledActions = this.getAvailableActions(seatId).filter((x) => x.enabled).map((x) => x.action);
     const decision = decideActionDispatch({
       pendingOwnerId: pending.ownerId,
@@ -716,12 +701,12 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const discard = this.discardCardById(seatId, cardId);
+    const discard = this.ops.discardCardById(seatId, cardId);
     if (!discard) {
       return;
     }
 
-    this.pushDiscard(seatId, discard);
+    this.ops.pushDiscard(seatId, discard);
     this.beginCollectiveFromDiscard(seatId, discard);
   }
 
@@ -777,14 +762,16 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
+    const operationDeps = this.ops.buildOperationExecutorDeps();
     executeResponseWinner(
       {
         getHand: (seatId) => this.playerHands.get(seatId) ?? [],
-        explainHuForSeat: (seatId, hand, responseCard) => this.explainHuForSeat(seatId, hand, responseCard),
+        explainHuForSeat: (seatId, hand, responseCard) =>
+          this.ops.explainHuForSeat(seatId, hand, responseCard, this.getHuWildcardCount()),
         logHuCheck: (stage, seatId, hand, response, valid) => this.logHuCheck(stage, seatId, hand, response, valid),
-        executeKaiOperation: (seatId, pendingCard) => this.executeKaiOperation(seatId, pendingCard),
-        executePengOperation: (seatId, pendingCard) => this.executePengOperation(seatId, pendingCard),
-        executeChiOperation: (seatId, pendingCard) => this.executeChiOperation(seatId, pendingCard),
+        executeKaiOperation: (seatId, pendingCard) => tryExecuteKai(operationDeps, seatId, pendingCard),
+        executePengOperation: (seatId, pendingCard) => tryExecutePeng(operationDeps, seatId, pendingCard),
+        executeChiOperation: (seatId, pendingCard) => tryExecuteChi(operationDeps, seatId, pendingCard),
         isEatResponder: (ownerId, responderId) => this.isEatResponder(ownerId, responderId),
         getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
         setLastAction: (value) => {
@@ -838,7 +825,7 @@ export class FourColorGameRoom extends Room<GameState> {
       clearResponseEndsAt: () => {
         this.state.responseEndsAt = 0;
       },
-      addWildcardCardToPlayer: (nextOwnerId, card, source) => this.addWildcardCardToPlayer(nextOwnerId, card, source),
+      addWildcardCardToPlayer: (nextOwnerId, card, source) => this.ops.addWildcardCardToPlayer(nextOwnerId, card, source),
       setLastAction: (action) => {
         this.state.lastAction = action;
       },
@@ -849,10 +836,11 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private executeEat(ownerId: string): void {
+    const operationDeps = this.ops.buildOperationExecutorDeps();
     executeEatFlow(
       {
         pending: this.pendingResponse,
-        executeChiOperation: (ownerIdArg, pendingCard) => this.executeChiOperation(ownerIdArg, pendingCard),
+        executeChiOperation: (ownerIdArg, pendingCard) => tryExecuteChi(operationDeps, ownerIdArg, pendingCard),
         setLastAction: (action) => {
           this.state.lastAction = action;
         },
@@ -867,7 +855,7 @@ export class FourColorGameRoom extends Room<GameState> {
       {
         pending: this.pendingResponse,
         deck: this.deck,
-        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         shouldEndDrawAfterUpperPass,
         endRound: (lastAction) => this.endRound(lastAction),
         setDeckCount: (deckCount) => {
@@ -881,7 +869,7 @@ export class FourColorGameRoom extends Room<GameState> {
         setupCollectiveAfterGrab: (ownerIdArg, card) => {
           this.pendingResponse = createPendingResponse(ownerIdArg, card, "draw");
           this.state.responsePhase = "collective";
-          this.setResponseCard(card, "draw");
+          this.ops.setResponseCard(card, "draw");
           this.state.currentTurnPlayerId = ownerIdArg;
           this.state.previousPlayerId = ownerIdArg;
           this.state.loopStage = "global_poll";
@@ -903,7 +891,7 @@ export class FourColorGameRoom extends Room<GameState> {
     executePassToNextFlow(
       {
         pending: this.pendingResponse,
-        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         setLastAction: (action) => {
           this.state.lastAction = action;
         },
@@ -916,8 +904,8 @@ export class FourColorGameRoom extends Room<GameState> {
   private finalizeWithDiscardFrom(playerId: string): void {
     finalizeWithDiscardFlow(
       {
-        pickDiscardCard: (playerIdArg) => this.pickDiscardCard(playerIdArg),
-        pushDiscard: (playerIdArg, card) => this.pushDiscard(playerIdArg, card),
+        pickDiscardCard: (playerIdArg) => this.ops.pickDiscardCard(playerIdArg),
+        pushDiscard: (playerIdArg, card) => this.ops.pushDiscard(playerIdArg, card),
         advanceToNextOwner: (playerIdArg, card) => this.advanceToNextOwner(playerIdArg, card),
         endRound: (lastAction) => this.endRound(lastAction),
       },
@@ -939,7 +927,7 @@ export class FourColorGameRoom extends Room<GameState> {
         setResponsePhaseCollective: () => {
           this.state.responsePhase = "collective";
         },
-        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         setCurrentTurnPlayer: (ownerId) => {
           this.state.currentTurnPlayerId = ownerId;
         },
@@ -966,215 +954,12 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private pickDiscardCard(playerId: string): Card | null {
-    const hand = this.playerHands.get(playerId) ?? [];
-    const idx = hand.findIndex((card) => !isDiscardRestricted(card));
-    if (idx < 0) {
-      return null;
-    }
-    const [discard] = hand.splice(idx, 1);
-    this.playerHands.set(playerId, hand);
-    return discard;
-  }
-
-  private discardCardById(playerId: string, cardId: string): Card | null {
-    const hand = this.playerHands.get(playerId) ?? [];
-    const idx = hand.findIndex((card) => card.id === cardId);
-    if (idx < 0) {
-      return null;
-    }
-    const discard = hand[idx];
-    if (isDiscardRestricted(discard)) {
-      return null;
-    }
-    hand.splice(idx, 1);
-    this.playerHands.set(playerId, hand);
-    return discard;
-  }
-
-  private consumeMatchingCards(playerId: string, target: Card, count: number): void {
-    this.takeMatchingCards(playerId, target, count);
-  }
-
-  private takeMatchingCards(playerId: string, target: Card, count: number): Card[] {
-    const hand = this.playerHands.get(playerId) ?? [];
-    let rest = count;
-    const removed: Card[] = [];
-    for (let i = hand.length - 1; i >= 0 && rest > 0; i -= 1) {
-      if (isSameFace(hand[i], target)) {
-        removed.push(...hand.splice(i, 1));
-        rest -= 1;
-      }
-    }
-    this.playerHands.set(playerId, hand);
-    return removed;
-  }
-
-  private removeFromHand(playerId: string, card: Card): void {
-    const hand = this.playerHands.get(playerId) ?? [];
-    const idx = hand.findIndex((x) => x.id === card.id);
-    if (idx >= 0) {
-      hand.splice(idx, 1);
-      this.playerHands.set(playerId, hand);
-      return;
-    }
-    const byFace = hand.findIndex((x) => x.color === card.color && x.type === card.type);
-    if (byFace >= 0) {
-      hand.splice(byFace, 1);
-      this.playerHands.set(playerId, hand);
-    }
-  }
-
-  private removeFromWildcardPool(playerId: string, card: Card): void {
-    const player = this.state.players.get(playerId);
-    if (!player) {
-      return;
-    }
-    const idx = player.wildcardPool.findIndex((x) => x.id === card.id);
-    if (idx >= 0) {
-      player.wildcardPool.splice(idx, 1);
-      return;
-    }
-    const byFace = player.wildcardPool.findIndex((x) => x.color === card.color && x.type === card.type);
-    if (byFace >= 0) {
-      player.wildcardPool.splice(byFace, 1);
-    }
-    const gById = player.generalArea.findIndex((x) => x.id === card.id);
-    if (gById >= 0) {
-      player.generalArea.splice(gById, 1);
-      return;
-    }
-    const gByFace = player.generalArea.findIndex((x) => x.color === card.color && x.type === card.type);
-    if (gByFace >= 0) {
-      player.generalArea.splice(gByFace, 1);
-    }
-  }
-
-  private consumePlanCards(playerId: string, handCards: Card[], poolCards: Card[]): Card[] {
-    for (const card of handCards) {
-      this.removeFromHand(playerId, card);
-    }
-    for (const card of poolCards) {
-      this.removeFromWildcardPool(playerId, card);
-    }
-    return [...handCards, ...poolCards];
-  }
-
-  private pushDiscard(playerId: string, card: Card): void {
-    const player = this.state.players.get(playerId);
-    if (!player) {
-      return;
-    }
-    const schemaCard = this.toSchemaCard(card, false, "upper");
-    player.discardPile.unshift(schemaCard);
-    this.state.publicDiscardPile.unshift(this.toSchemaCard(card, false, "upper"));
-  }
-
-  private pushExposedGroup(playerId: string, cards: Card[], highlight: boolean): void {
-    const player = this.state.players.get(playerId);
-    if (!player) {
-      return;
-    }
-    if (cards.length > 0) {
-      player.exposedGroupSizes.push(cards.length);
-    }
-    for (const card of cards) {
-      player.exposedArea.push(this.toSchemaCard(card, highlight, card.source ?? "upper"));
-    }
-  }
-
-  private setResponseCard(card: Card, source: "upper" | "draw"): void {
-    this.state.responseCard = this.toSchemaCard(card, false, source);
-    this.state.targetCard = this.toSchemaCard(card, false, source);
-    this.state.isMoCard = source === "draw";
-    this.state.currentPlayerId = this.pendingResponse?.ownerId ?? this.state.currentPlayerId;
-  }
-
-  private toSchemaCard(card: Card, isResponseCard: boolean, source: "upper" | "draw"): CardSchema {
-    const schemaCard = new CardSchema();
-    schemaCard.id = card.id;
-    schemaCard.color = card.color;
-    schemaCard.type = card.type;
-    schemaCard.source = source;
-    schemaCard.isResponseCard = isResponseCard;
-    return schemaCard;
-  }
-
-  private toPlainCard(card: { id: string; color: string; type: string; source?: string }): Card {
-    return {
-      id: card.id,
-      color: card.color as Card["color"],
-      type: card.type as Card["type"],
-      source: card.source === "draw" ? "draw" : "upper",
-    };
-  }
-
-  private getWildcardPoolCards(seatId: string): Card[] {
-    const player = this.state.players.get(seatId);
-    if (!player) {
-      return [];
-    }
-    return player.wildcardPool.map((card) => this.toPlainCard(card));
-  }
-
-  private explainHuForSeat(seatId: string, hand: Card[], responseCard: Card) {
-    return explainHu(hand, responseCard, {
-      wildcardCount: this.getHuWildcardCount(),
-      wildcardPool: this.getWildcardPoolCards(seatId),
-    });
-  }
-
-  private executeKaiOperation(seatId: string, pendingCard: Card): boolean {
-    return tryExecuteKai(
-      {
-        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
-        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
-        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
-        removeFromHand: (id, card) => this.removeFromHand(id, card),
-        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
-        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
-      },
-      seatId,
-      pendingCard,
-    );
-  }
-
-  private executePengOperation(seatId: string, pendingCard: Card): boolean {
-    return tryExecutePeng(
-      {
-        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
-        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
-        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
-        removeFromHand: (id, card) => this.removeFromHand(id, card),
-        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
-        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
-      },
-      seatId,
-      pendingCard,
-    );
-  }
-
-  private executeChiOperation(seatId: string, pendingCard: Card): boolean {
-    return tryExecuteChi(
-      {
-        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
-        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
-        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
-        removeFromHand: (id, card) => this.removeFromHand(id, card),
-        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
-        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
-      },
-      seatId,
-      pendingCard,
-    );
-  }
-
   private buildRoundResultPlayers(winnerId: string | null, groups: string[]): RoundResultPlayer[] {
     return buildRoundResultPlayersFlow(
       this.playerOrder,
       this.state.players,
       this.playerHands,
-      (card) => this.toPlainCard(card),
+      (card) => this.ops.toPlainCard(card),
       winnerId,
       groups,
     );
@@ -1234,7 +1019,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
     const hand = this.playerHands.get(seatId) ?? [];
-    const wildcardPool = this.getWildcardPoolCards(seatId);
+    const wildcardPool = this.ops.getWildcardPoolCards(seatId);
     return getAvailableActionsFlow({
       phase: this.state.phase,
       seatId,
@@ -1244,9 +1029,10 @@ export class FourColorGameRoom extends Room<GameState> {
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       hand,
       wildcardPool,
-      explainHuForSeat: (seatIdArg, handArg, responseCard) => this.explainHuForSeat(seatIdArg, handArg, responseCard),
+      explainHuForSeat: (seatIdArg, handArg, responseCard) =>
+        this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
       logHuCheck: (stage, seatIdArg, handArg, response, valid) => this.logHuCheck(stage, seatIdArg, handArg, response, valid),
-      getHandWithoutPending: (seatIdArg, pendingCard) => this.getHandWithoutPending(seatIdArg, pendingCard),
+      getHandWithoutPending: (seatIdArg, pendingCard) => this.ops.getHandWithoutPending(seatIdArg, pendingCard),
     });
   }
 
@@ -1357,21 +1143,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private syncAllPrivateHands(): void {
-    for (const client of this.clients) {
-      const seatId = this.seatBySession.get(client.sessionId);
-      if (!seatId) {
-        continue;
-      }
-      const hand = this.playerHands.get(seatId) ?? [];
-      client.send("private_hand", hand.map((card) => ({ ...card, isHidden: false })));
-    }
-  }
-
-  private iterateFromNext(startId: string): string[] {
-    if (this.playerOrder.length === 0) {
-      return [];
-    }
-    return iterateFromNextOrder(this.playerOrder, startId);
+    syncAllPrivateHandsFlow(this.clients, this.seatBySession, this.playerHands);
   }
 
   private getNextPlayerId(playerId: string): string {
@@ -1585,7 +1357,7 @@ export class FourColorGameRoom extends Room<GameState> {
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       discardFromAndCollective: (ownerId) => this.discardFromAndCollective(ownerId),
       getHand: (seatId) => this.playerHands.get(seatId) ?? [],
-      getWildcardPoolCards: (seatId) => this.getWildcardPoolCards(seatId),
+      getWildcardPoolCards: (seatId) => this.ops.getWildcardPoolCards(seatId),
       executeEat: (ownerId) => this.executeEat(ownerId),
       executeGrab: (ownerId) => this.executeGrab(ownerId),
       executePassToNext: (ownerId) => this.executePassToNext(ownerId),
@@ -1605,8 +1377,8 @@ export class FourColorGameRoom extends Room<GameState> {
           this.pendingResponse = value;
         },
         getPendingResponse: () => this.pendingResponse,
-        toSchemaCard: (card, isResponseCard, source) => this.toSchemaCard(card, isResponseCard, source),
-        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        toSchemaCard: (card, isResponseCard, source) => this.ops.toSchemaCard(card, isResponseCard, source),
+        setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         syncAllPrivateHands: () => this.syncAllPrivateHands(),
         resetCollectivePolling: () => this.resetCollectivePolling(),
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
@@ -1618,23 +1390,5 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private normalizeAction(action: ActionType): ActionType {
-    return normalizeActionUtil(action);
-  }
-
-  private normalizeName(input: unknown): string {
-    return normalizeNameUtil(input);
-  }
-
-  private normalizeToken(input: unknown): string {
-    return normalizeTokenUtil(input);
-  }
-
-  private generateToken(): string {
-    return generateTokenUtil();
-  }
-
-  private pickRandomDealerId(): string {
-    return pickRandomDealerIdUtil(this.playerOrder);
-  }
 }
+

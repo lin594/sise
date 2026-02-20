@@ -1,4 +1,8 @@
 import type { ActionType, Card } from "../../rules/types.js";
+import { executeChiAction } from "./actions/chi.js";
+import { executeHuAction } from "./actions/hu.js";
+import { executeKaiAction } from "./actions/kai.js";
+import { executePengAction } from "./actions/peng.js";
 
 type SeatId = string;
 
@@ -34,57 +38,22 @@ export function executeResponseWinner(
   winnerId: SeatId,
   action: ActionType,
 ): void {
-  const winnerHand = deps.getHand(winnerId);
-  const response = pending.card;
-
   if (action === "hu") {
-    const hu = deps.explainHuForSeat(winnerId, winnerHand, response);
-    deps.logHuCheck("collective_winner_hu", winnerId, winnerHand, response, hu.valid);
-    if (!hu.valid) {
-      deps.setLastAction("HU_INVALID");
-      deps.enterNoResponsePath();
-      return;
-    }
-    deps.endRound(`${winnerId} HU`, winnerId, hu.groups);
+    executeHuAction(deps, pending, winnerId);
     return;
   }
-
   if (action === "kai") {
-    if (!deps.executeKaiOperation(winnerId, response)) {
-      const nextId = deps.getNextPlayerId(pending.ownerId);
-      deps.startTurn(nextId, "TURN_DRAW");
-      return;
-    }
-    deps.setLastAction(`${winnerId} KAI`);
-    deps.startTurn(winnerId, "KONG_DRAW");
+    executeKaiAction(deps, pending, winnerId);
     return;
   }
-
   if (action === "peng") {
-    if (!deps.executePengOperation(winnerId, response)) {
-      const nextId = deps.getNextPlayerId(pending.ownerId);
-      deps.startTurn(nextId, "TURN_DRAW");
-      return;
-    }
-    deps.enterDiscardStage(winnerId, "PENG");
+    executePengAction(deps, pending, winnerId);
     return;
   }
-
   if (action === "chi") {
-    if (!deps.isEatResponder(pending.ownerId, winnerId)) {
-      const nextId = deps.getNextPlayerId(pending.ownerId);
-      deps.startTurn(nextId, "TURN_DRAW");
-      return;
-    }
-    if (!deps.executeChiOperation(winnerId, response)) {
-      const nextId = deps.getNextPlayerId(pending.ownerId);
-      deps.startTurn(nextId, "TURN_DRAW");
-      return;
-    }
-    deps.enterDiscardStage(winnerId, "CHI");
+    executeChiAction(deps, pending, winnerId);
     return;
   }
-
   const nextId = deps.getNextPlayerId(pending.ownerId);
   deps.startTurn(nextId, "TURN_DRAW");
 }

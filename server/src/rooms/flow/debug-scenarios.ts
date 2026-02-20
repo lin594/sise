@@ -1,6 +1,6 @@
 import { CardSchema, GameState } from "../../schema/game-state.schema.js";
 import type { Card } from "../../rules/types.js";
-import { createPendingResponse, type PendingResponseSnapshot } from "./pending-response.js";
+import { createPendingResponse, type PendingResponseSnapshot } from "./support.js";
 
 export interface DebugScenarioContext {
   state: GameState;
