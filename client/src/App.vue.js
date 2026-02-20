@@ -138,7 +138,7 @@ const winnerName = computed(() => {
 const settlementPlayers = computed(() => roundResult.value?.players ?? []);
 const endSummary = computed(() => {
     const action = String(state.value?.lastAction ?? "");
-    if (action === "DECK_EMPTY") {
+    if (action === "DECK_EMPTY" || action === "DRAW_GAME") {
         return "牌堆耗尽，流局。";
     }
     const noDiscardMatch = action.match(/^(\S+)\s+NO_DISCARD$/);

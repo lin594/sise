@@ -56,6 +56,7 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
   "HU",
   "HU_INVALID",
   "DECK_EMPTY",
+  "DRAW_GAME",
 ]);
 
 export class FourColorGameRoom extends Room<GameState> {
@@ -633,7 +634,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const drawn = this.deck.shift();
     this.state.deckCount = this.deck.length;
     if (!drawn) {
-      this.endRound("DECK_EMPTY");
+      this.endRound("DRAW_GAME");
       return;
     }
 
@@ -1029,14 +1030,14 @@ export class FourColorGameRoom extends Room<GameState> {
 
     // Rule (new loop): when passing on an upper card, deck reaching 8 triggers draw end.
     if (this.deck.length <= 8) {
-      this.endRound("DECK_EMPTY");
+      this.endRound("DRAW_GAME");
       return;
     }
 
     const newCard = this.deck.shift();
     this.state.deckCount = this.deck.length;
     if (!newCard) {
-      this.endRound("DECK_EMPTY");
+      this.endRound("DRAW_GAME");
       return;
     }
 
