@@ -1,4 +1,4 @@
-import { Room, Client } from "colyseus";
+﻿import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, isGeneral, isGold, isSameFace, shuffle } from "../rules/deck.js";
 import { canChi, canKai, canPeng } from "../rules/actions.js";
@@ -8,10 +8,45 @@ import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-e
 import { executeResponseWinner } from "./flow/response-winner.js";
 import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
 import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
-import { resolveNextCollectiveResponder } from "./flow/collective-polling.js";
-import { pickCollectiveBotAction, pickLocalBotAction } from "./flow/bot-strategy.js";
 import { createPendingResponse } from "./flow/pending-response.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
+import { canReturnLobby, canStartNextRound, decideStartGame } from "./flow/match-entry.js";
+import { resetToFreshLobbyFlow } from "./flow/fresh-lobby.js";
+import { createHumanSeatFlow, reclaimSeatStateFlow } from "./flow/seat-lifecycle.js";
+import { decideActionDispatch } from "./flow/action-dispatch.js";
+import { canAcceptDiscardRequest, normalizeDiscardCardId, pickFallbackDiscard } from "./flow/turn-cycle.js";
+import {
+  applyCollectivePollState,
+  applyEnterDiscardStageState,
+  applyPlayingStartAfterDeclaring,
+  applyTurnTransitionState,
+} from "./flow/state-transitions.js";
+import { planTickBots } from "./flow/bot-tick.js";
+import { runBotStep } from "./flow/bot-runner.js";
+import { advanceCollectiveFlow, startCollectiveFlow } from "./flow/collective-runtime.js";
+import { endRoundFlow } from "./flow/round-end.js";
+import { buildRoundResultPlayers as buildRoundResultPlayersFlow } from "./flow/round-result.js";
+import { resetToLobby } from "./flow/lobby-reset.js";
+import {
+  dealInitialHands as dealInitialHandsFlow,
+  ensureBotSeatsForStart as ensureBotSeatsForStartFlow,
+  resetRoundPlayers as resetRoundPlayersFlow,
+} from "./flow/round-bootstrap.js";
+import {
+  buildHuSummaryBySeat,
+  shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
+  summarizeAllPlayersCards,
+  summarizeCards,
+} from "./flow/logging-utils.js";
+import {
+  generateToken as generateTokenUtil,
+  normalizeAction as normalizeActionUtil,
+  normalizeName as normalizeNameUtil,
+  normalizeToken as normalizeTokenUtil,
+  pickRandomDealerId as pickRandomDealerIdUtil,
+} from "./flow/input-normalization.js";
+import { areAllDeclarationsReady as areAllDeclarationsReadyUtil, buildDeclarationSelection } from "./flow/declaration-utils.js";
+import { runDeclaringTimeoutFlow, startDeclaringFlow } from "./flow/declaring.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -239,59 +274,61 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private resetToFreshLobby(): void {
-    this.clearBotTimer();
-    this.clearDeclareTimer();
-    this.resetCollectivePolling();
-    this.deck = [];
-    this.pendingResponse = null;
-    this.publicGeneralPool = [];
-    this.awaitingDiscardOwnerId = null;
-    this.roundDealerId = null;
-
-    this.playerHands.clear();
-    this.playerOrder = [];
-    this.botIds.clear();
-    this.seatBySession.clear();
-    this.seatByToken.clear();
-    this.baseNameBySeat.clear();
-
-    this.state.players.clear();
-    this.state.publicDiscardPile.clear();
-    this.state.phase = "waiting";
-    this.state.responsePhase = "collective";
-    this.state.currentPlayerId = "";
-    this.state.hostPlayerId = "";
-    this.state.dealerId = "";
-    this.state.deckCount = 0;
-    this.state.declareEndsAt = 0;
-    this.state.targetCard = new CardSchema();
-    this.state.isMoCard = false;
-    this.state.previousPlayerId = "";
-    this.state.currentTurnPlayerId = "";
-    this.state.loopStage = "";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = "";
-    this.state.responseEndsAt = 0;
-    this.state.responseCard = new CardSchema();
-    this.state.lastAction = `LOBBY 0/${this.targetSeats}`;
-    this.broadcastAvailableActions();
+    resetToFreshLobbyFlow({
+      state: this.state,
+      targetSeats: this.targetSeats,
+      clearBotTimer: () => this.clearBotTimer(),
+      clearDeclareTimer: () => this.clearDeclareTimer(),
+      resetCollectivePolling: () => this.resetCollectivePolling(),
+      setDeck: (deck) => {
+        this.deck = deck;
+      },
+      setPendingResponseNull: () => {
+        this.pendingResponse = null;
+      },
+      setPublicGeneralPool: (cards) => {
+        this.publicGeneralPool = cards;
+      },
+      setAwaitingDiscardOwnerNull: () => {
+        this.awaitingDiscardOwnerId = null;
+      },
+      setRoundDealerNull: () => {
+        this.roundDealerId = null;
+      },
+      clearPlayerHands: () => this.playerHands.clear(),
+      setPlayerOrder: (order) => {
+        this.playerOrder = order;
+      },
+      clearBotIds: () => this.botIds.clear(),
+      clearSeatBySession: () => this.seatBySession.clear(),
+      clearSeatByToken: () => this.seatByToken.clear(),
+      clearBaseNameBySeat: () => this.baseNameBySeat.clear(),
+      broadcastAvailableActions: () => this.broadcastAvailableActions(),
+    });
   }
 
   private handleStartGame(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId) {
-      return;
-    }
-    if (this.state.phase !== "waiting") {
+    const decision = decideStartGame(
+      seatId,
+      this.state.phase,
+      this.state.hostPlayerId,
+      this.seatByToken.size,
+      this.minPlayersToStart,
+    );
+    if (!decision.ok && decision.reason === "not_waiting") {
       client.send("join_error", { message: "当前不在等待阶段，无法开始。" });
       return;
     }
-    if (seatId !== this.state.hostPlayerId) {
+    if (!decision.ok && decision.reason === "not_host") {
       client.send("join_error", { message: "仅房主可开始游戏。" });
       return;
     }
-    if (this.seatByToken.size < this.minPlayersToStart) {
+    if (!decision.ok && decision.reason === "not_enough_players") {
       client.send("join_error", { message: `至少需要 ${this.minPlayersToStart} 名真人玩家。` });
+      return;
+    }
+    if (!decision.ok) {
       return;
     }
 
@@ -301,10 +338,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private handleNextRound(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId || this.state.phase !== "ended") {
-      return;
-    }
-    if (seatId !== this.state.hostPlayerId) {
+    if (!canStartNextRound(seatId, this.state.phase, this.state.hostPlayerId)) {
       return;
     }
     this.ensureBotSeatsForStart();
@@ -313,34 +347,28 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private handleReturnLobby(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId || this.state.phase !== "ended") {
+    if (!canReturnLobby(seatId, this.state.phase)) {
       return;
     }
     this.backToLobby();
   }
 
   private createHumanSeat(client: Client, token: string, rawName: string): string {
-    const seatId = `seat_${this.seatByToken.size + 1}`;
-    const name = rawName || `玩家${this.seatByToken.size + 1}`;
-
-    const player = new PlayerState();
-    player.clientId = seatId;
-    player.name = name;
-    player.isBot = false;
-    player.connected = true;
-    this.state.players.set(seatId, player);
-
-    this.playerOrder.push(seatId);
-    this.playerHands.set(seatId, []);
-    this.baseNameBySeat.set(seatId, name);
-    this.seatByToken.set(token, seatId);
-    this.seatBySession.set(client.sessionId, seatId);
-    this.botIds.delete(seatId);
-
-    if (!this.state.hostPlayerId) {
-      this.state.hostPlayerId = seatId;
-    }
-    return seatId;
+    return createHumanSeatFlow(
+      {
+        state: this.state,
+        seatByTokenSize: this.seatByToken.size,
+        playerOrder: this.playerOrder,
+        playerHands: this.playerHands,
+        baseNameBySeat: this.baseNameBySeat,
+        seatByToken: this.seatByToken,
+        seatBySession: this.seatBySession,
+        botIds: this.botIds,
+      },
+      client.sessionId,
+      token,
+      rawName,
+    );
   }
 
   private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
@@ -353,21 +381,24 @@ export class FourColorGameRoom extends Room<GameState> {
       oldClient?.leave(4102);
     }
 
-    const player = this.state.players.get(seatId);
-    if (!player) {
+    const ok = reclaimSeatStateFlow(
+      {
+        state: this.state,
+        baseNameBySeat: this.baseNameBySeat,
+        botIds: this.botIds,
+        seatBySession: this.seatBySession,
+        seatByToken: this.seatByToken,
+      },
+      client.sessionId,
+      seatId,
+      token,
+      rawName,
+    );
+    if (!ok) {
       client.send("join_error", { message: "重连失败：座位不存在。" });
       client.leave(4103);
       return;
     }
-
-    const name = rawName || this.baseNameBySeat.get(seatId) || player.name;
-    this.baseNameBySeat.set(seatId, name);
-    player.name = name;
-    player.connected = true;
-    player.isBot = false;
-    this.botIds.delete(seatId);
-    this.seatBySession.set(client.sessionId, seatId);
-    this.seatByToken.set(token, seatId);
 
     this.sendSessionToken(client, seatId, token, true);
     this.syncAllPrivateHands();
@@ -386,33 +417,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private ensureBotSeatsForStart(): void {
-    while (this.playerOrder.length < this.targetSeats) {
-      const seatId = `bot_${this.playerOrder.length + 1}`;
-      if (this.state.players.has(seatId)) {
-        continue;
-      }
-      const bot = new PlayerState();
-      bot.clientId = seatId;
-      bot.name = `BOT_${this.playerOrder.length + 1}`;
-      bot.isBot = true;
-      bot.connected = false;
-      this.state.players.set(seatId, bot);
-      this.playerOrder.push(seatId);
-      this.playerHands.set(seatId, []);
-      this.botIds.add(seatId);
-    }
-
-    for (const seatId of this.playerOrder) {
-      const player = this.state.players.get(seatId);
-      if (!player) {
-        continue;
-      }
-      if (player.isBot) {
-        this.botIds.add(seatId);
-      } else {
-        this.botIds.delete(seatId);
-      }
-    }
+    ensureBotSeatsForStartFlow(this.state, this.playerOrder, this.playerHands, this.botIds, this.targetSeats);
   }
 
   private bootstrapRound(): void {
@@ -427,36 +432,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.huChecksValid = 0;
     this.huChecksBySeat.clear();
 
-    for (const seatId of this.playerOrder) {
-      const player = this.state.players.get(seatId);
-      if (!player) {
-        continue;
-      }
-      player.declaredKongs = 0;
-      player.declaredReady = false;
-      player.discardPile.clear();
-      player.exposedArea.clear();
-      player.exposedGroupSizes.clear();
-      player.generalArea.clear();
-      player.wildcardPool.clear();
-      player.fishArea.clear();
-    }
-    this.state.publicDiscardPile.clear();
+    resetRoundPlayersFlow(this.state, this.playerOrder);
 
     const dealerId = this.pickRandomDealerId();
     this.roundDealerId = dealerId;
     this.state.dealerId = dealerId;
-    for (const seatId of this.playerOrder) {
-      const count = seatId === dealerId ? 21 : 20;
-      const hand: Card[] = [];
-      for (let i = 0; i < count; i += 1) {
-        const card = this.deck.shift();
-        if (card) {
-          hand.push(card);
-        }
-      }
-      this.playerHands.set(seatId, hand);
-    }
+    dealInitialHandsFlow(this.playerOrder, dealerId, this.deck, this.playerHands);
 
     // Rule v1.0: dealer flips one shared public general card from deck top.
     const publicGeneral = this.deck.shift();
@@ -475,23 +456,16 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private startDeclaringPhase(): void {
-    for (const seatId of this.playerOrder) {
-      const player = this.state.players.get(seatId);
-      if (!player || player.declaredReady) {
-        continue;
-      }
-      if (player.isBot) {
-        this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
-      }
-    }
-
-    this.syncAllPrivateHands();
-    this.broadcastAvailableActions();
-    if (this.areAllDeclarationsReady()) {
-      this.finishDeclaringPhase();
-      return;
-    }
-    this.scheduleDeclareTimeout();
+    startDeclaringFlow({
+      playerOrder: this.playerOrder,
+      getPlayer: (seatId) => this.state.players.get(seatId),
+      submitDeclaration: (seatId, force) => this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, force),
+      syncAllPrivateHands: () => this.syncAllPrivateHands(),
+      broadcastAvailableActions: () => this.broadcastAvailableActions(),
+      allReady: () => this.areAllDeclarationsReady(),
+      finishDeclaringPhase: () => this.finishDeclaringPhase(),
+      scheduleDeclareTimeout: () => this.scheduleDeclareTimeout(),
+    });
   }
 
   private scheduleDeclareTimeout(): void {
@@ -501,16 +475,13 @@ export class FourColorGameRoom extends Room<GameState> {
       if (this.state.phase !== "declaring") {
         return;
       }
-      for (const seatId of this.playerOrder) {
-        const player = this.state.players.get(seatId);
-        if (!player || player.declaredReady) {
-          continue;
-        }
-        this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
-      }
-      if (this.areAllDeclarationsReady()) {
-        this.finishDeclaringPhase();
-      }
+      runDeclaringTimeoutFlow({
+        playerOrder: this.playerOrder,
+        getPlayer: (seatId) => this.state.players.get(seatId),
+        submitDeclaration: (seatId, force) => this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, force),
+        allReady: () => this.areAllDeclarationsReady(),
+        finishDeclaringPhase: () => this.finishDeclaringPhase(),
+      });
     }, this.declareTimeoutMs);
   }
 
@@ -522,7 +493,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private areAllDeclarationsReady(): boolean {
-    return this.playerOrder.every((seatId) => this.state.players.get(seatId)?.declaredReady);
+    return areAllDeclarationsReadyUtil(this.playerOrder, (seatId) => this.state.players.get(seatId));
   }
 
   private finishDeclaringPhase(): void {
@@ -530,60 +501,10 @@ export class FourColorGameRoom extends Room<GameState> {
     const dealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
       ? this.roundDealerId
       : this.playerOrder[0];
-    this.state.dealerId = dealerId;
-    this.state.declareEndsAt = 0;
-    this.state.phase = "playing";
-    this.state.responsePhase = "local_draw";
-    this.state.currentPlayerId = dealerId;
-    this.state.currentTurnPlayerId = dealerId;
-    this.state.previousPlayerId = this.getPreviousPlayerId(dealerId);
-    this.state.loopStage = "transition";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = "";
-    this.state.responseEndsAt = 0;
-    this.state.lastAction = `DEALER ${dealerId}`;
+    applyPlayingStartAfterDeclaring(this.state, dealerId, this.getPreviousPlayerId(dealerId));
     this.syncAllPrivateHands();
     // Round opening: dealer must discard one legal card from own hand first.
     this.enterDiscardStage(dealerId, "OPENING_DISCARD");
-  }
-
-  private validateFishSelection(cards: Card[]): boolean {
-    if (!cards.length) {
-      return true;
-    }
-
-    let goldCount = 0;
-    const nonGoldFaceCount = new Map<string, number>();
-    for (const card of cards) {
-      if (card.color === "gold") {
-        goldCount += 1;
-        continue;
-      }
-      const key = `${card.color}:${card.type}`;
-      nonGoldFaceCount.set(key, (nonGoldFaceCount.get(key) ?? 0) + 1);
-    }
-
-    for (const count of nonGoldFaceCount.values()) {
-      if (count !== 4) {
-        return false;
-      }
-    }
-
-    if (goldCount !== 0 && goldCount !== 4 && goldCount !== 5) {
-      return false;
-    }
-    return true;
-  }
-
-  private pickCardsByIdsFromHand(hand: Card[], ids: string[]): Card[] {
-    const wanted = new Set(ids);
-    const selected: Card[] = [];
-    for (const card of hand) {
-      if (wanted.has(card.id)) {
-        selected.push(card);
-      }
-    }
-    return selected;
   }
 
   private submitDeclaration(seatId: string, payload: DeclareSetupPayload, force = false): void {
@@ -596,12 +517,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const hand = this.playerHands.get(seatId) ?? [];
-    const declaredKongs = Math.max(0, Number(payload?.declaredKongs) || 0);
-    const fishIds = Array.isArray(payload?.fishCardIds) ? payload.fishCardIds.map(String).filter(Boolean) : [];
-    const uniqueFishIds = [...new Set(fishIds)];
-    const selectedCards = this.pickCardsByIdsFromHand(hand, uniqueFishIds);
-    const idMatch = uniqueFishIds.length === selectedCards.length;
-    const fishValid = this.validateFishSelection(selectedCards);
+    const { declaredKongs, selectedCards, idMatch, fishValid } = buildDeclarationSelection(hand, payload ?? {});
 
     if (!force && (!idMatch || !fishValid)) {
       const target = this.clients.find((c) => this.seatBySession.get(c.sessionId) === seatId);
@@ -634,9 +550,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
     this.resetCollectivePolling();
-    this.state.currentPlayerId = ownerId;
-    this.state.currentTurnPlayerId = ownerId;
-    this.state.loopStage = "transition";
+    applyTurnTransitionState(this.state, ownerId);
     this.drawForOwner(ownerId, tag);
   }
 
@@ -654,15 +568,8 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.pendingResponse = createPendingResponse(ownerId, drawn, "draw");
     this.awaitingDiscardOwnerId = null;
-    this.state.responsePhase = "collective";
     this.setResponseCard(drawn, "draw");
-    this.state.currentTurnPlayerId = ownerId;
-    this.state.previousPlayerId = this.getPreviousPlayerId(ownerId);
-    this.state.loopStage = "global_poll";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = ownerId;
-    this.state.responseEndsAt = 0;
-    this.state.lastAction = `${ownerId} ${tag}`;
+    applyCollectivePollState(this.state, ownerId, this.getPreviousPlayerId(ownerId), ownerId, `${ownerId} ${tag}`);
     this.syncAllPrivateHands();
     this.startCollectivePolling();
   }
@@ -698,16 +605,8 @@ export class FourColorGameRoom extends Room<GameState> {
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
     this.pendingResponse = createPendingResponse(ownerId, discard, "upper");
     this.awaitingDiscardOwnerId = null;
-    this.state.responsePhase = "collective";
-    this.state.currentPlayerId = ownerId;
     this.setResponseCard(discard, "upper");
-    this.state.currentTurnPlayerId = ownerId;
-    this.state.previousPlayerId = ownerId;
-    this.state.loopStage = "global_poll";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = ownerId;
-    this.state.responseEndsAt = 0;
-    this.state.lastAction = `${ownerId} DISCARD`;
+    applyCollectivePollState(this.state, ownerId, ownerId, ownerId, `${ownerId} DISCARD`);
     this.syncAllPrivateHands();
     this.startCollectivePolling();
   }
@@ -735,17 +634,19 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const pending = this.pendingResponse;
-    const isOwner = pending.ownerId === seatId;
     action = this.normalizeAction(action);
     const enabledActions = this.getAvailableActions(seatId).filter((x) => x.enabled).map((x) => x.action);
-    if (!enabledActions.includes(action)) {
-      return;
-    }
+    const decision = decideActionDispatch({
+      pendingOwnerId: pending.ownerId,
+      seatId,
+      action,
+      enabledActions,
+      responsePhase: this.state.responsePhase,
+      collectiveResponderId: this.collectiveResponderId,
+      awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
+    });
 
-    if (this.state.responsePhase === "collective") {
-      if (seatId !== this.collectiveResponderId) {
-        return;
-      }
+    if (decision === "collective_accept") {
       this.clearCollectiveTimer();
       pending.collectives.set(seatId, action === "pass" ? "pass" : action);
       this.collectiveCursor += 1;
@@ -754,47 +655,41 @@ export class FourColorGameRoom extends Room<GameState> {
       }
       return;
     }
-
-    if (!isOwner) {
+    if (decision === "local_chi") {
+      this.executeEat(seatId);
       return;
     }
-
-    if (this.awaitingDiscardOwnerId === seatId) {
+    if (decision === "local_pass_upper") {
+      this.executeGrab(seatId);
       return;
     }
-
-    if (this.state.responsePhase === "local_upper" || this.state.responsePhase === "local_draw") {
-      if (action === "chi") {
-        this.executeEat(seatId);
-        return;
-      }
-      if (action === "pass") {
-        if (this.state.responsePhase === "local_upper") {
-          this.executeGrab(seatId);
-        } else {
-          this.executePassToNext(seatId);
-        }
-      }
+    if (decision === "local_pass_draw") {
+      this.executePassToNext(seatId);
       return;
     }
   }
 
   private handleDiscardCard(client: Client, payload: { cardId?: string } | string): void {
-    if (!this.pendingResponse || this.state.phase !== "playing") {
-      return;
-    }
-
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId) {
       return;
     }
 
     const pending = this.pendingResponse;
-    if (pending.ownerId !== seatId || this.awaitingDiscardOwnerId !== seatId || this.state.responsePhase === "collective") {
+    if (
+      !canAcceptDiscardRequest({
+        hasPending: Boolean(pending),
+        phase: this.state.phase,
+        pendingOwnerId: pending?.ownerId ?? "",
+        seatId,
+        awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
+        responsePhase: this.state.responsePhase,
+      })
+    ) {
       return;
     }
 
-    const cardId = typeof payload === "string" ? payload : String(payload?.cardId ?? "");
+    const cardId = normalizeDiscardCardId(payload);
     if (!cardId) {
       return;
     }
@@ -810,7 +705,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private enterDiscardStage(ownerId: string, tag: string): void {
     const hand = this.playerHands.get(ownerId) ?? [];
-    const fallback = hand.find((card) => !isDiscardRestricted(card));
+    const fallback = pickFallbackDiscard(hand, isDiscardRestricted);
     if (!fallback) {
       this.endRound(`${ownerId} NO_DISCARD`);
       return;
@@ -819,10 +714,8 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pendingResponse = createPendingResponse(ownerId, fallback, "draw");
     this.awaitingDiscardOwnerId = ownerId;
     this.resetCollectivePolling();
-    this.state.responsePhase = "local_draw";
-    this.state.currentPlayerId = ownerId;
+    applyEnterDiscardStageState(this.state, ownerId, tag);
     this.state.responseCard = new CardSchema();
-    this.state.lastAction = `${ownerId} ${tag}`;
     this.syncAllPrivateHands();
     this.tickBots();
   }
@@ -1210,173 +1103,67 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private getScoreRules(): Record<string, { label: string; unit: number }> {
-    return {
-      Pair: { label: "对子", unit: 0 },
-      FrameJMP: { label: "车马炮架", unit: 1 },
-      FrameJSX: { label: "将士象架", unit: 1 },
-      TripleZu: { label: "三兵组", unit: 1 },
-      QuadZu: { label: "四兵组", unit: 2 },
-      Triplet: { label: "坎", unit: 3 },
-      GoldTriplet: { label: "金条坎", unit: 9 },
-      SingleJiang: { label: "单将组", unit: 1 },
-      SingleGold: { label: "单金条组", unit: 3 },
-    };
-  }
-
-  private buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownItem[]; total: number } {
-    const rules = this.getScoreRules();
-    const counter = new Map<string, number>();
-    for (const group of groups) {
-      counter.set(group, (counter.get(group) ?? 0) + 1);
-    }
-
-    const items: ScoreBreakdownItem[] = [];
-    let total = 0;
-    for (const [key, count] of counter.entries()) {
-      const rule = rules[key];
-      const unit = rule?.unit ?? 0;
-      const label = rule?.label ?? key;
-      const lineTotal = unit * count;
-      total += lineTotal;
-      items.push({
-        key,
-        label,
-        count,
-        unit,
-        total: lineTotal,
-      });
-    }
-    items.sort((a, b) => b.total - a.total || b.unit - a.unit || a.key.localeCompare(b.key));
-    return { items, total };
-  }
-
   private buildRoundResultPlayers(winnerId: string | null, groups: string[]): RoundResultPlayer[] {
-    const winnerScore = winnerId ? this.buildScoreBreakdown(groups) : { items: [], total: 0 };
-    const result: RoundResultPlayer[] = [];
-    for (const seatId of this.playerOrder) {
-      const player = this.state.players.get(seatId);
-      const hand = this.playerHands.get(seatId) ?? [];
-      const exposedArea = [...(player?.exposedArea ?? [])].map((card) => this.toPlainCard(card));
-      const exposedGroupSizes = [...(player?.exposedGroupSizes ?? [])];
-      const generalArea = [...(player?.generalArea ?? [])].map((card) => this.toPlainCard(card));
-      const fishArea = [...(player?.fishArea ?? [])].map((card) => this.toPlainCard(card));
-      const discardCount = player?.discardPile.length ?? 0;
-      const isWinner = winnerId === seatId;
-      result.push({
-        clientId: seatId,
-        name: player?.name ?? seatId,
-        hand: hand.map((card) => this.toPlainCard(card)),
-        exposedArea,
-        exposedGroupSizes,
-        generalArea,
-        fishArea,
-        discardCount,
-        scoreBreakdown: isWinner ? winnerScore.items : [],
-        totalScore: isWinner ? winnerScore.total : 0,
-      });
-    }
-    return result;
+    return buildRoundResultPlayersFlow(
+      this.playerOrder,
+      this.state.players,
+      this.playerHands,
+      (card) => this.toPlainCard(card),
+      winnerId,
+      groups,
+    );
   }
 
   private backToLobby(): void {
-    this.clearBotTimer();
-    this.clearDeclareTimer();
-    this.resetCollectivePolling();
-    this.deck = [];
-    this.pendingResponse = null;
-    this.publicGeneralPool = [];
-    this.awaitingDiscardOwnerId = null;
-    this.lastTerminalFingerprint = "";
-    this.huLogDedup.clear();
-    this.huChecksTotal = 0;
-    this.huChecksValid = 0;
-    this.huChecksBySeat.clear();
-    this.roundDealerId = null;
-
-    const humanSeats = this.playerOrder.filter((seatId) => !this.botIds.has(seatId));
-    const humanSet = new Set(humanSeats);
-
-    for (const seatId of this.playerOrder) {
-      if (humanSet.has(seatId)) {
-        continue;
-      }
-      this.state.players.delete(seatId);
-      this.playerHands.delete(seatId);
-      this.baseNameBySeat.delete(seatId);
-    }
-
-    this.playerOrder = humanSeats;
-    this.botIds.clear();
-
-    for (const seatId of this.playerOrder) {
-      const player = this.state.players.get(seatId);
-      if (!player) {
-        continue;
-      }
-      player.declaredKongs = 0;
-      player.declaredReady = false;
-      player.discardPile.clear();
-      player.exposedArea.clear();
-      player.exposedGroupSizes.clear();
-      player.generalArea.clear();
-      player.wildcardPool.clear();
-      player.fishArea.clear();
-      this.playerHands.set(seatId, []);
-      const online = [...this.seatBySession.values()].includes(seatId);
-      player.connected = online;
-      player.isBot = false;
-      player.name = this.baseNameBySeat.get(seatId) ?? player.name;
-    }
-
-    if (!this.state.players.has(this.state.hostPlayerId) && this.playerOrder.length > 0) {
-      this.state.hostPlayerId = this.playerOrder[0];
-    }
-
-    this.state.phase = "waiting";
-    this.state.dealerId = "";
-    this.state.currentPlayerId = "";
-    this.state.responsePhase = "collective";
-    this.state.deckCount = 0;
-    this.state.declareEndsAt = 0;
-    this.state.targetCard = new CardSchema();
-    this.state.isMoCard = false;
-    this.state.previousPlayerId = "";
-    this.state.currentTurnPlayerId = "";
-    this.state.loopStage = "";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = "";
-    this.state.responseEndsAt = 0;
-    this.state.publicDiscardPile.clear();
-    this.state.responseCard = new CardSchema();
-    this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
-    this.syncAllPrivateHands();
-    this.broadcastAvailableActions();
+    resetToLobby({
+      state: this.state,
+      playerOrder: this.playerOrder,
+      botIds: this.botIds,
+      playerHands: this.playerHands,
+      baseNameBySeat: this.baseNameBySeat,
+      seatBySession: this.seatBySession,
+      seatByToken: this.seatByToken,
+      targetSeats: this.targetSeats,
+      resetRuntime: () => {
+        this.clearBotTimer();
+        this.clearDeclareTimer();
+        this.resetCollectivePolling();
+        this.deck = [];
+        this.pendingResponse = null;
+        this.publicGeneralPool = [];
+        this.awaitingDiscardOwnerId = null;
+        this.lastTerminalFingerprint = "";
+        this.huLogDedup.clear();
+        this.huChecksTotal = 0;
+        this.huChecksValid = 0;
+        this.huChecksBySeat.clear();
+        this.roundDealerId = null;
+      },
+      syncAllPrivateHands: () => this.syncAllPrivateHands(),
+      broadcastAvailableActions: () => this.broadcastAvailableActions(),
+    });
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
-    this.state.phase = "ended";
-    this.state.lastAction = lastAction;
-    this.pendingResponse = null;
-    this.awaitingDiscardOwnerId = null;
-    this.resetCollectivePolling();
-    this.clearBotTimer();
-    this.state.loopStage = "";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = "";
-    this.state.responseEndsAt = 0;
-
-    if (winnerId) {
-      this.broadcast("hu_result", { winnerId, groups });
-    }
-
-    this.broadcast("round_result", {
+    endRoundFlow(
+      {
+        state: this.state,
+        resetCollectivePolling: () => this.resetCollectivePolling(),
+        clearBotTimer: () => this.clearBotTimer(),
+        setPendingResponseNull: () => {
+          this.pendingResponse = null;
+        },
+        setAwaitingDiscardOwnerNull: () => {
+          this.awaitingDiscardOwnerId = null;
+        },
+        broadcast: (event, payload) => this.broadcast(event, payload),
+        buildRoundResultPlayers: (winnerIdArg, groupArgs) => this.buildRoundResultPlayers(winnerIdArg, groupArgs),
+        broadcastAvailableActions: () => this.broadcastAvailableActions(),
+      },
+      lastAction,
       winnerId,
       groups,
-      players: this.buildRoundResultPlayers(winnerId, groups),
-    });
-
-    this.broadcastAvailableActions();
+    );
   }
 
   private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
@@ -1492,41 +1279,11 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private shouldLogStateSnapshot(): boolean {
-    if (this.stateLogMode === "off") {
-      return false;
-    }
-    if (this.stateLogMode === "all") {
-      return true;
-    }
-    const keyword = this.getStateActionKeyword(this.state.lastAction || "");
-    return COMPACT_STATE_ACTIONS.has(keyword);
-  }
-
-  private getStateActionKeyword(action: string): string {
-    const parts = action.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      return "";
-    }
-    if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
-      return parts[1] ?? "";
-    }
-    return parts[0];
+    return shouldLogStateSnapshotUtil(this.stateLogMode, this.state.lastAction || "", COMPACT_STATE_ACTIONS);
   }
 
   private summarizeAllPlayersCards(): string {
-    const parts: string[] = [];
-    for (const seatId of this.playerOrder) {
-      const hand = this.playerHands.get(seatId) ?? [];
-      const p = this.state.players.get(seatId);
-      const exposed = p?.exposedArea ?? [];
-      const discard = p?.discardPile ?? [];
-      const generals = p?.generalArea ?? [];
-      const fish = p?.fishArea ?? [];
-      parts.push(
-        `${seatId}{h=${this.summarizeCards(hand)}|e=${this.summarizeSchemaCards(exposed)}|g=${this.summarizeSchemaCards(generals)}|d=${this.summarizeSchemaCards(discard)}|f=${this.summarizeSchemaCards(fish)}}`,
-      );
-    }
-    return parts.join(" ; ");
+    return summarizeAllPlayersCards(this.playerOrder, this.playerHands, this.state.players);
   }
 
   private getHuWildcardCount(): number {
@@ -1535,34 +1292,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private summarizeCards(cards: Card[]): string {
-    if (!cards.length) {
-      return "-";
-    }
-    const counter = new Map<string, number>();
-    for (const c of cards) {
-      const key = `${c.color}:${c.type}`;
-      counter.set(key, (counter.get(key) ?? 0) + 1);
-    }
-    return [...counter.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, n]) => `${k}x${n}`)
-      .join(",");
-  }
-
-  private summarizeSchemaCards(cards: Iterable<{ color: string; type: string }>): string {
-    const list = [...cards];
-    if (!list.length) {
-      return "-";
-    }
-    const counter = new Map<string, number>();
-    for (const c of list) {
-      const key = `${c.color}:${c.type}`;
-      counter.set(key, (counter.get(key) ?? 0) + 1);
-    }
-    return [...counter.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, n]) => `${k}x${n}`)
-      .join(",");
+    return summarizeCards(cards);
   }
 
   private logHuCheck(stage: string, seatId: string, hand: Card[], response: Card, valid: boolean): void {
@@ -1643,35 +1373,41 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private tickBots(): void {
-    if (!this.pendingResponse || this.state.phase !== "playing") {
+    const pending = this.pendingResponse;
+    const plan = planTickBots({
+      hasPending: !!pending,
+      phase: this.state.phase,
+      responsePhase: this.state.responsePhase,
+      collectiveResponderId: this.collectiveResponderId,
+      pendingOwnerId: pending?.ownerId ?? "",
+      hasCollectiveTimer: !!this.collectiveTimer,
+      isBot: (seatId) => this.botIds.has(seatId),
+    });
+    if (plan === "clear_and_broadcast") {
       this.clearBotTimer();
       this.broadcastAvailableActions();
       return;
     }
-
-    if (this.state.responsePhase === "collective") {
-      if (!this.collectiveResponderId) {
-        this.startCollectivePolling();
-        return;
-      }
-      if (this.botIds.has(this.collectiveResponderId)) {
-        this.clearCollectiveTimer();
-        this.scheduleBotStep();
-      } else if (!this.collectiveTimer) {
-        this.scheduleCollectiveTimeout();
-      }
-      this.broadcastAvailableActions();
+    if (plan === "start_collective") {
+      this.startCollectivePolling();
       return;
     }
-
-    const ownerId = this.pendingResponse.ownerId;
-    if (this.botIds.has(ownerId)) {
+    if (plan === "schedule_bot_collective") {
+      this.clearCollectiveTimer();
       this.scheduleBotStep();
       this.broadcastAvailableActions();
       return;
     }
-
-    this.clearBotTimer();
+    if (plan === "schedule_collective_timeout") {
+      this.scheduleCollectiveTimeout();
+      this.broadcastAvailableActions();
+      return;
+    }
+    if (plan === "schedule_bot_owner") {
+      this.scheduleBotStep();
+      this.broadcastAvailableActions();
+      return;
+    }
     this.broadcastAvailableActions();
   }
 
@@ -1699,23 +1435,32 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private startCollectivePolling(): void {
-    const pending = this.pendingResponse;
-    if (!pending || this.state.responsePhase !== "collective") {
-      this.resetCollectivePolling();
-      this.broadcastAvailableActions();
-      return;
-    }
-
-    this.state.loopStage = "global_poll";
-    if (!this.state.pollOriginPlayerId) {
-      this.state.pollOriginPlayerId = pending.ownerId;
-    }
-    this.clearBotTimer();
-    this.clearCollectiveTimer();
-    this.collectiveQueue = this.getCollectiveOrder(pending);
-    this.collectiveCursor = 0;
-    this.collectiveResponderId = null;
-    this.advanceCollectivePolling();
+    startCollectiveFlow({
+      pending: this.pendingResponse,
+      responsePhase: this.state.responsePhase,
+      pollOriginPlayerId: this.state.pollOriginPlayerId,
+      setLoopStageGlobal: () => {
+        this.state.loopStage = "global_poll";
+      },
+      setPollOriginPlayerId: (id) => {
+        this.state.pollOriginPlayerId = id;
+      },
+      clearBotTimer: () => this.clearBotTimer(),
+      clearCollectiveTimer: () => this.clearCollectiveTimer(),
+      setQueue: (queue) => {
+        this.collectiveQueue = queue;
+      },
+      getOrder: (pending) => this.getCollectiveOrder(pending as PendingResponse),
+      resetCursorAndResponder: () => {
+        this.collectiveCursor = 0;
+        this.collectiveResponderId = null;
+      },
+      advance: () => this.advanceCollectivePolling(),
+      resetAndBroadcast: () => {
+        this.resetCollectivePolling();
+        this.broadcastAvailableActions();
+      },
+    });
   }
 
   private getCollectiveOrder(pending: PendingResponse): string[] {
@@ -1743,44 +1488,46 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private advanceCollectivePolling(): void {
-    const pending = this.pendingResponse;
-    if (!pending || this.state.responsePhase !== "collective") {
-      this.resetCollectivePolling();
-      this.broadcastAvailableActions();
-      return;
-    }
-
-    this.clearBotTimer();
-    this.clearCollectiveTimer();
-    const next = resolveNextCollectiveResponder({
+    advanceCollectiveFlow({
+      pending: this.pendingResponse,
+      hasResponded: (seatId) => this.pendingResponse?.collectives.has(seatId) ?? false,
+      responsePhase: this.state.responsePhase,
+      clearBotTimer: () => this.clearBotTimer(),
+      clearCollectiveTimer: () => this.clearCollectiveTimer(),
       queue: this.collectiveQueue,
       cursor: this.collectiveCursor,
-      hasResponded: (seatId) => pending.collectives.has(seatId),
       hasActionBeyondPass: (seatId) => this.hasCollectiveActionBeyondPass(seatId),
+      setCollectivePass: (seatId) => {
+        this.pendingResponse?.collectives.set(seatId, "pass");
+      },
+      setCursor: (cursor) => {
+        this.collectiveCursor = cursor;
+      },
+      setResponder: (responderId) => {
+        this.collectiveResponderId = responderId;
+      },
+      setActiveResponder: (responderId) => {
+        this.state.activeResponderId = responderId;
+      },
+      setCurrentPlayer: (seatId) => {
+        this.state.currentPlayerId = seatId;
+      },
+      setCurrentTurnPlayer: (seatId) => {
+        this.state.currentTurnPlayerId = seatId;
+      },
+      isBot: (seatId) => this.botIds.has(seatId),
+      scheduleBotStep: () => this.scheduleBotStep(),
+      scheduleCollectiveTimeout: () => this.scheduleCollectiveTimeout(),
+      broadcastAvailableActions: () => this.broadcastAvailableActions(),
+      clearResponseEndsAt: () => {
+        this.state.responseEndsAt = 0;
+      },
+      resolveCollectivePhase: () => this.resolveCollectivePhase(),
+      resetAndBroadcast: () => {
+        this.resetCollectivePolling();
+        this.broadcastAvailableActions();
+      },
     });
-    for (const seatId of next.forcedPassIds) {
-      pending.collectives.set(seatId, "pass");
-    }
-    if (next.responderId) {
-      this.collectiveCursor = next.nextCursor;
-      this.collectiveResponderId = next.responderId;
-      this.state.currentPlayerId = next.responderId;
-      this.state.currentTurnPlayerId = next.responderId;
-      this.state.activeResponderId = next.responderId;
-      if (this.botIds.has(next.responderId)) {
-        this.scheduleBotStep();
-      } else {
-        this.scheduleCollectiveTimeout();
-      }
-      this.broadcastAvailableActions();
-      return;
-    }
-    this.collectiveCursor = next.nextCursor;
-
-    this.collectiveResponderId = null;
-    this.state.activeResponderId = "";
-    this.state.responseEndsAt = 0;
-    this.resolveCollectivePhase();
   }
 
   private scheduleBotStep(): void {
@@ -1806,61 +1553,33 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private runBotStepNow(): void {
-    if (!this.pendingResponse || this.state.phase !== "playing") {
+    const pending = this.pendingResponse;
+    if (!pending) {
       this.broadcastAvailableActions();
       return;
     }
-
-    if (this.state.responsePhase === "collective") {
-      const responderId = this.collectiveResponderId;
-      if (!responderId || !this.botIds.has(responderId)) {
-        this.broadcastAvailableActions();
-        return;
-      }
-      const acts = this.getAvailableActions(responderId);
-      const choose = pickCollectiveBotAction(acts);
-      this.pendingResponse.collectives.set(responderId, choose);
-      this.collectiveCursor += 1;
-      this.advanceCollectivePolling();
-      return;
-    }
-
-    const ownerId = this.pendingResponse.ownerId;
-    if (!this.botIds.has(ownerId)) {
-      this.broadcastAvailableActions();
-      return;
-    }
-
-    if (this.awaitingDiscardOwnerId === ownerId) {
-      this.discardFromAndCollective(ownerId);
-      return;
-    }
-
-    const hand = this.playerHands.get(ownerId) ?? [];
-    if (this.state.responsePhase === "local_upper") {
-      const action = pickLocalBotAction(
-        "local_upper",
-        canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId)),
-      );
-      if (action === "chi") {
-        this.executeEat(ownerId);
-      } else {
-        this.executeGrab(ownerId);
-      }
-      return;
-    }
-
-    if (this.state.responsePhase === "local_draw") {
-      const action = pickLocalBotAction("local_draw", canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId)));
-      if (action === "chi") {
-        this.executeEat(ownerId);
-      } else {
-        this.executePassToNext(ownerId);
-      }
-      return;
-    }
-
-    this.broadcastAvailableActions();
+    runBotStep({
+      phase: this.state.phase,
+      responsePhase: this.state.responsePhase,
+      pendingOwnerId: pending.ownerId,
+      pendingCard: pending.card,
+      collectiveResponderId: this.collectiveResponderId,
+      isBot: (seatId) => this.botIds.has(seatId),
+      awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
+      getAvailableActions: (seatId) => this.getAvailableActions(seatId),
+      setCollectiveChoice: (seatId, action) => {
+        this.pendingResponse?.collectives.set(seatId, action);
+        this.collectiveCursor += 1;
+      },
+      advanceCollectivePolling: () => this.advanceCollectivePolling(),
+      broadcastAvailableActions: () => this.broadcastAvailableActions(),
+      discardFromAndCollective: (ownerId) => this.discardFromAndCollective(ownerId),
+      getHand: (seatId) => this.playerHands.get(seatId) ?? [],
+      getWildcardPoolCards: (seatId) => this.getWildcardPoolCards(seatId),
+      executeEat: (ownerId) => this.executeEat(ownerId),
+      executeGrab: (ownerId) => this.executeGrab(ownerId),
+      executePassToNext: (ownerId) => this.executePassToNext(ownerId),
+    });
   }
 
   private applyDebugScenario(seatId: string, scenario: string): boolean {
@@ -1890,36 +1609,22 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private normalizeAction(action: ActionType): ActionType {
-    if (action === "open") {
-      return "kai";
-    }
-    if (action === "eat") {
-      return "chi";
-    }
-    if (action === "grab") {
-      return "pass";
-    }
-    return action;
+    return normalizeActionUtil(action);
   }
 
   private normalizeName(input: unknown): string {
-    const name = String(input ?? "").trim();
-    return name.slice(0, 24);
+    return normalizeNameUtil(input);
   }
 
   private normalizeToken(input: unknown): string {
-    return String(input ?? "").trim().slice(0, 128);
+    return normalizeTokenUtil(input);
   }
 
   private generateToken(): string {
-    return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    return generateTokenUtil();
   }
 
   private pickRandomDealerId(): string {
-    if (!this.playerOrder.length) {
-      return "";
-    }
-    const idx = Math.floor(Math.random() * this.playerOrder.length);
-    return this.playerOrder[idx];
+    return pickRandomDealerIdUtil(this.playerOrder);
   }
 }
