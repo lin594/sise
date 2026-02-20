@@ -1,9 +1,10 @@
 import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, isGeneral, isGold, isSameFace, shuffle } from "../rules/deck.js";
-import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
+import { canChi, canKai, canPeng } from "../rules/actions.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
+import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -921,22 +922,22 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (action === "kai") {
-      const plan = findKaiPlan(winnerHand, response, this.getWildcardPoolCards(winnerId));
-      if (!plan) {
+      if (!this.executeKaiOperation(winnerId, response)) {
         const nextId = this.getNextPlayerId(pending.ownerId);
         this.startTurn(nextId, "TURN_DRAW");
         return;
       }
-      const taken = this.consumePlanCards(winnerId, plan.handCards, plan.poolCards);
-      this.pushExposedGroup(winnerId, [response, ...taken], true);
       this.state.lastAction = `${winnerId} KAI`;
       this.startTurn(winnerId, "KONG_DRAW");
       return;
     }
 
     if (action === "peng") {
-      const taken = this.takeMatchingCards(winnerId, response, 2);
-      this.pushExposedGroup(winnerId, [response, ...taken], true);
+      if (!this.executePengOperation(winnerId, response)) {
+        const nextId = this.getNextPlayerId(pending.ownerId);
+        this.startTurn(nextId, "TURN_DRAW");
+        return;
+      }
       this.enterDiscardStage(winnerId, "PENG");
       return;
     }
@@ -947,16 +948,11 @@ export class FourColorGameRoom extends Room<GameState> {
         this.startTurn(nextId, "TURN_DRAW");
         return;
       }
-      const hand = this.playerHands.get(winnerId) ?? [];
-      const plans = getChiPlans(hand, response, this.getWildcardPoolCards(winnerId));
-      if (plans.length === 0) {
+      if (!this.executeChiOperation(winnerId, response)) {
         const nextId = this.getNextPlayerId(pending.ownerId);
         this.startTurn(nextId, "TURN_DRAW");
         return;
       }
-      const picked = plans[0];
-      const taken = this.consumePlanCards(winnerId, picked.handCards, picked.poolCards);
-      this.pushExposedGroup(winnerId, [response, ...taken], true);
       this.enterDiscardStage(winnerId, "CHI");
       return;
     }
@@ -1009,15 +1005,9 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
-    const hand = this.playerHands.get(ownerId) ?? [];
-    const plans = getChiPlans(hand, pending.card, this.getWildcardPoolCards(ownerId));
-    if (plans.length === 0) {
+    if (!this.executeChiOperation(ownerId, pending.card)) {
       return;
     }
-
-    const picked = plans[0];
-    const taken = this.consumePlanCards(ownerId, picked.handCards, picked.poolCards);
-    this.pushExposedGroup(ownerId, [pending.card, ...taken], true);
     this.state.lastAction = `${ownerId} CHI`;
     this.finalizeWithDiscardFrom(ownerId);
   }
@@ -1260,6 +1250,51 @@ export class FourColorGameRoom extends Room<GameState> {
       wildcardCount: this.getHuWildcardCount(),
       wildcardPool: this.getWildcardPoolCards(seatId),
     });
+  }
+
+  private executeKaiOperation(seatId: string, pendingCard: Card): boolean {
+    return tryExecuteKai(
+      {
+        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
+        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
+        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
+        removeFromHand: (id, card) => this.removeFromHand(id, card),
+        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
+        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
+      },
+      seatId,
+      pendingCard,
+    );
+  }
+
+  private executePengOperation(seatId: string, pendingCard: Card): boolean {
+    return tryExecutePeng(
+      {
+        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
+        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
+        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
+        removeFromHand: (id, card) => this.removeFromHand(id, card),
+        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
+        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
+      },
+      seatId,
+      pendingCard,
+    );
+  }
+
+  private executeChiOperation(seatId: string, pendingCard: Card): boolean {
+    return tryExecuteChi(
+      {
+        getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
+        getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
+        consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
+        removeFromHand: (id, card) => this.removeFromHand(id, card),
+        takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
+        pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
+      },
+      seatId,
+      pendingCard,
+    );
   }
 
   private getScoreRules(): Record<string, { label: string; unit: number }> {
