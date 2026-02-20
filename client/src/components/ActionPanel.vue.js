@@ -17,7 +17,7 @@ const panelHint = computed(() => {
         return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
     }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
-        return "他人待响阶段：你可以选择胡/开/碰/吃/过";
+        return "他人待响阶段：你可以选择胡/开/碰/过";
     }
     if (!normalized.value.some((x) => x.enabled)) {
         return "当前阶段没有可执行动作";

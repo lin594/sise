@@ -155,7 +155,7 @@ const turnHint = computed(() => {
     }
     if (state.value?.responsePhase === "collective") {
         if (!isMyTurn.value && canAct.value) {
-            return "他人待响阶段：你可以选择胡/开/碰/吃/过";
+            return "他人待响阶段：你可以选择胡/开/碰/过";
         }
         if (isMyTurn.value) {
             return "等待他人响应";

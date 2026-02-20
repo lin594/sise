@@ -1946,7 +1946,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
     const seq = ++this.debugSeq;
 
-    if (scenario === "hu_ready_mode2") {
+    if (scenario === "hu_ready_mode2" || scenario === "hu_ready_local_draw") {
       add("h1", "red", "ju");
       add("h2", "red", "ma");
       add("h3", "red", "pao");
@@ -1959,8 +1959,8 @@ export class FourColorGameRoom extends Room<GameState> {
       this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "draw");
-      this.state.lastAction = `DEBUG: hu_ready_mode2#${seq}`;
-    } else if (scenario === "eat_mode1") {
+      this.state.lastAction = `DEBUG: hu_ready_local_draw#${seq}`;
+    } else if (scenario === "eat_mode1" || scenario === "chi_local_upper") {
       add("d1", "red", "shi");
       add("d2", "red", "xiang");
       add("d3", "yellow", "ju");
@@ -1974,8 +1974,8 @@ export class FourColorGameRoom extends Room<GameState> {
       this.state.responsePhase = "local_upper";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "upper");
-      this.state.lastAction = `DEBUG: eat_mode1#${seq}`;
-    } else if (scenario === "mode2_pass") {
+      this.state.lastAction = `DEBUG: chi_local_upper#${seq}`;
+    } else if (scenario === "mode2_pass" || scenario === "local_draw_pass") {
       add("d5", "yellow", "ju");
       add("d6", "white", "xiang");
       add("d7", "green", "zu");
@@ -1988,7 +1988,7 @@ export class FourColorGameRoom extends Room<GameState> {
       this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "draw");
-      this.state.lastAction = `DEBUG: mode2_pass#${seq}`;
+      this.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
     } else if (scenario === "collective_no_actions") {
       add("d8", "red", "shi");
       add("d9", "green", "xiang");

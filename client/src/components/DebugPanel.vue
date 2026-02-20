@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <section class="debug">
-    <h3>测试面板</h3>
+    <h3>娴嬭瘯闈㈡澘</h3>
     <div class="list">
       <button v-for="item in scenarios" :key="item.key" class="btn" @click="$emit('run', item.key)">
         {{ item.label }}
@@ -8,7 +8,7 @@
     </div>
     <p class="tips">{{ hint }}</p>
     <div v-if="result" class="result" :class="result.ok ? 'ok' : 'fail'">
-      <strong>{{ result.ok ? "PASS" : "FAIL" }} · {{ labelOf(result.scenario) }}</strong>
+      <strong>{{ result.ok ? "PASS" : "FAIL" }} 路 {{ labelOf(result.scenario) }}</strong>
       <p>{{ result.summary }}</p>
       <ul v-if="result.errors.length">
         <li v-for="err in result.errors" :key="err">{{ err }}</li>
@@ -33,11 +33,11 @@ defineEmits<{
 }>();
 
 const scenarios = [
-  { key: "hu_ready_mode2", label: "开局可胡（模式2）" },
-  { key: "mode2_pass", label: "模式2 过牌" },
-  { key: "collective_no_actions", label: "他人待响可过" },
-  { key: "hu_fail_case", label: "单将胡失败" },
-  { key: "discard_public", label: "弃牌区公开演示" },
+  { key: "hu_ready_local_draw", label: "本家摸牌可胡（本地阶段）" },
+  { key: "local_draw_pass", label: "本家摸牌过牌（本地阶段）" },
+  { key: "collective_no_actions", label: "集体轮询仅可过" },
+  { key: "hu_fail_case", label: "胡牌失败用例" },
+  { key: "discard_public", label: "弃牌区公开展示" },
 ];
 
 function labelOf(key: string): string {
