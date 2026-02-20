@@ -230,7 +230,7 @@ const isMyTurn = computed(() => {
 
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(
-  () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "self_grab" && !canAct.value,
+  () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && !canAct.value,
 );
 const isCompactLandscape = ref(false);
 const resettingLobby = ref(false);

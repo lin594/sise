@@ -137,6 +137,15 @@ function normalizeAction(action) {
     }
     return action;
 }
+function normalizeResponsePhase(input) {
+    if (input === "self_eat") {
+        return "local_upper";
+    }
+    if (input === "self_grab") {
+        return "local_draw";
+    }
+    return input;
+}
 export function useRoom(playerName = "Player") {
     const ROOM_KEY = "four_room_id";
     const TOKEN_KEY = "four_player_token";
@@ -257,7 +266,7 @@ export function useRoom(playerName = "Player") {
                     hostPlayerId: String(next?.hostPlayerId ?? ""),
                     dealerId: String(next?.dealerId ?? ""),
                     currentPlayerId: String(next?.currentPlayerId ?? ""),
-                    responsePhase: String(next?.responsePhase ?? ""),
+                    responsePhase: normalizeResponsePhase(String(next?.responsePhase ?? "")),
                     lastAction: String(next?.lastAction ?? ""),
                     deckCount: Number(next?.deckCount ?? 0),
                     responseCard: asCard(next?.responseCard),

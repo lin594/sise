@@ -29,7 +29,7 @@ export class GameState extends Schema {
   @type("string") hostPlayerId: string = "";
   @type("string") dealerId: string = "";
   @type("string") currentPlayerId: string = "";
-  @type("string") responsePhase: "collective" | "self_eat" | "self_grab" = "collective";
+  @type("string") responsePhase: "collective" | "local_upper" | "local_draw" = "collective";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type([CardSchema]) publicDiscardPile = new ArraySchema<CardSchema>();
   @type("string") lastAction: string = "";

@@ -520,7 +520,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.dealerId = dealerId;
     this.state.declareEndsAt = 0;
     this.state.phase = "playing";
-    this.state.responsePhase = "self_grab";
+    this.state.responsePhase = "local_draw";
     this.state.currentPlayerId = dealerId;
     this.state.currentTurnPlayerId = dealerId;
     this.state.previousPlayerId = this.getPreviousPlayerId(dealerId);
@@ -757,13 +757,13 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    if (this.state.responsePhase === "self_eat" || this.state.responsePhase === "self_grab") {
+    if (this.state.responsePhase === "local_upper" || this.state.responsePhase === "local_draw") {
       if (action === "chi") {
         this.executeEat(seatId);
         return;
       }
       if (action === "pass") {
-        if (this.state.responsePhase === "self_eat") {
+        if (this.state.responsePhase === "local_upper") {
           this.executeGrab(seatId);
         } else {
           this.executePassToNext(seatId);
@@ -817,7 +817,7 @@ export class FourColorGameRoom extends Room<GameState> {
     };
     this.awaitingDiscardOwnerId = ownerId;
     this.resetCollectivePolling();
-    this.state.responsePhase = "self_grab";
+    this.state.responsePhase = "local_draw";
     this.state.currentPlayerId = ownerId;
     this.state.responseCard = new CardSchema();
     this.state.lastAction = `${ownerId} ${tag}`;
@@ -984,7 +984,7 @@ export class FourColorGameRoom extends Room<GameState> {
       pending.ownerId = localOwnerId;
       this.state.currentPlayerId = localOwnerId;
     }
-    this.state.responsePhase = fromDraw ? "self_grab" : "self_eat";
+    this.state.responsePhase = fromDraw ? "local_draw" : "local_upper";
     this.state.currentPlayerId = localOwnerId;
     this.state.currentTurnPlayerId = localOwnerId;
     this.state.loopStage = "local_poll";
@@ -1469,7 +1469,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return [];
     }
 
-    if (this.state.responsePhase === "self_eat" || this.state.responsePhase === "self_grab") {
+    if (this.state.responsePhase === "local_upper" || this.state.responsePhase === "local_draw") {
       const handNoPending = this.getHandWithoutPending(seatId, pending.card);
       const wildcardPool = this.getWildcardPoolCards(seatId);
       return [
@@ -1484,7 +1484,7 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.getDisabledPanel(this.state.responsePhase);
   }
 
-  private getDisabledPanel(responsePhase: "collective" | "self_eat" | "self_grab"): Array<{ action: ActionType; enabled: boolean }> {
+  private getDisabledPanel(responsePhase: "collective" | "local_upper" | "local_draw"): Array<{ action: ActionType; enabled: boolean }> {
     if (responsePhase === "collective") {
       return [
         { action: "hu", enabled: false },
@@ -1915,7 +1915,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const hand = this.playerHands.get(ownerId) ?? [];
-    if (this.state.responsePhase === "self_eat") {
+    if (this.state.responsePhase === "local_upper") {
       if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
@@ -1924,7 +1924,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    if (this.state.responsePhase === "self_grab") {
+    if (this.state.responsePhase === "local_draw") {
       if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
@@ -1956,7 +1956,7 @@ export class FourColorGameRoom extends Room<GameState> {
         collectives: new Map(),
       };
       this.state.phase = "playing";
-      this.state.responsePhase = "self_grab";
+      this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "draw");
       this.state.lastAction = `DEBUG: hu_ready_mode2#${seq}`;
@@ -1971,7 +1971,7 @@ export class FourColorGameRoom extends Room<GameState> {
         collectives: new Map(),
       };
       this.state.phase = "playing";
-      this.state.responsePhase = "self_eat";
+      this.state.responsePhase = "local_upper";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "upper");
       this.state.lastAction = `DEBUG: eat_mode1#${seq}`;
@@ -1985,7 +1985,7 @@ export class FourColorGameRoom extends Room<GameState> {
         collectives: new Map(),
       };
       this.state.phase = "playing";
-      this.state.responsePhase = "self_grab";
+      this.state.responsePhase = "local_draw";
       this.state.currentPlayerId = seatId;
       this.setResponseCard(this.pendingResponse.card, "draw");
       this.state.lastAction = `DEBUG: mode2_pass#${seq}`;
