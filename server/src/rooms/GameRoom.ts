@@ -788,7 +788,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const pending = this.pendingResponse;
-    if (pending.ownerId !== seatId || pending.mode !== "mode2" || this.state.responsePhase === "collective") {
+    if (pending.ownerId !== seatId || this.awaitingDiscardOwnerId !== seatId || this.state.responsePhase === "collective") {
       return;
     }
 
@@ -1451,7 +1451,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
     if (isCollective) {
       if (seatId !== this.collectiveResponderId) {
-        return this.getDisabledPanel("mode1", "collective");
+        return this.getDisabledPanel("collective");
       }
       const wildcardPool = this.getWildcardPoolCards(seatId);
       const huProbe = explainHu(hand, pending.card, {
@@ -1469,7 +1469,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (!isOwner) {
-      return this.getDisabledPanel(pending.mode, this.state.responsePhase);
+      return this.getDisabledPanel(this.state.responsePhase);
     }
 
     if (this.awaitingDiscardOwnerId === seatId) {
@@ -1488,13 +1488,10 @@ export class FourColorGameRoom extends Room<GameState> {
       ];
     }
 
-    return this.getDisabledPanel(pending.mode, this.state.responsePhase);
+    return this.getDisabledPanel(this.state.responsePhase);
   }
 
-  private getDisabledPanel(
-    mode: ResponseMode,
-    responsePhase: "collective" | "self_eat" | "self_grab",
-  ): Array<{ action: ActionType; enabled: boolean }> {
+  private getDisabledPanel(responsePhase: "collective" | "self_eat" | "self_grab"): Array<{ action: ActionType; enabled: boolean }> {
     if (responsePhase === "collective") {
       return [
         { action: "hu", enabled: false },
@@ -1505,25 +1502,6 @@ export class FourColorGameRoom extends Room<GameState> {
       ];
     }
 
-    if (mode === "mode2") {
-      return [
-        { action: "hu", enabled: false },
-        { action: "kai", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "chi", enabled: false },
-        { action: "pass", enabled: false },
-      ];
-    }
-
-    if (mode === "mode1") {
-      return [
-        { action: "hu", enabled: false },
-        { action: "kai", enabled: false },
-        { action: "peng", enabled: false },
-        { action: "chi", enabled: false },
-        { action: "pass", enabled: false },
-      ];
-    }
     return [
       { action: "hu", enabled: false },
       { action: "kai", enabled: false },
