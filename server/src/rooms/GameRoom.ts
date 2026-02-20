@@ -9,6 +9,7 @@ import { executeResponseWinner } from "./flow/response-winner.js";
 import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
 import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
 import { resolveNextCollectiveResponder } from "./flow/collective-polling.js";
+import { pickCollectiveBotAction, pickLocalBotAction } from "./flow/bot-strategy.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -1835,13 +1836,7 @@ export class FourColorGameRoom extends Room<GameState> {
         return;
       }
       const acts = this.getAvailableActions(responderId);
-      const choose =
-        acts.find((x) => x.action === "hu" && x.enabled)?.action ??
-        acts.find((x) => x.action === "kai" && x.enabled)?.action ??
-        acts.find((x) => x.action === "peng" && x.enabled)?.action ??
-        acts.find((x) => x.action === "chi" && x.enabled)?.action ??
-        acts.find((x) => x.action === "pass" && x.enabled)?.action ??
-        "pass";
+      const choose = pickCollectiveBotAction(acts);
       this.pendingResponse.collectives.set(responderId, choose);
       this.collectiveCursor += 1;
       this.advanceCollectivePolling();
@@ -1861,7 +1856,11 @@ export class FourColorGameRoom extends Room<GameState> {
 
     const hand = this.playerHands.get(ownerId) ?? [];
     if (this.state.responsePhase === "local_upper") {
-      if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
+      const action = pickLocalBotAction(
+        "local_upper",
+        canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId)),
+      );
+      if (action === "chi") {
         this.executeEat(ownerId);
       } else {
         this.executeGrab(ownerId);
@@ -1870,7 +1869,8 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "local_draw") {
-      if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
+      const action = pickLocalBotAction("local_draw", canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId)));
+      if (action === "chi") {
         this.executeEat(ownerId);
       } else {
         this.executePassToNext(ownerId);
