@@ -8,6 +8,11 @@ type Candidate = {
   remove: string[];
 };
 
+export interface HuExplainOptions {
+  wildcardCount?: number;
+  wildcardPool?: Card[];
+}
+
 const COLORS = ["yellow", "red", "green", "white"] as const;
 
 function token(card: Card): string {
@@ -59,12 +64,37 @@ function takeWithWild(counter: Counter, keys: string[], wild: number): { next: C
       }
       continue;
     }
+    if (consumeWildcardToken(next)) {
+      continue;
+    }
     if (wildLeft <= 0) {
       return null;
     }
     wildLeft -= 1;
   }
   return { next, wildLeft };
+}
+
+function isWildcardToken(key: string): boolean {
+  if (key === "gold") {
+    return true;
+  }
+  return key.endsWith(":jiang");
+}
+
+function consumeWildcardToken(counter: Counter): boolean {
+  for (const [key, value] of counter.entries()) {
+    if (!isWildcardToken(key) || value <= 0) {
+      continue;
+    }
+    if (value === 1) {
+      counter.delete(key);
+    } else {
+      counter.set(key, value - 1);
+    }
+    return true;
+  }
+  return false;
 }
 
 function splitKey(key: string): { color: string; type: string } | null {
@@ -244,13 +274,27 @@ function dfs(counter: Counter, wild: number, memo: Map<string, string[] | null>)
   return null;
 }
 
-export function validateHu(hand: Card[], responseCard: Card): boolean {
-  return explainHu(hand, responseCard).valid;
+function resolveOptions(arg?: number | HuExplainOptions): Required<HuExplainOptions> {
+  if (typeof arg === "number") {
+    return {
+      wildcardCount: Math.max(0, arg),
+      wildcardPool: [],
+    };
+  }
+  return {
+    wildcardCount: Math.max(0, Number(arg?.wildcardCount ?? 0)),
+    wildcardPool: Array.isArray(arg?.wildcardPool) ? arg!.wildcardPool : [],
+  };
 }
 
-export function explainHu(hand: Card[], responseCard: Card, wildcardCount = 0): HuResult {
-  const allCards = [...hand, responseCard];
-  const groups = dfs(makeCounter(allCards), Math.max(0, wildcardCount), new Map());
+export function validateHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): boolean {
+  return explainHu(hand, responseCard, options).valid;
+}
+
+export function explainHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): HuResult {
+  const resolved = resolveOptions(options);
+  const allCards = [...hand, ...resolved.wildcardPool, responseCard];
+  const groups = dfs(makeCounter(allCards), resolved.wildcardCount, new Map());
   return {
     valid: Boolean(groups),
     groups: groups ?? [],
