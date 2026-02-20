@@ -8,6 +8,7 @@ import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-e
 import { executeResponseWinner } from "./flow/response-winner.js";
 import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
 import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
+import { resolveNextCollectiveResponder } from "./flow/collective-polling.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -1768,25 +1769,22 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.clearBotTimer();
     this.clearCollectiveTimer();
-
-    while (this.collectiveCursor < this.collectiveQueue.length) {
-      const seatId = this.collectiveQueue[this.collectiveCursor];
-      if (pending.collectives.has(seatId)) {
-        this.collectiveCursor += 1;
-        continue;
-      }
-
-      if (!this.hasCollectiveActionBeyondPass(seatId)) {
-        pending.collectives.set(seatId, "pass");
-        this.collectiveCursor += 1;
-        continue;
-      }
-
-      this.collectiveResponderId = seatId;
-      this.state.currentPlayerId = seatId;
-      this.state.currentTurnPlayerId = seatId;
-      this.state.activeResponderId = seatId;
-      if (this.botIds.has(seatId)) {
+    const next = resolveNextCollectiveResponder({
+      queue: this.collectiveQueue,
+      cursor: this.collectiveCursor,
+      hasResponded: (seatId) => pending.collectives.has(seatId),
+      hasActionBeyondPass: (seatId) => this.hasCollectiveActionBeyondPass(seatId),
+    });
+    for (const seatId of next.forcedPassIds) {
+      pending.collectives.set(seatId, "pass");
+    }
+    if (next.responderId) {
+      this.collectiveCursor = next.nextCursor;
+      this.collectiveResponderId = next.responderId;
+      this.state.currentPlayerId = next.responderId;
+      this.state.currentTurnPlayerId = next.responderId;
+      this.state.activeResponderId = next.responderId;
+      if (this.botIds.has(next.responderId)) {
         this.scheduleBotStep();
       } else {
         this.scheduleCollectiveTimeout();
@@ -1794,6 +1792,7 @@ export class FourColorGameRoom extends Room<GameState> {
       this.broadcastAvailableActions();
       return;
     }
+    this.collectiveCursor = next.nextCursor;
 
     this.collectiveResponderId = null;
     this.state.activeResponderId = "";
