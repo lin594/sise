@@ -5,7 +5,7 @@ import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
 import { executeResponseWinner } from "./flow/response-winner.js";
-import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
+import { getCollectiveOrder } from "./flow/collective-logic.js";
 import { shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
 import { createPendingResponse } from "./flow/pending-response.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
@@ -13,7 +13,7 @@ import { canReturnLobby, canStartNextRound, decideStartGame } from "./flow/match
 import { resetToFreshLobbyFlow } from "./flow/fresh-lobby.js";
 import { createHumanSeatFlow, reclaimSeatStateFlow } from "./flow/seat-lifecycle.js";
 import { decideActionDispatch } from "./flow/action-dispatch.js";
-import { canAcceptDiscardRequest, normalizeDiscardCardId, pickFallbackDiscard } from "./flow/turn-cycle.js";
+import { canAcceptDiscardRequest, normalizeDiscardCardId } from "./flow/turn-cycle.js";
 import {
   applyCollectivePollState,
   applyEnterDiscardStageState,
@@ -57,6 +57,14 @@ import {
   executePassToNextFlow,
   finalizeWithDiscardFlow,
 } from "./flow/owner-actions.js";
+import {
+  advanceToNextOwnerFlow,
+  beginCollectiveFromDiscardFlow,
+  discardFromAndCollectiveFlow,
+  drawForOwnerFlow,
+  enterDiscardStageFlow,
+} from "./flow/turn-runtime.js";
+import { resolveCollectivePhaseFlow } from "./flow/collective-resolution.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -544,23 +552,32 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private drawForOwner(ownerId: string, tag: string): void {
-    if (this.state.phase !== "playing") {
-      return;
-    }
-
-    const drawn = this.deck.shift();
-    this.state.deckCount = this.deck.length;
-    if (!drawn) {
-      this.endRound("DRAW_GAME");
-      return;
-    }
-
-    this.pendingResponse = createPendingResponse(ownerId, drawn, "draw");
-    this.awaitingDiscardOwnerId = null;
-    this.setResponseCard(drawn, "draw");
-    applyCollectivePollState(this.state, ownerId, this.getPreviousPlayerId(ownerId), ownerId, `${ownerId} ${tag}`);
-    this.syncAllPrivateHands();
-    this.startCollectivePolling();
+    drawForOwnerFlow(
+      {
+        phase: this.state.phase,
+        deck: this.deck,
+        setDeckCount: (count) => {
+          this.state.deckCount = count;
+        },
+        endRound: (lastAction) => this.endRound(lastAction),
+        createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
+        setPendingResponse: (pending) => {
+          this.pendingResponse = pending;
+        },
+        clearAwaitingDiscardOwner: () => {
+          this.awaitingDiscardOwnerId = null;
+        },
+        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
+          applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
+        },
+        getPreviousPlayerId: (ownerIdArg) => this.getPreviousPlayerId(ownerIdArg),
+        syncAllPrivateHands: () => this.syncAllPrivateHands(),
+        startCollectivePolling: () => this.startCollectivePolling(),
+      },
+      ownerId,
+      tag,
+    );
   }
 
   private exposeGeneralCard(ownerId: string, card: Card): void {
@@ -580,24 +597,40 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private discardFromAndCollective(ownerId: string): void {
-    this.awaitingDiscardOwnerId = null;
-    const discard = this.pickDiscardCard(ownerId);
-    if (!discard) {
-      this.endRound(`${ownerId} NO_DISCARD`);
-      return;
-    }
-
-    this.pushDiscard(ownerId, discard);
-    this.beginCollectiveFromDiscard(ownerId, discard);
+    discardFromAndCollectiveFlow(
+      {
+        pickDiscardCard: (ownerIdArg) => this.pickDiscardCard(ownerIdArg),
+        pushDiscard: (ownerIdArg, card) => this.pushDiscard(ownerIdArg, card),
+        beginCollectiveFromDiscard: (ownerIdArg, discard) => this.beginCollectiveFromDiscard(ownerIdArg, discard),
+        clearAwaitingDiscardOwner: () => {
+          this.awaitingDiscardOwnerId = null;
+        },
+        endRound: (lastAction) => this.endRound(lastAction),
+      },
+      ownerId,
+    );
   }
 
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
-    this.pendingResponse = createPendingResponse(ownerId, discard, "upper");
-    this.awaitingDiscardOwnerId = null;
-    this.setResponseCard(discard, "upper");
-    applyCollectivePollState(this.state, ownerId, ownerId, ownerId, `${ownerId} DISCARD`);
-    this.syncAllPrivateHands();
-    this.startCollectivePolling();
+    beginCollectiveFromDiscardFlow(
+      {
+        createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
+        setPendingResponse: (pending) => {
+          this.pendingResponse = pending;
+        },
+        clearAwaitingDiscardOwner: () => {
+          this.awaitingDiscardOwnerId = null;
+        },
+        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
+          applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
+        },
+        syncAllPrivateHands: () => this.syncAllPrivateHands(),
+        startCollectivePolling: () => this.startCollectivePolling(),
+      },
+      ownerId,
+      discard,
+    );
   }
 
   private getHandWithoutPending(ownerId: string, pendingCard: Card): Card[] {
@@ -693,38 +726,40 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private enterDiscardStage(ownerId: string, tag: string): void {
-    const hand = this.playerHands.get(ownerId) ?? [];
-    const fallback = pickFallbackDiscard(hand, isDiscardRestricted);
-    if (!fallback) {
-      this.endRound(`${ownerId} NO_DISCARD`);
-      return;
-    }
-
-    this.pendingResponse = createPendingResponse(ownerId, fallback, "draw");
-    this.awaitingDiscardOwnerId = ownerId;
-    this.resetCollectivePolling();
-    applyEnterDiscardStageState(this.state, ownerId, tag);
-    this.state.responseCard = new CardSchema();
-    this.syncAllPrivateHands();
-    this.tickBots();
+    enterDiscardStageFlow(
+      {
+        playerHand: this.playerHands.get(ownerId) ?? [],
+        endRound: (lastAction) => this.endRound(lastAction),
+        createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
+        setPendingResponse: (pending) => {
+          this.pendingResponse = pending;
+        },
+        setAwaitingDiscardOwner: (ownerIdArg) => {
+          this.awaitingDiscardOwnerId = ownerIdArg;
+        },
+        resetCollectivePolling: () => this.resetCollectivePolling(),
+        applyEnterDiscardStageState: (ownerIdArg, tagArg) => applyEnterDiscardStageState(this.state, ownerIdArg, tagArg),
+        clearResponseCard: () => {
+          this.state.responseCard = new CardSchema();
+        },
+        syncAllPrivateHands: () => this.syncAllPrivateHands(),
+        tickBots: () => this.tickBots(),
+      },
+      ownerId,
+      tag,
+    );
   }
 
   private resolveCollectivePhase(): void {
-    const pending = this.pendingResponse;
-    if (!pending) {
-      return;
-    }
-
-    const order = this.getCollectiveOrder(pending);
-    const winner = pickCollectiveWinner(order, pending.collectives);
-
-    if (winner) {
-      this.executeResponseWinner(winner.id, winner.action);
-      return;
-    }
-
-    this.state.lastAction = "NO_RESPONSE";
-    this.enterOwnerLocalPhaseAfterNoResponse(pending.ownerId);
+    resolveCollectivePhaseFlow({
+      pending: this.pendingResponse,
+      playerOrder: this.playerOrder,
+      executeResponseWinner: (winnerId, action) => this.executeResponseWinner(winnerId, action),
+      setLastAction: (action) => {
+        this.state.lastAction = action;
+      },
+      enterOwnerLocalPhaseAfterNoResponse: (ownerId) => this.enterOwnerLocalPhaseAfterNoResponse(ownerId),
+    });
   }
 
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
@@ -891,19 +926,44 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private advanceToNextOwner(currentOwnerId: string, cardToNext: Card): void {
-    const nextId = this.getNextPlayerId(currentOwnerId);
-    this.pendingResponse = createPendingResponse(nextId, cardToNext, "upper");
-    this.state.currentPlayerId = nextId;
-    this.state.responsePhase = "collective";
-    this.setResponseCard(cardToNext, "upper");
-    this.state.currentTurnPlayerId = nextId;
-    this.state.previousPlayerId = currentOwnerId;
-    this.state.loopStage = "global_poll";
-    this.state.activeResponderId = "";
-    this.state.pollOriginPlayerId = currentOwnerId;
-    this.state.responseEndsAt = 0;
-    this.syncAllPrivateHands();
-    this.startCollectivePolling();
+    advanceToNextOwnerFlow(
+      {
+        getNextPlayerId: (ownerId) => this.getNextPlayerId(ownerId),
+        createPendingResponse: ({ ownerId, card, source }) => createPendingResponse(ownerId, card, source),
+        setPendingResponse: (pending) => {
+          this.pendingResponse = pending;
+        },
+        setCurrentPlayer: (ownerId) => {
+          this.state.currentPlayerId = ownerId;
+        },
+        setResponsePhaseCollective: () => {
+          this.state.responsePhase = "collective";
+        },
+        setResponseCard: (card, source) => this.setResponseCard(card, source),
+        setCurrentTurnPlayer: (ownerId) => {
+          this.state.currentTurnPlayerId = ownerId;
+        },
+        setPreviousPlayer: (ownerId) => {
+          this.state.previousPlayerId = ownerId;
+        },
+        setLoopStageGlobal: () => {
+          this.state.loopStage = "global_poll";
+        },
+        clearActiveResponder: () => {
+          this.state.activeResponderId = "";
+        },
+        clearResponseEndsAt: () => {
+          this.state.responseEndsAt = 0;
+        },
+        setPollOriginPlayer: (ownerId) => {
+          this.state.pollOriginPlayerId = ownerId;
+        },
+        syncAllPrivateHands: () => this.syncAllPrivateHands(),
+        startCollectivePolling: () => this.startCollectivePolling(),
+      },
+      currentOwnerId,
+      cardToNext,
+    );
   }
 
   private pickDiscardCard(playerId: string): Card | null {
