@@ -419,6 +419,7 @@ export class FourColorGameRoom extends Room<GameState> {
       player.exposedArea.clear();
       player.exposedGroupSizes.clear();
       player.generalArea.clear();
+      player.wildcardPool.clear();
       player.fishArea.clear();
     }
     this.state.publicDiscardPile.clear();
@@ -442,8 +443,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const publicGeneral = this.deck.shift();
     if (publicGeneral) {
       this.publicGeneralPool.push(publicGeneral);
-      const dealer = this.state.players.get(dealerId);
-      dealer?.generalArea.unshift(this.toSchemaCard(publicGeneral, true, "upper"));
+      this.addWildcardCardToPlayer(dealerId, publicGeneral, "upper");
     }
 
     this.state.deckCount = this.deck.length;
@@ -655,9 +655,18 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private exposeGeneralCard(ownerId: string, card: Card): void {
     this.publicGeneralPool.push(card);
-    const player = this.state.players.get(ownerId);
-    player?.generalArea.unshift(this.toSchemaCard(card, true, "draw"));
+    this.addWildcardCardToPlayer(ownerId, card, "draw");
     this.state.lastAction = `${ownerId} DRAW_GENERAL`;
+  }
+
+  private addWildcardCardToPlayer(ownerId: string, card: Card, source: "upper" | "draw"): void {
+    const player = this.state.players.get(ownerId);
+    if (!player) {
+      return;
+    }
+    const schemaCard = this.toSchemaCard(card, true, source);
+    player.generalArea.unshift(schemaCard);
+    player.wildcardPool.unshift(this.toSchemaCard(card, true, source));
   }
 
   private discardFromAndCollective(ownerId: string): void {
@@ -1186,6 +1195,15 @@ export class FourColorGameRoom extends Room<GameState> {
     if (byFace >= 0) {
       player.wildcardPool.splice(byFace, 1);
     }
+    const gById = player.generalArea.findIndex((x) => x.id === card.id);
+    if (gById >= 0) {
+      player.generalArea.splice(gById, 1);
+      return;
+    }
+    const gByFace = player.generalArea.findIndex((x) => x.color === card.color && x.type === card.type);
+    if (gByFace >= 0) {
+      player.generalArea.splice(gByFace, 1);
+    }
   }
 
   private consumePlanCards(playerId: string, handCards: Card[], poolCards: Card[]): Card[] {
@@ -1370,6 +1388,7 @@ export class FourColorGameRoom extends Room<GameState> {
       player.exposedArea.clear();
       player.exposedGroupSizes.clear();
       player.generalArea.clear();
+      player.wildcardPool.clear();
       player.fishArea.clear();
       this.playerHands.set(seatId, []);
       const online = [...this.seatBySession.values()].includes(seatId);
@@ -1611,7 +1630,8 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private getHuWildcardCount(): number {
-    return this.publicGeneralPool.length;
+    // Wildcards are now passed by per-seat wildcardPool in explainHuForSeat.
+    return 0;
   }
 
   private summarizeCards(cards: Card[]): string {
@@ -2083,6 +2103,7 @@ export class FourColorGameRoom extends Room<GameState> {
       this.publicGeneralPool = [];
       for (const id of this.playerOrder) {
         this.state.players.get(id)?.generalArea.clear();
+        this.state.players.get(id)?.wildcardPool.clear();
       }
       add("d11", "red", "jiang");
       add("d12", "red", "shi");
