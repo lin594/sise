@@ -7,6 +7,7 @@ import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi, tryExecuteKai, tryExecutePeng } from "./flow/operation-executor.js";
 import { executeResponseWinner } from "./flow/response-winner.js";
 import { getCollectiveOrder, pickCollectiveWinner } from "./flow/collective-logic.js";
+import { planLocalPhaseAfterNoResponse, shouldEndDrawAfterUpperPass } from "./flow/local-phase.js";
 import {
   iterateFromNext as iterateFromNextOrder,
   getNextPlayerId as getNextPlayerIdOrder,
@@ -852,37 +853,9 @@ export class FourColorGameRoom extends Room<GameState> {
     this.enterOwnerLocalPhaseAfterNoResponse(pending.ownerId);
   }
 
-  private isCollectiveReady(pending: PendingResponse): boolean {
-    let responded = 0;
-    for (const seatId of this.playerOrder) {
-      if (pending.collectives.has(seatId)) {
-        responded += 1;
-      }
-    }
-    return responded >= this.playerOrder.length;
-  }
-
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
     const acts = this.getAvailableActions(seatId);
     return acts.some((item) => item.enabled && item.action !== "pass");
-  }
-
-  private autoFillForcedCollectivePasses(): void {
-    const pending = this.pendingResponse;
-    if (!pending || this.state.responsePhase !== "collective") {
-      return;
-    }
-
-    for (const seatId of this.playerOrder) {
-      if (pending.collectives.has(seatId)) {
-        continue;
-      }
-
-      // If a seat has no legal response except pass, skip manual click.
-      if (!this.hasCollectiveActionBeyondPass(seatId)) {
-        pending.collectives.set(seatId, "pass");
-      }
-    }
   }
 
   private isEatResponder(ownerId: string, responderId: string): boolean {
@@ -933,24 +906,22 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending || pending.ownerId !== ownerId) {
       return;
     }
-    const fromDraw = pending.card.source === "draw";
-    const localOwnerId = fromDraw ? ownerId : this.getNextPlayerId(ownerId);
-    if (!fromDraw) {
-      pending.ownerId = localOwnerId;
-      this.state.currentPlayerId = localOwnerId;
+    const plan = planLocalPhaseAfterNoResponse(ownerId, pending.card.source, this.getNextPlayerId(ownerId));
+    if (plan.rebindPendingOwner) {
+      pending.ownerId = plan.localOwnerId;
+      this.state.currentPlayerId = plan.localOwnerId;
     }
-    this.state.responsePhase = fromDraw ? "local_draw" : "local_upper";
-    this.state.currentPlayerId = localOwnerId;
-    this.state.currentTurnPlayerId = localOwnerId;
+    this.state.responsePhase = plan.responsePhase;
+    this.state.currentPlayerId = plan.localOwnerId;
+    this.state.currentTurnPlayerId = plan.localOwnerId;
     this.state.loopStage = "local_poll";
     this.state.activeResponderId = "";
     this.state.responseEndsAt = 0;
 
-    // Drawn wildcard cannot be passed in local phase; owner must take it.
-    if (fromDraw && (isGeneral(pending.card) || isGold(pending.card))) {
-      this.addWildcardCardToPlayer(localOwnerId, pending.card, "draw");
-      this.state.lastAction = `${localOwnerId} FORCE_TAKE`;
-      this.enterDiscardStage(localOwnerId, "FORCE_TAKE");
+    if (plan.responsePhase === "local_draw" && (isGeneral(pending.card) || isGold(pending.card))) {
+      this.addWildcardCardToPlayer(plan.localOwnerId, pending.card, "draw");
+      this.state.lastAction = `${plan.localOwnerId} FORCE_TAKE`;
+      this.enterDiscardStage(plan.localOwnerId, "FORCE_TAKE");
       return;
     }
 
@@ -978,7 +949,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.pushDiscard(ownerId, pending.card);
 
     // Rule (new loop): when passing on an upper card, deck reaching 8 triggers draw end.
-    if (this.deck.length <= 8) {
+    if (shouldEndDrawAfterUpperPass(this.deck.length)) {
       this.endRound("DRAW_GAME");
       return;
     }
