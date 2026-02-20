@@ -741,7 +741,7 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     if (this.state.responsePhase === "collective") {
-      if (seatId === pending.ownerId || seatId !== this.collectiveResponderId) {
+      if (seatId !== this.collectiveResponderId) {
         return;
       }
       this.clearCollectiveTimer();
@@ -888,7 +888,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    const order = this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId);
+    const order = this.getCollectiveOrder(pending);
     let winner: { id: string; action: ActionType } | null = null;
 
     for (const id of order) {
@@ -920,14 +920,11 @@ export class FourColorGameRoom extends Room<GameState> {
   private isCollectiveReady(pending: PendingResponse): boolean {
     let responded = 0;
     for (const seatId of this.playerOrder) {
-      if (seatId === pending.ownerId) {
-        continue;
-      }
       if (pending.collectives.has(seatId)) {
         responded += 1;
       }
     }
-    return responded >= Math.max(0, this.playerOrder.length - 1);
+    return responded >= this.playerOrder.length;
   }
 
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
@@ -942,9 +939,6 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     for (const seatId of this.playerOrder) {
-      if (seatId === pending.ownerId) {
-        continue;
-      }
       if (pending.collectives.has(seatId)) {
         continue;
       }
@@ -1042,18 +1036,23 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
     const fromDraw = pending.card.source === "draw";
+    const localOwnerId = fromDraw ? ownerId : this.getNextPlayerId(ownerId);
+    if (!fromDraw) {
+      pending.ownerId = localOwnerId;
+      this.state.currentPlayerId = localOwnerId;
+    }
     this.state.responsePhase = fromDraw ? "self_grab" : "self_eat";
-    this.state.currentPlayerId = ownerId;
-    this.state.currentTurnPlayerId = ownerId;
+    this.state.currentPlayerId = localOwnerId;
+    this.state.currentTurnPlayerId = localOwnerId;
     this.state.loopStage = "local_poll";
     this.state.activeResponderId = "";
     this.state.responseEndsAt = 0;
 
     // Drawn wildcard cannot be passed in local phase; owner must take it.
     if (fromDraw && (isGeneral(pending.card) || isGold(pending.card))) {
-      this.addWildcardCardToPlayer(ownerId, pending.card, "draw");
-      this.state.lastAction = `${ownerId} FORCE_TAKE`;
-      this.enterDiscardStage(ownerId, "FORCE_TAKE");
+      this.addWildcardCardToPlayer(localOwnerId, pending.card, "draw");
+      this.state.lastAction = `${localOwnerId} FORCE_TAKE`;
+      this.enterDiscardStage(localOwnerId, "FORCE_TAKE");
       return;
     }
 
@@ -1503,7 +1502,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const isCollective = this.state.responsePhase === "collective";
 
     if (isCollective) {
-      if (isOwner || seatId !== this.collectiveResponderId) {
+      if (seatId !== this.collectiveResponderId) {
         return this.getDisabledPanel("mode1", "collective");
       }
       const wildcardPool = this.getWildcardPoolCards(seatId);
@@ -1879,10 +1878,17 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.clearBotTimer();
     this.clearCollectiveTimer();
-    this.collectiveQueue = this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId);
+    this.collectiveQueue = this.getCollectiveOrder(pending);
     this.collectiveCursor = 0;
     this.collectiveResponderId = null;
     this.advanceCollectivePolling();
+  }
+
+  private getCollectiveOrder(pending: PendingResponse): string[] {
+    if (pending.card.source === "draw") {
+      return [pending.ownerId, ...this.iterateFromNext(pending.ownerId).filter((id) => id !== pending.ownerId)];
+    }
+    return this.iterateFromNext(pending.ownerId);
   }
 
   private scheduleCollectiveTimeout(): void {
