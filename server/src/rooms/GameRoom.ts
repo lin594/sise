@@ -1086,6 +1086,12 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.pushDiscard(ownerId, pending.card);
 
+    // Rule (new loop): when passing on an upper card, deck reaching 8 triggers draw end.
+    if (this.deck.length <= 8) {
+      this.endRound("DECK_EMPTY");
+      return;
+    }
+
     const newCard = this.deck.shift();
     this.state.deckCount = this.deck.length;
     if (!newCard) {
@@ -2029,7 +2035,7 @@ export class FourColorGameRoom extends Room<GameState> {
       if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
-        this.executePassToNext(ownerId);
+        this.executeGrab(ownerId);
       }
       return;
     }
