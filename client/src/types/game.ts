@@ -1,4 +1,5 @@
-export type ActionType = "hu" | "open" | "peng" | "eat" | "grab" | "pass";
+// Keep legacy actions for transition compatibility.
+export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass" | "open" | "eat" | "grab";
 
 export interface Card {
   id: string;
@@ -19,6 +20,7 @@ export interface PlayerState {
   exposedArea: Card[];
   exposedGroupSizes: number[];
   generalArea: Card[];
+  wildcardPool: Card[];
   fishArea: Card[];
 }
 
