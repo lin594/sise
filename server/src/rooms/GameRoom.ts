@@ -1,6 +1,6 @@
 import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { createDeck, isDiscardRestricted, isGeneral, isSameFace, shuffle } from "../rules/deck.js";
+import { createDeck, isDiscardRestricted, isGeneral, isGold, isSameFace, shuffle } from "../rules/deck.js";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -633,27 +633,12 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    let drawn = this.deck.shift();
+    const drawn = this.deck.shift();
     this.state.deckCount = this.deck.length;
     if (!drawn) {
       this.endRound("DECK_EMPTY");
       return;
     }
-
-    // Rule v1.0: drawing a general reveals it and immediately draws again.
-    while (drawn && isGeneral(drawn)) {
-      this.exposeGeneralCard(ownerId, drawn);
-      drawn = this.deck.shift();
-      this.state.deckCount = this.deck.length;
-      if (!drawn) {
-        this.endRound("DECK_EMPTY");
-        return;
-      }
-    }
-
-    const hand = this.playerHands.get(ownerId) ?? [];
-    hand.push(drawn);
-    this.playerHands.set(ownerId, hand);
 
     this.pendingResponse = {
       ownerId,
@@ -662,17 +647,17 @@ export class FourColorGameRoom extends Room<GameState> {
       collectives: new Map(),
     };
     this.awaitingDiscardOwnerId = null;
-    this.state.responsePhase = "self_grab";
+    this.state.responsePhase = "collective";
     this.setResponseCard(drawn, "draw");
     this.state.currentTurnPlayerId = ownerId;
     this.state.previousPlayerId = this.getPreviousPlayerId(ownerId);
-    this.state.loopStage = "local_poll";
+    this.state.loopStage = "global_poll";
     this.state.activeResponderId = "";
     this.state.pollOriginPlayerId = ownerId;
     this.state.responseEndsAt = 0;
     this.state.lastAction = `${ownerId} ${tag}`;
     this.syncAllPrivateHands();
-    this.tickBots();
+    this.startCollectivePolling();
   }
 
   private exposeGeneralCard(ownerId: string, card: Card): void {
@@ -923,26 +908,13 @@ export class FourColorGameRoom extends Room<GameState> {
       }
     }
 
-    if (!winner) {
-      for (const id of order) {
-        if (!this.isEatResponder(pending.ownerId, id)) {
-          continue;
-        }
-        if ((pending.collectives.get(id) ?? "pass") === "chi") {
-          winner = { id, action: "chi" };
-          break;
-        }
-      }
-    }
-
     if (winner) {
       this.executeResponseWinner(winner.id, winner.action);
       return;
     }
 
-    const nextId = this.getNextPlayerId(pending.ownerId);
     this.state.lastAction = "NO_RESPONSE";
-    this.startTurn(nextId, "TURN_DRAW");
+    this.enterOwnerLocalPhaseAfterNoResponse(pending.ownerId);
   }
 
   private isCollectiveReady(pending: PendingResponse): boolean {
@@ -1060,9 +1032,33 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!ownerId) {
       return;
     }
-    const nextId = this.getNextPlayerId(ownerId);
     this.state.lastAction = "NO_RESPONSE";
-    this.startTurn(nextId, "TURN_DRAW");
+    this.enterOwnerLocalPhaseAfterNoResponse(ownerId);
+  }
+
+  private enterOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
+    const pending = this.pendingResponse;
+    if (!pending || pending.ownerId !== ownerId) {
+      return;
+    }
+    const fromDraw = pending.card.source === "draw";
+    this.state.responsePhase = fromDraw ? "self_grab" : "self_eat";
+    this.state.currentPlayerId = ownerId;
+    this.state.currentTurnPlayerId = ownerId;
+    this.state.loopStage = "local_poll";
+    this.state.activeResponderId = "";
+    this.state.responseEndsAt = 0;
+
+    // Drawn wildcard cannot be passed in local phase; owner must take it.
+    if (fromDraw && (isGeneral(pending.card) || isGold(pending.card))) {
+      this.addWildcardCardToPlayer(ownerId, pending.card, "draw");
+      this.state.lastAction = `${ownerId} FORCE_TAKE`;
+      this.enterDiscardStage(ownerId, "FORCE_TAKE");
+      return;
+    }
+
+    this.syncAllPrivateHands();
+    this.tickBots();
   }
 
   private executeEat(ownerId: string): void {
@@ -1514,7 +1510,7 @@ export class FourColorGameRoom extends Room<GameState> {
         { action: "hu", enabled: huProbe.valid },
         { action: "kai", enabled: canKai(hand, pending.card, wildcardPool) },
         { action: "peng", enabled: canPeng(hand, pending.card) },
-        { action: "chi", enabled: this.isEatResponder(pending.ownerId, seatId) && canChi(hand, pending.card, wildcardPool) },
+        { action: "chi", enabled: false },
         { action: "pass", enabled: true },
       ];
     }
@@ -1529,15 +1525,10 @@ export class FourColorGameRoom extends Room<GameState> {
       }
       const handNoPending = this.getHandWithoutPending(seatId, pending.card);
       const wildcardPool = this.getWildcardPoolCards(seatId);
-      const huProbe = explainHu(handNoPending, pending.card, {
-        wildcardCount: this.getHuWildcardCount(),
-        wildcardPool,
-      });
-      this.logHuCheck("mode2_owner", seatId, handNoPending, pending.card, huProbe.valid);
       return [
-        { action: "hu", enabled: huProbe.valid },
-        { action: "kai", enabled: canKai(handNoPending, pending.card, wildcardPool) },
-        { action: "peng", enabled: canPeng(handNoPending, pending.card) },
+        { action: "hu", enabled: false },
+        { action: "kai", enabled: false },
+        { action: "peng", enabled: false },
         { action: "chi", enabled: canChi(handNoPending, pending.card, wildcardPool) },
         { action: "pass", enabled: true },
       ];
@@ -2013,46 +2004,9 @@ export class FourColorGameRoom extends Room<GameState> {
     if (this.pendingResponse.mode === "mode2") {
       const acts = this.getAvailableActions(ownerId);
       const choose =
-        acts.find((x) => x.action === "hu" && x.enabled)?.action ??
-        acts.find((x) => x.action === "kai" && x.enabled)?.action ??
-        acts.find((x) => x.action === "peng" && x.enabled)?.action ??
         acts.find((x) => x.action === "chi" && x.enabled)?.action ??
         acts.find((x) => x.action === "pass" && x.enabled)?.action ??
         "pass";
-
-      if (choose === "hu") {
-        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
-        const hu = this.explainHuForSeat(ownerId, hand, this.pendingResponse.card);
-        this.logHuCheck("mode2_bot_hu", ownerId, hand, this.pendingResponse.card, hu.valid);
-        if (hu.valid) {
-          this.endRound(`${ownerId} HU`, ownerId, hu.groups);
-        } else {
-          this.discardFromAndCollective(ownerId);
-        }
-        return;
-      }
-
-      if (choose === "kai") {
-        const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
-        const plan = findKaiPlan(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId));
-        if (!plan) {
-          this.enterDiscardStage(ownerId, "PASS");
-          return;
-        }
-        const taken = this.consumePlanCards(ownerId, plan.handCards, plan.poolCards);
-        this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
-        this.state.lastAction = `${ownerId} KAI`;
-        this.startTurn(ownerId, "KONG_DRAW");
-        return;
-      }
-
-      if (choose === "peng") {
-        this.removeFromHand(ownerId, this.pendingResponse.card);
-        const taken = this.takeMatchingCards(ownerId, this.pendingResponse.card, 2);
-        this.pushExposedGroup(ownerId, [this.pendingResponse.card, ...taken], true);
-        this.enterDiscardStage(ownerId, "PENG");
-        return;
-      }
 
       if (choose === "chi") {
         const hand = this.getHandWithoutPending(ownerId, this.pendingResponse.card);
@@ -2075,7 +2029,7 @@ export class FourColorGameRoom extends Room<GameState> {
       if (canChi(hand, this.pendingResponse.card, this.getWildcardPoolCards(ownerId))) {
         this.executeEat(ownerId);
       } else {
-        this.executeGrab(ownerId);
+        this.executePassToNext(ownerId);
       }
       return;
     }
