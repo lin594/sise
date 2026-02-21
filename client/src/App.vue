@@ -87,7 +87,25 @@
             @click="submitCandidate(candidate.id)"
           >
             <span class="candidate-title">{{ index + 1 }}. {{ candidate.title }}</span>
-            <small>{{ candidateSourceText(candidate.source) }} · {{ candidate.cardIds.join("、") || "无需手牌" }}</small>
+            <div class="candidate-cards-preview">
+              <div class="preview-col target" v-if="candidateTargetCard">
+                <small>目标牌</small>
+                <CardComp :card="candidateTargetCard" size="sm" />
+              </div>
+              <div class="preview-col group">
+                <small>组合牌</small>
+                <div v-if="candidateGroupCards(candidate).length" class="preview-cards">
+                  <CardComp
+                    v-for="card in candidateGroupCards(candidate)"
+                    :key="`cand-${candidate.id}-${card.id}`"
+                    :card="card"
+                    size="sm"
+                  />
+                </div>
+                <small v-else class="candidate-raw">{{ candidate.cardIds.join("、") || "无需手牌" }}</small>
+              </div>
+            </div>
+            <small>{{ candidateSourceText(candidate.source) }}</small>
           </button>
         </div>
         <p v-else class="candidate-empty">当前没有可选牌组</p>
@@ -218,7 +236,7 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-import type { ActionCandidate, ActionRequest, RoundResultPlayer } from "@/types/game";
+import type { ActionCandidate, ActionRequest, Card, RoundResultPlayer } from "@/types/game";
 
 const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
 const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
@@ -269,6 +287,9 @@ const activeCandidates = computed<ActionCandidate[]>(() => {
   }
   const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
   return item?.candidates ?? [];
+});
+const candidateTargetCard = computed<Card | null>(() => {
+  return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
 });
 const isCompactLandscape = ref(false);
 const resettingLobby = ref(false);
@@ -390,6 +411,22 @@ function candidateSourceText(source: ActionCandidate["source"]): string {
     return "对子复用";
   }
   return "手牌";
+}
+
+function parseCardIdToCard(cardId: string): Card | null {
+  const match = String(cardId ?? "").trim().match(/^([a-z]+)_([a-z]+)_\d+$/i);
+  if (!match) {
+    return null;
+  }
+  return {
+    id: cardId,
+    color: match[1].toLowerCase(),
+    type: match[2].toLowerCase(),
+  };
+}
+
+function candidateGroupCards(candidate: ActionCandidate): Card[] {
+  return candidate.cardIds.map((id) => parseCardIdToCard(id)).filter((card): card is Card => Boolean(card));
 }
 
 function submitDeclaration() {
@@ -750,6 +787,32 @@ async function rebuildLobby() {
   background: #3f2d0f;
 }
 
+.candidate-cards-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.preview-col {
+  display: grid;
+  gap: 4px;
+}
+
+.preview-col small {
+  color: #93c5fd;
+}
+
+.preview-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.candidate-raw {
+  color: #cbd5e1;
+}
+
 .candidate-title {
   font-size: 14px;
   font-weight: 700;
@@ -944,6 +1007,10 @@ async function rebuildLobby() {
   }
 
   .settlement-list {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-cards-preview {
     grid-template-columns: 1fr;
   }
 }

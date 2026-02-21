@@ -198,6 +198,41 @@ export class RoomStateOps {
   }
 
   /**
+   * 作用：将明示区中的一个对子组原地升级为三张组（用于对子复用后的碰）。
+   * 关键输入/输出：输入目标玩家、对子牌与响应牌；输出是否升级成功。
+   * 副作用：修改 `exposedArea/exposedGroupSizes`，不新增单张组。
+   */
+  upgradeExposedPairToTriplet(playerId: SeatId, pairCards: Card[], pendingCard: Card, highlight: boolean): boolean {
+    const player = this.state.players.get(playerId);
+    if (!player || pairCards.length < 2) {
+      return false;
+    }
+    let offset = 0;
+    for (let idx = 0; idx < player.exposedGroupSizes.length; idx += 1) {
+      const size = player.exposedGroupSizes[idx];
+      const end = offset + size;
+      if (size === 2) {
+        const chunk = player.exposedArea.slice(offset, end);
+        const hasAllPairIds = pairCards.every((pair) => chunk.some((card) => card.id === pair.id));
+        if (hasAllPairIds) {
+          const merged = [...player.exposedArea];
+          merged.splice(end, 0, this.toSchemaCard(pendingCard, highlight, pendingCard.source ?? "upper"));
+          while (player.exposedArea.length > 0) {
+            player.exposedArea.pop();
+          }
+          for (const card of merged) {
+            player.exposedArea.push(card);
+          }
+          player.exposedGroupSizes[idx] = size + 1;
+          return true;
+        }
+      }
+      offset = end;
+    }
+    return false;
+  }
+
+  /**
    * 作用：同步当前响应牌到 `responseCard/targetCard/isMoCard`。
    * 关键输入/输出：输入牌和来源，输出无返回值。
    * 副作用：修改 `state.responseCard/targetCard/isMoCard/currentPlayerId`。

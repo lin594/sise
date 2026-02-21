@@ -134,7 +134,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.botThinkMinMs,
     Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1000),
   );
-  private readonly collectiveTimeoutMs = Math.max(1000, Number(process.env.COLLECTIVE_TIMEOUT_MS ?? 8000));
+  private readonly operationTimeoutMs = Math.max(1000, Number(process.env.OP_TIMEOUT_MS ?? 20000));
+  private readonly collectiveTimeoutMs = Math.max(
+    1000,
+    Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
+  );
+  private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
@@ -861,14 +866,17 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
     if (decision === "local_chi") {
+      this.clearCollectiveTimer();
       this.executeEat(seatId, candidateId);
       return;
     }
     if (decision === "local_pass_upper") {
+      this.clearCollectiveTimer();
       this.executeGrab(seatId);
       return;
     }
     if (decision === "local_pass_draw") {
+      this.clearCollectiveTimer();
       this.executePassToNext(seatId);
       return;
     }
@@ -911,6 +919,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
+    this.clearCollectiveTimer();
     this.traceStep("discard_accept", `seat=${seatId} discard=${this.formatTraceCard(discard)}`);
     this.ops.pushDiscard(seatId, discard);
     this.beginCollectiveFromDiscard(seatId, discard);
@@ -1007,6 +1016,8 @@ export class FourColorGameRoom extends Room<GameState> {
               takeMatchingCards: (seatIdArg, target, count) => this.ops.takeMatchingCards(seatIdArg, target, count),
               takeMatchingReusablePairCards: (seatIdArg, target, count) =>
                 this.takeMatchingReusablePairCards(seatIdArg, target, count),
+              upgradeExposedPairToTriplet: (seatIdArg, pairCards, pendingCardArg, highlight) =>
+                this.ops.upgradeExposedPairToTriplet(seatIdArg, pairCards, pendingCardArg, highlight),
               pushExposedGroup: (seatIdArg, cards, highlight) => this.ops.pushExposedGroup(seatIdArg, cards, highlight),
             },
             seatId,
@@ -1536,6 +1547,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.traceStep("tick_bots", `plan=${plan} pending=${pending ? "yes" : "no"}`);
     if (plan === "clear_and_broadcast") {
       this.clearBotTimer();
+      this.clearCollectiveTimer();
       this.broadcastAvailableActions();
       return;
     }
@@ -1555,6 +1567,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
     if (plan === "schedule_bot_owner") {
+      this.clearCollectiveTimer();
       this.scheduleBotStep();
       this.broadcastAvailableActions();
       return;
@@ -1636,26 +1649,61 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private scheduleCollectiveTimeout(): void {
     this.clearCollectiveTimer();
-    this.state.responseEndsAt = Date.now() + this.collectiveTimeoutMs;
-    this.traceStep("schedule_collective_timeout", `ms=${this.collectiveTimeoutMs}`);
+    const isCollectivePhase = this.state.responsePhase === "collective";
+    const timeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
+    this.state.responseEndsAt = Date.now() + timeoutMs;
+    this.traceStep(
+      "schedule_collective_timeout",
+      `phase=${this.state.responsePhase} ms=${timeoutMs} awaiting=${this.awaitingDiscardOwnerId ?? "-"}`,
+    );
     this.collectiveTimer = setTimeout(() => {
-      const pending = this.pendingResponse;
-      const responderId = this.collectiveResponderId;
       this.collectiveTimer = null;
-      if (!pending || this.state.responsePhase !== "collective" || !responderId) {
+      const pending = this.pendingResponse;
+      if (!pending || this.state.phase !== "playing") {
         this.traceStep("collective_timeout_skip");
         return;
       }
-      if (pending.collectives.has(responderId)) {
-        this.traceStep("collective_timeout_already_responded", `responder=${responderId}`);
+      if (this.state.responsePhase === "collective") {
+        const responderId = this.collectiveResponderId;
+        if (!responderId) {
+          this.traceStep("collective_timeout_skip");
+          return;
+        }
+        if (pending.collectives.has(responderId)) {
+          this.traceStep("collective_timeout_already_responded", `responder=${responderId}`);
+          return;
+        }
+        pending.collectives.set(responderId, { action: "pass" });
+        this.collectiveCursor += 1;
+        this.state.lastAction = `${responderId} TIMEOUT_PASS`;
+        this.traceStep("collective_timeout_pass", `responder=${responderId}`);
+        this.advanceCollectivePolling();
         return;
       }
-      pending.collectives.set(responderId, { action: "pass" });
-      this.collectiveCursor += 1;
-      this.state.lastAction = `${responderId} TIMEOUT_PASS`;
-      this.traceStep("collective_timeout_pass", `responder=${responderId}`);
-      this.advanceCollectivePolling();
-    }, this.collectiveTimeoutMs);
+
+      const ownerId = pending.ownerId;
+      if (this.state.responsePhase === "local_upper") {
+        this.traceStep("local_timeout_pass_upper", `owner=${ownerId}`);
+        this.executeGrab(ownerId);
+        this.state.lastAction = `${ownerId} TIMEOUT_PASS`;
+        return;
+      }
+
+      if (this.state.responsePhase === "local_draw") {
+        if (this.awaitingDiscardOwnerId === ownerId) {
+          this.traceStep("local_timeout_discard", `owner=${ownerId}`);
+          this.discardFromAndCollective(ownerId);
+          this.state.lastAction = `${ownerId} TIMEOUT_DISCARD`;
+          return;
+        }
+        this.traceStep("local_timeout_pass_draw", `owner=${ownerId}`);
+        this.executePassToNext(ownerId);
+        this.state.lastAction = `${ownerId} TIMEOUT_PASS`;
+        return;
+      }
+
+      this.traceStep("collective_timeout_skip", `phase=${this.state.responsePhase}`);
+    }, timeoutMs);
   }
 
   /**

@@ -588,6 +588,10 @@ export function planTickBots(input: TickBotInput): TickBotPlan {
     return "schedule_bot_owner";
   }
 
+  if (!input.hasCollectiveTimer) {
+    return "schedule_collective_timeout";
+  }
+
   return "broadcast_only";
 }
 

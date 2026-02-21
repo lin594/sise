@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
+import { tryExecutePeng } from "../rooms/flow/actions/peng.js";
+import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 
@@ -46,6 +48,82 @@ t("actions: peng rejects mixed source hand1+pair1", () => {
   const hand = [c("rj1", "red", "ju")];
   const pairCards = [c("rj2", "red", "ju")];
   assert.equal(canPeng(hand, response, pairCards), false);
+});
+
+t("room-state-ops: upgrade pair group to triplet in-place", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "B";
+  player.name = "B";
+  state.players.set("B", player);
+  const ops = createRoomStateOps(state, new Map(), () => null);
+  const p1 = c("rj1", "red", "ju");
+  const p2 = c("rj2", "red", "ju");
+  const pending = c("rj3", "red", "ju", "upper");
+  player.exposedArea.push(ops.toSchemaCard(p1, false, "upper"));
+  player.exposedArea.push(ops.toSchemaCard(p2, false, "upper"));
+  player.exposedGroupSizes.push(2);
+
+  const ok = ops.upgradeExposedPairToTriplet("B", [p1, p2], pending, true);
+
+  assert.equal(ok, true);
+  assert.deepEqual([...player.exposedGroupSizes], [3]);
+  assert.equal(player.exposedArea.length, 3);
+  assert.equal(player.exposedArea[2].id, "rj3");
+});
+
+t("room-state-ops: upgrade targets matching pair when multiple groups exist", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "B";
+  player.name = "B";
+  state.players.set("B", player);
+  const ops = createRoomStateOps(state, new Map(), () => null);
+  const a1 = c("rj1", "red", "ju");
+  const a2 = c("rj2", "red", "ju");
+  const b1 = c("gm1", "green", "ma");
+  const b2 = c("gm2", "green", "ma");
+  const pending = c("gm3", "green", "ma", "upper");
+  player.exposedArea.push(ops.toSchemaCard(a1, false, "upper"));
+  player.exposedArea.push(ops.toSchemaCard(a2, false, "upper"));
+  player.exposedArea.push(ops.toSchemaCard(b1, false, "upper"));
+  player.exposedArea.push(ops.toSchemaCard(b2, false, "upper"));
+  player.exposedGroupSizes.push(2);
+  player.exposedGroupSizes.push(2);
+
+  const ok = ops.upgradeExposedPairToTriplet("B", [b1, b2], pending, true);
+
+  assert.equal(ok, true);
+  assert.deepEqual([...player.exposedGroupSizes], [2, 3]);
+  assert.equal(player.exposedArea[0].id, "rj1");
+  assert.equal(player.exposedArea[1].id, "rj2");
+  assert.equal(player.exposedArea[2].id, "gm1");
+  assert.equal(player.exposedArea[3].id, "gm2");
+  assert.equal(player.exposedArea[4].id, "gm3");
+});
+
+t("actions: peng reusable_pair falls back to full triplet group when upgrade misses", () => {
+  const pending = c("rj3", "red", "ju", "upper");
+  const pairA = c("rj1", "red", "ju");
+  const pairB = c("rj2", "red", "ju");
+  const pushed: Card[][] = [];
+
+  const ok = tryExecutePeng(
+    {
+      getHandWithoutPending: () => [],
+      getReusablePairCards: () => [pairA, pairB],
+      takeMatchingCards: () => [],
+      takeMatchingReusablePairCards: () => [pairA, pairB],
+      upgradeExposedPairToTriplet: () => false,
+      pushExposedGroup: (_seatId, cards) => pushed.push(cards),
+    },
+    "B",
+    pending,
+  );
+
+  assert.equal(ok, true);
+  assert.equal(pushed.length, 1);
+  assert.equal(pushed[0].length, 3);
 });
 
 t("actions: chi supports wildcard completion", () => {
@@ -141,6 +219,9 @@ function mkRoom(seats: string[]) {
   room.state = state;
   room.playerOrder = [...seats];
   room.state.phase = "playing";
+  room.collectiveTimeoutMs = 5;
+  room.localTimeoutMs = 5;
+  room.operationTimeoutMs = 5;
   return room;
 }
 
@@ -305,6 +386,62 @@ t("room: entering discard stage with no legal card ends with winner instead of d
   room.enterDiscardStage("B", "CHI");
   assert.equal(room.state.phase, "ended");
   assert.match(String(room.state.lastAction), /^B HU$/);
+});
+
+t("room: human discard rejects gold cards", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "ju", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.awaitingDiscardOwnerId = "B";
+  room.playerHands.set("B", [c("g1", "gold", "gong"), c("m1", "red", "ma")]);
+  room.seatBySession.set("sessB", "B");
+  const client = { sessionId: "sessB", send: () => {} };
+
+  room.handleDiscardCard(client, { cardId: "g1" });
+
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
+  assert.equal((room.playerHands.get("B") ?? []).some((card: Card) => card.id === "g1"), true);
+});
+
+t("room: bot auto-discard skips gold cards", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "ju", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.awaitingDiscardOwnerId = "B";
+  room.playerHands.set("B", [c("g1", "gold", "gong"), c("m1", "red", "ma")]);
+  room.botIds.add("B");
+
+  room.runBotStepNow();
+
+  const top = room.state.players.get("B")?.discardPile[0];
+  assert.ok(top);
+  assert.equal(top!.color, "red");
+  assert.equal(top!.id, "m1");
+});
+
+t("room: local human phase schedules response timeout", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_upper";
+  room.state.currentPlayerId = "B";
+
+  room.tickBots();
+
+  assert.equal(room.state.responseEndsAt > Date.now(), true);
+  assert.equal(Boolean(room.collectiveTimer), true);
+  room.clearCollectiveTimer();
 });
 
 t("room: human collective peng without candidateId is rejected", () => {
