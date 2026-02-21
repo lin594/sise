@@ -23,12 +23,11 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
-/** @type {__VLS_StyleScopedClasses['card']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "card" },
-    ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, { response: __VLS_ctx.isResponseCard }]) },
+    ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`]) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text text-top" },

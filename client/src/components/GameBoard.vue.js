@@ -4,7 +4,7 @@ import CardComp from "./Card.vue";
 const props = defineProps();
 const emit = defineEmits();
 const isCompactLandscape = ref(false);
-const layoutRevision = ref(0);
+const nowMs = ref(Date.now());
 const orderedPlayers = computed(() => {
     const list = props.players ?? [];
     if (!list.length) {
@@ -49,17 +49,29 @@ let dealerTimer = null;
 let dealerIntroTimer = null;
 let dealAnimatingUntil = 0;
 let flashTimer = null;
+let countdownTimer = null;
+const OP_COUNTDOWN_MS = 20000;
 function splitExposedGroups(cards, sizes, prefix) {
+    const normalizeResponseFlag = (chunk) => {
+        const firstResponseIndex = chunk.findIndex((card) => Boolean(card.isResponseCard));
+        if (firstResponseIndex < 0) {
+            return chunk.map((card) => ({ ...card }));
+        }
+        return chunk.map((card, idx) => ({
+            ...card,
+            isResponseCard: idx === firstResponseIndex,
+        }));
+    };
     const cleanSizes = sizes.filter((size) => Number.isFinite(size) && size > 0);
     const total = cleanSizes.reduce((sum, size) => sum + size, 0);
     if (!cleanSizes.length || total !== cards.length) {
-        return cards.map((card, idx) => ({ id: `${prefix}-fallback-${idx}`, cards: [card] }));
+        return cards.map((card, idx) => ({ id: `${prefix}-fallback-${idx}`, cards: [{ ...card }] }));
     }
     const groups = [];
     let offset = 0;
     for (let idx = 0; idx < cleanSizes.length; idx += 1) {
         const size = cleanSizes[idx];
-        const chunk = cards.slice(offset, offset + size);
+        const chunk = normalizeResponseFlag(cards.slice(offset, offset + size));
         offset += size;
         if (chunk.length > 0) {
             groups.push({ id: `${prefix}-${idx}`, cards: chunk });
@@ -69,7 +81,7 @@ function splitExposedGroups(cards, sizes, prefix) {
 }
 function buildOpenGroups(player, prefix) {
     const exposed = splitExposedGroups(player.exposedArea ?? [], player.exposedGroupSizes ?? [], `${prefix}-exp`);
-    const generals = (player.generalArea ?? []).map((card, idx) => ({ id: `${prefix}-gen-${idx}`, cards: [card] }));
+    const generals = (player.generalArea ?? []).map((card, idx) => ({ id: `${prefix}-gen-${idx}`, cards: [{ ...card }] }));
     return [...exposed, ...generals];
 }
 const seatEntries = computed(() => {
@@ -177,6 +189,9 @@ const centerEventText = computed(() => {
         return "";
     }
     const { actor, keyword } = parseActionDescriptor(action);
+    if (isSystemAction(keyword)) {
+        return "";
+    }
     const actionMap = {
         DISCARD: "出牌",
         PENG: "碰",
@@ -197,37 +212,54 @@ const centerEventText = computed(() => {
     const targetLabel = target ? cardLabel(target) : "-";
     return `${actorName} ${label}（target: ${targetLabel}）`;
 });
-const centerPointerStyle = computed(() => {
-    void layoutRevision.value;
-    const table = tableRef.value;
-    if (!table) {
+const seatCountdownSeconds = computed(() => {
+    const endsAt = Number(props.state?.responseEndsAt ?? 0);
+    if (!endsAt || endsAt <= nowMs.value) {
         return null;
     }
+    return Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000));
+});
+const seatCountdownPercent = computed(() => {
+    const endsAt = Number(props.state?.responseEndsAt ?? 0);
+    if (!endsAt || endsAt <= nowMs.value) {
+        return 0;
+    }
+    const remain = endsAt - nowMs.value;
+    const raw = (remain / OP_COUNTDOWN_MS) * 100;
+    return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
+});
+const compactCenterHint = computed(() => {
+    if (canDiscard.value) {
+        return "请选择弃牌";
+    }
+    if (String(props.state?.responsePhase ?? "") === "collective") {
+        return isMyTurn.value ? "等待他人响应" : "待响应阶段";
+    }
+    return isMyTurn.value ? "轮到你操作" : "等待对方操作";
+});
+const mergedActionLogs = computed(() => {
+    const logs = props.parsedActionLogs ?? [];
+    return logs.slice(0, 12).map((log) => ({
+        ...log,
+        actorLabel: props.players.find((player) => player.clientId === log.actorId)?.name || log.actorId || "系统",
+    }));
+});
+const centerPointerDirection = computed(() => {
     const currentId = String(props.state?.currentPlayerId ?? "");
     if (!currentId) {
         return null;
     }
-    const targetAbs = targetForPlayer(currentId);
-    if (!targetAbs) {
-        return null;
+    const position = resolvePlayerPosition(currentId);
+    if (position === "top") {
+        return "up";
     }
-    const tableRect = table.getBoundingClientRect();
-    const center = { x: tableRect.width / 2, y: tableRect.height / 2 };
-    const target = { x: targetAbs.x - tableRect.left, y: targetAbs.y - tableRect.top };
-    const dx = target.x - center.x;
-    const dy = target.y - center.y;
-    const distance = Math.hypot(dx, dy);
-    if (distance < 1) {
-        return null;
+    if (position === "left") {
+        return "left";
     }
-    const length = Math.min(64, Math.max(48, distance * 0.2));
-    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-    return {
-        left: `${center.x}px`,
-        top: `${center.y}px`,
-        width: `${length}px`,
-        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
-    };
+    if (position === "right") {
+        return "right";
+    }
+    return "down";
 });
 const dealerName = computed(() => {
     const dealerId = String(props.state?.dealerId ?? "");
@@ -248,8 +280,11 @@ function statusText(player) {
 function isDealer(playerId) {
     return Boolean(playerId) && String(props.state?.dealerId ?? "") === playerId;
 }
+function isSystemAction(actionKey) {
+    return actionKey === "NO_RESPONSE" || actionKey === "TURN_DRAW" || actionKey === "KONG_DRAW";
+}
 function canDiscardCard(card) {
-    return canDiscard.value && card.type !== "jiang";
+    return canDiscard.value && card.type !== "jiang" && card.color !== "gold";
 }
 function onDiscard(cardId, event) {
     if (!canDiscard.value || discardingCardId.value) {
@@ -361,6 +396,13 @@ function setSeatRef(playerId, el) {
     else {
         seatRefMap.delete(playerId);
     }
+}
+function resolvePlayerPosition(playerId) {
+    if (selfPlayer.value?.clientId === playerId) {
+        return "self";
+    }
+    const seat = seatEntries.value.find((entry) => entry.player.clientId === playerId);
+    return seat?.position ?? "self";
 }
 function pointFromElement(el) {
     if (!el) {
@@ -670,7 +712,6 @@ function queueDealerIntro(name, dealerId) {
     }, delay);
 }
 function updateCompactLandscape() {
-    layoutRevision.value += 1;
     const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
     if (compact !== isCompactLandscape.value) {
         isCompactLandscape.value = compact;
@@ -680,6 +721,9 @@ onMounted(() => {
     updateCompactLandscape();
     window.addEventListener("resize", updateCompactLandscape);
     window.addEventListener("orientationchange", updateCompactLandscape);
+    countdownTimer = setInterval(() => {
+        nowMs.value = Date.now();
+    }, 500);
 });
 onUnmounted(() => {
     clearDealAnimationRuntime();
@@ -700,6 +744,10 @@ onUnmounted(() => {
     dealerFlight.value = null;
     window.removeEventListener("resize", updateCompactLandscape);
     window.removeEventListener("orientationchange", updateCompactLandscape);
+    if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
 });
 watch(() => props.state?.phase, (phase, prev) => {
     if (prev === "declaring" && phase === "playing") {
@@ -760,6 +808,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
@@ -769,9 +818,13 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-text']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
@@ -780,6 +833,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
@@ -787,10 +841,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
@@ -805,16 +859,14 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-open-left']} */ ;
@@ -837,11 +889,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
@@ -849,6 +899,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
@@ -867,6 +918,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
@@ -884,6 +936,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1016,10 +1070,24 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
             ...{ class: "tag turn" },
         });
     }
+    if (__VLS_ctx.isCurrentTurn(entry.player.clientId) && __VLS_ctx.seatCountdownSeconds !== null) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "turn-countdown" },
+        });
+        (__VLS_ctx.seatCountdownSeconds);
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "tag status" },
     });
     (__VLS_ctx.statusText(entry.player));
+    if (__VLS_ctx.isCurrentTurn(entry.player.clientId) && __VLS_ctx.seatCountdownSeconds !== null) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "turn-timer-bar" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ style: ({ width: `${__VLS_ctx.seatCountdownPercent}%` }) },
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "seat-meta" },
     });
@@ -1119,25 +1187,25 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElemen
     ...{ class: "center" },
     ...{ class: ({ 'my-turn': __VLS_ctx.isMyTurn }) },
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
-    ...{ class: "center-head" },
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "center-text" },
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
 (__VLS_ctx.currentPlayerName);
 if (__VLS_ctx.isMyTurn) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
 }
-if (__VLS_ctx.isMyTurn) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "my-turn-alert" },
-    });
-}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
     ...{ class: "center-turn-hint" },
 });
-(props.turnHint || "等待中...");
+(__VLS_ctx.compactCenterHint);
+if (__VLS_ctx.centerEventText) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "center-event" },
+    });
+    (__VLS_ctx.centerEventText);
+}
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "response-wrap" },
@@ -1170,33 +1238,27 @@ if (__VLS_ctx.responseCard) {
     }, ...__VLS_functionalComponentArgsRest(__VLS_22));
     var __VLS_21;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-    (__VLS_ctx.responseCard.source === "draw" ? "摸牌" : "他人弃牌");
 }
-else {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "response-wrap response-empty" },
-        ref: "responseLandingRef",
+if (__VLS_ctx.mergedActionLogs.length) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "table-action-log" },
     });
-    /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "ghost-card" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
+    for (const [log] of __VLS_getVForSourceType((__VLS_ctx.mergedActionLogs))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
+            key: (`merged-log-${log.id}`),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.time, __VLS_intrinsicElements.time)({});
+        (log.at);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        (log.actorLabel);
+        (log.displayText);
+    }
 }
-__VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-    ...{ class: "hint" },
-});
-(__VLS_ctx.state?.lastAction || "等待中...");
-if (__VLS_ctx.centerEventText) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "center-event" },
-    });
-    (__VLS_ctx.centerEventText);
-}
-if (__VLS_ctx.centerPointerStyle) {
+if (__VLS_ctx.centerPointerDirection) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-pointer" },
-        ...{ style: (__VLS_ctx.centerPointerStyle) },
+        ...{ class: (`pointer-${__VLS_ctx.centerPointerDirection}`) },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
         ...{ class: "center-pointer-head" },
@@ -1310,12 +1372,30 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: "tag dealer" },
         });
     }
+    if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "turn-countdown" },
+        });
+        (__VLS_ctx.seatCountdownSeconds);
+    }
     if (!__VLS_ctx.isCompactLandscape) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "tag status" },
         });
         (__VLS_ctx.statusText(__VLS_ctx.selfPlayer));
     }
+    if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "turn-timer-bar self-turn-timer" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ style: ({ width: `${__VLS_ctx.seatCountdownPercent}%` }) },
+        });
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-main" },
+        ...{ class: ({ 'no-open': __VLS_ctx.isCompactLandscape || !(__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length) }) },
+    });
     if (!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "self-areas" },
@@ -1417,6 +1497,9 @@ if (__VLS_ctx.selfPlayer) {
             }
         }
     }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-hand-panel" },
+    });
     if (__VLS_ctx.canDiscard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "discard-tip" },
@@ -1439,6 +1522,7 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: ({
                     playable: __VLS_ctx.canDiscardCard(card),
                     blocked: !__VLS_ctx.canDiscardCard(card),
+                    'gold-blocked': card.color === 'gold',
                     'candidate-active': __VLS_ctx.isCandidateCard(card.id),
                     'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
                 }) },
@@ -1546,8 +1630,10 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
@@ -1560,15 +1646,11 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['my-turn-alert']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-turn-hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-event']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-action-log']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-anchor']} */ ;
@@ -1584,8 +1666,12 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['grouped-cards']} */ ;
@@ -1597,6 +1683,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -1635,7 +1722,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
             centerEventText: centerEventText,
-            centerPointerStyle: centerPointerStyle,
+            seatCountdownSeconds: seatCountdownSeconds,
+            seatCountdownPercent: seatCountdownPercent,
+            compactCenterHint: compactCenterHint,
+            mergedActionLogs: mergedActionLogs,
+            centerPointerDirection: centerPointerDirection,
             isCurrentTurn: isCurrentTurn,
             statusText: statusText,
             isDealer: isDealer,

@@ -35,10 +35,6 @@
     </section>
 
     <template v-else>
-      <section v-if="isPlaying" class="turn-banner" :class="{ mine: isMyTurn }">
-        <strong>当前回合: {{ currentPlayerName }}</strong>
-        <span>{{ turnHint }}</span>
-      </section>
       <GameBoard
         :state="state"
         :players="players"
@@ -55,6 +51,7 @@
         :selection-mode="selectionMode"
         :selected-candidate-id="selectedCandidateId"
         :active-candidates="activeCandidates"
+        :parsed-action-logs="actionLogs"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
         @selection-change="onPanelSelectionChange"
@@ -235,8 +232,10 @@ const {
   availableActions,
   huResult,
   roundResult,
+  actionLogs,
   joinError,
   declareError,
+  clearActionLogs,
   sendAction,
   sendDiscardCard,
   declareSetup,
@@ -519,6 +518,7 @@ async function rebuildLobby() {
   }
   resettingLobby.value = true;
   globalError.value = "";
+  clearActionLogs();
   try {
     const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
     if (!response.ok) {
@@ -564,7 +564,7 @@ async function rebuildLobby() {
 }
 
 .layout.playing {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .layout.compact-landscape.playing {
@@ -574,8 +574,7 @@ async function rebuildLobby() {
     max(0.2rem, env(safe-area-inset-bottom)) max(0.2rem, env(safe-area-inset-left));
 }
 
-.layout.compact-landscape .top,
-.layout.compact-landscape .turn-banner {
+.layout.compact-landscape .top {
   display: none;
 }
 
@@ -661,25 +660,6 @@ async function rebuildLobby() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.turn-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: clamp(0.25rem, 0.8vh, 0.45rem) clamp(0.45rem, 1.2vw, 0.75rem);
-  border: 1px solid #334155;
-  border-radius: 10px;
-  background: #111827;
-  color: #bfdbfe;
-  font-size: clamp(0.66rem, 1.5vh, 0.84rem);
-  min-height: 0;
-}
-
-.turn-banner.mine {
-  border-color: #22c55e;
-  background: #052e16;
-  color: #bbf7d0;
 }
 
 .error {
@@ -963,12 +943,6 @@ async function rebuildLobby() {
     text-align: right;
   }
 
-  .turn-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
   .settlement-list {
     grid-template-columns: 1fr;
   }
@@ -993,10 +967,6 @@ async function rebuildLobby() {
     font-size: clamp(0.55rem, 1.25vh, 0.68rem);
   }
 
-  .turn-banner {
-    padding: 0.2rem 0.45rem;
-    font-size: clamp(0.6rem, 1.3vh, 0.74rem);
-  }
 }
 
 @media (orientation: landscape) and (max-width: 960px) {
@@ -1006,7 +976,7 @@ async function rebuildLobby() {
   }
 
   .layout.playing {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .top {
@@ -1024,12 +994,6 @@ async function rebuildLobby() {
     flex-wrap: nowrap;
     justify-content: flex-end;
     overflow: hidden;
-  }
-
-  .turn-banner {
-    border-radius: 1.2vh;
-    padding: 0.45vh 1.2vw;
-    font-size: clamp(0.58rem, 1.35vh, 0.74rem);
   }
 
   .layout.compact-landscape.playing {

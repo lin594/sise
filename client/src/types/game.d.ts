@@ -29,6 +29,7 @@ export interface RoomStateSnapshot {
     currentTurnPlayerId: string;
     previousPlayerId: string;
     responsePhase: string;
+    responseEndsAt: number;
     lastAction: string;
     deckCount: number;
     isMoCard: boolean;
@@ -37,6 +38,15 @@ export interface RoomStateSnapshot {
     publicDiscardPile: Card[];
     declareEndsAt: number;
     players: PlayerState[];
+}
+export interface ParsedActionLog {
+    id: number;
+    at: string;
+    text: string;
+    actorId: string;
+    actionKey: string;
+    displayText: string;
+    isSystem: boolean;
 }
 export interface AvailableAction {
     action: ActionType;

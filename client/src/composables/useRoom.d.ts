@@ -1,4 +1,4 @@
-import type { ActionRequest, ActionType, AvailableAction, Card, PlayerState, RoomStateSnapshot, RoundResultPayload } from "@/types/game";
+import type { ActionRequest, ActionType, AvailableAction, Card, ParsedActionLog, PlayerState, RoomStateSnapshot, RoundResultPayload } from "@/types/game";
 export declare function useRoom(playerName?: string): {
     connected: import("vue").Ref<boolean, boolean>;
     myId: import("vue").Ref<string, string>;
@@ -12,6 +12,7 @@ export declare function useRoom(playerName?: string): {
         currentTurnPlayerId: string;
         previousPlayerId: string;
         responsePhase: string;
+        responseEndsAt: number;
         lastAction: string;
         deckCount: number;
         isMoCard: boolean;
@@ -89,6 +90,7 @@ export declare function useRoom(playerName?: string): {
         currentTurnPlayerId: string;
         previousPlayerId: string;
         responsePhase: string;
+        responseEndsAt: number;
         lastAction: string;
         deckCount: number;
         isMoCard: boolean;
@@ -316,15 +318,20 @@ export declare function useRoom(playerName?: string): {
         id: number;
         at: string;
         text: string;
-    }[], {
+        actorId: string;
+        actionKey: string;
+        displayText: string;
+        isSystem: boolean;
+    }[], ParsedActionLog[] | {
         id: number;
         at: string;
         text: string;
-    }[] | {
-        id: number;
-        at: string;
-        text: string;
+        actorId: string;
+        actionKey: string;
+        displayText: string;
+        isSystem: boolean;
     }[]>;
+    clearActionLogs: () => void;
     sendAction: (input: ActionRequest) => void;
     sendDiscardCard: (cardId: string) => void;
     declareKongs: (count: number) => void;

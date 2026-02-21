@@ -1,4 +1,4 @@
-import type { ActionCandidate, ActionRequest, AvailableAction, Card, PlayerState } from "@/types/game";
+import type { ActionCandidate, ActionRequest, AvailableAction, Card, ParsedActionLog, PlayerState } from "@/types/game";
 type __VLS_Props = {
     state: any;
     players: PlayerState[];
@@ -15,6 +15,7 @@ type __VLS_Props = {
     selectionMode?: "kai" | "peng" | "chi" | null;
     selectedCandidateId?: string | null;
     activeCandidates?: ActionCandidate[];
+    parsedActionLogs?: ParsedActionLog[];
 };
 declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {
     discardCard: (cardId: string) => any;

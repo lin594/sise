@@ -6,7 +6,7 @@ import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
 const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
 const HTTP_URL = import.meta.env.VITE_SERVER_HTTP_URL || DEFAULT_HTTP_URL;
-const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
+const { connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, actionLogs, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
@@ -247,6 +247,7 @@ async function rebuildLobby() {
     }
     resettingLobby.value = true;
     globalError.value = "";
+    clearActionLogs();
     try {
         const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
         if (!response.ok) {
@@ -276,16 +277,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
@@ -296,20 +293,17 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
@@ -388,16 +382,6 @@ if (__VLS_ctx.isWaiting) {
     }
 }
 else {
-    if (__VLS_ctx.isPlaying) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-            ...{ class: "turn-banner" },
-            ...{ class: ({ mine: __VLS_ctx.isMyTurn }) },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-        (__VLS_ctx.currentPlayerName);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        (__VLS_ctx.turnHint);
-    }
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
     const __VLS_3 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
@@ -419,6 +403,7 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
+        parsedActionLogs: (__VLS_ctx.actionLogs),
     }));
     const __VLS_4 = __VLS_3({
         ...{ 'onDiscardCard': {} },
@@ -439,6 +424,7 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
+        parsedActionLogs: (__VLS_ctx.actionLogs),
     }, ...__VLS_functionalComponentArgsRest(__VLS_3));
     let __VLS_6;
     let __VLS_7;
@@ -843,7 +829,6 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-item']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
@@ -912,6 +897,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             privateHand: privateHand,
             availableActions: availableActions,
             huResult: huResult,
+            actionLogs: actionLogs,
             joinError: joinError,
             declareError: declareError,
             sendDiscardCard: sendDiscardCard,

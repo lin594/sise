@@ -1,8 +1,8 @@
-<template>
-  <div class="card" :class="[colorClass, `size-${sizeClass}`, { response: isResponseCard }]">
+﻿<template>
+  <div class="card" :class="[colorClass, `size-${sizeClass}`]">
     <span class="text text-top">{{ label }}</span>
     <span class="text text-bottom">{{ label }}</span>
-    <span v-if="isResponseCard" class="star">★</span>
+    <span v-if="isResponseCard" class="star">*</span>
   </div>
 </template>
 
@@ -73,9 +73,9 @@ const sizeClass = computed(() => props.size ?? "md");
 }
 
 .size-xl {
-  width: clamp(1.5rem, 2.3vw, 2.35rem);
-  height: clamp(4rem, 6vw, 6.2rem);
-  font-size: clamp(0.88rem, 1.08vw, 1.12rem);
+  width: clamp(1.35rem, 2.1vw, 2.1rem);
+  height: clamp(3.7rem, 5.4vw, 5.8rem);
+  font-size: clamp(0.82rem, 1vw, 1.02rem);
 }
 
 .card:hover {
@@ -102,17 +102,14 @@ const sizeClass = computed(() => props.size ?? "md");
   padding-bottom: 3px;
 }
 
-.card.response {
-  border: 2px solid #ffd54f;
-  animation: pulse 1.5s infinite;
-}
-
 .star {
   position: absolute;
-  right: 2px;
-  top: 1px;
+  right: 3px;
+  top: 2px;
   color: #ffca28;
-  font-size: 0.62em;
+  font-size: 1em;
+  font-weight: 800;
+  text-shadow: 0 0 4px rgba(250, 204, 21, 0.85);
 }
 
 .color-yellow {
@@ -132,18 +129,6 @@ const sizeClass = computed(() => props.size ?? "md");
 }
 
 .color-gold {
-  background: #ffd700;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0.8);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 213, 79, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 213, 79, 0);
-  }
+  background: #c41e1e;
 }
 </style>

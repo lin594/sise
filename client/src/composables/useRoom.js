@@ -172,6 +172,33 @@ function normalizeResponsePhase(input) {
     }
     return input;
 }
+const SYSTEM_ACTION_KEYS = new Set(["NO_RESPONSE", "TURN_DRAW", "KONG_DRAW"]);
+function parseActionDescriptor(action) {
+    const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) {
+        return { actorId: "", actionKey: "" };
+    }
+    if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
+        return { actorId: parts[0], actionKey: parts[1] ?? "" };
+    }
+    return { actorId: "", actionKey: parts[0] };
+}
+function toDisplayAction(actionKey) {
+    const label = {
+        DISCARD: "出牌",
+        PENG: "碰",
+        EAT: "吃",
+        CHI: "吃",
+        OPEN: "开",
+        KAI: "开",
+        HU: "胡",
+        PASS: "过",
+        TIMEOUT_PASS: "超时过",
+        DRAW_GAME: "流局",
+        DEALER: "定庄",
+    };
+    return label[actionKey] ?? actionKey;
+}
 export function useRoom(playerName = "Player") {
     const ROOM_KEY = "four_room_id";
     const TOKEN_KEY = "four_player_token";
@@ -193,6 +220,7 @@ export function useRoom(playerName = "Player") {
     const actionLogs = ref([]);
     let logSeq = 0;
     let lastFingerprint = "";
+    let lastPhase = "";
     function readStored(key) {
         return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
     }
@@ -230,7 +258,28 @@ export function useRoom(playerName = "Player") {
         if (!line) {
             return;
         }
-        actionLogs.value = [{ id: ++logSeq, at: new Date().toLocaleTimeString(), text: line }, ...actionLogs.value].slice(0, MAX_LOGS);
+        const { actorId, actionKey } = parseActionDescriptor(line);
+        const isSystem = SYSTEM_ACTION_KEYS.has(actionKey);
+        if (isSystem) {
+            return;
+        }
+        actionLogs.value = [
+            {
+                id: ++logSeq,
+                at: new Date().toLocaleTimeString(),
+                text: line,
+                actorId,
+                actionKey,
+                displayText: toDisplayAction(actionKey),
+                isSystem,
+            },
+            ...actionLogs.value,
+        ].slice(0, MAX_LOGS);
+    }
+    function clearActionLogs() {
+        actionLogs.value = [];
+        logSeq = 0;
+        lastFingerprint = "";
     }
     async function connect() {
         const client = new Client(WS_URL);
@@ -295,6 +344,7 @@ export function useRoom(playerName = "Player") {
                     currentTurnPlayerId: String(next?.currentTurnPlayerId ?? ""),
                     previousPlayerId: String(next?.previousPlayerId ?? ""),
                     responsePhase: normalizeResponsePhase(String(next?.responsePhase ?? "")),
+                    responseEndsAt: Number(next?.responseEndsAt ?? 0),
                     lastAction: String(next?.lastAction ?? ""),
                     deckCount: Number(next?.deckCount ?? 0),
                     isMoCard: Boolean(next?.isMoCard),
@@ -304,6 +354,12 @@ export function useRoom(playerName = "Player") {
                     declareEndsAt: Number(next?.declareEndsAt ?? 0),
                     players: normalizedPlayers,
                 };
+                const currentPhase = String(state.value?.phase ?? "");
+                if ((lastPhase === "ended" || lastPhase === "waiting") &&
+                    (currentPhase === "declaring" || currentPhase === "playing")) {
+                    clearActionLogs();
+                }
+                lastPhase = currentPhase;
                 const lastAction = String(state.value?.lastAction ?? "").trim();
                 const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
                 if (lastAction && fingerprint !== lastFingerprint) {
@@ -417,12 +473,15 @@ export function useRoom(playerName = "Player") {
         room.value?.send("debug_setup", scenario);
     }
     function startGame() {
+        clearActionLogs();
         room.value?.send("start_game");
     }
     function nextRound() {
+        clearActionLogs();
         room.value?.send("next_round");
     }
     function returnLobby() {
+        clearActionLogs();
         room.value?.send("return_lobby");
     }
     onMounted(() => {
@@ -449,6 +508,7 @@ export function useRoom(playerName = "Player") {
         joinError,
         declareError,
         actionLogs,
+        clearActionLogs,
         sendAction,
         sendDiscardCard,
         declareKongs,
