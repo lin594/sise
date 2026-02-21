@@ -26,6 +26,12 @@ export interface ChiPlan extends ConsumePlan {
   kind: "jmp" | "jsx" | "zu3" | "zu4" | "pair";
 }
 
+export interface PengPlan {
+  kind: "hand" | "reusable_pair";
+  handCards: Card[];
+  pairCards: Card[];
+}
+
 function isWildcard(card: Card): boolean {
   return isGeneral(card) || isGold(card);
 }
@@ -46,6 +52,29 @@ function collectRefs(hand: Card[], wildcardPool: Card[]): CardRef[] {
     ...hand.map((card) => ({ card, from: "hand" as const })),
     ...wildcardPool.map((card) => ({ card, from: "pool" as const })),
   ];
+}
+
+function combinations<T>(list: T[], pick: number): T[][] {
+  if (pick <= 0) {
+    return [[]];
+  }
+  if (list.length < pick) {
+    return [];
+  }
+  const out: T[][] = [];
+  const walk = (start: number, acc: T[]) => {
+    if (acc.length === pick) {
+      out.push([...acc]);
+      return;
+    }
+    for (let i = start; i < list.length; i += 1) {
+      acc.push(list[i]);
+      walk(i + 1, acc);
+      acc.pop();
+    }
+  };
+  walk(0, []);
+  return out;
 }
 
 function countMatching(cards: Card[], target: Card): number {
@@ -85,9 +114,15 @@ function pickWildcard(refs: CardRef[]): { picked: CardRef | null; rest: CardRef[
   return { picked, rest: removeRefById(refs, picked.card.id) };
 }
 
-function buildConsumePlan(requirements: FaceNeed[], hand: Card[], wildcardPool: Card[]): ConsumePlan | null {
+function buildConsumePlan(
+  requirements: FaceNeed[],
+  hand: Card[],
+  wildcardPool: Card[],
+  maxWildcardUse = Number.MAX_SAFE_INTEGER,
+): ConsumePlan | null {
   let refs = collectRefs(hand, wildcardPool);
   const picked: CardRef[] = [];
+  let wildcardUsed = 0;
 
   for (const need of requirements) {
     const exact = pickExact(refs, need);
@@ -96,54 +131,109 @@ function buildConsumePlan(requirements: FaceNeed[], hand: Card[], wildcardPool: 
       refs = exact.rest;
       continue;
     }
+    if (wildcardUsed >= maxWildcardUse) {
+      return null;
+    }
     const wildcard = pickWildcard(refs);
     if (!wildcard.picked) {
       return null;
     }
     picked.push(wildcard.picked);
     refs = wildcard.rest;
+    wildcardUsed += 1;
   }
 
   return splitPlan(picked);
 }
 
-export function canPeng(hand: Card[], response: Card): boolean {
-  if (isGeneral(response)) {
+export function canPeng(hand: Card[], response: Card, pairCards: Card[] = []): boolean {
+  if (isWildcard(response)) {
     return false;
   }
-  return countMatching(hand, response) >= 2;
+  return countMatching(hand, response) >= 2 || countMatching(pairCards, response) >= 2;
 }
 
-export function findKaiPlan(hand: Card[], response: Card, wildcardPool: Card[] = []): KaiPlan | null {
+export function getKaiPlans(hand: Card[], response: Card, wildcardPool: Card[] = []): KaiPlan[] {
   const all = collectRefs(hand, wildcardPool);
+  const plans: KaiPlan[] = [];
+  const seen = new Set<string>();
+  const pushPlan = (kind: KaiPlan["kind"], refs: CardRef[]) => {
+    const consume = splitPlan(refs);
+    const fingerprint = [kind, ...consume.handCards.map((x) => x.id), ...consume.poolCards.map((x) => x.id)]
+      .sort()
+      .join("|");
+    if (seen.has(fingerprint)) {
+      return;
+    }
+    seen.add(fingerprint);
+    plans.push({ kind, ...consume });
+  };
 
   if (isGold(response)) {
-    const goldRefs = all.filter((x) => isGold(x.card)).slice(0, 3);
-    if (goldRefs.length < 3) {
-      return null;
+    const goldRefs = all.filter((x) => isGold(x.card));
+    for (const picked of combinations(goldRefs, 3)) {
+      pushPlan("gold", picked);
     }
-    return { kind: "gold", ...splitPlan(goldRefs) };
+    return plans;
   }
 
   const sameRefs = all.filter((x) => isSameFace(x.card, response));
-  if (sameRefs.length >= 3) {
-    return { kind: "regular", ...splitPlan(sameRefs.slice(0, 3)) };
+  for (const picked of combinations(sameRefs, 3)) {
+    pushPlan("regular", picked);
   }
 
-  if (sameRefs.length >= 2) {
-    const sameIds = new Set(sameRefs.slice(0, 2).map((x) => x.card.id));
-    const rest = all.filter((x) => !sameIds.has(x.card.id));
-    const wildcard = rest.find((x) => isWildcard(x.card));
-    if (wildcard) {
-      return { kind: "regular", ...splitPlan([...sameRefs.slice(0, 2), wildcard]) };
+  const wildcards = all.filter((x) => isWildcard(x.card));
+  for (const exactTwo of combinations(sameRefs, 2)) {
+    const used = new Set(exactTwo.map((x) => x.card.id));
+    for (const wildcard of wildcards) {
+      if (used.has(wildcard.card.id)) {
+        continue;
+      }
+      pushPlan("regular", [...exactTwo, wildcard]);
     }
   }
 
+  return plans;
+}
+
+export function findKaiPlan(hand: Card[], response: Card, wildcardPool: Card[] = []): KaiPlan | null {
+  const plans = getKaiPlans(hand, response, wildcardPool);
+  if (plans.length > 0) {
+    return plans[0];
+  }
   return null;
 }
 
 export function canKai(hand: Card[], response: Card, wildcardPool: Card[] = []): boolean {
-  return Boolean(findKaiPlan(hand, response, wildcardPool));
+  return getKaiPlans(hand, response, wildcardPool).length > 0;
+}
+
+export function getPengPlans(hand: Card[], response: Card, pairCards: Card[] = []): PengPlan[] {
+  if (isWildcard(response)) {
+    return [];
+  }
+  const plans: PengPlan[] = [];
+  const seen = new Set<string>();
+  const pushPlan = (kind: PengPlan["kind"], handPicked: Card[], pairPicked: Card[]) => {
+    const fingerprint = [kind, ...handPicked.map((x) => x.id), ...pairPicked.map((x) => x.id)].sort().join("|");
+    if (seen.has(fingerprint)) {
+      return;
+    }
+    seen.add(fingerprint);
+    plans.push({ kind, handCards: handPicked, pairCards: pairPicked });
+  };
+
+  const handMatches = hand.filter((card) => isSameFace(card, response));
+  for (const picked of combinations(handMatches, 2)) {
+    pushPlan("hand", picked, []);
+  }
+
+  const pairMatches = pairCards.filter((card) => isSameFace(card, response));
+  for (const picked of combinations(pairMatches, 2)) {
+    pushPlan("reusable_pair", [], picked);
+  }
+
+  return plans;
 }
 
 function chiRequirements(response: Card): Array<{ kind: ChiPlan["kind"]; needs: FaceNeed[] }> {
@@ -188,12 +278,29 @@ function chiRequirements(response: Card): Array<{ kind: ChiPlan["kind"]; needs: 
     });
   }
 
-  list.push({
-    kind: "pair",
-    needs: [{ color: response.color, type: response.type }],
-  });
+  if (response.type !== "jiang") {
+    list.push({
+      kind: "pair",
+      needs: [{ color: response.color, type: response.type }],
+    });
+  }
 
   return list;
+}
+
+function buildPairConsumePlan(response: Card, hand: Card[]): ConsumePlan | null {
+  const exactMatches = hand.filter((card) => card.color === response.color && card.type === response.type);
+  if (exactMatches.length === 0) {
+    return null;
+  }
+  // 当手里已有两张同目标牌时，pair 响应按“三张组合”执行，避免降级为两张对子。
+  const consumeFromHand = exactMatches.length >= 2 ? exactMatches.slice(0, 2) : [exactMatches[0]];
+  return {
+    handCards: consumeFromHand,
+    poolCards: [],
+    wildcardFromHand: [],
+    wildcardFromPool: [],
+  };
 }
 
 export function getChiPlans(hand: Card[], response: Card, wildcardPool: Card[] = []): ChiPlan[] {
@@ -201,7 +308,10 @@ export function getChiPlans(hand: Card[], response: Card, wildcardPool: Card[] =
   const seen = new Set<string>();
 
   for (const item of chiRequirements(response)) {
-    const consume = buildConsumePlan(item.needs, hand, wildcardPool);
+    const consume =
+      item.kind === "pair"
+        ? buildPairConsumePlan(response, hand)
+        : buildConsumePlan(item.needs, hand, wildcardPool, 1);
     if (!consume) {
       continue;
     }

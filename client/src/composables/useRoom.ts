@@ -1,10 +1,13 @@
 ﻿import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Client, Room } from "colyseus.js";
 import type {
+  ActionCandidate,
+  ActionRequest,
   ActionType,
   AvailableAction,
   Card,
   PlayerState,
+  RoomStateSnapshot,
   RoundResultPayload,
   SessionTokenPayload,
 } from "@/types/game";
@@ -155,6 +158,34 @@ function normalizeAction(action: ActionType): ActionType {
   return action;
 }
 
+function normalizeCandidate(raw: any): ActionCandidate | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const action = normalizeAction(String(raw.action ?? "") as ActionType);
+  if (action !== "kai" && action !== "peng" && action !== "chi") {
+    return null;
+  }
+  const id = String(raw.id ?? "").trim();
+  if (!id) {
+    return null;
+  }
+  const sourceRaw = String(raw.source ?? "");
+  const source: ActionCandidate["source"] =
+    sourceRaw === "hand+pool" || sourceRaw === "reusable_pair" ? sourceRaw : "hand";
+  const cardIds = Array.isArray(raw.cardIds) ? raw.cardIds.map((x: unknown) => String(x)).filter(Boolean) : [];
+  const kind = typeof raw.kind === "string" ? raw.kind : undefined;
+  const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : action.toUpperCase();
+  return {
+    id,
+    action,
+    kind,
+    cardIds,
+    source,
+    title,
+  };
+}
+
 function normalizeResponsePhase(input: string): string {
   if (input === "self_eat") {
     return "local_upper";
@@ -173,7 +204,7 @@ export function useRoom(playerName = "Player") {
 
   const connected = ref(false);
   const room = ref<Room | null>(null);
-  const state = ref<any>(null);
+  const state = ref<RoomStateSnapshot | null>(null);
   const myId = ref("");
   const mySeatId = ref("");
   const playerToken = ref("");
@@ -301,9 +332,13 @@ export function useRoom(playerName = "Player") {
         hostPlayerId: String((next as any)?.hostPlayerId ?? ""),
         dealerId: String((next as any)?.dealerId ?? ""),
         currentPlayerId: String((next as any)?.currentPlayerId ?? ""),
+        currentTurnPlayerId: String((next as any)?.currentTurnPlayerId ?? ""),
+        previousPlayerId: String((next as any)?.previousPlayerId ?? ""),
         responsePhase: normalizeResponsePhase(String((next as any)?.responsePhase ?? "")),
         lastAction: String((next as any)?.lastAction ?? ""),
         deckCount: Number((next as any)?.deckCount ?? 0),
+        isMoCard: Boolean((next as any)?.isMoCard),
+        targetCard: asCard((next as any)?.targetCard),
         responseCard: asCard((next as any)?.responseCard),
         publicDiscardPile: asCardArray((next as any)?.publicDiscardPile),
         declareEndsAt: Number((next as any)?.declareEndsAt ?? 0),
@@ -329,7 +364,16 @@ export function useRoom(playerName = "Player") {
       availableActions.value = (payload ?? []).map((item) => ({
         action: normalizeAction(item.action),
         enabled: Boolean(item.enabled),
+        candidates: Array.isArray((item as any)?.candidates)
+          ? ((item as any).candidates as unknown[])
+              .map((raw) => normalizeCandidate(raw))
+              .filter((candidate): candidate is ActionCandidate => Boolean(candidate))
+          : undefined,
       }));
+    });
+    joined.onMessage("action_rejected", (payload: { reason?: string }) => {
+      const reason = String(payload?.reason ?? "unknown");
+      pushLog(`ACTION_REJECTED ${reason}`);
     });
     joined.onMessage("hu_result", (payload: { winnerId: string; groups: string[] }) => {
       huResult.value = payload;
@@ -382,11 +426,21 @@ export function useRoom(playerName = "Player") {
     }
   }
 
-  function sendAction(action: ActionType) {
+  function sendAction(input: ActionRequest) {
     if (!room.value) {
       return;
     }
-    room.value.send("action", normalizeAction(action));
+    if (typeof input === "string") {
+      room.value.send("action", normalizeAction(input));
+      return;
+    }
+    const action = normalizeAction(input.action);
+    const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
+    if (candidateId) {
+      room.value.send("action", { action, candidateId });
+      return;
+    }
+    room.value.send("action", action);
   }
 
   function sendDiscardCard(cardId: string) {

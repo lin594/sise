@@ -21,6 +21,15 @@ const isMyTurn = computed(() => {
 });
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && !canAct.value);
+const selectionMode = ref(null);
+const selectedCandidateId = ref(null);
+const activeCandidates = computed(() => {
+    if (!selectionMode.value) {
+        return [];
+    }
+    const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
+    return item?.candidates ?? [];
+});
 const isCompactLandscape = ref(false);
 const resettingLobby = ref(false);
 const globalError = ref("");
@@ -95,6 +104,43 @@ function toggleFish(cardId) {
     }
     selectedFishCardIds.value = next;
 }
+function clearSelection() {
+    selectionMode.value = null;
+    selectedCandidateId.value = null;
+}
+function onPanelSelectionChange(payload) {
+    selectionMode.value = payload.mode;
+    selectedCandidateId.value = payload.selectedCandidateId;
+}
+function onPanelSubmit(request) {
+    sendAction(request);
+    clearSelection();
+}
+function submitCandidate(candidateId) {
+    if (!selectionMode.value) {
+        return;
+    }
+    selectedCandidateId.value = candidateId;
+    onPanelSubmit({ action: selectionMode.value, candidateId });
+}
+function actionText(action) {
+    if (action === "kai") {
+        return "开";
+    }
+    if (action === "peng") {
+        return "碰";
+    }
+    return "吃";
+}
+function candidateSourceText(source) {
+    if (source === "hand+pool") {
+        return "手牌+将/金条区";
+    }
+    if (source === "reusable_pair") {
+        return "对子复用";
+    }
+    return "手牌";
+}
 function submitDeclaration() {
     if (!fishSelectionValid.value || isDeclareSubmitted.value) {
         return;
@@ -110,6 +156,23 @@ watch(shouldShowDeclarePanel, (show) => {
         declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
     }
 });
+watch(() => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`, () => {
+    clearSelection();
+});
+watch(() => availableActions.value, () => {
+    if (!selectionMode.value) {
+        return;
+    }
+    const current = availableActions.value.find((item) => item.action === selectionMode.value && item.enabled);
+    if (!current) {
+        clearSelection();
+        return;
+    }
+    if (selectedCandidateId.value &&
+        !Boolean(current.candidates?.some((candidate) => candidate.id === selectedCandidateId.value))) {
+        selectedCandidateId.value = null;
+    }
+}, { deep: true });
 onMounted(() => {
     declareTick = window.setInterval(() => {
         nowMs.value = Date.now();
@@ -223,8 +286,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
@@ -337,6 +403,7 @@ else {
     const __VLS_3 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        ...{ 'onSelectionChange': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
@@ -349,10 +416,14 @@ else {
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
         embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
+        activeCandidates: (__VLS_ctx.activeCandidates),
     }));
     const __VLS_4 = __VLS_3({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        ...{ 'onSelectionChange': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
@@ -365,6 +436,9 @@ else {
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
         embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
+        activeCandidates: (__VLS_ctx.activeCandidates),
     }, ...__VLS_functionalComponentArgsRest(__VLS_3));
     let __VLS_6;
     let __VLS_7;
@@ -373,36 +447,101 @@ else {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
     const __VLS_10 = {
-        onSubmitAction: (__VLS_ctx.sendAction)
+        onSubmitAction: (__VLS_ctx.onPanelSubmit)
+    };
+    const __VLS_11 = {
+        onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
     var __VLS_5;
 }
 if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_11 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_12 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
     }));
-    const __VLS_12 = __VLS_11({
+    const __VLS_13 = __VLS_12({
         ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_11));
-    let __VLS_14;
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     let __VLS_15;
     let __VLS_16;
-    const __VLS_17 = {
-        onSubmit: (__VLS_ctx.sendAction)
+    let __VLS_17;
+    const __VLS_18 = {
+        onSubmit: (__VLS_ctx.onPanelSubmit)
     };
-    var __VLS_13;
+    const __VLS_19 = {
+        onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
+    };
+    var __VLS_14;
+}
+if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "candidate-mask" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "candidate-panel" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "candidate-head" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    (__VLS_ctx.actionText(__VLS_ctx.selectionMode));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.clearSelection) },
+        ...{ class: "ghost" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "candidate-desc" },
+    });
+    (__VLS_ctx.actionText(__VLS_ctx.selectionMode));
+    if (__VLS_ctx.activeCandidates.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "candidate-list" },
+        });
+        for (const [candidate, index] of __VLS_getVForSourceType((__VLS_ctx.activeCandidates))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (...[$event]) => {
+                        if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
+                            return;
+                        if (!(__VLS_ctx.activeCandidates.length))
+                            return;
+                        __VLS_ctx.submitCandidate(candidate.id);
+                    } },
+                key: (candidate.id),
+                ...{ class: "candidate-item" },
+                ...{ class: ({ selected: __VLS_ctx.selectedCandidateId === candidate.id }) },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "candidate-title" },
+            });
+            (index + 1);
+            (candidate.title);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+            (__VLS_ctx.candidateSourceText(candidate.source));
+            (candidate.cardIds.join("、") || "无需手牌");
+        }
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "candidate-empty" },
+        });
+    }
 }
 if (__VLS_ctx.shouldShowDeclarePanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -464,12 +603,12 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_20 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (card),
             }));
-            const __VLS_19 = __VLS_18({
+            const __VLS_21 = __VLS_20({
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_20));
         }
     }
     else {
@@ -490,14 +629,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedFishCards))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_23 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
             }));
-            const __VLS_22 = __VLS_21({
+            const __VLS_24 = __VLS_23({
                 key: (`declare-fish-${card.id}`),
                 card: (card),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_23));
         }
     }
     else {
@@ -577,14 +716,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_26 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_25 = __VLS_24({
+                    const __VLS_27 = __VLS_26({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_26));
                 }
             }
             else {
@@ -605,14 +744,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType(([...p.exposedArea, ...p.generalArea]))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_29 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_28 = __VLS_27({
+                    const __VLS_30 = __VLS_29({
                         key: (`settle-e-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_29));
                 }
             }
             else {
@@ -633,14 +772,14 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.fishArea))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_32 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
                     }));
-                    const __VLS_31 = __VLS_30({
+                    const __VLS_33 = __VLS_32({
                         key: (`settle-fish-${p.clientId}-${card.id}`),
                         card: (card),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_32));
                 }
             }
             else {
@@ -705,6 +844,15 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-banner']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-desc']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
@@ -766,7 +914,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             huResult: huResult,
             joinError: joinError,
             declareError: declareError,
-            sendAction: sendAction,
             sendDiscardCard: sendDiscardCard,
             startGame: startGame,
             nextRound: nextRound,
@@ -778,6 +925,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             isMyTurn: isMyTurn,
             canAct: canAct,
             canDiscard: canDiscard,
+            selectionMode: selectionMode,
+            selectedCandidateId: selectedCandidateId,
+            activeCandidates: activeCandidates,
             isCompactLandscape: isCompactLandscape,
             resettingLobby: resettingLobby,
             globalError: globalError,
@@ -791,6 +941,12 @@ const __VLS_self = (await import('vue')).defineComponent({
             declareProgressPercent: declareProgressPercent,
             fishSelectionValid: fishSelectionValid,
             toggleFish: toggleFish,
+            clearSelection: clearSelection,
+            onPanelSelectionChange: onPanelSelectionChange,
+            onPanelSubmit: onPanelSubmit,
+            submitCandidate: submitCandidate,
+            actionText: actionText,
+            candidateSourceText: candidateSourceText,
             submitDeclaration: submitDeclaration,
             endPanelTitle: endPanelTitle,
             winnerName: winnerName,

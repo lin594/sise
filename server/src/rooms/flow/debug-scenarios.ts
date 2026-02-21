@@ -20,6 +20,11 @@ export interface DebugScenarioContext {
   tickBots: () => void;
 }
 
+/**
+ * 作用：注入预设调试牌局场景，快速验证主循环与动作流程。
+ * 关键输入/输出：输入座位与场景名，输出是否应用成功。
+ * 副作用：覆盖指定玩家手牌、pending/responsePhase/lastAction，并触发轮询或 bot 步进。
+ */
 export function applyDebugScenario(context: DebugScenarioContext, seatId: string, scenario: string): boolean {
   if (!context.state.players.has(seatId)) {
     return false;

@@ -32,3 +32,11 @@ test("numeric wildcardCount option stays backward compatible", () => {
   const response = c("rma", "red", "ma");
   assert.equal(validateHu(hand, response, 1), true);
 });
+
+test("hu limits wildcard substitution to one per group", () => {
+  const result = explainHu([], c("rju", "red", "ju"), {
+    wildcardPool: [c("wj1", "white", "jiang"), c("gold1", "gold", "gong")],
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.groups.includes("Triplet"), false);
+});

@@ -34,6 +34,20 @@ t("actions: peng does not consume wildcard", () => {
   assert.equal(canPeng(hand, response), false);
 });
 
+t("actions: peng can use reusable pair cards", () => {
+  const response = c("rj", "red", "ju");
+  const hand: Card[] = [];
+  const pairCards = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
+  assert.equal(canPeng(hand, response, pairCards), true);
+});
+
+t("actions: peng rejects mixed source hand1+pair1", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju")];
+  const pairCards = [c("rj2", "red", "ju")];
+  assert.equal(canPeng(hand, response, pairCards), false);
+});
+
 t("actions: chi supports wildcard completion", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rm", "red", "ma")];
@@ -41,6 +55,51 @@ t("actions: chi supports wildcard completion", () => {
   assert.equal(canChi(hand, response, pool), true);
   const plans = getChiPlans(hand, response, pool);
   assert.ok(plans.length > 0);
+});
+
+t("actions: chi frame cannot consume two wildcards in one group", () => {
+  const response = c("rj", "red", "ju");
+  const hand: Card[] = [];
+  const pool = [c("w1", "white", "jiang"), c("g1", "gold", "gong")];
+  assert.equal(canChi(hand, response, pool), false);
+});
+
+t("actions: kai still rejects one exact + two wildcards", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju"), c("w1", "white", "jiang"), c("g1", "gold", "gong")];
+  assert.equal(canKai(hand, response, []), false);
+});
+
+t("actions: chi pair rejects jiang response", () => {
+  const response = c("rj", "red", "jiang");
+  const hand = [c("rj2", "red", "jiang")];
+  const plans = getChiPlans(hand, response, []);
+  assert.equal(plans.some((x) => x.kind === "pair"), false);
+});
+
+t("actions: chi pair rejects wildcard substitution from hand", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("wj", "white", "jiang")];
+  const plans = getChiPlans(hand, response, []);
+  assert.equal(plans.some((x) => x.kind === "pair"), false);
+});
+
+t("actions: chi pair rejects wildcard substitution from pool", () => {
+  const response = c("rj", "red", "ju");
+  const hand: Card[] = [];
+  const pool = [c("gold1", "gold", "gong")];
+  const plans = getChiPlans(hand, response, pool);
+  assert.equal(plans.some((x) => x.kind === "pair"), false);
+});
+
+t("actions: chi pair with two exact cards consumes two from hand", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
+  const plans = getChiPlans(hand, response, []);
+  const pair = plans.find((x) => x.kind === "pair");
+  assert.ok(pair);
+  assert.equal(pair!.handCards.length, 2);
+  assert.equal(pair!.poolCards.length, 0);
 });
 
 t("hu: single jiang is valid", () => {
@@ -60,6 +119,14 @@ t("hu: numeric wildcard option compatible", () => {
   const hand = [c("rju", "red", "ju")];
   const response = c("rma", "red", "ma");
   assert.equal(validateHu(hand, response, 1), true);
+});
+
+t("hu: one group cannot consume two wildcards", () => {
+  const result = explainHu([], c("rju", "red", "ju"), {
+    wildcardPool: [c("w1", "white", "jiang"), c("g1", "gold", "gong")],
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.groups.includes("Triplet"), false);
 });
 
 function mkRoom(seats: string[]) {
@@ -109,21 +176,34 @@ t("room: no-response on upper enters local_upper for next player", () => {
   assert.equal(room.state.currentPlayerId, "B");
 });
 
+t("room: collective action probing no longer depends on current responder", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = null;
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju")]);
+  assert.equal(room.hasCollectiveActionBeyondPass("B"), true);
+});
+
 t("room: collective conflict resolves by polling order for same priority", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "A",
     card: c("x", "red", "ju", "upper"),
-    collectives: new Map<string, string>([
-      ["B", "kai"],
-      ["C", "kai"],
-      ["D", "pass"],
-      ["A", "pass"],
+    collectives: new Map<string, { action: string }>([
+      ["B", { action: "kai" }],
+      ["C", { action: "kai" }],
+      ["D", { action: "pass" }],
+      ["A", { action: "pass" }],
     ]),
   };
   let resolved: { id: string; action: string } | null = null;
-  room.executeResponseWinner = (id: string, action: string) => {
-    resolved = { id, action };
+  room.executeResponseWinner = (id: string, choice: { action: string }) => {
+    resolved = { id, action: choice.action };
   };
   room.resolveCollectivePhase();
   assert.deepEqual(resolved, { id: "B", action: "kai" });
@@ -134,22 +214,22 @@ t("room: collective priority uses hu over kai/peng", () => {
   room.pendingResponse = {
     ownerId: "A",
     card: c("x", "red", "ju", "upper"),
-    collectives: new Map<string, string>([
-      ["B", "kai"],
-      ["C", "hu"],
-      ["D", "peng"],
-      ["A", "pass"],
+    collectives: new Map<string, { action: string }>([
+      ["B", { action: "kai" }],
+      ["C", { action: "hu" }],
+      ["D", { action: "peng" }],
+      ["A", { action: "pass" }],
     ]),
   };
   let resolved: { id: string; action: string } | null = null;
-  room.executeResponseWinner = (id: string, action: string) => {
-    resolved = { id, action };
+  room.executeResponseWinner = (id: string, choice: { action: string }) => {
+    resolved = { id, action: choice.action };
   };
   room.resolveCollectivePhase();
   assert.deepEqual(resolved, { id: "C", action: "hu" });
 });
 
-t("room: force-take draw wildcard can directly end with NO_DISCARD", () => {
+t("room: force-take draw wildcard can directly win when no legal discard", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.playerHands.set("A", []);
   room.pendingResponse = {
@@ -159,7 +239,170 @@ t("room: force-take draw wildcard can directly end with NO_DISCARD", () => {
   };
   room.enterOwnerLocalPhaseAfterNoResponse("A");
   assert.equal(room.state.phase, "ended");
-  assert.match(String(room.state.lastAction), /^A NO_DISCARD$/);
+  assert.match(String(room.state.lastAction), /^A HU$/);
+});
+
+t("room: local chi enters manual discard stage instead of auto discard", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_upper";
+  room.state.currentPlayerId = "B";
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("ym1", "yellow", "ma")]);
+  room.seatBySession.set("sessB", "B");
+  const client = { sessionId: "sessB", send: () => {} };
+  const candidateId = room
+    .getAvailableActions("B")
+    .find((item: any) => item.action === "chi")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+
+  room.handleAction(client, { action: "chi", candidateId });
+
+  assert.equal(room.awaitingDiscardOwnerId, "B");
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.state.phase, "playing");
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
+});
+
+t("room: local upper pass draws new target without adding to hand", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_upper";
+  room.playerHands.set("B", [c("ym1", "yellow", "ma")]);
+  room.deck = [
+    c("draw1", "green", "pao", "draw"),
+    c("draw2", "white", "zu", "draw"),
+    c("draw3", "red", "ma", "draw"),
+    c("draw4", "yellow", "ju", "draw"),
+    c("draw5", "green", "zu", "draw"),
+    c("draw6", "white", "ju", "draw"),
+    c("draw7", "red", "pao", "draw"),
+    c("draw8", "yellow", "zu", "draw"),
+    c("draw9", "green", "ma", "draw"),
+    c("draw10", "white", "ma", "draw"),
+  ];
+  const before = (room.playerHands.get("B") ?? []).length;
+
+  room.executeGrab("B");
+
+  assert.equal((room.playerHands.get("B") ?? []).length, before);
+  assert.equal(room.pendingResponse?.card.id, "draw1");
+  assert.equal(room.pendingResponse?.card.source, "draw");
+  assert.notEqual(room.state.responsePhase, "local_upper");
+});
+
+t("room: entering discard stage with no legal card ends with winner instead of draw", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [c("w1", "white", "jiang"), c("rj1", "red", "jiang")]);
+  room.enterDiscardStage("B", "CHI");
+  assert.equal(room.state.phase, "ended");
+  assert.match(String(room.state.lastAction), /^B HU$/);
+});
+
+t("room: human collective peng without candidateId is rejected", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju")]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.advanceCollectivePolling = () => {};
+  room.seatBySession.set("sessB", "B");
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "sessB",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleAction(client, "peng");
+
+  assert.equal(room.pendingResponse.collectives.has("B"), false);
+  assert.equal(sent.some((x) => x.event === "action_rejected" && x.payload?.reason === "candidate_required"), true);
+});
+
+t("room: human collective peng with candidateId is accepted", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju")]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.advanceCollectivePolling = () => {};
+  room.seatBySession.set("sessB", "B");
+  const client = { sessionId: "sessB", send: () => {} };
+  const candidateId = room
+    .getAvailableActions("B")
+    .find((item: any) => item.action === "peng")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+
+  room.handleAction(client, { action: "peng", candidateId });
+
+  assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "peng", candidateId });
+});
+
+t("room: human collective peng with invalid candidateId is rejected", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju")]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.advanceCollectivePolling = () => {};
+  room.seatBySession.set("sessB", "B");
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "sessB",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleAction(client, { action: "peng", candidateId: "bad-id" });
+
+  assert.equal(room.pendingResponse.collectives.has("B"), false);
+  assert.equal(sent.some((x) => x.event === "action_rejected" && x.payload?.reason === "invalid_candidate"), true);
+});
+
+t("room: bot collective auto-selects first candidate", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.botIds.add("B");
+  room.advanceCollectivePolling = () => {};
+  room.getAvailableActions = () => [
+    { action: "hu", enabled: false },
+    { action: "kai", enabled: false },
+    { action: "peng", enabled: true, candidates: [{ id: "bot-peng-1" }] },
+    { action: "chi", enabled: false },
+    { action: "pass", enabled: true },
+  ];
+
+  room.runBotStepNow();
+
+  const choice = room.pendingResponse.collectives.get("B");
+  assert.equal(choice?.action, "peng");
+  assert.equal(choice?.candidateId, "bot-peng-1");
 });
 
 let failed = 0;

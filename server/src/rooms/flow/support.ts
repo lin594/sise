@@ -4,6 +4,17 @@ import type { GameState, PlayerState } from "../../schema/game-state.schema.js";
 
 type SeatId = string;
 
+/**
+ * 纯工具聚合层：提供回合顺序、状态写入助手、输入归一化与日志摘要工具。
+ * 关键输入/输出：输入基础状态参数，输出可复用的计算结果或直接写入 `GameState`。
+ * 副作用：仅 `apply*State` 族函数会修改 `GameState`，其余函数保持无副作用。
+ */
+
+/**
+ * 作用：从指定玩家的下家开始，生成完整一圈顺序。
+ * 关键输入/输出：输入座位顺序和起点，输出轮询顺序数组。
+ * 副作用：无。
+ */
 export function iterateFromNext(playerOrder: SeatId[], startId: SeatId): SeatId[] {
   const idx = playerOrder.indexOf(startId);
   if (idx < 0) {
@@ -16,6 +27,11 @@ export function iterateFromNext(playerOrder: SeatId[], startId: SeatId): SeatId[
   return ordered;
 }
 
+/**
+ * 作用：根据当前座位获取下家。
+ * 关键输入/输出：输入座位顺序与当前座位，输出下家座位。
+ * 副作用：无。
+ */
 export function getNextPlayerId(playerOrder: SeatId[], playerId: SeatId): SeatId {
   const idx = playerOrder.indexOf(playerId);
   if (idx < 0) {
@@ -24,6 +40,11 @@ export function getNextPlayerId(playerOrder: SeatId[], playerId: SeatId): SeatId
   return playerOrder[(idx + 1) % playerOrder.length];
 }
 
+/**
+ * 作用：根据当前座位获取上家。
+ * 关键输入/输出：输入座位顺序与当前座位，输出上家座位。
+ * 副作用：无。
+ */
 export function getPreviousPlayerId(playerOrder: SeatId[], playerId: SeatId): SeatId {
   const idx = playerOrder.indexOf(playerId);
   if (idx < 0) {
@@ -37,26 +58,38 @@ interface PendingOrderLike {
   card: { source?: "upper" | "draw" };
 }
 
+/**
+ * 作用：构造 collective 阶段的应答顺序。
+ * 关键输入/输出：输入座位顺序和待响应牌来源，输出轮询顺序。
+ * 副作用：无。
+ */
 export function getCollectiveOrder(playerOrder: SeatId[], pending: PendingOrderLike): SeatId[] {
+  // 设计原因：摸牌(`draw`)时先给牌主本人响应；上家来牌(`upper`)时从下家开始轮询。
   if (pending.card.source === "draw") {
     return [pending.ownerId, ...iterateFromNext(playerOrder, pending.ownerId).filter((id) => id !== pending.ownerId)];
   }
   return iterateFromNext(playerOrder, pending.ownerId);
 }
 
+/**
+ * 作用：按优先级从 collective 响应结果中选出胜出动作。
+ * 关键输入/输出：输入轮询顺序与各家响应，输出首个生效的玩家与动作。
+ * 副作用：无。
+ */
 export function pickCollectiveWinner(
   order: SeatId[],
-  collectives: Map<SeatId, ActionType>,
-): { id: SeatId; action: ActionType } | null {
+  collectives: Map<SeatId, { action: ActionType; candidateId?: string }>,
+): { id: SeatId; choice: { action: ActionType; candidateId?: string } } | null {
   for (const id of order) {
-    if ((collectives.get(id) ?? "pass") === "hu") {
-      return { id, action: "hu" };
+    const choice = collectives.get(id) ?? { action: "pass" as ActionType };
+    if (choice.action === "hu") {
+      return { id, choice };
     }
   }
   for (const id of order) {
-    const act = collectives.get(id) ?? "pass";
-    if (act === "kai" || act === "peng") {
-      return { id, action: act };
+    const choice = collectives.get(id) ?? { action: "pass" as ActionType };
+    if (choice.action === "kai" || choice.action === "peng") {
+      return { id, choice };
     }
   }
   return null;
@@ -75,6 +108,11 @@ export interface CollectiveCursorResult {
   forcedPassIds: SeatId[];
 }
 
+/**
+ * 作用：推进 collective 游标并找到下一位实际需要决策的玩家。
+ * 关键输入/输出：输入队列、游标与判定函数，输出下一游标、响应者、强制 pass 列表。
+ * 副作用：无。
+ */
 export function resolveNextCollectiveResponder(input: CollectiveCursorInput): CollectiveCursorResult {
   let cursor = input.cursor;
   const forcedPassIds: SeatId[] = [];
@@ -100,6 +138,11 @@ export interface LocalPhasePlan {
   rebindPendingOwner: boolean;
 }
 
+/**
+ * 作用：在 collective 无人响应后，规划进入 local 阶段的归属与相位。
+ * 关键输入/输出：输入当前牌主、牌来源和下家，输出本地阶段规划。
+ * 副作用：无。
+ */
 export function planLocalPhaseAfterNoResponse(
   ownerId: SeatId,
   cardSource: "upper" | "draw" | undefined,
@@ -113,10 +156,21 @@ export function planLocalPhaseAfterNoResponse(
   };
 }
 
+/**
+ * 作用：判断上家来牌无人吃时是否直接流局。
+ * 关键输入/输出：输入剩余牌堆数量，输出是否结束本局。
+ * 副作用：无。
+ */
 export function shouldEndDrawAfterUpperPass(deckCount: number): boolean {
+  // 设计原因：牌堆<=8 视为“收尾保留牌”，上家 pass 后不再继续补摸，直接 DRAW_GAME。
   return deckCount <= 8;
 }
 
+/**
+ * 作用：统一 `discard_card` 入参格式。
+ * 关键输入/输出：输入字符串或对象，输出标准 cardId 字符串。
+ * 副作用：无。
+ */
 export function normalizeDiscardCardId(payload: { cardId?: string } | string): string {
   return typeof payload === "string" ? payload : String(payload?.cardId ?? "");
 }
@@ -130,6 +184,11 @@ export interface DiscardRequestInput {
   responsePhase: "collective" | "local_upper" | "local_draw";
 }
 
+/**
+ * 作用：校验客户端当前是否允许执行弃牌请求。
+ * 关键输入/输出：输入当前阶段上下文，输出可否受理。
+ * 副作用：无。
+ */
 export function canAcceptDiscardRequest(input: DiscardRequestInput): boolean {
   if (!input.hasPending || input.phase !== "playing") {
     return false;
@@ -146,12 +205,22 @@ export function canAcceptDiscardRequest(input: DiscardRequestInput): boolean {
   return true;
 }
 
+/**
+ * 作用：写入回合切换到 transition 阶段的公共状态字段。
+ * 关键输入/输出：输入 `GameState` 与牌主，输出无返回值。
+ * 副作用：修改 `currentPlayerId/currentTurnPlayerId/loopStage`。
+ */
 export function applyTurnTransitionState(state: GameState, ownerId: string): void {
   state.currentPlayerId = ownerId;
   state.currentTurnPlayerId = ownerId;
   state.loopStage = "transition";
 }
 
+/**
+ * 作用：写入进入 collective 轮询阶段的公共状态字段。
+ * 关键输入/输出：输入 `GameState` 与轮询上下文，输出无返回值。
+ * 副作用：修改 `responsePhase/currentPlayerId/previousPlayerId/loopStage` 等字段。
+ */
 export function applyCollectivePollState(
   state: GameState,
   ownerId: string,
@@ -170,6 +239,11 @@ export function applyCollectivePollState(
   state.lastAction = lastAction;
 }
 
+/**
+ * 作用：声明阶段结束后初始化 playing 起始状态。
+ * 关键输入/输出：输入庄家与上家，输出无返回值。
+ * 副作用：重置并写入 playing 阶段主循环状态字段。
+ */
 export function applyPlayingStartAfterDeclaring(
   state: GameState,
   dealerId: string,
@@ -189,12 +263,22 @@ export function applyPlayingStartAfterDeclaring(
   state.lastAction = `DEALER ${dealerId}`;
 }
 
+/**
+ * 作用：写入进入待弃牌阶段时的关键状态。
+ * 关键输入/输出：输入牌主和动作标签，输出无返回值。
+ * 副作用：修改 `responsePhase/currentPlayerId/lastAction`。
+ */
 export function applyEnterDiscardStageState(state: GameState, ownerId: string, tag: string): void {
   state.responsePhase = "local_draw";
   state.currentPlayerId = ownerId;
   state.lastAction = `${ownerId} ${tag}`;
 }
 
+/**
+ * 作用：兼容旧动作协议，归一化动作名称。
+ * 关键输入/输出：输入客户端动作，输出当前语义动作。
+ * 副作用：无。
+ */
 export function normalizeAction(action: ActionType): ActionType {
   if (action === "open") {
     return "kai";
@@ -322,6 +406,11 @@ interface ActionOption {
   enabled: boolean;
 }
 
+/**
+ * 作用：生成机器人在 collective 阶段的默认动作选择。
+ * 关键输入/输出：输入可选动作面板，输出单个动作。
+ * 副作用：无。
+ */
 export function pickCollectiveBotAction(actions: ActionOption[]): ActionType {
   return (
     actions.find((x) => x.action === "hu" && x.enabled)?.action ??
@@ -333,6 +422,11 @@ export function pickCollectiveBotAction(actions: ActionOption[]): ActionType {
   );
 }
 
+/**
+ * 作用：生成机器人在 local 阶段的默认动作选择。
+ * 关键输入/输出：输入 local 相位与是否可吃，输出 `chi/grab/pass_to_next`。
+ * 副作用：无。
+ */
 export function pickLocalBotAction(
   responsePhase: "local_upper" | "local_draw",
   canChi: boolean,
@@ -349,9 +443,14 @@ export function pickLocalBotAction(
 export interface PendingResponseSnapshot {
   ownerId: string;
   card: Card;
-  collectives: Map<string, ActionType>;
+  collectives: Map<string, { action: ActionType; candidateId?: string }>;
 }
 
+/**
+ * 作用：创建统一的 pendingResponse 快照对象。
+ * 关键输入/输出：输入牌主、目标牌与来源，输出带 collectives 的快照。
+ * 副作用：无。
+ */
 export function createPendingResponse(
   ownerId: string,
   card: Card,

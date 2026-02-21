@@ -4,6 +4,7 @@ import CardComp from "./Card.vue";
 const props = defineProps();
 const emit = defineEmits();
 const isCompactLandscape = ref(false);
+const layoutRevision = ref(0);
 const orderedPlayers = computed(() => {
     const list = props.players ?? [];
     if (!list.length) {
@@ -27,6 +28,7 @@ const showDealAnimation = ref(false);
 const actionEffect = ref(null);
 const dealerReveal = ref(null);
 const dealerFlight = ref(null);
+const flashActorId = ref("");
 const tableRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
@@ -46,6 +48,7 @@ let actionTimer = null;
 let dealerTimer = null;
 let dealerIntroTimer = null;
 let dealAnimatingUntil = 0;
+let flashTimer = null;
 function splitExposedGroups(cards, sizes, prefix) {
     const cleanSizes = sizes.filter((size) => Number.isFinite(size) && size > 0);
     const total = cleanSizes.reduce((sum, size) => sum + size, 0);
@@ -107,6 +110,14 @@ const latestDiscardFromAction = computed(() => {
     return null;
 });
 const responseCard = computed(() => {
+    const directResponse = props.state?.responseCard;
+    if (directResponse?.id) {
+        return directResponse;
+    }
+    const directTarget = props.state?.targetCard;
+    if (props.state?.responsePhase === "collective" && directTarget?.id) {
+        return directTarget;
+    }
     const collective = props.state?.responsePhase === "collective";
     if (collective) {
         const publicTop = props.state?.publicDiscardPile?.[0];
@@ -121,7 +132,7 @@ const responseCard = computed(() => {
     if (card?.id) {
         return card;
     }
-    return latestDiscardFromAction.value;
+    return collective ? latestDiscardFromAction.value : null;
 });
 const currentPlayer = computed(() => {
     const playerId = props.state?.currentPlayerId;
@@ -141,6 +152,83 @@ const isMyTurn = computed(() => Boolean(props.mySeatId) &&
     props.state?.currentPlayerId === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const activeCandidates = computed(() => props.activeCandidates ?? []);
+const selectedCandidate = computed(() => {
+    const id = props.selectedCandidateId ?? "";
+    if (!id) {
+        return null;
+    }
+    return activeCandidates.value.find((candidate) => candidate.id === id) ?? null;
+});
+const candidateIndexesByCardId = computed(() => {
+    const map = new Map();
+    activeCandidates.value.forEach((candidate, index) => {
+        candidate.cardIds.forEach((cardId) => {
+            const list = map.get(cardId) ?? [];
+            list.push(index + 1);
+            map.set(cardId, list);
+        });
+    });
+    return map;
+});
+const centerEventText = computed(() => {
+    const action = String(props.state?.lastAction ?? "").trim();
+    if (!action) {
+        return "";
+    }
+    const { actor, keyword } = parseActionDescriptor(action);
+    const actionMap = {
+        DISCARD: "出牌",
+        PENG: "碰",
+        OPEN: "开",
+        KAI: "开",
+        EAT: "吃",
+        CHI: "吃",
+        HU: "胡",
+        PASS: "过",
+        TIMEOUT_PASS: "超时过",
+    };
+    const label = actionMap[keyword];
+    if (!label) {
+        return "";
+    }
+    const actorName = props.players.find((player) => player.clientId === actor)?.name || actor || "系统";
+    const target = responseCard.value ?? latestDiscardFromAction.value;
+    const targetLabel = target ? cardLabel(target) : "-";
+    return `${actorName} ${label}（target: ${targetLabel}）`;
+});
+const centerPointerStyle = computed(() => {
+    void layoutRevision.value;
+    const table = tableRef.value;
+    if (!table) {
+        return null;
+    }
+    const currentId = String(props.state?.currentPlayerId ?? "");
+    if (!currentId) {
+        return null;
+    }
+    const targetAbs = targetForPlayer(currentId);
+    if (!targetAbs) {
+        return null;
+    }
+    const tableRect = table.getBoundingClientRect();
+    const center = { x: tableRect.width / 2, y: tableRect.height / 2 };
+    const target = { x: targetAbs.x - tableRect.left, y: targetAbs.y - tableRect.top };
+    const dx = target.x - center.x;
+    const dy = target.y - center.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 1) {
+        return null;
+    }
+    const length = Math.min(64, Math.max(48, distance * 0.2));
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    return {
+        left: `${center.x}px`,
+        top: `${center.y}px`,
+        width: `${length}px`,
+        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+    };
+});
 const dealerName = computed(() => {
     const dealerId = String(props.state?.dealerId ?? "");
     if (!dealerId) {
@@ -182,8 +270,45 @@ function onDiscard(cardId, event) {
         }
     }, 460);
 }
-function onSubmitAction(action) {
-    emit("submitAction", action);
+function onSubmitAction(request) {
+    emit("submitAction", request);
+}
+function onSelectionChange(payload) {
+    emit("selectionChange", payload);
+}
+function isCandidateCard(cardId) {
+    return candidateIndexesByCardId.value.has(cardId);
+}
+function isSelectedCandidateCard(cardId) {
+    return Boolean(selectedCandidate.value?.cardIds.includes(cardId));
+}
+function candidateBadgeText(cardId) {
+    const indexes = candidateIndexesByCardId.value.get(cardId) ?? [];
+    return indexes.length > 0 ? indexes.join("/") : "";
+}
+function cardLabel(card) {
+    const colorMap = {
+        red: "红",
+        yellow: "黄",
+        green: "绿",
+        white: "白",
+        gold: "金",
+    };
+    const typeMap = {
+        jiang: "将",
+        shi: "士",
+        xiang: "相",
+        ju: "车",
+        ma: "马",
+        pao: "炮",
+        zu: "卒",
+        gong: "条",
+        hou: "侯",
+        bo: "伯",
+        zi: "子",
+        nan: "男",
+    };
+    return `${colorMap[card.color] ?? card.color}${typeMap[card.type] ?? card.type}`;
 }
 function previewGroupCards(cards) {
     return cards.slice(0, previewGroupSize(cards));
@@ -382,7 +507,7 @@ function triggerMeldAnimation(actorId, keyword) {
     if (!baseCard) {
         return;
     }
-    const count = keyword === "OPEN" ? 4 : 3;
+    const count = keyword === "OPEN" || keyword === "KAI" ? 4 : 3;
     const offsets = groupOffsets(count);
     offsets.forEach((offset, index) => {
         spawnFlight({
@@ -505,6 +630,20 @@ function triggerActionEffect(label) {
         actionTimer = null;
     }, 760);
 }
+function triggerActorFlash(actorId) {
+    if (!actorId) {
+        return;
+    }
+    if (flashTimer) {
+        clearTimeout(flashTimer);
+        flashTimer = null;
+    }
+    flashActorId.value = actorId;
+    flashTimer = setTimeout(() => {
+        flashActorId.value = "";
+        flashTimer = null;
+    }, 780);
+}
 function triggerDealerReveal(name, dealerId) {
     if (!name || name === "-") {
         return;
@@ -531,6 +670,7 @@ function queueDealerIntro(name, dealerId) {
     }, delay);
 }
 function updateCompactLandscape() {
+    layoutRevision.value += 1;
     const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
     if (compact !== isCompactLandscape.value) {
         isCompactLandscape.value = compact;
@@ -552,6 +692,11 @@ onUnmounted(() => {
         clearTimeout(dealerTimer);
         dealerTimer = null;
     }
+    if (flashTimer) {
+        clearTimeout(flashTimer);
+        flashTimer = null;
+    }
+    flashActorId.value = "";
     dealerFlight.value = null;
     window.removeEventListener("resize", updateCompactLandscape);
     window.removeEventListener("orientationchange", updateCompactLandscape);
@@ -571,10 +716,15 @@ watch(() => props.state?.lastAction, (action) => {
         return;
     }
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
+    if (actor) {
+        triggerActorFlash(actor);
+    }
     const labelMap = {
         PENG: "碰",
         EAT: "吃",
+        CHI: "吃",
         OPEN: "开",
+        KAI: "开",
         HU: "胡",
         KONG_DRAW: "补牌",
         GRAB: "抓",
@@ -589,7 +739,7 @@ watch(() => props.state?.lastAction, (action) => {
         }
         return;
     }
-    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN") && actor) {
+    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN" || keyword === "KAI" || keyword === "CHI") && actor) {
         triggerMeldAnimation(actor, keyword);
     }
 });
@@ -602,6 +752,7 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat']} */ ;
@@ -625,11 +776,15 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -833,6 +988,7 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
                     active: __VLS_ctx.isCurrentTurn(entry.player.clientId),
                     'with-fish': entry.player.fishArea.length > 0,
                     dealer: __VLS_ctx.isDealer(entry.player.clientId),
+                    'actor-flash': __VLS_ctx.flashActorId === entry.player.clientId,
                 },
             ]) },
     });
@@ -1031,6 +1187,21 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
     ...{ class: "hint" },
 });
 (__VLS_ctx.state?.lastAction || "等待中...");
+if (__VLS_ctx.centerEventText) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "center-event" },
+    });
+    (__VLS_ctx.centerEventText);
+}
+if (__VLS_ctx.centerPointerStyle) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "center-pointer" },
+        ...{ style: (__VLS_ctx.centerPointerStyle) },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+        ...{ class: "center-pointer-head" },
+    });
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "deck-anchor" },
     ref: "deckAnchorRef",
@@ -1113,7 +1284,7 @@ var __VLS_40;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-zone" },
-        ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId) }) },
+        ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
@@ -1265,9 +1436,20 @@ if (__VLS_ctx.selfPlayer) {
                 } },
             key: (`me-${card.id}`),
             ...{ class: "hand-card" },
-            ...{ class: ({ playable: __VLS_ctx.canDiscardCard(card), blocked: !__VLS_ctx.canDiscardCard(card) }) },
+            ...{ class: ({
+                    playable: __VLS_ctx.canDiscardCard(card),
+                    blocked: !__VLS_ctx.canDiscardCard(card),
+                    'candidate-active': __VLS_ctx.isCandidateCard(card.id),
+                    'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
+                }) },
             disabled: (!__VLS_ctx.canDiscardCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
+        if (__VLS_ctx.candidateBadgeText(card.id)) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "candidate-badge" },
+            });
+            (__VLS_ctx.candidateBadgeText(card.id));
+        }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
         const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -1284,27 +1466,36 @@ if (__VLS_ctx.selfPlayer) {
         // @ts-ignore
         const __VLS_53 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
             ...{ 'onSubmit': {} },
+            ...{ 'onSelectionChange': {} },
             ...{ class: "embedded-actions" },
             actions: (props.actions ?? []),
             canAct: (Boolean(props.canAct)),
             isCurrentTurn: (Boolean(props.isCurrentTurn)),
             responsePhase: (props.responsePhase ?? ''),
             currentPlayerName: (props.currentPlayerName ?? '-'),
+            selectionMode: (props.selectionMode ?? null),
+            selectedCandidateId: (props.selectedCandidateId ?? null),
         }));
         const __VLS_54 = __VLS_53({
             ...{ 'onSubmit': {} },
+            ...{ 'onSelectionChange': {} },
             ...{ class: "embedded-actions" },
             actions: (props.actions ?? []),
             canAct: (Boolean(props.canAct)),
             isCurrentTurn: (Boolean(props.isCurrentTurn)),
             responsePhase: (props.responsePhase ?? ''),
             currentPlayerName: (props.currentPlayerName ?? '-'),
+            selectionMode: (props.selectionMode ?? null),
+            selectedCandidateId: (props.selectedCandidateId ?? null),
         }, ...__VLS_functionalComponentArgsRest(__VLS_53));
         let __VLS_56;
         let __VLS_57;
         let __VLS_58;
         const __VLS_59 = {
             onSubmit: (__VLS_ctx.onSubmitAction)
+        };
+        const __VLS_60 = {
+            onSelectionChange: (__VLS_ctx.onSelectionChange)
         };
         var __VLS_55;
     }
@@ -1327,14 +1518,14 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             size: "md",
         }));
-        const __VLS_61 = __VLS_60({
+        const __VLS_62 = __VLS_61({
             card: (flight.card),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_61));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -1377,6 +1568,9 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['response-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-event']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-anchor']} */ ;
 /** @type {__VLS_StyleScopedClasses['deal-overlay']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
@@ -1407,6 +1601,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
@@ -1425,6 +1620,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             actionEffect: actionEffect,
             dealerReveal: dealerReveal,
             dealerFlight: dealerFlight,
+            flashActorId: flashActorId,
             tableRef: tableRef,
             responseLandingRef: responseLandingRef,
             deckAnchorRef: deckAnchorRef,
@@ -1438,12 +1634,18 @@ const __VLS_self = (await import('vue')).defineComponent({
             currentPlayerName: currentPlayerName,
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
+            centerEventText: centerEventText,
+            centerPointerStyle: centerPointerStyle,
             isCurrentTurn: isCurrentTurn,
             statusText: statusText,
             isDealer: isDealer,
             canDiscardCard: canDiscardCard,
             onDiscard: onDiscard,
             onSubmitAction: onSubmitAction,
+            onSelectionChange: onSelectionChange,
+            isCandidateCard: isCandidateCard,
+            isSelectedCandidateCard: isSelectedCandidateCard,
+            candidateBadgeText: candidateBadgeText,
             previewGroupCards: previewGroupCards,
             previewGroupSize: previewGroupSize,
             fanCardStyle: fanCardStyle,

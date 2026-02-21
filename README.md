@@ -105,6 +105,8 @@ docs/                           # 项目文档
 - `MIN_PLAYERS`：允许开始时最少真人玩家数（默认 `1`）
 - `BOT_THINK_MS`：机器人思考延时毫秒（默认 `200`）
 - `ROOM_LOG` / `HU_LOG`：日志开关
+- `ROOM_TRACE`：步骤级调试日志开关（`1` 开启）
+- `ROOM_TRACE_CARDS`：在 trace 中输出响应牌详情（`1` 开启）
 
 ## 当前里程碑
 

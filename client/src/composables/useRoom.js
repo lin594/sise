@@ -137,6 +137,32 @@ function normalizeAction(action) {
     }
     return action;
 }
+function normalizeCandidate(raw) {
+    if (!raw || typeof raw !== "object") {
+        return null;
+    }
+    const action = normalizeAction(String(raw.action ?? ""));
+    if (action !== "kai" && action !== "peng" && action !== "chi") {
+        return null;
+    }
+    const id = String(raw.id ?? "").trim();
+    if (!id) {
+        return null;
+    }
+    const sourceRaw = String(raw.source ?? "");
+    const source = sourceRaw === "hand+pool" || sourceRaw === "reusable_pair" ? sourceRaw : "hand";
+    const cardIds = Array.isArray(raw.cardIds) ? raw.cardIds.map((x) => String(x)).filter(Boolean) : [];
+    const kind = typeof raw.kind === "string" ? raw.kind : undefined;
+    const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : action.toUpperCase();
+    return {
+        id,
+        action,
+        kind,
+        cardIds,
+        source,
+        title,
+    };
+}
 function normalizeResponsePhase(input) {
     if (input === "self_eat") {
         return "local_upper";
@@ -266,9 +292,13 @@ export function useRoom(playerName = "Player") {
                     hostPlayerId: String(next?.hostPlayerId ?? ""),
                     dealerId: String(next?.dealerId ?? ""),
                     currentPlayerId: String(next?.currentPlayerId ?? ""),
+                    currentTurnPlayerId: String(next?.currentTurnPlayerId ?? ""),
+                    previousPlayerId: String(next?.previousPlayerId ?? ""),
                     responsePhase: normalizeResponsePhase(String(next?.responsePhase ?? "")),
                     lastAction: String(next?.lastAction ?? ""),
                     deckCount: Number(next?.deckCount ?? 0),
+                    isMoCard: Boolean(next?.isMoCard),
+                    targetCard: asCard(next?.targetCard),
                     responseCard: asCard(next?.responseCard),
                     publicDiscardPile: asCardArray(next?.publicDiscardPile),
                     declareEndsAt: Number(next?.declareEndsAt ?? 0),
@@ -292,7 +322,16 @@ export function useRoom(playerName = "Player") {
                 availableActions.value = (payload ?? []).map((item) => ({
                     action: normalizeAction(item.action),
                     enabled: Boolean(item.enabled),
+                    candidates: Array.isArray(item?.candidates)
+                        ? item.candidates
+                            .map((raw) => normalizeCandidate(raw))
+                            .filter((candidate) => Boolean(candidate))
+                        : undefined,
                 }));
+            });
+            joined.onMessage("action_rejected", (payload) => {
+                const reason = String(payload?.reason ?? "unknown");
+                pushLog(`ACTION_REJECTED ${reason}`);
             });
             joined.onMessage("hu_result", (payload) => {
                 huResult.value = payload;
@@ -345,11 +384,21 @@ export function useRoom(playerName = "Player") {
             connected.value = false;
         }
     }
-    function sendAction(action) {
+    function sendAction(input) {
         if (!room.value) {
             return;
         }
-        room.value.send("action", normalizeAction(action));
+        if (typeof input === "string") {
+            room.value.send("action", normalizeAction(input));
+            return;
+        }
+        const action = normalizeAction(input.action);
+        const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
+        if (candidateId) {
+            room.value.send("action", { action, candidateId });
+            return;
+        }
+        room.value.send("action", action);
     }
     function sendDiscardCard(cardId) {
         if (!room.value || !cardId) {

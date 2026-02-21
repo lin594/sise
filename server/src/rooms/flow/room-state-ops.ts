@@ -14,6 +14,11 @@ export interface OperationExecutorDeps {
   pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean) => void;
 }
 
+/**
+ * 房间状态读写层：集中处理手牌/明牌/弃牌/响应牌等状态变更。
+ * 关键输入/输出：输入 `GameState` 与 `playerHands`，输出统一状态操作方法。
+ * 副作用：本类方法会直接修改 `playerHands` 与 `state.players/*` 区域。
+ */
 export class RoomStateOps {
   constructor(
     private readonly state: GameState,
@@ -21,6 +26,11 @@ export class RoomStateOps {
     private readonly getPendingOwnerId: () => SeatId | null,
   ) {}
 
+  /**
+   * 作用：返回“去掉 pending 响应牌”后的手牌视图。
+   * 关键输入/输出：输入座位和 pending 牌，输出过滤后的手牌副本。
+   * 副作用：无。
+   */
   getHandWithoutPending(ownerId: SeatId, pendingCard: Card): Card[] {
     const hand = this.playerHands.get(ownerId) ?? [];
     let removed = false;
@@ -33,6 +43,11 @@ export class RoomStateOps {
     });
   }
 
+  /**
+   * 作用：为自动流程挑选首张可弃牌并从手牌移除。
+   * 关键输入/输出：输入座位，输出被移除的牌或 null。
+   * 副作用：修改 `playerHands`。
+   */
   pickDiscardCard(playerId: SeatId): Card | null {
     const hand = this.playerHands.get(playerId) ?? [];
     const idx = hand.findIndex((card) => !isDiscardRestricted(card));
@@ -44,6 +59,11 @@ export class RoomStateOps {
     return discard;
   }
 
+  /**
+   * 作用：按 cardId 执行玩家主动弃牌。
+   * 关键输入/输出：输入座位与 cardId，输出被弃的牌或 null。
+   * 副作用：修改 `playerHands`。
+   */
   discardCardById(playerId: SeatId, cardId: string): Card | null {
     const hand = this.playerHands.get(playerId) ?? [];
     const idx = hand.findIndex((card) => card.id === cardId);
@@ -59,6 +79,11 @@ export class RoomStateOps {
     return discard;
   }
 
+  /**
+   * 作用：按牌面移除固定数量手牌（碰/杠/吃等组合消耗）。
+   * 关键输入/输出：输入目标牌面和数量，输出实际移除牌列表。
+   * 副作用：修改 `playerHands`。
+   */
   takeMatchingCards(playerId: SeatId, target: Card, count: number): Card[] {
     const hand = this.playerHands.get(playerId) ?? [];
     let rest = count;
@@ -73,6 +98,11 @@ export class RoomStateOps {
     return removed;
   }
 
+  /**
+   * 作用：优先按 id、其次按牌面从手牌移除一张牌。
+   * 关键输入/输出：输入座位和目标牌，输出无返回值。
+   * 副作用：修改 `playerHands`。
+   */
   removeFromHand(playerId: SeatId, card: Card): void {
     const hand = this.playerHands.get(playerId) ?? [];
     const idx = hand.findIndex((x) => x.id === card.id);
@@ -88,6 +118,11 @@ export class RoomStateOps {
     }
   }
 
+  /**
+   * 作用：从 wildcardPool/generalArea 同步移除一张百搭牌。
+   * 关键输入/输出：输入座位和目标牌，输出无返回值。
+   * 副作用：修改 `wildcardPool` 与 `generalArea`。
+   */
   removeFromWildcardPool(playerId: SeatId, card: Card): void {
     const player = this.state.players.get(playerId);
     if (!player) {
@@ -102,6 +137,7 @@ export class RoomStateOps {
     if (byFace >= 0) {
       player.wildcardPool.splice(byFace, 1);
     }
+    // 设计原因：wildcardPool 与 generalArea 是同一张牌的两种视图，移除时必须保持同步。
     const gById = player.generalArea.findIndex((x) => x.id === card.id);
     if (gById >= 0) {
       player.generalArea.splice(gById, 1);
@@ -113,6 +149,11 @@ export class RoomStateOps {
     }
   }
 
+  /**
+   * 作用：按组合计划统一扣除手牌与百搭池牌。
+   * 关键输入/输出：输入手牌消耗与池牌消耗，输出合并后的实际消耗牌。
+   * 副作用：修改 `playerHands/wildcardPool/generalArea`。
+   */
   consumePlanCards(playerId: SeatId, handCards: Card[], poolCards: Card[]): Card[] {
     for (const card of handCards) {
       this.removeFromHand(playerId, card);
@@ -123,6 +164,11 @@ export class RoomStateOps {
     return [...handCards, ...poolCards];
   }
 
+  /**
+   * 作用：写入个人弃牌与公共弃牌堆。
+   * 关键输入/输出：输入座位和牌，输出无返回值。
+   * 副作用：修改 `player.discardPile/state.publicDiscardPile`。
+   */
   pushDiscard(playerId: SeatId, card: Card): void {
     const player = this.state.players.get(playerId);
     if (!player) {
@@ -133,6 +179,11 @@ export class RoomStateOps {
     this.state.publicDiscardPile.unshift(this.toSchemaCard(card, false, "upper"));
   }
 
+  /**
+   * 作用：写入明牌组合与组合长度。
+   * 关键输入/输出：输入座位与组合牌，输出无返回值。
+   * 副作用：修改 `exposedArea/exposedGroupSizes`。
+   */
   pushExposedGroup(playerId: SeatId, cards: Card[], highlight: boolean): void {
     const player = this.state.players.get(playerId);
     if (!player) {
@@ -146,6 +197,11 @@ export class RoomStateOps {
     }
   }
 
+  /**
+   * 作用：同步当前响应牌到 `responseCard/targetCard/isMoCard`。
+   * 关键输入/输出：输入牌和来源，输出无返回值。
+   * 副作用：修改 `state.responseCard/targetCard/isMoCard/currentPlayerId`。
+   */
   setResponseCard(card: Card, source: "upper" | "draw"): void {
     this.state.responseCard = this.toSchemaCard(card, false, source);
     this.state.targetCard = this.toSchemaCard(card, false, source);
@@ -153,6 +209,11 @@ export class RoomStateOps {
     this.state.currentPlayerId = this.getPendingOwnerId() ?? this.state.currentPlayerId;
   }
 
+  /**
+   * 作用：将业务卡牌转为 Schema 卡牌。
+   * 关键输入/输出：输入业务 Card，输出 `CardSchema`。
+   * 副作用：无。
+   */
   toSchemaCard(card: Card, isResponseCard: boolean, source: "upper" | "draw"): CardSchema {
     const schemaCard = new CardSchema();
     schemaCard.id = card.id;
@@ -163,6 +224,11 @@ export class RoomStateOps {
     return schemaCard;
   }
 
+  /**
+   * 作用：将 Schema 卡牌转回业务 Card。
+   * 关键输入/输出：输入 Schema 结构，输出业务 Card。
+   * 副作用：无。
+   */
   toPlainCard(card: { id: string; color: string; type: string; source?: string }): Card {
     return {
       id: card.id,
@@ -172,6 +238,11 @@ export class RoomStateOps {
     };
   }
 
+  /**
+   * 作用：读取指定玩家百搭池的业务牌视图。
+   * 关键输入/输出：输入座位，输出百搭池数组。
+   * 副作用：无。
+   */
   getWildcardPoolCards(seatId: SeatId): Card[] {
     const player = this.state.players.get(seatId);
     if (!player) {
@@ -180,6 +251,11 @@ export class RoomStateOps {
     return player.wildcardPool.map((card) => this.toPlainCard(card));
   }
 
+  /**
+   * 作用：向玩家写入一张百搭牌（generalArea + wildcardPool 双写）。
+   * 关键输入/输出：输入座位、牌与来源，输出无返回值。
+   * 副作用：修改 `generalArea/wildcardPool`。
+   */
   addWildcardCardToPlayer(ownerId: SeatId, card: Card, source: "upper" | "draw"): void {
     const player = this.state.players.get(ownerId);
     if (!player) {
@@ -190,6 +266,11 @@ export class RoomStateOps {
     player.wildcardPool.unshift(this.toSchemaCard(card, true, source));
   }
 
+  /**
+   * 作用：封装胡牌解释调用，统一注入 seat 级 wildcard 信息。
+   * 关键输入/输出：输入 seat/hand/response/wildcardCount，输出胡牌解释结果。
+   * 副作用：无。
+   */
   explainHuForSeat(seatId: SeatId, hand: Card[], responseCard: Card, wildcardCount: number) {
     return explainHu(hand, responseCard, {
       wildcardCount,
@@ -197,6 +278,11 @@ export class RoomStateOps {
     });
   }
 
+  /**
+   * 作用：生成动作执行器依赖对象，供 actions/*.ts 复用。
+   * 关键输入/输出：无输入，输出规则执行依赖集合。
+   * 副作用：无。
+   */
   buildOperationExecutorDeps(): OperationExecutorDeps {
     return {
       getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
@@ -220,6 +306,11 @@ export function syncAllPrivateHands(clients: { sessionId: string; send: (event: 
   }
 }
 
+/**
+ * 作用：创建房间状态操作器实例。
+ * 关键输入/输出：输入 `GameState/playerHands/getPendingOwnerId`，输出 `RoomStateOps`。
+ * 副作用：无。
+ */
 export function createRoomStateOps(
   state: GameState,
   playerHands: Map<string, Card[]>,

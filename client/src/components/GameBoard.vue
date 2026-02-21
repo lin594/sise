@@ -45,6 +45,7 @@
             active: isCurrentTurn(entry.player.clientId),
             'with-fish': entry.player.fishArea.length > 0,
             dealer: isDealer(entry.player.clientId),
+            'actor-flash': flashActorId === entry.player.clientId,
           },
         ]"
       >
@@ -127,6 +128,10 @@
         </div>
 
         <p class="hint">{{ state?.lastAction || "等待中..." }}</p>
+        <p v-if="centerEventText" class="center-event">{{ centerEventText }}</p>
+        <div v-if="centerPointerStyle" class="center-pointer" :style="centerPointerStyle">
+          <i class="center-pointer-head"></i>
+        </div>
         <div class="deck-anchor" ref="deckAnchorRef"></div>
       </section>
 
@@ -161,7 +166,7 @@
 
     <section
       class="self-zone"
-      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId) }"
+      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       v-if="selfPlayer"
       ref="selfZoneRef"
     >
@@ -224,10 +229,16 @@
           v-for="card in privateHand"
           :key="`me-${card.id}`"
           class="hand-card"
-          :class="{ playable: canDiscardCard(card), blocked: !canDiscardCard(card) }"
+          :class="{
+            playable: canDiscardCard(card),
+            blocked: !canDiscardCard(card),
+            'candidate-active': isCandidateCard(card.id),
+            'candidate-selected': isSelectedCandidateCard(card.id),
+          }"
           :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
           @click="onDiscard(card.id, $event)"
         >
+          <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
           <CardComp :card="card" size="xl" />
         </button>
       </div>
@@ -240,7 +251,10 @@
         :is-current-turn="Boolean(props.isCurrentTurn)"
         :response-phase="props.responsePhase ?? ''"
         :current-player-name="props.currentPlayerName ?? '-'"
+        :selection-mode="props.selectionMode ?? null"
+        :selected-candidate-id="props.selectedCandidateId ?? null"
         @submit="onSubmitAction"
+        @selection-change="onSelectionChange"
       />
     </section>
 
@@ -263,7 +277,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import type { ActionType, AvailableAction, Card, PlayerState } from "@/types/game";
+import type { ActionCandidate, ActionRequest, AvailableAction, Card, PlayerState } from "@/types/game";
 
 type ExposedGroup = {
   id: string;
@@ -307,14 +321,19 @@ const props = defineProps<{
   currentPlayerName?: string;
   turnHint?: string;
   embeddedActionPanel?: boolean;
+  selectionMode?: "kai" | "peng" | "chi" | null;
+  selectedCandidateId?: string | null;
+  activeCandidates?: ActionCandidate[];
 }>();
 
 const emit = defineEmits<{
   discardCard: [cardId: string];
-  submitAction: [action: ActionType];
+  submitAction: [request: ActionRequest];
+  selectionChange: [payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }];
 }>();
 
 const isCompactLandscape = ref(false);
+const layoutRevision = ref(0);
 
 const orderedPlayers = computed<PlayerState[]>(() => {
   const list = props.players ?? [];
@@ -340,6 +359,7 @@ const showDealAnimation = ref(false);
 const actionEffect = ref<{ id: number; label: string } | null>(null);
 const dealerReveal = ref<{ id: number; name: string } | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
+const flashActorId = ref("");
 
 const tableRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
@@ -361,6 +381,7 @@ let actionTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
 let dealAnimatingUntil = 0;
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
 function splitExposedGroups(cards: Card[], sizes: number[], prefix: string): ExposedGroup[] {
   const cleanSizes = sizes.filter((size) => Number.isFinite(size) && size > 0);
@@ -433,6 +454,16 @@ const latestDiscardFromAction = computed<Card | null>(() => {
 });
 
 const responseCard = computed<Card | null>(() => {
+  const directResponse = props.state?.responseCard;
+  if (directResponse?.id) {
+    return directResponse as Card;
+  }
+
+  const directTarget = props.state?.targetCard;
+  if (props.state?.responsePhase === "collective" && directTarget?.id) {
+    return directTarget as Card;
+  }
+
   const collective = props.state?.responsePhase === "collective";
   if (collective) {
     const publicTop = props.state?.publicDiscardPile?.[0];
@@ -449,7 +480,7 @@ const responseCard = computed<Card | null>(() => {
     return card as Card;
   }
 
-  return latestDiscardFromAction.value;
+  return collective ? latestDiscardFromAction.value : null;
 });
 
 const currentPlayer = computed(() => {
@@ -476,6 +507,87 @@ const isMyTurn = computed(
 );
 
 const canDiscard = computed(() => Boolean(props.canDiscard));
+
+const activeCandidates = computed<ActionCandidate[]>(() => props.activeCandidates ?? []);
+const selectedCandidate = computed<ActionCandidate | null>(() => {
+  const id = props.selectedCandidateId ?? "";
+  if (!id) {
+    return null;
+  }
+  return activeCandidates.value.find((candidate) => candidate.id === id) ?? null;
+});
+
+const candidateIndexesByCardId = computed(() => {
+  const map = new Map<string, number[]>();
+  activeCandidates.value.forEach((candidate, index) => {
+    candidate.cardIds.forEach((cardId) => {
+      const list = map.get(cardId) ?? [];
+      list.push(index + 1);
+      map.set(cardId, list);
+    });
+  });
+  return map;
+});
+
+const centerEventText = computed(() => {
+  const action = String(props.state?.lastAction ?? "").trim();
+  if (!action) {
+    return "";
+  }
+  const { actor, keyword } = parseActionDescriptor(action);
+  const actionMap: Record<string, string> = {
+    DISCARD: "出牌",
+    PENG: "碰",
+    OPEN: "开",
+    KAI: "开",
+    EAT: "吃",
+    CHI: "吃",
+    HU: "胡",
+    PASS: "过",
+    TIMEOUT_PASS: "超时过",
+  };
+  const label = actionMap[keyword];
+  if (!label) {
+    return "";
+  }
+  const actorName = props.players.find((player) => player.clientId === actor)?.name || actor || "系统";
+  const target = responseCard.value ?? latestDiscardFromAction.value;
+  const targetLabel = target ? cardLabel(target) : "-";
+  return `${actorName} ${label}（target: ${targetLabel}）`;
+});
+
+const centerPointerStyle = computed<Record<string, string> | null>(() => {
+  void layoutRevision.value;
+  const table = tableRef.value;
+  if (!table) {
+    return null;
+  }
+  const currentId = String(props.state?.currentPlayerId ?? "");
+  if (!currentId) {
+    return null;
+  }
+  const targetAbs = targetForPlayer(currentId);
+  if (!targetAbs) {
+    return null;
+  }
+  const tableRect = table.getBoundingClientRect();
+  const center = { x: tableRect.width / 2, y: tableRect.height / 2 };
+  const target = { x: targetAbs.x - tableRect.left, y: targetAbs.y - tableRect.top };
+  const dx = target.x - center.x;
+  const dy = target.y - center.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 1) {
+    return null;
+  }
+  const length = Math.min(64, Math.max(48, distance * 0.2));
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return {
+    left: `${center.x}px`,
+    top: `${center.y}px`,
+    width: `${length}px`,
+    transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+  };
+});
 
 const dealerName = computed(() => {
   const dealerId = String(props.state?.dealerId ?? "");
@@ -524,8 +636,50 @@ function onDiscard(cardId: string, event?: MouseEvent): void {
   }, 460);
 }
 
-function onSubmitAction(action: ActionType): void {
-  emit("submitAction", action);
+function onSubmitAction(request: ActionRequest): void {
+  emit("submitAction", request);
+}
+
+function onSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }): void {
+  emit("selectionChange", payload);
+}
+
+function isCandidateCard(cardId: string): boolean {
+  return candidateIndexesByCardId.value.has(cardId);
+}
+
+function isSelectedCandidateCard(cardId: string): boolean {
+  return Boolean(selectedCandidate.value?.cardIds.includes(cardId));
+}
+
+function candidateBadgeText(cardId: string): string {
+  const indexes = candidateIndexesByCardId.value.get(cardId) ?? [];
+  return indexes.length > 0 ? indexes.join("/") : "";
+}
+
+function cardLabel(card: Card): string {
+  const colorMap: Record<string, string> = {
+    red: "红",
+    yellow: "黄",
+    green: "绿",
+    white: "白",
+    gold: "金",
+  };
+  const typeMap: Record<string, string> = {
+    jiang: "将",
+    shi: "士",
+    xiang: "相",
+    ju: "车",
+    ma: "马",
+    pao: "炮",
+    zu: "卒",
+    gong: "条",
+    hou: "侯",
+    bo: "伯",
+    zi: "子",
+    nan: "男",
+  };
+  return `${colorMap[card.color] ?? card.color}${typeMap[card.type] ?? card.type}`;
 }
 
 function previewGroupCards(cards: Card[]): Card[] {
@@ -744,7 +898,7 @@ function triggerMeldAnimation(actorId: string, keyword: string): void {
   if (!baseCard) {
     return;
   }
-  const count = keyword === "OPEN" ? 4 : 3;
+  const count = keyword === "OPEN" || keyword === "KAI" ? 4 : 3;
   const offsets = groupOffsets(count);
   offsets.forEach((offset, index) => {
     spawnFlight({
@@ -875,6 +1029,21 @@ function triggerActionEffect(label: string) {
   }, 760);
 }
 
+function triggerActorFlash(actorId: string): void {
+  if (!actorId) {
+    return;
+  }
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+  flashActorId.value = actorId;
+  flashTimer = setTimeout(() => {
+    flashActorId.value = "";
+    flashTimer = null;
+  }, 780);
+}
+
 function triggerDealerReveal(name: string, dealerId?: string) {
   if (!name || name === "-") {
     return;
@@ -903,6 +1072,7 @@ function queueDealerIntro(name: string, dealerId?: string): void {
 }
 
 function updateCompactLandscape() {
+  layoutRevision.value += 1;
   const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
   if (compact !== isCompactLandscape.value) {
     isCompactLandscape.value = compact;
@@ -926,6 +1096,11 @@ onUnmounted(() => {
     clearTimeout(dealerTimer);
     dealerTimer = null;
   }
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+  flashActorId.value = "";
   dealerFlight.value = null;
   window.removeEventListener("resize", updateCompactLandscape);
   window.removeEventListener("orientationchange", updateCompactLandscape);
@@ -952,10 +1127,15 @@ watch(
       return;
     }
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
+    if (actor) {
+      triggerActorFlash(actor);
+    }
     const labelMap: Record<string, string> = {
       PENG: "碰",
       EAT: "吃",
+      CHI: "吃",
       OPEN: "开",
+      KAI: "开",
       HU: "胡",
       KONG_DRAW: "补牌",
       GRAB: "抓",
@@ -970,7 +1150,7 @@ watch(
       }
       return;
     }
-    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN") && actor) {
+    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN" || keyword === "KAI" || keyword === "CHI") && actor) {
       triggerMeldAnimation(actor, keyword);
     }
   },
@@ -992,7 +1172,7 @@ watch(
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) clamp(12rem, 35vh, 18.5rem);
   gap: clamp(0.3rem, 0.9vh, 0.5rem);
   overflow: hidden;
 }
@@ -1000,10 +1180,10 @@ watch(
 .table {
   position: relative;
   width: 100%;
-  aspect-ratio: 2.2 / 1;
-  height: auto;
+  aspect-ratio: auto;
+  height: 100%;
   min-height: 0;
-  max-height: 56vh;
+  max-height: none;
   margin: 0 auto;
   border-radius: clamp(0.5rem, 1.5vh, 1rem);
   border: 1px solid #1e293b;
@@ -1036,7 +1216,7 @@ watch(
   display: grid;
   grid-template-rows: auto auto minmax(86px, 1fr);
   gap: 6px;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
 }
 
@@ -1048,7 +1228,8 @@ watch(
   grid-area: top;
   width: 100%;
   justify-self: center;
-  height: clamp(4.8rem, 15vh, 7rem);
+  height: auto;
+  min-height: clamp(6rem, 16vh, 8.2rem);
 }
 
 .seat.left {
@@ -1067,6 +1248,10 @@ watch(
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
   animation: seat-turn-pulse 1.45s ease-in-out infinite;
+}
+
+.seat.actor-flash {
+  animation: actor-flash 0.8s ease-out;
 }
 
 .seat.dealer {
@@ -1137,6 +1322,7 @@ watch(
   border-top: 1px dashed #334155;
   padding-top: 6px;
   min-height: 0;
+  overflow: auto;
 }
 
 .seat-zone p {
@@ -1217,6 +1403,7 @@ watch(
 }
 
 .center {
+  position: relative;
   grid-area: center;
   width: min(100%, 66%);
   justify-self: center;
@@ -1310,6 +1497,35 @@ watch(
   font-size: 13px;
 }
 
+.center-event {
+  margin: 0;
+  color: #fde68a;
+  font-size: clamp(0.65rem, 1.5vh, 0.86rem);
+  font-weight: 700;
+}
+
+.center-pointer {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.9));
+  border-radius: 999px;
+  transform-origin: left center;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.center-pointer-head {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 7px solid #22c55e;
+  transform: translateY(-50%);
+}
+
 .empty {
   margin: 0;
   color: #64748b;
@@ -1342,6 +1558,10 @@ watch(
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.38) inset, 0 0 24px rgba(245, 158, 11, 0.16);
 }
 
+.self-zone.actor-flash {
+  animation: actor-flash 0.8s ease-out;
+}
+
 .self-turn-arrow {
   top: 2px;
 }
@@ -1362,8 +1582,8 @@ watch(
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(34vw, 12rem), 1fr));
   gap: clamp(0.2rem, 0.7vh, 0.5rem);
-  max-height: clamp(4rem, 11vh, 7rem);
-  overflow: hidden;
+  max-height: none;
+  overflow: auto;
 }
 
 .self-area {
@@ -1374,7 +1594,7 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .self-area p {
@@ -1399,7 +1619,7 @@ watch(
   flex: 1 1 auto;
   min-height: 0;
   align-content: flex-start;
-  overflow: hidden;
+  overflow: auto;
   padding-right: 0;
   gap: clamp(0.2rem, 0.7vh, 0.55rem);
 }
@@ -1426,6 +1646,32 @@ watch(
   opacity: 0.45;
   cursor: not-allowed;
   filter: grayscale(0.2);
+}
+
+.hand-card.candidate-active {
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.65);
+}
+
+.hand-card.candidate-selected {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.95);
+  transform: translateY(-2px);
+}
+
+.candidate-badge {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  z-index: 2;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 3px;
 }
 
 .hand :deep(.size-xl) {
@@ -1686,6 +1932,15 @@ watch(
   }
 }
 
+@keyframes actor-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.88);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(56, 189, 248, 0);
+  }
+}
+
 @keyframes dealer-fly {
   0% {
     transform: translate(var(--sx), var(--sy)) scale(2.8);
@@ -1728,7 +1983,7 @@ watch(
 
 @media (max-width: 1200px) {
   .table {
-    max-height: 50vh;
+    max-height: none;
     grid-template-columns: minmax(0, 25%) minmax(0, 1fr) minmax(0, 25%);
   }
 
@@ -1743,8 +1998,8 @@ watch(
   }
 
   .table {
-    aspect-ratio: 2.35 / 1;
-    max-height: 52vh;
+    aspect-ratio: auto;
+    max-height: none;
     border-radius: 0.65rem;
     padding: 0.25rem;
   }
@@ -1840,7 +2095,7 @@ watch(
     border-radius: 1.1vh;
     background: rgba(11, 18, 32, 0.88);
     padding: 0.35vh 0.5vh;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .self-open-left p {
@@ -1852,7 +2107,7 @@ watch(
   .self-open-left .cards {
     gap: 0.35vh;
     align-content: flex-start;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .self-open-left .grouped-cards {
@@ -1973,9 +2228,9 @@ watch(
   }
 
   .self-areas {
-    max-height: 10.8vh;
+    max-height: none;
     gap: 0.45vh;
-    overflow: hidden;
+    overflow: auto;
   }
 
   .self-area {
@@ -1989,8 +2244,8 @@ watch(
   }
 
   .self-area .cards {
-    max-height: 6.4vh;
-    overflow: hidden;
+    max-height: none;
+    overflow: auto;
   }
 
   .self-area .grouped-cards {

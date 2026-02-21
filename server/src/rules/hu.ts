@@ -51,9 +51,21 @@ function countPresent(counter: Counter, keys: string[]): number {
   return present;
 }
 
+function countWildcardTokens(counter: Counter): number {
+  let total = 0;
+  for (const [key, value] of counter.entries()) {
+    if (value <= 0 || !isWildcardToken(key)) {
+      continue;
+    }
+    total += value;
+  }
+  return total;
+}
+
 function takeWithWild(counter: Counter, keys: string[], wild: number): { next: Counter; wildLeft: number } | null {
   const next = new Map(counter);
   let wildLeft = wild;
+  let wildcardUsedInGroup = 0;
   for (const key of keys) {
     const value = next.get(key) ?? 0;
     if (value > 0) {
@@ -64,13 +76,19 @@ function takeWithWild(counter: Counter, keys: string[], wild: number): { next: C
       }
       continue;
     }
+    // 规则约束：单个牌组最多使用 1 张万能牌进行替代。
+    if (wildcardUsedInGroup >= 1) {
+      return null;
+    }
     if (consumeWildcardToken(next)) {
+      wildcardUsedInGroup += 1;
       continue;
     }
     if (wildLeft <= 0) {
       return null;
     }
     wildLeft -= 1;
+    wildcardUsedInGroup += 1;
   }
   return { next, wildLeft };
 }
@@ -171,7 +189,12 @@ function listCandidatesForPivot(counter: Counter, pivot: string, wild: number): 
     if (present <= 0) {
       return;
     }
-    if (present + wild < need) {
+    const missing = need - present;
+    // 规则约束：同一牌组最多补 1 张万能牌。
+    if (missing > 1) {
+      return;
+    }
+    if (missing > wild + countWildcardTokens(counter)) {
       return;
     }
 
@@ -189,12 +212,8 @@ function listCandidatesForPivot(counter: Counter, pivot: string, wild: number): 
   }
 
   if (pivot === "gold") {
-    if (pivotCount >= 3 || pivotCount + wild >= 3) {
-      push("GoldTriplet", ["gold", "gold", "gold"]);
-    }
-    if (pivotCount >= 2 || (pivotCount >= 1 && wild >= 1)) {
-      push("Pair", ["gold", "gold"]);
-    }
+    push("GoldTriplet", ["gold", "gold", "gold"]);
+    push("Pair", ["gold", "gold"]);
     push("SingleGold", ["gold"]);
   } else {
     const parsed = splitKey(pivot);
@@ -203,10 +222,8 @@ function listCandidatesForPivot(counter: Counter, pivot: string, wild: number): 
     }
     const { color, type } = parsed;
 
-    if (pivotCount >= 2 || (pivotCount >= 1 && wild >= 1)) {
-      push("Pair", [pivot, pivot]);
-    }
-    if (type !== "jiang" && (pivotCount >= 3 || pivotCount + wild >= 3)) {
+    push("Pair", [pivot, pivot]);
+    if (type !== "jiang") {
       push("Triplet", [pivot, pivot, pivot]);
     }
     if (type === "jiang") {

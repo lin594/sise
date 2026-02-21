@@ -50,12 +50,12 @@ import {
 } from "./flow/support.js";
 import {
   decideActionDispatch,
+  type AvailableActionEntry,
   getAvailableActionsFlow,
   enterOwnerLocalPhaseAfterNoResponseFlow,
   executeEatFlow,
   executeGrabFlow,
   executePassToNextFlow,
-  finalizeWithDiscardFlow,
   advanceToNextOwnerFlow,
   beginCollectiveFromDiscardFlow,
   discardFromAndCollectiveFlow,
@@ -72,8 +72,15 @@ import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, typ
 interface PendingResponse {
   ownerId: string;
   card: Card;
-  collectives: Map<string, ActionType>;
+  collectives: Map<string, { action: ActionType; candidateId?: string }>;
 }
+
+type ActionRequest =
+  | ActionType
+  | {
+      action: ActionType;
+      candidateId?: string;
+    };
 
 interface DeclareSetupPayload {
   declaredKongs?: number;
@@ -110,6 +117,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private deck: Card[] = [];
   private playerHands = new Map<string, Card[]>(); // seatId -> cards
+  private reusablePairCardsBySeat = new Map<string, Card[]>(); // seatId -> unlocked pair cards from pair-chi
   private playerOrder: string[] = []; // seatIds in round order
   private botIds = new Set<string>(); // currently bot-controlled seatIds
   private seatBySession = new Map<string, string>(); // sessionId -> seatId
@@ -129,6 +137,8 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly collectiveTimeoutMs = Math.max(1000, Number(process.env.COLLECTIVE_TIMEOUT_MS ?? 8000));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
+  private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
+  private readonly traceCards = (process.env.ROOM_TRACE_CARDS ?? "0") === "1";
   private readonly roomLogCards = (process.env.ROOM_LOG_CARDS ?? "0") === "1";
   private readonly huLogEnabled = (process.env.HU_LOG ?? "1") !== "0";
   private readonly huLogCards = (process.env.HU_LOG_CARDS ?? "0") !== "0";
@@ -158,6 +168,11 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.stateOps;
   }
 
+  /**
+   * 作用：房间创建入口，注册消息路由并初始化状态容器。
+   * 关键输入/输出：无入参；输出为事件监听完成的房间实例。
+   * 副作用：创建 `GameState`、初始化 `stateOps`、绑定所有消息处理器。
+   */
   onCreate(): void {
     this.setState(new GameState());
     this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
@@ -190,8 +205,8 @@ export class FourColorGameRoom extends Room<GameState> {
       this.submitDeclaration(seatId, payload ?? {});
     });
 
-    this.onMessage("action", (client, action: ActionType) => {
-      this.handleAction(client, action);
+    this.onMessage("action", (client, payload: ActionRequest) => {
+      this.handleAction(client, payload);
     });
 
     this.onMessage("discard_card", (client, payload: { cardId?: string } | string) => {
@@ -205,6 +220,11 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  /**
+   * 作用：玩家加入入口，处理新进房与 token 重连。
+   * 关键输入/输出：输入客户端和 join 参数；输出为座位分配或拒绝结果。
+   * 副作用：更新 seat 映射、玩家信息、大厅动作面板。
+   */
   onJoin(client: Client, options: { name?: string; playerToken?: string }): void {
     const inputName = normalizeNameUtil(options?.name);
     const inputToken = normalizeTokenUtil(options?.playerToken);
@@ -234,6 +254,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.broadcastAvailableActions();
   }
 
+  /**
+   * 作用：玩家离开入口，执行托管接管或空房重置。
+   * 关键输入/输出：输入离开客户端；输出无返回值。
+   * 副作用：更新在线态与 botIds，必要时重置到 fresh lobby。
+   */
   onLeave(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId) {
@@ -277,7 +302,15 @@ export class FourColorGameRoom extends Room<GameState> {
     this.clearCollectiveTimer();
   }
 
+  // ===== 房间生命周期与消息入口 =====
+
+  /**
+   * 作用：将房间恢复到“无人占座”的全新大厅。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：清空牌局运行态、座位映射、玩家容器和计时器。
+   */
   private resetToFreshLobby(): void {
+    this.reusablePairCardsBySeat.clear();
     resetToFreshLobbyFlow({
       state: this.state,
       targetSeats: this.targetSeats,
@@ -311,6 +344,11 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  /**
+   * 作用：处理 start_game 消息并校验开局条件。
+   * 关键输入/输出：输入发起客户端；输出无返回值。
+   * 副作用：可能补齐机器人并启动新局。
+   */
   private handleStartGame(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
     const decision = decideStartGame(
@@ -340,6 +378,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.bootstrapRound();
   }
 
+  /**
+   * 作用：处理 next_round 消息，仅 ended 阶段房主可触发。
+   * 关键输入/输出：输入发起客户端；输出无返回值。
+   * 副作用：可能补齐机器人并重启回合。
+   */
   private handleNextRound(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!canStartNextRound(seatId, this.state.phase, this.state.hostPlayerId)) {
@@ -349,6 +392,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.bootstrapRound();
   }
 
+  /**
+   * 作用：处理 return_lobby 消息，回到等待大厅。
+   * 关键输入/输出：输入发起客户端；输出无返回值。
+   * 副作用：清理局内运行态并刷新大厅视图。
+   */
   private handleReturnLobby(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!canReturnLobby(seatId, this.state.phase)) {
@@ -357,6 +405,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.backToLobby();
   }
 
+  /**
+   * 作用：创建真人座位并维护会话映射。
+   * 关键输入/输出：输入客户端、token、昵称；输出 seatId。
+   * 副作用：修改玩家容器、顺序和索引映射。
+   */
   private createHumanSeat(client: Client, token: string, rawName: string): string {
     return createHumanSeatFlow(
       {
@@ -375,6 +428,11 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
+  /**
+   * 作用：重连回收座位，踢掉旧会话并恢复真人控制。
+   * 关键输入/输出：输入客户端、seat/token/name；输出无返回值。
+   * 副作用：更新在线态、会话映射并触发动作刷新。
+   */
   private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
     for (const [sessionId, mappedSeat] of this.seatBySession.entries()) {
       if (mappedSeat !== seatId || sessionId === client.sessionId) {
@@ -410,6 +468,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.tickBots();
   }
 
+  /**
+   * 作用：给客户端下发当前会话 token 与座位信息。
+   * 关键输入/输出：输入客户端、seat、token、reclaimed；输出无返回值。
+   * 副作用：发送 `session_token` 消息。
+   */
   private sendSessionToken(client: Client, seatId: string, token: string, reclaimed: boolean): void {
     client.send("session_token", {
       playerToken: token,
@@ -420,10 +483,22 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  /**
+   * 作用：确保开局前座位数补齐到目标人数。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：可能新增 BOT 玩家并写入 botIds。
+   */
   private ensureBotSeatsForStart(): void {
     ensureBotSeatsForStartFlow(this.state, this.playerOrder, this.playerHands, this.botIds, this.targetSeats);
   }
 
+  // ===== 开局与声明阶段 =====
+
+  /**
+   * 作用：初始化一局牌（洗牌、发牌、定庄、亮公将）。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：重置局内状态，写入手牌/庄家/声明倒计时并进入声明阶段。
+   */
   private bootstrapRound(): void {
     this.clearDeclareTimer();
     this.state.phase = "declaring";
@@ -431,12 +506,16 @@ export class FourColorGameRoom extends Room<GameState> {
     this.publicGeneralPool = [];
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
+    this.reusablePairCardsBySeat.clear();
     this.huLogDedup.clear();
     this.huChecksTotal = 0;
     this.huChecksValid = 0;
     this.huChecksBySeat.clear();
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
+    for (const seatId of this.playerOrder) {
+      this.reusablePairCardsBySeat.set(seatId, []);
+    }
 
     const dealerId = pickRandomDealerIdUtil(this.playerOrder);
     this.roundDealerId = dealerId;
@@ -459,6 +538,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.startDeclaringPhase();
   }
 
+  /**
+   * 作用：启动声明阶段流程（机器人自动声明+超时托底）。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：可能推进到声明完成并进入 playing。
+   */
   private startDeclaringPhase(): void {
     startDeclaringFlow({
       playerOrder: this.playerOrder,
@@ -472,6 +556,11 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  /**
+   * 作用：安排声明阶段超时处理。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：设置 `declareTimer`，超时后强制提交未声明玩家。
+   */
   private scheduleDeclareTimeout(): void {
     this.clearDeclareTimer();
     this.declareTimer = setTimeout(() => {
@@ -489,6 +578,11 @@ export class FourColorGameRoom extends Room<GameState> {
     }, this.declareTimeoutMs);
   }
 
+  /**
+   * 作用：清理声明阶段计时器。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：清空 `declareTimer`。
+   */
   private clearDeclareTimer(): void {
     if (this.declareTimer) {
       clearTimeout(this.declareTimer);
@@ -496,10 +590,20 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  /**
+   * 作用：判断是否所有玩家都完成声明。
+   * 关键输入/输出：无入参；输出布尔值。
+   * 副作用：无。
+   */
   private areAllDeclarationsReady(): boolean {
     return areAllDeclarationsReadyUtil(this.playerOrder, (seatId) => this.state.players.get(seatId));
   }
 
+  /**
+   * 作用：声明阶段收尾并进入首轮出牌。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：切换 `phase=playing`，并让庄家先进入弃牌阶段。
+   */
   private finishDeclaringPhase(): void {
     this.clearDeclareTimer();
     const dealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
@@ -511,6 +615,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.enterDiscardStage(dealerId, "OPENING_DISCARD");
   }
 
+  /**
+   * 作用：提交单个玩家声明数据（杠数/亮鱼）。
+   * 关键输入/输出：输入 seat 与 payload；输出无返回值。
+   * 副作用：更新玩家声明字段、fishArea 和手牌，必要时触发阶段推进。
+   */
   private submitDeclaration(seatId: string, payload: DeclareSetupPayload, force = false): void {
     if (this.state.phase !== "declaring") {
       return;
@@ -549,16 +658,30 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  // ===== 回合主循环 =====
+
+  /**
+   * 作用：开启指定牌主的回合起点（transition -> draw）。
+   * 关键输入/输出：输入 owner 与 tag；输出无返回值。
+   * 副作用：重置 collective 运行态并进入摸牌处理。
+   */
   private startTurn(ownerId: string, tag: string): void {
     if (this.state.phase !== "playing") {
       return;
     }
+    this.traceStep("start_turn", `owner=${ownerId} tag=${tag}`);
     this.resetCollectivePolling();
     applyTurnTransitionState(this.state, ownerId);
     this.drawForOwner(ownerId, tag);
   }
 
+  /**
+   * 作用：执行牌主摸牌并进入 collective 轮询。
+   * 关键输入/输出：输入 owner 与 tag；输出无返回值。
+   * 副作用：消费牌堆、重建 pending、更新 responseCard 并启动轮询。
+   */
   private drawForOwner(ownerId: string, tag: string): void {
+    this.traceStep("draw_for_owner:begin", `owner=${ownerId} tag=${tag}`);
     drawForOwnerFlow(
       {
         phase: this.state.phase,
@@ -585,6 +708,7 @@ export class FourColorGameRoom extends Room<GameState> {
       ownerId,
       tag,
     );
+    this.traceStep("draw_for_owner:end", `owner=${ownerId} tag=${tag}`);
   }
 
   private exposeGeneralCard(ownerId: string, card: Card): void {
@@ -593,6 +717,11 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.lastAction = `${ownerId} DRAW_GENERAL`;
   }
 
+  /**
+   * 作用：自动从当前玩家打出一张合法牌并发起 collective。
+   * 关键输入/输出：输入 owner；输出无返回值。
+   * 副作用：清理 awaitingDiscardOwner、写入弃牌并进入 collective。
+   */
   private discardFromAndCollective(ownerId: string): void {
     discardFromAndCollectiveFlow(
       {
@@ -602,13 +731,19 @@ export class FourColorGameRoom extends Room<GameState> {
         clearAwaitingDiscardOwner: () => {
           this.awaitingDiscardOwnerId = null;
         },
-        endRound: (lastAction) => this.endRound(lastAction),
+        declareNoDiscardWin: (ownerIdArg, tag) => this.declareNoDiscardWin(ownerIdArg, tag),
       },
       ownerId,
     );
   }
 
+  /**
+   * 作用：以“玩家刚弃牌”为起点，建立 collective 响应上下文。
+   * 关键输入/输出：输入 owner 与弃牌；输出无返回值。
+   * 副作用：更新 pending/responseCard/轮询状态并广播动作。
+   */
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
+    this.traceStep("collective_from_discard", `owner=${ownerId} discard=${this.formatTraceCard(discard)}`);
     beginCollectiveFromDiscardFlow(
       {
         createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
@@ -630,7 +765,46 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private handleAction(client: Client, action: ActionType): void {
+  // ===== 动作处理与分发 =====
+
+  /**
+   * 作用：处理 action 消息并按当前 responsePhase 分发动作。
+   * 关键输入/输出：输入客户端动作；输出无返回值。
+   * 副作用：可能写入 collective 选择，或触发 chi/grab/pass_to_next。
+   */
+  private normalizeActionRequest(payload: ActionRequest): { action: ActionType; candidateId?: string } | null {
+    if (typeof payload === "string") {
+      return { action: normalizeActionUtil(payload) };
+    }
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    const rawAction = typeof (payload as { action?: unknown }).action === "string" ? (payload as { action: string }).action : "";
+    if (!rawAction) {
+      return null;
+    }
+    const action = normalizeActionUtil(rawAction as ActionType);
+    const candidateId = typeof payload.candidateId === "string" ? payload.candidateId.trim() : "";
+    return { action, candidateId: candidateId || undefined };
+  }
+
+  private isManualCandidateAction(action: ActionType): boolean {
+    return action === "kai" || action === "peng" || action === "chi";
+  }
+
+  private isCandidateValidForAction(item: AvailableActionEntry | undefined, candidateId?: string): boolean {
+    if (!candidateId) {
+      return false;
+    }
+    return Boolean(item?.candidates?.some((candidate) => candidate.id === candidateId));
+  }
+
+  private rejectAction(client: Client, reason: string): void {
+    client.send("action_rejected", { reason });
+    this.traceStep("action_rejected", reason);
+  }
+
+  private handleAction(client: Client, payload: ActionRequest): void {
     if (!this.pendingResponse || this.state.phase !== "playing") {
       return;
     }
@@ -641,8 +815,14 @@ export class FourColorGameRoom extends Room<GameState> {
     }
 
     const pending = this.pendingResponse;
-    action = normalizeActionUtil(action);
-    const enabledActions = this.getAvailableActions(seatId).filter((x) => x.enabled).map((x) => x.action);
+    const parsed = this.normalizeActionRequest(payload);
+    if (!parsed) {
+      this.rejectAction(client, "invalid_action_payload");
+      return;
+    }
+    const { action, candidateId } = parsed;
+    const availableActions = this.getAvailableActions(seatId);
+    const enabledActions = availableActions.filter((x) => x.enabled).map((x) => x.action);
     const decision = decideActionDispatch({
       pendingOwnerId: pending.ownerId,
       seatId,
@@ -652,18 +832,36 @@ export class FourColorGameRoom extends Room<GameState> {
       collectiveResponderId: this.collectiveResponderId,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
     });
+    const actionItem = availableActions.find((item) => item.action === action);
+    this.traceStep(
+      "action_dispatch",
+      `seat=${seatId} action=${action} candidate=${candidateId ?? "-"} decision=${decision} enabled=${enabledActions.join(",") || "-"}`,
+    );
+
+    const requireCandidate =
+      !this.botIds.has(seatId) &&
+      this.isManualCandidateAction(action) &&
+      (decision === "collective_accept" || decision === "local_chi");
+    if (requireCandidate && !this.isCandidateValidForAction(actionItem, candidateId)) {
+      this.rejectAction(client, candidateId ? "invalid_candidate" : "candidate_required");
+      return;
+    }
 
     if (decision === "collective_accept") {
       this.clearCollectiveTimer();
-      pending.collectives.set(seatId, action === "pass" ? "pass" : action);
+      pending.collectives.set(seatId, {
+        action: action === "pass" ? "pass" : action,
+        candidateId: action === "pass" ? undefined : candidateId,
+      });
       this.collectiveCursor += 1;
+      this.traceStep("collective_accept", `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`);
       if (this.state.responsePhase === "collective" && this.pendingResponse === pending) {
         this.advanceCollectivePolling();
       }
       return;
     }
     if (decision === "local_chi") {
-      this.executeEat(seatId);
+      this.executeEat(seatId, candidateId);
       return;
     }
     if (decision === "local_pass_upper") {
@@ -676,6 +874,11 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  /**
+   * 作用：处理 discard_card 消息（仅限 local 阶段牌主）。
+   * 关键输入/输出：输入客户端与 cardId；输出无返回值。
+   * 副作用：从手牌移除目标牌并进入 collective。
+   */
   private handleDiscardCard(client: Client, payload: { cardId?: string } | string): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId) {
@@ -700,21 +903,30 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!cardId) {
       return;
     }
+    this.traceStep("discard_request", `seat=${seatId} cardId=${cardId}`);
 
     const discard = this.ops.discardCardById(seatId, cardId);
     if (!discard) {
+      this.traceStep("discard_rejected", `seat=${seatId} cardId=${cardId}`);
       return;
     }
 
+    this.traceStep("discard_accept", `seat=${seatId} discard=${this.formatTraceCard(discard)}`);
     this.ops.pushDiscard(seatId, discard);
     this.beginCollectiveFromDiscard(seatId, discard);
   }
 
+  /**
+   * 作用：让牌主进入“待手动弃牌”本地阶段。
+   * 关键输入/输出：输入 owner 与触发标签；输出无返回值。
+   * 副作用：写入 awaitingDiscardOwner 与 local_draw 状态。
+   */
   private enterDiscardStage(ownerId: string, tag: string): void {
+    this.traceStep("enter_discard_stage", `owner=${ownerId} tag=${tag}`);
     enterDiscardStageFlow(
       {
         playerHand: this.playerHands.get(ownerId) ?? [],
-        endRound: (lastAction) => this.endRound(lastAction),
+        declareNoDiscardWin: (ownerIdArg, tagArg) => this.declareNoDiscardWin(ownerIdArg, tagArg),
         createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
         setPendingResponse: (pending) => {
           this.pendingResponse = pending;
@@ -735,7 +947,13 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
+  /**
+   * 作用：collective 轮询结束后的统一决议入口。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：触发胜者动作，或转入无响应本地阶段。
+   */
   private resolveCollectivePhase(): void {
+    this.traceStep("resolve_collective:begin");
     resolveCollectivePhaseFlow({
       pending: this.pendingResponse,
       playerOrder: this.playerOrder,
@@ -745,10 +963,11 @@ export class FourColorGameRoom extends Room<GameState> {
       },
       enterOwnerLocalPhaseAfterNoResponse: (ownerId) => this.enterOwnerLocalPhaseAfterNoResponse(ownerId),
     });
+    this.traceStep("resolve_collective:end");
   }
 
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
-    const acts = this.getAvailableActions(seatId);
+    const acts = this.getAvailableActions(seatId, true);
     return acts.some((item) => item.enabled && item.action !== "pass");
   }
 
@@ -757,11 +976,20 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.getPreviousPlayerId(ownerId) === responderId;
   }
 
-  private executeResponseWinner(winnerId: string, action: ActionType): void {
+  /**
+   * 作用：执行 collective 决胜动作（胡/开/碰/吃）调度。
+   * 关键输入/输出：输入胜者与动作；输出无返回值。
+   * 副作用：按动作分发到执行器并推进主循环。
+   */
+  private executeResponseWinner(winnerId: string, choice: { action: ActionType; candidateId?: string }): void {
     const pending = this.pendingResponse;
     if (!pending) {
       return;
     }
+    this.traceStep(
+      "execute_response_winner",
+      `winner=${winnerId} action=${choice.action} candidate=${choice.candidateId ?? "-"}`,
+    );
     const operationDeps = this.ops.buildOperationExecutorDeps();
     executeResponseWinner(
       {
@@ -769,9 +997,29 @@ export class FourColorGameRoom extends Room<GameState> {
         explainHuForSeat: (seatId, hand, responseCard) =>
           this.ops.explainHuForSeat(seatId, hand, responseCard, this.getHuWildcardCount()),
         logHuCheck: (stage, seatId, hand, response, valid) => this.logHuCheck(stage, seatId, hand, response, valid),
-        executeKaiOperation: (seatId, pendingCard) => tryExecuteKai(operationDeps, seatId, pendingCard),
-        executePengOperation: (seatId, pendingCard) => tryExecutePeng(operationDeps, seatId, pendingCard),
-        executeChiOperation: (seatId, pendingCard) => tryExecuteChi(operationDeps, seatId, pendingCard),
+        executeKaiOperation: (seatId, pendingCard, candidateId) =>
+          tryExecuteKai(operationDeps, seatId, pendingCard, candidateId),
+        executePengOperation: (seatId, pendingCard, candidateId) =>
+          tryExecutePeng(
+            {
+              getHandWithoutPending: (seatIdArg, pendingCardArg) => this.ops.getHandWithoutPending(seatIdArg, pendingCardArg),
+              getReusablePairCards: (seatIdArg) => this.getReusablePairCards(seatIdArg),
+              takeMatchingCards: (seatIdArg, target, count) => this.ops.takeMatchingCards(seatIdArg, target, count),
+              takeMatchingReusablePairCards: (seatIdArg, target, count) =>
+                this.takeMatchingReusablePairCards(seatIdArg, target, count),
+              pushExposedGroup: (seatIdArg, cards, highlight) => this.ops.pushExposedGroup(seatIdArg, cards, highlight),
+            },
+            seatId,
+            pendingCard,
+            candidateId,
+          ),
+        executeChiOperation: (seatId, pendingCard, candidateId) => {
+          const chiResult = tryExecuteChi(operationDeps, seatId, pendingCard, candidateId);
+          if (chiResult.ok && chiResult.kind === "pair" && chiResult.groupCards && chiResult.groupCards.length === 2) {
+            this.addReusablePairCards(seatId, chiResult.groupCards);
+          }
+          return chiResult.ok;
+        },
         isEatResponder: (ownerId, responderId) => this.isEatResponder(ownerId, responderId),
         getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
         setLastAction: (value) => {
@@ -784,19 +1032,30 @@ export class FourColorGameRoom extends Room<GameState> {
       },
       pending,
       winnerId,
-      action,
+      choice,
     );
   }
 
+  /**
+   * 作用：collective 无响应时进入本地分支。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：更新 lastAction 并转到牌主 local 阶段。
+   */
   private enterNoResponsePath(): void {
     const ownerId = this.pendingResponse?.ownerId;
     if (!ownerId) {
       return;
     }
     this.state.lastAction = "NO_RESPONSE";
+    this.traceStep("no_response_path", `owner=${ownerId}`);
     this.enterOwnerLocalPhaseAfterNoResponse(ownerId);
   }
 
+  /**
+   * 作用：根据 pending 牌来源进入 local_upper/local_draw。
+   * 关键输入/输出：输入 ownerId；输出无返回值。
+   * 副作用：可能重绑 pending.owner，并更新 local 阶段状态字段。
+   */
   private enterOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
     enterOwnerLocalPhaseAfterNoResponseFlow({
       pending: this.pendingResponse,
@@ -835,22 +1094,41 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
-  private executeEat(ownerId: string): void {
+  /**
+   * 作用：执行 local 吃动作并进入后续弃牌。
+   * 关键输入/输出：输入 ownerId；输出无返回值。
+   * 副作用：更新 lastAction 并进入手动弃牌阶段。
+   */
+  private executeEat(ownerId: string, candidateId?: string): boolean {
     const operationDeps = this.ops.buildOperationExecutorDeps();
-    executeEatFlow(
+    const ok = executeEatFlow(
       {
         pending: this.pendingResponse,
-        executeChiOperation: (ownerIdArg, pendingCard) => tryExecuteChi(operationDeps, ownerIdArg, pendingCard),
+        executeChiOperation: (ownerIdArg, pendingCard) => {
+          const chiResult = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId);
+          if (chiResult.ok && chiResult.kind === "pair" && chiResult.groupCards && chiResult.groupCards.length === 2) {
+            this.addReusablePairCards(ownerIdArg, chiResult.groupCards);
+          }
+          return chiResult.ok;
+        },
         setLastAction: (action) => {
           this.state.lastAction = action;
         },
-        finalizeWithDiscardFrom: (ownerIdArg) => this.finalizeWithDiscardFrom(ownerIdArg),
+        enterDiscardStage: (ownerIdArg, tag) => this.enterDiscardStage(ownerIdArg, tag),
       },
       ownerId,
     );
+    this.traceStep("execute_eat", `owner=${ownerId} ok=${ok}`);
+    return ok;
   }
 
+  /**
+   * 作用：执行 local_upper 的 pass（抓牌）路径。
+   * 关键输入/输出：输入 ownerId；输出无返回值。
+   * 副作用：可能流局，或重建 collective 进行新一轮响应。
+   */
   private executeGrab(ownerId: string): void {
+    this.traceStep("execute_grab", `owner=${ownerId}`);
     executeGrabFlow(
       {
         pending: this.pendingResponse,
@@ -860,11 +1138,6 @@ export class FourColorGameRoom extends Room<GameState> {
         endRound: (lastAction) => this.endRound(lastAction),
         setDeckCount: (deckCount) => {
           this.state.deckCount = deckCount;
-        },
-        addCardToHand: (ownerIdArg, card) => {
-          const hand = this.playerHands.get(ownerIdArg) ?? [];
-          hand.push(card);
-          this.playerHands.set(ownerIdArg, hand);
         },
         setupCollectiveAfterGrab: (ownerIdArg, card) => {
           this.pendingResponse = createPendingResponse(ownerIdArg, card, "draw");
@@ -887,7 +1160,13 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
+  /**
+   * 作用：执行 local_draw 的 pass_to_next 路径。
+   * 关键输入/输出：输入 ownerId；输出无返回值。
+   * 副作用：将响应牌入弃牌并推进到下家。
+   */
   private executePassToNext(ownerId: string): void {
+    this.traceStep("execute_pass_to_next", `owner=${ownerId}`);
     executePassToNextFlow(
       {
         pending: this.pendingResponse,
@@ -901,19 +1180,13 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private finalizeWithDiscardFrom(playerId: string): void {
-    finalizeWithDiscardFlow(
-      {
-        pickDiscardCard: (playerIdArg) => this.ops.pickDiscardCard(playerIdArg),
-        pushDiscard: (playerIdArg, card) => this.ops.pushDiscard(playerIdArg, card),
-        advanceToNextOwner: (playerIdArg, card) => this.advanceToNextOwner(playerIdArg, card),
-        endRound: (lastAction) => this.endRound(lastAction),
-      },
-      playerId,
-    );
-  }
-
+  /**
+   * 作用：将当前响应牌交给下家并启动新的 collective。
+   * 关键输入/输出：输入当前牌主和待传递牌；输出无返回值。
+   * 副作用：重建 pending、切换 current/previous/pollOrigin 并开始轮询。
+   */
   private advanceToNextOwner(currentOwnerId: string, cardToNext: Card): void {
+    this.traceStep("advance_to_next_owner", `from=${currentOwnerId} card=${this.formatTraceCard(cardToNext)}`);
     advanceToNextOwnerFlow(
       {
         getNextPlayerId: (ownerId) => this.getNextPlayerId(ownerId),
@@ -983,6 +1256,7 @@ export class FourColorGameRoom extends Room<GameState> {
         this.pendingResponse = null;
         this.publicGeneralPool = [];
         this.awaitingDiscardOwnerId = null;
+        this.reusablePairCardsBySeat.clear();
         this.lastTerminalFingerprint = "";
         this.huLogDedup.clear();
         this.huChecksTotal = 0;
@@ -1017,8 +1291,9 @@ export class FourColorGameRoom extends Room<GameState> {
     );
   }
 
-  private getAvailableActions(seatId: string): Array<{ action: ActionType; enabled: boolean }> {
+  private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
     const hand = this.playerHands.get(seatId) ?? [];
+    const reusablePairCards = this.getReusablePairCards(seatId);
     const wildcardPool = this.ops.getWildcardPoolCards(seatId);
     return getAvailableActionsFlow({
       phase: this.state.phase,
@@ -1026,8 +1301,10 @@ export class FourColorGameRoom extends Room<GameState> {
       pending: this.pendingResponse,
       responsePhase: this.state.responsePhase,
       collectiveResponderId: this.collectiveResponderId,
+      probeCollectiveResponder,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       hand,
+      reusablePairCards,
       wildcardPool,
       explainHuForSeat: (seatIdArg, handArg, responseCard) =>
         this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
@@ -1036,6 +1313,13 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  // ===== 日志与广播 =====
+
+  /**
+   * 作用：向每位在线玩家广播其当前可执行动作。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：发送 `available_actions`，并可触发状态快照日志。
+   */
   private broadcastAvailableActions(): void {
     this.logStateSnapshot("STATE");
     for (const client of this.clients) {
@@ -1047,6 +1331,16 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  private declareNoDiscardWin(ownerId: string, tag: string): void {
+    this.traceStep("no_discard_win", `owner=${ownerId} tag=${tag}`);
+    this.endRound(`${ownerId} HU`, ownerId, []);
+  }
+
+  /**
+   * 作用：按配置输出房间阶段快照日志。
+   * 关键输入/输出：输入标签；输出无返回值。
+   * 副作用：写控制台日志，并在结束阶段输出胡牌统计汇总。
+   */
   private logStateSnapshot(tag: string): void {
     if (!this.logEnabled || !this.shouldLogStateSnapshot()) {
       return;
@@ -1087,10 +1381,72 @@ export class FourColorGameRoom extends Room<GameState> {
     return 0;
   }
 
+  private getReusablePairCards(seatId: string): Card[] {
+    return this.reusablePairCardsBySeat.get(seatId) ?? [];
+  }
+
+  private addReusablePairCards(seatId: string, cards: Card[]): void {
+    if (cards.length === 0) {
+      return;
+    }
+    const current = this.reusablePairCardsBySeat.get(seatId) ?? [];
+    current.push(...cards.map((card) => ({ ...card })));
+    this.reusablePairCardsBySeat.set(seatId, current);
+  }
+
+  private takeMatchingReusablePairCards(seatId: string, target: Card, count: number): Card[] {
+    const pool = this.reusablePairCardsBySeat.get(seatId) ?? [];
+    let rest = count;
+    const removed: Card[] = [];
+    for (let i = pool.length - 1; i >= 0 && rest > 0; i -= 1) {
+      const card = pool[i];
+      if (card.color === target.color && card.type === target.type) {
+        removed.push(...pool.splice(i, 1));
+        rest -= 1;
+      }
+    }
+    this.reusablePairCardsBySeat.set(seatId, pool);
+    return removed;
+  }
+
   private summarizeCards(cards: Card[]): string {
     return summarizeCards(cards);
   }
 
+  private formatTraceCard(card: Card | null | undefined): string {
+    if (!card) {
+      return "-";
+    }
+    const src = card.source ?? "upper";
+    return `${card.color}:${card.type}#${card.id}@${src}`;
+  }
+
+  private traceStep(event: string, extra = ""): void {
+    if (!this.traceEnabled) {
+      return;
+    }
+    const pending = this.pendingResponse;
+    const base =
+      `[${new Date().toISOString()}] [room:${this.roomId}] [TRACE] ${event}` +
+      ` phase=${this.state.phase}` +
+      ` response=${this.state.responsePhase}` +
+      ` current=${this.state.currentPlayerId || "-"}` +
+      ` owner=${pending?.ownerId ?? "-"}` +
+      ` responder=${this.collectiveResponderId ?? "-"}` +
+      ` awaiting=${this.awaitingDiscardOwnerId ?? "-"}` +
+      ` cursor=${this.collectiveCursor}/${this.collectiveQueue.length}` +
+      ` deck=${this.state.deckCount}` +
+      ` last=${this.state.lastAction || "-"}`;
+    const cardPart = this.traceCards ? ` card=${this.formatTraceCard(pending?.card)}` : "";
+    const extraPart = extra ? ` | ${extra}` : "";
+    console.log(`${base}${cardPart}${extraPart}`);
+  }
+
+  /**
+   * 作用：记录一次胡牌判定探针日志并累计统计。
+   * 关键输入/输出：输入判定上下文；输出无返回值。
+   * 副作用：更新 `huChecks*` 统计并按配置输出日志。
+   */
   private logHuCheck(stage: string, seatId: string, hand: Card[], response: Card, valid: boolean): void {
     this.huChecksTotal += 1;
     if (valid) {
@@ -1127,6 +1483,11 @@ export class FourColorGameRoom extends Room<GameState> {
     console.log(`[${new Date().toISOString()}] [room:${this.roomId}] [HU_CHECK] ${fp}${cardsPart}`);
   }
 
+  /**
+   * 作用：输出当前局胡牌判定统计汇总。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：写控制台日志。
+   */
   private logHuSummary(): void {
     if (!this.logEnabled) {
       return;
@@ -1154,6 +1515,13 @@ export class FourColorGameRoom extends Room<GameState> {
     return getPreviousPlayerIdOrder(this.playerOrder, playerId);
   }
 
+  // ===== AI 与计时器 =====
+
+  /**
+   * 作用：根据当前阶段推进机器人或超时调度。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：可能安排 bot 计时器、collective 超时或广播动作面板。
+   */
   private tickBots(): void {
     const pending = this.pendingResponse;
     const plan = planTickBots({
@@ -1165,6 +1533,7 @@ export class FourColorGameRoom extends Room<GameState> {
       hasCollectiveTimer: !!this.collectiveTimer,
       isBot: (seatId) => this.botIds.has(seatId),
     });
+    this.traceStep("tick_bots", `plan=${plan} pending=${pending ? "yes" : "no"}`);
     if (plan === "clear_and_broadcast") {
       this.clearBotTimer();
       this.broadcastAvailableActions();
@@ -1216,7 +1585,13 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.activeResponderId = "";
   }
 
+  /**
+   * 作用：启动 collective 轮询（构队列并进入 advance）。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：重置轮询游标、设置 activeResponder，并调度下一步。
+   */
   private startCollectivePolling(): void {
+    this.traceStep("start_collective_polling");
     startCollectiveFlow({
       pending: this.pendingResponse,
       responsePhase: this.state.responsePhase,
@@ -1245,31 +1620,51 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  /**
+   * 作用：按当前 pending 构造 collective 顺序。
+   * 关键输入/输出：输入 pending；输出轮询 seatId 列表。
+   * 副作用：无。
+   */
   private getCollectiveOrder(pending: PendingResponse): string[] {
     return getCollectiveOrder(this.playerOrder, pending);
   }
 
+  /**
+   * 作用：为当前 collective 响应者设置超时自动 pass。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：设置 `collectiveTimer`，超时后写入 pass 并推进游标。
+   */
   private scheduleCollectiveTimeout(): void {
     this.clearCollectiveTimer();
     this.state.responseEndsAt = Date.now() + this.collectiveTimeoutMs;
+    this.traceStep("schedule_collective_timeout", `ms=${this.collectiveTimeoutMs}`);
     this.collectiveTimer = setTimeout(() => {
       const pending = this.pendingResponse;
       const responderId = this.collectiveResponderId;
       this.collectiveTimer = null;
       if (!pending || this.state.responsePhase !== "collective" || !responderId) {
+        this.traceStep("collective_timeout_skip");
         return;
       }
       if (pending.collectives.has(responderId)) {
+        this.traceStep("collective_timeout_already_responded", `responder=${responderId}`);
         return;
       }
-      pending.collectives.set(responderId, "pass");
+      pending.collectives.set(responderId, { action: "pass" });
       this.collectiveCursor += 1;
       this.state.lastAction = `${responderId} TIMEOUT_PASS`;
+      this.traceStep("collective_timeout_pass", `responder=${responderId}`);
       this.advanceCollectivePolling();
     }, this.collectiveTimeoutMs);
   }
 
+  /**
+   * 作用：推进 collective 轮询到下一响应者或决议完成。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：更新 responder/cursor/currentPlayer，并触发 bot/超时调度。
+   */
   private advanceCollectivePolling(): void {
+    this.traceStep("advance_collective_polling:begin");
     advanceCollectiveFlow({
       pending: this.pendingResponse,
       hasResponded: (seatId) => this.pendingResponse?.collectives.has(seatId) ?? false,
@@ -1280,7 +1675,7 @@ export class FourColorGameRoom extends Room<GameState> {
       cursor: this.collectiveCursor,
       hasActionBeyondPass: (seatId) => this.hasCollectiveActionBeyondPass(seatId),
       setCollectivePass: (seatId) => {
-        this.pendingResponse?.collectives.set(seatId, "pass");
+        this.pendingResponse?.collectives.set(seatId, { action: "pass" });
       },
       setCursor: (cursor) => {
         this.collectiveCursor = cursor;
@@ -1310,19 +1705,29 @@ export class FourColorGameRoom extends Room<GameState> {
         this.broadcastAvailableActions();
       },
     });
+    this.traceStep("advance_collective_polling:end");
   }
 
+  /**
+   * 作用：安排下一次机器人思考步进。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：设置 `botTimer` 或立即执行 `runBotStepNow`。
+   */
   private scheduleBotStep(): void {
     if (this.botThinkMaxMs <= 0) {
+      this.traceStep("schedule_bot_step:immediate");
       this.runBotStepNow();
       return;
     }
     if (this.botTimer) {
+      this.traceStep("schedule_bot_step:already_scheduled");
       return;
     }
     const delayMs = this.randomBotThinkDelayMs();
+    this.traceStep("schedule_bot_step", `delayMs=${delayMs}`);
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
+      this.traceStep("bot_step_timer_fire");
       this.runBotStepNow();
     }, delayMs);
   }
@@ -1334,12 +1739,19 @@ export class FourColorGameRoom extends Room<GameState> {
     return this.botThinkMinMs + Math.floor(Math.random() * (this.botThinkMaxMs - this.botThinkMinMs + 1));
   }
 
+  /**
+   * 作用：立即执行一次机器人动作。
+   * 关键输入/输出：无入参；输出无返回值。
+   * 副作用：可能写入动作选择、推进轮询或触发本地动作。
+   */
   private runBotStepNow(): void {
     const pending = this.pendingResponse;
     if (!pending) {
+      this.traceStep("run_bot_step_skip:no_pending");
       this.broadcastAvailableActions();
       return;
     }
+    this.traceStep("run_bot_step", `owner=${pending.ownerId} responder=${this.collectiveResponderId ?? "-"}`);
     runBotStep({
       phase: this.state.phase,
       responsePhase: this.state.responsePhase,
@@ -1349,8 +1761,8 @@ export class FourColorGameRoom extends Room<GameState> {
       isBot: (seatId) => this.botIds.has(seatId),
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       getAvailableActions: (seatId) => this.getAvailableActions(seatId),
-      setCollectiveChoice: (seatId, action) => {
-        this.pendingResponse?.collectives.set(seatId, action);
+      setCollectiveChoice: (seatId, choice) => {
+        this.pendingResponse?.collectives.set(seatId, choice);
         this.collectiveCursor += 1;
       },
       advanceCollectivePolling: () => this.advanceCollectivePolling(),
@@ -1364,6 +1776,13 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  // ===== 调试场景 =====
+
+  /**
+   * 作用：应用预置调试场景以复现特定流程分支。
+   * 关键输入/输出：输入 seatId 与场景名；输出是否成功。
+   * 副作用：覆盖局部状态并触发轮询/机器人推进。
+   */
   private applyDebugScenario(seatId: string, scenario: string): boolean {
     return applyDebugScenarioFlow(
       {

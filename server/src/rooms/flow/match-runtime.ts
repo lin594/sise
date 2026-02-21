@@ -2,10 +2,21 @@ import type { MapSchema } from "@colyseus/schema";
 import { CardSchema, GameState, PlayerState } from "../../schema/game-state.schema.js";
 import type { Card } from "../../rules/types.js";
 
+/**
+ * 对局阶段管理层：负责等待/声明/结算等阶段切换与开局准备。
+ * 关键输入/输出：输入房间状态与运行时容器，输出阶段决策或状态重置结果。
+ * 副作用：会批量修改 `GameState`、座位集合与玩家局内区域。
+ */
+
 export type StartGameDecision =
   | { ok: true }
   | { ok: false; reason: "not_waiting" | "not_host" | "not_enough_players" };
 
+/**
+ * 作用：校验是否允许开始新局。
+ * 关键输入/输出：输入发起者、阶段、房主与人数，输出可执行与失败原因。
+ * 副作用：无。
+ */
 export function decideStartGame(
   seatId: string | undefined,
   phase: string,
@@ -28,6 +39,11 @@ export function decideStartGame(
   return { ok: true };
 }
 
+/**
+ * 作用：校验 ended 阶段是否允许“下一局”。
+ * 关键输入/输出：输入发起者和当前阶段，输出布尔值。
+ * 副作用：无。
+ */
 export function canStartNextRound(seatId: string | undefined, phase: string, hostPlayerId: string): boolean {
   if (!seatId || phase !== "ended") {
     return false;
@@ -35,6 +51,11 @@ export function canStartNextRound(seatId: string | undefined, phase: string, hos
   return seatId === hostPlayerId;
 }
 
+/**
+ * 作用：校验 ended 阶段是否允许返回大厅。
+ * 关键输入/输出：输入发起者与阶段，输出布尔值。
+ * 副作用：无。
+ */
 export function canReturnLobby(seatId: string | undefined, phase: string): boolean {
   return Boolean(seatId && phase === "ended");
 }
@@ -59,6 +80,11 @@ export interface FreshLobbyContext {
   broadcastAvailableActions: () => void;
 }
 
+/**
+ * 作用：在“最后一位真人离开房间”时重置为全新大厅状态。
+ * 关键输入/输出：输入房间运行时上下文，输出无返回值。
+ * 副作用：清空牌局缓存、座位映射、玩家列表与计时器。
+ */
 export function resetToFreshLobbyFlow(ctx: FreshLobbyContext): void {
   ctx.clearBotTimer();
   ctx.clearDeclareTimer();
@@ -109,6 +135,11 @@ export interface SeatCreateContext {
   botIds: Set<string>;
 }
 
+/**
+ * 作用：创建真人座位并写入基础索引。
+ * 关键输入/输出：输入 session/token/name，输出新 seatId。
+ * 副作用：修改 players/playerOrder/playerHands/seat 映射与 host。
+ */
 export function createHumanSeatFlow(
   ctx: SeatCreateContext,
   sessionId: string,
@@ -147,6 +178,11 @@ export interface SeatReclaimContext {
   seatByToken: Map<string, string>;
 }
 
+/**
+ * 作用：处理断线后凭 token 重连，回收原座位控制权。
+ * 关键输入/输出：输入 session/seat/token/name，输出是否成功。
+ * 副作用：更新玩家在线态、机器人态与会话映射。
+ */
 export function reclaimSeatStateFlow(
   ctx: SeatReclaimContext,
   sessionId: string,
@@ -170,6 +206,11 @@ export function reclaimSeatStateFlow(
   return true;
 }
 
+/**
+ * 作用：开局前补齐机器人到目标座位数。
+ * 关键输入/输出：输入当前玩家容器与目标人数，输出无返回值。
+ * 副作用：新增/更新机器人玩家与 botIds。
+ */
 export function ensureBotSeatsForStart(
   state: GameState,
   playerOrder: string[],
@@ -206,6 +247,11 @@ export function ensureBotSeatsForStart(
   }
 }
 
+/**
+ * 作用：每局开始前清理所有玩家的局内声明与展示区域。
+ * 关键输入/输出：输入状态与座位顺序，输出无返回值。
+ * 副作用：清空 discard/exposed/general/wildcard/fish 与公共弃牌。
+ */
 export function resetRoundPlayers(
   state: GameState,
   playerOrder: string[],
@@ -227,6 +273,11 @@ export function resetRoundPlayers(
   state.publicDiscardPile.clear();
 }
 
+/**
+ * 作用：按规则发起手牌（庄家 21，其余 20）。
+ * 关键输入/输出：输入座位顺序、庄家与牌堆，输出无返回值。
+ * 副作用：消费 deck 并写入 playerHands。
+ */
 export function dealInitialHands(
   playerOrder: string[],
   dealerId: string,
@@ -246,6 +297,11 @@ export function dealInitialHands(
   }
 }
 
+/**
+ * 作用：判断声明阶段是否全员 ready。
+ * 关键输入/输出：输入座位顺序和玩家读取函数，输出布尔值。
+ * 副作用：无。
+ */
 export function areAllDeclarationsReady(playerOrder: string[], getPlayer: (seatId: string) => PlayerState | undefined): boolean {
   return playerOrder.every((seatId) => getPlayer(seatId)?.declaredReady);
 }
@@ -292,6 +348,11 @@ export interface DeclarationSelection {
   fishValid: boolean;
 }
 
+/**
+ * 作用：构建并校验单个玩家声明输入（杠数与亮鱼牌）。
+ * 关键输入/输出：输入手牌和声明 payload，输出选择结果与合法性。
+ * 副作用：无。
+ */
 export function buildDeclarationSelection(hand: Card[], payload: { declaredKongs?: number; fishCardIds?: string[] }): DeclarationSelection {
   const declaredKongs = Math.max(0, Number(payload?.declaredKongs) || 0);
   const fishIds = Array.isArray(payload?.fishCardIds) ? payload.fishCardIds.map(String).filter(Boolean) : [];
@@ -320,6 +381,11 @@ export interface StartDeclaringDeps {
   scheduleDeclareTimeout: () => void;
 }
 
+/**
+ * 作用：进入声明阶段后自动处理机器人声明并安排超时。
+ * 关键输入/输出：输入声明阶段依赖，输出无返回值。
+ * 副作用：可能触发 `submitDeclaration/finishDeclaringPhase/scheduleDeclareTimeout`。
+ */
 export function startDeclaringFlow(deps: StartDeclaringDeps): void {
   for (const seatId of deps.playerOrder) {
     const player = deps.getPlayer(seatId);
@@ -347,6 +413,11 @@ export interface TimeoutDeclaringDeps {
   finishDeclaringPhase: () => void;
 }
 
+/**
+ * 作用：声明超时后强制补齐未声明玩家。
+ * 关键输入/输出：输入声明阶段依赖，输出无返回值。
+ * 副作用：会对未声明玩家执行强制声明并可能结束声明阶段。
+ */
 export function runDeclaringTimeoutFlow(deps: TimeoutDeclaringDeps): void {
   for (const seatId of deps.playerOrder) {
     const player = deps.getPlayer(seatId);
@@ -374,6 +445,11 @@ export interface LobbyResetContext {
   broadcastAvailableActions: () => void;
 }
 
+/**
+ * 作用：对局结束后回到大厅并保留真人座位。
+ * 关键输入/输出：输入大厅重置上下文，输出无返回值。
+ * 副作用：移除 bot 座位、重置局内字段并刷新动作面板。
+ */
 export function resetToLobby(context: LobbyResetContext): void {
   context.resetRuntime();
 
@@ -449,6 +525,11 @@ export interface RoundEndContext<RoundResultPlayer> {
   broadcastAvailableActions: () => void;
 }
 
+/**
+ * 作用：统一执行回合结束状态落地与结算广播。
+ * 关键输入/输出：输入结算上下文、结算动作、赢家与番型，输出无返回值。
+ * 副作用：切换 `phase=ended`，清空轮询运行态并广播结果。
+ */
 export function endRoundFlow<RoundResultPlayer>(
   context: RoundEndContext<RoundResultPlayer>,
   lastAction: string,
@@ -514,6 +595,11 @@ function getScoreRules(): Record<string, { label: string; unit: number }> {
   };
 }
 
+/**
+ * 作用：将番型列表聚合成可展示的分项计分。
+ * 关键输入/输出：输入番型 key 列表，输出分项与总分。
+ * 副作用：无。
+ */
 export function buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownItem[]; total: number } {
   const rules = getScoreRules();
   const counter = new Map<string, number>();
@@ -541,6 +627,11 @@ export function buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownIt
   return { items, total };
 }
 
+/**
+ * 作用：构建 round_result 玩家视图（手牌/明牌/得分）。
+ * 关键输入/输出：输入座位顺序、玩家容器与赢家信息，输出可广播数组。
+ * 副作用：无。
+ */
 export function buildRoundResultPlayers(
   playerOrder: string[],
   players: MapSchema<PlayerState>,

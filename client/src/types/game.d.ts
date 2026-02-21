@@ -21,10 +21,40 @@ export interface PlayerState {
     wildcardPool: Card[];
     fishArea: Card[];
 }
+export interface RoomStateSnapshot {
+    phase: string;
+    hostPlayerId: string;
+    dealerId: string;
+    currentPlayerId: string;
+    currentTurnPlayerId: string;
+    previousPlayerId: string;
+    responsePhase: string;
+    lastAction: string;
+    deckCount: number;
+    isMoCard: boolean;
+    targetCard: Card | null;
+    responseCard: Card | null;
+    publicDiscardPile: Card[];
+    declareEndsAt: number;
+    players: PlayerState[];
+}
 export interface AvailableAction {
     action: ActionType;
     enabled: boolean;
+    candidates?: ActionCandidate[];
 }
+export interface ActionCandidate {
+    id: string;
+    action: "kai" | "peng" | "chi";
+    kind?: string;
+    cardIds: string[];
+    source: "hand" | "hand+pool" | "reusable_pair";
+    title: string;
+}
+export type ActionRequest = ActionType | {
+    action: ActionType;
+    candidateId?: string;
+};
 export interface SessionTokenPayload {
     playerToken: string;
     seatId: string;

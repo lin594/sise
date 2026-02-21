@@ -1,10 +1,164 @@
-import type { ActionType, AvailableAction, Card, PlayerState, RoundResultPayload } from "@/types/game";
+import type { ActionRequest, ActionType, AvailableAction, Card, PlayerState, RoomStateSnapshot, RoundResultPayload } from "@/types/game";
 export declare function useRoom(playerName?: string): {
     connected: import("vue").Ref<boolean, boolean>;
     myId: import("vue").Ref<string, string>;
     mySeatId: import("vue").Ref<string, string>;
     playerToken: import("vue").Ref<string, string>;
-    state: import("vue").Ref<any, any>;
+    state: import("vue").Ref<{
+        phase: string;
+        hostPlayerId: string;
+        dealerId: string;
+        currentPlayerId: string;
+        currentTurnPlayerId: string;
+        previousPlayerId: string;
+        responsePhase: string;
+        lastAction: string;
+        deckCount: number;
+        isMoCard: boolean;
+        targetCard: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null;
+        responseCard: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null;
+        publicDiscardPile: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[];
+        declareEndsAt: number;
+        players: {
+            clientId: string;
+            name: string;
+            declaredKongs: number;
+            declaredReady: boolean;
+            isBot: boolean;
+            connected: boolean;
+            discardPile: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            exposedArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            exposedGroupSizes: number[];
+            generalArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            wildcardPool: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            fishArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+    } | null, RoomStateSnapshot | {
+        phase: string;
+        hostPlayerId: string;
+        dealerId: string;
+        currentPlayerId: string;
+        currentTurnPlayerId: string;
+        previousPlayerId: string;
+        responsePhase: string;
+        lastAction: string;
+        deckCount: number;
+        isMoCard: boolean;
+        targetCard: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null;
+        responseCard: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null;
+        publicDiscardPile: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[];
+        declareEndsAt: number;
+        players: {
+            clientId: string;
+            name: string;
+            declaredKongs: number;
+            declaredReady: boolean;
+            isBot: boolean;
+            connected: boolean;
+            discardPile: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            exposedArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            exposedGroupSizes: number[];
+            generalArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            wildcardPool: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+            fishArea: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+    } | null>;
     players: import("vue").ComputedRef<PlayerState[]>;
     privateHand: import("vue").Ref<{
         id: string;
@@ -22,9 +176,25 @@ export declare function useRoom(playerName?: string): {
     availableActions: import("vue").Ref<{
         action: ActionType;
         enabled: boolean;
+        candidates?: {
+            id: string;
+            action: "kai" | "peng" | "chi";
+            kind?: string | undefined;
+            cardIds: string[];
+            source: "hand" | "hand+pool" | "reusable_pair";
+            title: string;
+        }[] | undefined;
     }[], AvailableAction[] | {
         action: ActionType;
         enabled: boolean;
+        candidates?: {
+            id: string;
+            action: "kai" | "peng" | "chi";
+            kind?: string | undefined;
+            cardIds: string[];
+            source: "hand" | "hand+pool" | "reusable_pair";
+            title: string;
+        }[] | undefined;
     }[]>;
     huResult: import("vue").Ref<{
         winnerId: string;
@@ -155,7 +325,7 @@ export declare function useRoom(playerName?: string): {
         at: string;
         text: string;
     }[]>;
-    sendAction: (action: ActionType) => void;
+    sendAction: (input: ActionRequest) => void;
     sendDiscardCard: (cardId: string) => void;
     declareKongs: (count: number) => void;
     declareSetup: (payload: {

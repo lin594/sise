@@ -52,8 +52,12 @@
         :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
         :embedded-action-panel="isCompactLandscape"
+        :selection-mode="selectionMode"
+        :selected-candidate-id="selectedCandidateId"
+        :active-candidates="activeCandidates"
         @discard-card="sendDiscardCard"
-        @submit-action="sendAction"
+        @submit-action="onPanelSubmit"
+        @selection-change="onPanelSelectionChange"
       />
     </template>
 
@@ -64,8 +68,34 @@
       :is-current-turn="isMyTurn"
       :response-phase="state?.responsePhase || ''"
       :current-player-name="currentPlayerName"
-      @submit="sendAction"
+      :selection-mode="selectionMode"
+      :selected-candidate-id="selectedCandidateId"
+      @submit="onPanelSubmit"
+      @selection-change="onPanelSelectionChange"
     />
+
+    <div v-if="isPlaying && selectionMode" class="candidate-mask">
+      <div class="candidate-panel">
+        <div class="candidate-head">
+          <h3>{{ actionText(selectionMode) }}候选牌组</h3>
+          <button class="ghost" @click="clearSelection">取消</button>
+        </div>
+        <p class="candidate-desc">请点击一个牌组确认{{ actionText(selectionMode) }}</p>
+        <div v-if="activeCandidates.length" class="candidate-list">
+          <button
+            v-for="(candidate, index) in activeCandidates"
+            :key="candidate.id"
+            class="candidate-item"
+            :class="{ selected: selectedCandidateId === candidate.id }"
+            @click="submitCandidate(candidate.id)"
+          >
+            <span class="candidate-title">{{ index + 1 }}. {{ candidate.title }}</span>
+            <small>{{ candidateSourceText(candidate.source) }} · {{ candidate.cardIds.join("、") || "无需手牌" }}</small>
+          </button>
+        </div>
+        <p v-else class="candidate-empty">当前没有可选牌组</p>
+      </div>
+    </div>
 
     <div v-if="shouldShowDeclarePanel" class="declare-mask">
       <div class="declare-panel">
@@ -191,7 +221,7 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
-import type { RoundResultPlayer } from "@/types/game";
+import type { ActionCandidate, ActionRequest, RoundResultPlayer } from "@/types/game";
 
 const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
 const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
@@ -232,6 +262,15 @@ const canAct = computed(() => isPlaying.value && availableActions.value.some((x)
 const canDiscard = computed(
   () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && !canAct.value,
 );
+const selectionMode = ref<"kai" | "peng" | "chi" | null>(null);
+const selectedCandidateId = ref<string | null>(null);
+const activeCandidates = computed<ActionCandidate[]>(() => {
+  if (!selectionMode.value) {
+    return [];
+  }
+  const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
+  return item?.candidates ?? [];
+});
 const isCompactLandscape = ref(false);
 const resettingLobby = ref(false);
 const globalError = ref("");
@@ -311,6 +350,49 @@ function toggleFish(cardId: string) {
   selectedFishCardIds.value = next;
 }
 
+function clearSelection() {
+  selectionMode.value = null;
+  selectedCandidateId.value = null;
+}
+
+function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }) {
+  selectionMode.value = payload.mode;
+  selectedCandidateId.value = payload.selectedCandidateId;
+}
+
+function onPanelSubmit(request: ActionRequest) {
+  sendAction(request);
+  clearSelection();
+}
+
+function submitCandidate(candidateId: string) {
+  if (!selectionMode.value) {
+    return;
+  }
+  selectedCandidateId.value = candidateId;
+  onPanelSubmit({ action: selectionMode.value, candidateId });
+}
+
+function actionText(action: "kai" | "peng" | "chi"): string {
+  if (action === "kai") {
+    return "开";
+  }
+  if (action === "peng") {
+    return "碰";
+  }
+  return "吃";
+}
+
+function candidateSourceText(source: ActionCandidate["source"]): string {
+  if (source === "hand+pool") {
+    return "手牌+将/金条区";
+  }
+  if (source === "reusable_pair") {
+    return "对子复用";
+  }
+  return "手牌";
+}
+
 function submitDeclaration() {
   if (!fishSelectionValid.value || isDeclareSubmitted.value) {
     return;
@@ -327,6 +409,34 @@ watch(shouldShowDeclarePanel, (show) => {
     declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
   }
 });
+
+watch(
+  () => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`,
+  () => {
+    clearSelection();
+  },
+);
+
+watch(
+  () => availableActions.value,
+  () => {
+    if (!selectionMode.value) {
+      return;
+    }
+    const current = availableActions.value.find((item) => item.action === selectionMode.value && item.enabled);
+    if (!current) {
+      clearSelection();
+      return;
+    }
+    if (
+      selectedCandidateId.value &&
+      !Boolean(current.candidates?.some((candidate) => candidate.id === selectedCandidateId.value))
+    ) {
+      selectedCandidateId.value = null;
+    }
+  },
+  { deep: true },
+);
 
 onMounted(() => {
   declareTick = window.setInterval(() => {
@@ -454,7 +564,7 @@ async function rebuildLobby() {
 }
 
 .layout.playing {
-  grid-template-rows: minmax(2.2rem, 8vh) minmax(2.1rem, 7vh) minmax(0, 1fr) minmax(3.4rem, 16vh);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .layout.compact-landscape.playing {
@@ -594,6 +704,80 @@ async function rebuildLobby() {
   justify-content: center;
   align-items: center;
   z-index: 90;
+}
+
+.candidate-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.68);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 95;
+  padding: 12px;
+}
+
+.candidate-panel {
+  width: min(760px, 96vw);
+  max-height: 82vh;
+  overflow: auto;
+  background: #0b1220;
+  border: 1px solid #1e3a5f;
+  border-radius: 12px;
+  color: #e2e8f0;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.candidate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.candidate-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.candidate-desc {
+  margin: 0;
+  color: #bfdbfe;
+  font-size: 14px;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 8px;
+}
+
+.candidate-item {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.candidate-item.selected {
+  border-color: #f59e0b;
+  background: #3f2d0f;
+}
+
+.candidate-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.candidate-empty {
+  margin: 0;
+  color: #fca5a5;
 }
 
 .declare-panel {
@@ -822,7 +1006,7 @@ async function rebuildLobby() {
   }
 
   .layout.playing {
-    grid-template-rows: 8vh 8vh minmax(0, 1fr) 16vh;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
 
   .top {

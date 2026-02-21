@@ -1,6 +1,6 @@
-import { canChi, canKai, canPeng } from "../../rules/actions.js";
 import { isDiscardRestricted, isGeneral, isGold } from "../../rules/deck.js";
 import type { ActionType, Card } from "../../rules/types.js";
+import { buildChiCandidates, buildKaiCandidates, buildPengCandidates, type ActionCandidate } from "./action-candidates.js";
 import {
   getCollectiveOrder,
   pickCollectiveWinner,
@@ -11,6 +11,12 @@ import {
 } from "./support.js";
 
 type SeatId = string;
+
+/**
+ * 对局主循环层：负责 collective/local 双阶段推进、动作分发、机器人步进与轮询驱动。
+ * 关键输入/输出：输入运行时依赖与当前上下文，输出调度决策或状态推进。
+ * 副作用：通过 deps 回调写入房间状态、触发广播/计时器/阶段切换。
+ */
 
 export type ActionDecision =
   | "ignore"
@@ -29,6 +35,11 @@ export interface ActionDispatchInput {
   awaitingDiscardOwnerId: string | null;
 }
 
+/**
+ * 作用：将客户端动作映射为主循环可执行的分发决策。
+ * 关键输入/输出：输入动作上下文，输出 `collective/local/ignore` 决策。
+ * 副作用：无。
+ */
 export function decideActionDispatch(input: ActionDispatchInput): ActionDecision {
   if (!input.enabledActions.includes(input.action)) {
     return "ignore";
@@ -67,22 +78,35 @@ export interface ActionPanelInput {
   pending: PendingActionContext | null;
   responsePhase: "collective" | "local_upper" | "local_draw";
   collectiveResponderId: SeatId | null;
+  probeCollectiveResponder?: boolean;
   awaitingDiscardOwnerId: SeatId | null;
   hand: Card[];
+  reusablePairCards: Card[];
   wildcardPool: Card[];
   explainHuForSeat: (seatId: SeatId, hand: Card[], responseCard: Card) => { valid: boolean };
   logHuCheck: (stage: string, seatId: SeatId, hand: Card[], response: Card, valid: boolean) => void;
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
 }
 
-export function getAvailableActionsFlow(input: ActionPanelInput): Array<{ action: ActionType; enabled: boolean }> {
+export interface AvailableActionEntry {
+  action: ActionType;
+  enabled: boolean;
+  candidates?: ActionCandidate[];
+}
+
+/**
+ * 作用：计算指定座位在当前时刻的可执行动作面板。
+ * 关键输入/输出：输入阶段、pending 与手牌信息，输出动作启用列表。
+ * 副作用：无（仅调用日志探针回调）。
+ */
+export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActionEntry[] {
   const disabled = [
     { action: "hu", enabled: false },
     { action: "kai", enabled: false },
     { action: "peng", enabled: false },
     { action: "chi", enabled: false },
     { action: "pass", enabled: false },
-  ] satisfies Array<{ action: ActionType; enabled: boolean }>;
+  ] satisfies AvailableActionEntry[];
 
   if (input.phase === "declaring" || !input.pending) {
     return [];
@@ -92,15 +116,19 @@ export function getAvailableActionsFlow(input: ActionPanelInput): Array<{ action
   const isCollective = input.responsePhase === "collective";
 
   if (isCollective) {
-    if (input.seatId !== input.collectiveResponderId) {
+    if (!input.probeCollectiveResponder && input.seatId !== input.collectiveResponderId) {
       return disabled;
     }
     const huProbe = input.explainHuForSeat(input.seatId, input.hand, input.pending.card);
     input.logHuCheck("collective", input.seatId, input.hand, input.pending.card, huProbe.valid);
+    const kaiCandidates = buildKaiCandidates(input.hand, input.pending.card, input.wildcardPool).map((item) => item.candidate);
+    const pengCandidates = buildPengCandidates(input.hand, input.pending.card, input.reusablePairCards).map(
+      (item) => item.candidate,
+    );
     return [
       { action: "hu", enabled: huProbe.valid },
-      { action: "kai", enabled: canKai(input.hand, input.pending.card, input.wildcardPool) },
-      { action: "peng", enabled: canPeng(input.hand, input.pending.card) },
+      { action: "kai", enabled: kaiCandidates.length > 0, candidates: kaiCandidates },
+      { action: "peng", enabled: pengCandidates.length > 0, candidates: pengCandidates },
       { action: "chi", enabled: false },
       { action: "pass", enabled: true },
     ];
@@ -116,11 +144,14 @@ export function getAvailableActionsFlow(input: ActionPanelInput): Array<{ action
 
   if (input.responsePhase === "local_upper" || input.responsePhase === "local_draw") {
     const handNoPending = input.getHandWithoutPending(input.seatId, input.pending.card);
+    const chiCandidates = buildChiCandidates(handNoPending, input.pending.card, input.wildcardPool).map(
+      (item) => item.candidate,
+    );
     return [
       { action: "hu", enabled: false },
       { action: "kai", enabled: false },
       { action: "peng", enabled: false },
-      { action: "chi", enabled: canChi(handNoPending, input.pending.card, input.wildcardPool) },
+      { action: "chi", enabled: chiCandidates.length > 0, candidates: chiCandidates },
       { action: "pass", enabled: true },
     ];
   }
@@ -151,12 +182,19 @@ export interface EnterOwnerLocalDeps {
   tickBots: () => void;
 }
 
+/**
+ * 作用：collective 无人响应后，进入牌主本地阶段（吃/过）。
+ * 关键输入/输出：输入 pending 与状态写入依赖，输出无返回值。
+ * 副作用：切换 `responsePhase/currentPlayer/loopStage`，必要时触发强制收牌并进入弃牌。
+ */
 export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDeps): void {
   const pending = deps.pending;
   if (!pending || pending.ownerId !== deps.ownerId) {
     return;
   }
   const plan = planLocalPhaseAfterNoResponse(deps.ownerId, pending.card.source, deps.getNextPlayerId(deps.ownerId));
+  // 设计原因：只有“上家来牌无人响应”才要把 pending.owner 重绑到下家；
+  // 若来源是 draw，则 owner 仍是原摸牌者，不应重绑。
   if (plan.rebindPendingOwner) {
     deps.setPendingOwner(plan.localOwnerId);
   }
@@ -187,19 +225,25 @@ export interface ExecuteEatDeps {
   pending: PendingLike | null;
   executeChiOperation: (ownerId: SeatId, pendingCard: Card) => boolean;
   setLastAction: (action: string) => void;
-  finalizeWithDiscardFrom: (ownerId: SeatId) => void;
+  enterDiscardStage: (ownerId: SeatId, tag: string) => void;
 }
 
-export function executeEatFlow(deps: ExecuteEatDeps, ownerId: SeatId): void {
+/**
+ * 作用：执行本地吃动作并进入弃牌收尾。
+ * 关键输入/输出：输入 pending 与吃牌执行器，输出无返回值。
+ * 副作用：更新 lastAction，并触发后续弃牌推进。
+ */
+export function executeEatFlow(deps: ExecuteEatDeps, ownerId: SeatId): boolean {
   const pending = deps.pending;
   if (!pending) {
-    return;
+    return false;
   }
   if (!deps.executeChiOperation(ownerId, pending.card)) {
-    return;
+    return false;
   }
   deps.setLastAction(`${ownerId} CHI`);
-  deps.finalizeWithDiscardFrom(ownerId);
+  deps.enterDiscardStage(ownerId, "CHI");
+  return true;
 }
 
 export interface ExecuteGrabDeps {
@@ -209,13 +253,17 @@ export interface ExecuteGrabDeps {
   shouldEndDrawAfterUpperPass: (deckCount: number) => boolean;
   endRound: (lastAction: string) => void;
   setDeckCount: (deckCount: number) => void;
-  addCardToHand: (ownerId: SeatId, card: Card) => void;
   setupCollectiveAfterGrab: (ownerId: SeatId, card: Card) => void;
   setLastAction: (action: string) => void;
   syncAllPrivateHands: () => void;
   startCollectivePolling: () => void;
 }
 
+/**
+ * 作用：执行 local_upper 下的 pass（抓牌）路径。
+ * 关键输入/输出：输入 pending、牌堆与状态写入依赖，输出无返回值。
+ * 副作用：可能入弃牌、发起新 collective，或直接流局。
+ */
 export function executeGrabFlow(deps: ExecuteGrabDeps, ownerId: SeatId): void {
   const pending = deps.pending;
   if (!pending) {
@@ -235,7 +283,6 @@ export function executeGrabFlow(deps: ExecuteGrabDeps, ownerId: SeatId): void {
     return;
   }
 
-  deps.addCardToHand(ownerId, newCard);
   deps.setupCollectiveAfterGrab(ownerId, newCard);
   deps.setLastAction(`${ownerId} PASS`);
   deps.syncAllPrivateHands();
@@ -249,6 +296,11 @@ export interface ExecutePassToNextDeps {
   advanceToNextOwner: (ownerId: SeatId, card: Card) => void;
 }
 
+/**
+ * 作用：执行 local_draw 下的 pass_to_next 路径。
+ * 关键输入/输出：输入 pending 与推进依赖，输出无返回值。
+ * 副作用：将当前响应牌入弃牌并推进到下家。
+ */
 export function executePassToNextFlow(deps: ExecutePassToNextDeps, ownerId: SeatId): void {
   const pending = deps.pending;
   if (!pending) {
@@ -257,23 +309,6 @@ export function executePassToNextFlow(deps: ExecutePassToNextDeps, ownerId: Seat
   deps.pushDiscard(ownerId, pending.card);
   deps.setLastAction(`${ownerId} PASS`);
   deps.advanceToNextOwner(ownerId, pending.card);
-}
-
-export interface FinalizeWithDiscardDeps {
-  pickDiscardCard: (ownerId: SeatId) => Card | null;
-  pushDiscard: (ownerId: SeatId, card: Card) => void;
-  advanceToNextOwner: (ownerId: SeatId, card: Card) => void;
-  endRound: (lastAction: string) => void;
-}
-
-export function finalizeWithDiscardFlow(deps: FinalizeWithDiscardDeps, ownerId: SeatId): void {
-  const discard = deps.pickDiscardCard(ownerId);
-  if (!discard) {
-    deps.endRound(`${ownerId} NO_DISCARD`);
-    return;
-  }
-  deps.pushDiscard(ownerId, discard);
-  deps.advanceToNextOwner(ownerId, discard);
 }
 
 export interface PendingFactory {
@@ -297,6 +332,11 @@ export interface DrawForOwnerDeps<Pending> {
   startCollectivePolling: () => void;
 }
 
+/**
+ * 作用：执行标准摸牌并进入 collective 响应。
+ * 关键输入/输出：输入牌堆和 pending/state 写入依赖，输出无返回值。
+ * 副作用：消费 deck，更新 pending/responseCard，并启动 collective 轮询。
+ */
 export function drawForOwnerFlow<Pending>(deps: DrawForOwnerDeps<Pending>, ownerId: SeatId, tag: string): void {
   if (deps.phase !== "playing") {
     return;
@@ -333,6 +373,11 @@ export interface BeginCollectiveFromDiscardDeps<Pending> {
   startCollectivePolling: () => void;
 }
 
+/**
+ * 作用：玩家弃牌后建立 collective 响应上下文并启动轮询。
+ * 关键输入/输出：输入弃牌与状态写入依赖，输出无返回值。
+ * 副作用：重建 pending/responseCard 并启动 collective。
+ */
 export function beginCollectiveFromDiscardFlow<Pending>(
   deps: BeginCollectiveFromDiscardDeps<Pending>,
   ownerId: SeatId,
@@ -354,7 +399,7 @@ export function beginCollectiveFromDiscardFlow<Pending>(
 
 export interface EnterDiscardStageDeps<Pending> {
   playerHand: Card[];
-  endRound: (lastAction: string) => void;
+  declareNoDiscardWin: (ownerId: SeatId, tag: string) => void;
   createPendingResponse: (input: PendingFactory) => Pending;
   setPendingResponse: (pending: Pending) => void;
   setAwaitingDiscardOwner: (ownerId: SeatId) => void;
@@ -365,10 +410,15 @@ export interface EnterDiscardStageDeps<Pending> {
   tickBots: () => void;
 }
 
+/**
+ * 作用：进入“待玩家手动弃牌”阶段并设置后备可弃牌。
+ * 关键输入/输出：输入手牌与状态写入依赖，输出无返回值。
+ * 副作用：重置轮询游标、设置 awaitingDiscardOwner，并刷新前端私有手牌。
+ */
 export function enterDiscardStageFlow<Pending>(deps: EnterDiscardStageDeps<Pending>, ownerId: SeatId, tag: string): void {
   const fallback = deps.playerHand.find((card) => !isDiscardRestricted(card)) ?? null;
   if (!fallback) {
-    deps.endRound(`${ownerId} NO_DISCARD`);
+    deps.declareNoDiscardWin(ownerId, tag);
     return;
   }
 
@@ -392,14 +442,19 @@ export interface DiscardFromAndCollectiveDeps {
   pushDiscard: (ownerId: SeatId, card: Card) => void;
   beginCollectiveFromDiscard: (ownerId: SeatId, discard: Card) => void;
   clearAwaitingDiscardOwner: () => void;
-  endRound: (lastAction: string) => void;
+  declareNoDiscardWin: (ownerId: SeatId, tag: string) => void;
 }
 
+/**
+ * 作用：自动从牌主手牌打出一张并进入 collective。
+ * 关键输入/输出：输入弃牌选择与 collective 入口依赖，输出无返回值。
+ * 副作用：清理 awaitingDiscardOwner，写入弃牌并重建 pending。
+ */
 export function discardFromAndCollectiveFlow(deps: DiscardFromAndCollectiveDeps, ownerId: SeatId): void {
   deps.clearAwaitingDiscardOwner();
   const discard = deps.pickDiscardCard(ownerId);
   if (!discard) {
-    deps.endRound(`${ownerId} NO_DISCARD`);
+    deps.declareNoDiscardWin(ownerId, "AUTO_DISCARD");
     return;
   }
   deps.pushDiscard(ownerId, discard);
@@ -423,6 +478,11 @@ export interface AdvanceToNextOwnerDeps<Pending> {
   startCollectivePolling: () => void;
 }
 
+/**
+ * 作用：将当前响应牌交给下家，进入新的 collective 轮询。
+ * 关键输入/输出：输入当前牌主与牌，输出无返回值。
+ * 副作用：重建 pending.owner，更新 current/previous/pollOrigin 并启动轮询。
+ */
 export function advanceToNextOwnerFlow<Pending>(
   deps: AdvanceToNextOwnerDeps<Pending>,
   currentOwnerId: SeatId,
@@ -452,17 +512,22 @@ export function advanceToNextOwnerFlow<Pending>(
 interface PendingCollective {
   ownerId: SeatId;
   card: Card;
-  collectives: Map<SeatId, ActionType>;
+  collectives: Map<SeatId, { action: ActionType; candidateId?: string }>;
 }
 
 export interface ResolveCollectiveDeps {
   pending: PendingCollective | null;
   playerOrder: SeatId[];
-  executeResponseWinner: (winnerId: SeatId, action: ActionType) => void;
+  executeResponseWinner: (winnerId: SeatId, choice: { action: ActionType; candidateId?: string }) => void;
   setLastAction: (action: string) => void;
   enterOwnerLocalPhaseAfterNoResponse: (ownerId: SeatId) => void;
 }
 
+/**
+ * 作用：collective 轮询结束后统一决议（优先胜者或无人响应）。
+ * 关键输入/输出：输入 pending 与执行回调，输出无返回值。
+ * 副作用：触发胜者动作或进入无响应本地阶段。
+ */
 export function resolveCollectivePhaseFlow(deps: ResolveCollectiveDeps): void {
   const pending = deps.pending;
   if (!pending) {
@@ -471,7 +536,7 @@ export function resolveCollectivePhaseFlow(deps: ResolveCollectiveDeps): void {
   const order = getCollectiveOrder(deps.playerOrder, pending);
   const winner = pickCollectiveWinner(order, pending.collectives);
   if (winner) {
-    deps.executeResponseWinner(winner.id, winner.action);
+    deps.executeResponseWinner(winner.id, winner.choice);
     return;
   }
   deps.setLastAction("NO_RESPONSE");
@@ -496,6 +561,11 @@ export interface TickBotInput {
   isBot: (seatId: string) => boolean;
 }
 
+/**
+ * 作用：根据当前阶段计算机器人调度计划。
+ * 关键输入/输出：输入是否有 pending、响应相位与 bot 身份，输出调度计划。
+ * 副作用：无。
+ */
 export function planTickBots(input: TickBotInput): TickBotPlan {
   if (!input.hasPending || input.phase !== "playing") {
     return "clear_and_broadcast";
@@ -529,18 +599,23 @@ export interface BotRunnerDeps {
   collectiveResponderId: string | null;
   isBot: (seatId: string) => boolean;
   awaitingDiscardOwnerId: string | null;
-  getAvailableActions: (seatId: string) => Array<{ action: ActionType; enabled: boolean }>;
-  setCollectiveChoice: (seatId: string, action: ActionType) => void;
+  getAvailableActions: (seatId: string) => AvailableActionEntry[];
+  setCollectiveChoice: (seatId: string, choice: { action: ActionType; candidateId?: string }) => void;
   advanceCollectivePolling: () => void;
   broadcastAvailableActions: () => void;
   discardFromAndCollective: (ownerId: string) => void;
   getHand: (seatId: string) => Card[];
   getWildcardPoolCards: (seatId: string) => Card[];
-  executeEat: (ownerId: string) => void;
+  executeEat: (ownerId: string) => boolean;
   executeGrab: (ownerId: string) => void;
   executePassToNext: (ownerId: string) => void;
 }
 
+/**
+ * 作用：立即执行一次机器人动作步进。
+ * 关键输入/输出：输入当前相位与读写依赖，输出无返回值。
+ * 副作用：可能写入 collective 选择、推进轮询或执行本地动作。
+ */
 export function runBotStep(deps: BotRunnerDeps): void {
   if (deps.phase !== "playing") {
     deps.broadcastAvailableActions();
@@ -553,8 +628,10 @@ export function runBotStep(deps: BotRunnerDeps): void {
       deps.broadcastAvailableActions();
       return;
     }
-    const choose = pickCollectiveBotAction(deps.getAvailableActions(responderId));
-    deps.setCollectiveChoice(responderId, choose);
+    const actions = deps.getAvailableActions(responderId);
+    const choose = pickCollectiveBotAction(actions);
+    const candidateId = actions.find((item) => item.action === choose)?.candidates?.[0]?.id;
+    deps.setCollectiveChoice(responderId, { action: choose, candidateId });
     deps.advanceCollectivePolling();
     return;
   }
@@ -572,9 +649,12 @@ export function runBotStep(deps: BotRunnerDeps): void {
 
   if (deps.responsePhase === "local_upper") {
     const hand = deps.getHand(ownerId);
-    const action = pickLocalBotAction("local_upper", canChi(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)));
+    const canChiNow = buildChiCandidates(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)).length > 0;
+    const action = pickLocalBotAction("local_upper", canChiNow);
     if (action === "chi") {
-      deps.executeEat(ownerId);
+      if (!deps.executeEat(ownerId)) {
+        deps.executeGrab(ownerId);
+      }
     } else {
       deps.executeGrab(ownerId);
     }
@@ -583,9 +663,12 @@ export function runBotStep(deps: BotRunnerDeps): void {
 
   if (deps.responsePhase === "local_draw") {
     const hand = deps.getHand(ownerId);
-    const action = pickLocalBotAction("local_draw", canChi(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)));
+    const canChiNow = buildChiCandidates(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)).length > 0;
+    const action = pickLocalBotAction("local_draw", canChiNow);
     if (action === "chi") {
-      deps.executeEat(ownerId);
+      if (!deps.executeEat(ownerId)) {
+        deps.executePassToNext(ownerId);
+      }
     } else {
       deps.executePassToNext(ownerId);
     }
@@ -598,7 +681,7 @@ export function runBotStep(deps: BotRunnerDeps): void {
 export interface PendingCollectiveRuntime {
   ownerId: SeatId;
   card: Card;
-  collectives: Map<SeatId, ActionType>;
+  collectives: Map<SeatId, { action: ActionType; candidateId?: string }>;
 }
 
 export interface StartCollectiveDeps {
@@ -616,6 +699,11 @@ export interface StartCollectiveDeps {
   resetAndBroadcast: () => void;
 }
 
+/**
+ * 作用：启动一次 collective 轮询流程。
+ * 关键输入/输出：输入 pending 与轮询控制依赖，输出无返回值。
+ * 副作用：重置轮询指针、刷新队列并进入 `advance`。
+ */
 export function startCollectiveFlow(deps: StartCollectiveDeps): void {
   if (!deps.pending || deps.responsePhase !== "collective") {
     deps.resetAndBroadcast();
@@ -656,6 +744,11 @@ export interface AdvanceCollectiveDeps {
   resetAndBroadcast: () => void;
 }
 
+/**
+ * 作用：推进 collective 轮询游标，直到找到下一位响应者或完成决议。
+ * 关键输入/输出：输入轮询队列与读写依赖，输出无返回值。
+ * 副作用：更新 responder/cursor/currentPlayer，并调度超时或 bot。
+ */
 export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
   if (!deps.pending || deps.responsePhase !== "collective") {
     deps.resetAndBroadcast();

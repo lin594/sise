@@ -4,17 +4,30 @@ const props = withDefaults(defineProps(), {
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    selectionMode: null,
+    selectedCandidateId: null,
 });
 const emit = defineEmits();
 const busy = ref(false);
 const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
-    const map = new Map(props.actions.map((x) => [x.action, x.enabled]));
-    return defaultOrder.map((action) => ({ action, enabled: Boolean(map.get(action)) }));
+    const map = new Map(props.actions.map((x) => [x.action, x]));
+    return defaultOrder.map((action) => {
+        const item = map.get(action);
+        return {
+            action,
+            enabled: Boolean(item?.enabled),
+            candidates: item?.candidates ?? [],
+        };
+    });
 });
+const selectionMode = computed(() => props.selectionMode ?? null);
 const panelHint = computed(() => {
     if (!props.canAct) {
         return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
+    }
+    if (selectionMode.value) {
+        return `已选择${text(selectionMode.value)}，请在中间弹窗选择牌组确认`;
     }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
         return "他人待响阶段：你可以选择胡/开/碰/过";
@@ -24,6 +37,9 @@ const panelHint = computed(() => {
     }
     return "请选择一个动作";
 });
+function isMeldAction(action) {
+    return action === "kai" || action === "peng" || action === "chi";
+}
 function text(action) {
     const map = {
         hu: "胡",
@@ -38,7 +54,20 @@ function text(action) {
     return map[action];
 }
 function onClick(action) {
+    if (busy.value) {
+        return;
+    }
+    if (isMeldAction(action)) {
+        if (selectionMode.value === action) {
+            emit("selectionChange", { mode: null, selectedCandidateId: null });
+        }
+        else {
+            emit("selectionChange", { mode: action, selectedCandidateId: null });
+        }
+        return;
+    }
     busy.value = true;
+    emit("selectionChange", { mode: null, selectedCandidateId: null });
     emit("submit", action);
     window.setTimeout(() => {
         busy.value = false;
@@ -50,6 +79,8 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    selectionMode: null,
+    selectedCandidateId: null,
 });
 const __VLS_ctx = {};
 let __VLS_components;
@@ -58,6 +89,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['locked']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
@@ -87,7 +119,10 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.normalized))) {
             } },
         key: (item.action),
         ...{ class: "btn" },
-        ...{ class: ({ enabled: item.enabled && __VLS_ctx.canAct }) },
+        ...{ class: ({
+                enabled: item.enabled && __VLS_ctx.canAct,
+                selected: __VLS_ctx.selectionMode === item.action,
+            }) },
         disabled: (!__VLS_ctx.canAct || !item.enabled || __VLS_ctx.busy),
     });
     (__VLS_ctx.text(item.action));
@@ -102,6 +137,7 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             busy: busy,
             normalized: normalized,
+            selectionMode: selectionMode,
             panelHint: panelHint,
             text: text,
             onClick: onClick,

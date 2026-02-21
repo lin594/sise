@@ -6,7 +6,10 @@
         v-for="item in normalized"
         :key="item.action"
         class="btn"
-        :class="{ enabled: item.enabled && canAct }"
+        :class="{
+          enabled: item.enabled && canAct,
+          selected: selectionMode === item.action,
+        }"
         :disabled="!canAct || !item.enabled || busy"
         @click="onClick(item.action)"
       >
@@ -18,7 +21,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { ActionType, AvailableAction } from "@/types/game";
+import type { ActionRequest, ActionType, AvailableAction } from "@/types/game";
+
+type SelectionMode = "kai" | "peng" | "chi" | null;
 
 const props = withDefaults(
   defineProps<{
@@ -27,30 +32,47 @@ const props = withDefaults(
     isCurrentTurn?: boolean;
     responsePhase?: string;
     currentPlayerName?: string;
+    selectionMode?: SelectionMode;
+    selectedCandidateId?: string | null;
   }>(),
   {
     canAct: false,
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    selectionMode: null,
+    selectedCandidateId: null,
   },
 );
 
 const emit = defineEmits<{
-  submit: [action: ActionType];
+  submit: [request: ActionRequest];
+  selectionChange: [payload: { mode: SelectionMode; selectedCandidateId: string | null }];
 }>();
 
 const busy = ref(false);
 
 const defaultOrder: ActionType[] = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
-  const map = new Map(props.actions.map((x) => [x.action, x.enabled]));
-  return defaultOrder.map((action) => ({ action, enabled: Boolean(map.get(action)) }));
+  const map = new Map(props.actions.map((x) => [x.action, x]));
+  return defaultOrder.map((action) => {
+    const item = map.get(action);
+    return {
+      action,
+      enabled: Boolean(item?.enabled),
+      candidates: item?.candidates ?? [],
+    };
+  });
 });
+
+const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 
 const panelHint = computed(() => {
   if (!props.canAct) {
     return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
+  }
+  if (selectionMode.value) {
+    return `已选择${text(selectionMode.value)}，请在中间弹窗选择牌组确认`;
   }
   if (props.responsePhase === "collective" && !props.isCurrentTurn) {
     return "他人待响阶段：你可以选择胡/开/碰/过";
@@ -60,6 +82,10 @@ const panelHint = computed(() => {
   }
   return "请选择一个动作";
 });
+
+function isMeldAction(action: ActionType): action is Exclude<SelectionMode, null> {
+  return action === "kai" || action === "peng" || action === "chi";
+}
 
 function text(action: ActionType): string {
   const map: Record<ActionType, string> = {
@@ -76,7 +102,20 @@ function text(action: ActionType): string {
 }
 
 function onClick(action: ActionType): void {
+  if (busy.value) {
+    return;
+  }
+  if (isMeldAction(action)) {
+    if (selectionMode.value === action) {
+      emit("selectionChange", { mode: null, selectedCandidateId: null });
+    } else {
+      emit("selectionChange", { mode: action, selectedCandidateId: null });
+    }
+    return;
+  }
+
   busy.value = true;
+  emit("selectionChange", { mode: null, selectedCandidateId: null });
   emit("submit", action);
   window.setTimeout(() => {
     busy.value = false;
@@ -132,6 +171,11 @@ function onClick(action: ActionType): void {
 
 .btn.enabled {
   background: #16a34a;
+}
+
+.btn.selected {
+  outline: 2px solid #fde68a;
+  background: #ca8a04;
 }
 
 .btn:disabled {
