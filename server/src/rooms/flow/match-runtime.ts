@@ -585,11 +585,13 @@ function getScoreRules(): Record<string, { label: string; unit: number }> {
   return {
     Pair: { label: "对子", unit: 0 },
     FrameJMP: { label: "车马炮架", unit: 1 },
-    FrameJSX: { label: "将士象架", unit: 1 },
     TripleZu: { label: "三兵组", unit: 1 },
     QuadZu: { label: "四兵组", unit: 2 },
     Triplet: { label: "坎", unit: 3 },
+    JiangTriplet: { label: "将坎", unit: 3 },
+    JiangQuad: { label: "将开", unit: 6 },
     GoldTriplet: { label: "金条坎", unit: 9 },
+    GoldQuad: { label: "金条开", unit: 18 },
     SingleJiang: { label: "单将组", unit: 1 },
     SingleGold: { label: "单金条组", unit: 3 },
   };

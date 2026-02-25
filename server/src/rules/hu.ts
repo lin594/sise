@@ -6,6 +6,7 @@ type Counter = Map<string, number>;
 type Candidate = {
   key: string;
   remove: string[];
+  priority: number;
 };
 
 export interface HuExplainOptions {
@@ -20,6 +21,17 @@ function token(card: Card): string {
     return "gold";
   }
   return `${card.color}:${card.type}`;
+}
+
+function splitKey(key: string): { color: string; type: string } | null {
+  const idx = key.indexOf(":");
+  if (idx <= 0) {
+    return null;
+  }
+  return {
+    color: key.slice(0, idx),
+    type: key.slice(idx + 1),
+  };
 }
 
 function makeCounter(cards: Card[]): Counter {
@@ -51,219 +63,98 @@ function countPresent(counter: Counter, keys: string[]): number {
   return present;
 }
 
-function countWildcardTokens(counter: Counter): number {
-  let total = 0;
-  for (const [key, value] of counter.entries()) {
-    if (value <= 0 || !isWildcardToken(key)) {
-      continue;
-    }
-    total += value;
-  }
-  return total;
-}
-
-function takeWithWild(counter: Counter, keys: string[], wild: number): { next: Counter; wildLeft: number } | null {
-  const next = new Map(counter);
-  let wildLeft = wild;
-  let wildcardUsedInGroup = 0;
-  for (const key of keys) {
-    const value = next.get(key) ?? 0;
-    if (value > 0) {
-      if (value === 1) {
-        next.delete(key);
-      } else {
-        next.set(key, value - 1);
-      }
-      continue;
-    }
-    // 规则约束：单个牌组最多使用 1 张万能牌进行替代。
-    if (wildcardUsedInGroup >= 1) {
-      return null;
-    }
-    if (consumeWildcardToken(next)) {
-      wildcardUsedInGroup += 1;
-      continue;
-    }
-    if (wildLeft <= 0) {
-      return null;
-    }
-    wildLeft -= 1;
-    wildcardUsedInGroup += 1;
-  }
-  return { next, wildLeft };
-}
-
-function isWildcardToken(key: string): boolean {
-  if (key === "gold") {
-    return true;
-  }
-  return key.endsWith(":jiang");
-}
-
-function consumeWildcardToken(counter: Counter): boolean {
-  for (const [key, value] of counter.entries()) {
-    if (!isWildcardToken(key) || value <= 0) {
-      continue;
-    }
-    if (value === 1) {
-      counter.delete(key);
-    } else {
-      counter.set(key, value - 1);
-    }
-    return true;
-  }
-  return false;
-}
-
-function splitKey(key: string): { color: string; type: string } | null {
-  const idx = key.indexOf(":");
-  if (idx <= 0) {
+function take(counter: Counter, keys: string[]): Counter | null {
+  const present = countPresent(counter, keys);
+  if (present !== keys.length) {
     return null;
   }
-  return {
-    color: key.slice(0, idx),
-    type: key.slice(idx + 1),
-  };
+  const next = new Map(counter);
+  for (const key of keys) {
+    const value = next.get(key) ?? 0;
+    if (value <= 0) {
+      return null;
+    }
+    if (value === 1) {
+      next.delete(key);
+    } else {
+      next.set(key, value - 1);
+    }
+  }
+  return next;
 }
 
 function pickPivot(counter: Counter): string {
   let best = "";
   let bestCount = -1;
-  let bestIsZu = 1;
-
   for (const [key, count] of counter.entries()) {
-    const parsed = splitKey(key);
-    const isZu = parsed?.type === "zu" ? 1 : 0;
-    if (count > bestCount) {
+    if (count > bestCount || (count === bestCount && key < best)) {
       best = key;
       bestCount = count;
-      bestIsZu = isZu;
-      continue;
-    }
-    if (count === bestCount && isZu < bestIsZu) {
-      best = key;
-      bestIsZu = isZu;
-      continue;
-    }
-    if (count === bestCount && isZu === bestIsZu && key < best) {
-      best = key;
     }
   }
-
   return best;
 }
 
-function candidatePriority(name: string): number {
-  switch (name) {
-    case "GoldTriplet":
-      return 7;
-    case "Triplet":
-      return 6;
-    case "QuadZu":
-      return 5;
-    case "TripleZu":
-      return 4;
-    case "FrameJMP":
-    case "FrameJSX":
-      return 3;
-    case "Pair":
-      return 2;
-    case "SingleGold":
-    case "SingleJiang":
-      return 1;
-    default:
-      return 0;
+function pushCandidate(candidates: Candidate[], key: string, remove: string[], priority: number, pivot: string): void {
+  if (!remove.includes(pivot)) {
+    return;
   }
+  candidates.push({ key, remove, priority });
 }
 
-function listCandidatesForPivot(counter: Counter, pivot: string, wild: number): Candidate[] {
+function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
   const candidates: Candidate[] = [];
-  const dedup = new Set<string>();
-
-  const push = (name: string, remove: string[]) => {
-    if (!remove.includes(pivot)) {
-      return;
-    }
-    const need = remove.length;
-    const present = countPresent(counter, remove);
-    if (present <= 0) {
-      return;
-    }
-    const missing = need - present;
-    // 规则约束：同一牌组最多补 1 张万能牌。
-    if (missing > 1) {
-      return;
-    }
-    if (missing > wild + countWildcardTokens(counter)) {
-      return;
-    }
-
-    const dedupKey = `${name}|${[...remove].sort().join(",")}`;
-    if (dedup.has(dedupKey)) {
-      return;
-    }
-    dedup.add(dedupKey);
-    candidates.push({ key: name, remove });
-  };
-
   const pivotCount = counter.get(pivot) ?? 0;
   if (pivotCount <= 0) {
     return candidates;
   }
 
   if (pivot === "gold") {
-    push("GoldTriplet", ["gold", "gold", "gold"]);
-    push("Pair", ["gold", "gold"]);
-    push("SingleGold", ["gold"]);
-  } else {
-    const parsed = splitKey(pivot);
-    if (!parsed) {
-      return candidates;
-    }
-    const { color, type } = parsed;
+    pushCandidate(candidates, "GoldQuad", ["gold", "gold", "gold", "gold"], 100, pivot);
+    pushCandidate(candidates, "GoldTriplet", ["gold", "gold", "gold"], 90, pivot);
+    pushCandidate(candidates, "SingleGold", ["gold"], 10, pivot);
+    return candidates;
+  }
 
-    push("Pair", [pivot, pivot]);
-    if (type !== "jiang") {
-      push("Triplet", [pivot, pivot, pivot]);
-    }
-    if (type === "jiang") {
-      push("SingleJiang", [pivot]);
-    }
+  const parsed = splitKey(pivot);
+  if (!parsed) {
+    return candidates;
+  }
+  const { color, type } = parsed;
+
+  if (type === "jiang") {
+    pushCandidate(candidates, "JiangQuad", [pivot, pivot, pivot, pivot], 100, pivot);
+    pushCandidate(candidates, "JiangTriplet", [pivot, pivot, pivot], 90, pivot);
+    pushCandidate(candidates, "SingleJiang", [pivot], 10, pivot);
+  } else {
+    pushCandidate(candidates, "Triplet", [pivot, pivot, pivot], 90, pivot);
+    pushCandidate(candidates, "Pair", [pivot, pivot], 20, pivot);
 
     if (type === "ju" || type === "ma" || type === "pao") {
-      push("FrameJMP", [`${color}:ju`, `${color}:ma`, `${color}:pao`]);
-    }
-    if (type === "jiang" || type === "shi" || type === "xiang") {
-      push("FrameJSX", [`${color}:jiang`, `${color}:shi`, `${color}:xiang`]);
+      pushCandidate(candidates, "FrameJMP", [`${color}:ju`, `${color}:ma`, `${color}:pao`], 30, pivot);
     }
 
     if (type === "zu") {
       const others = COLORS.filter((c) => c !== color);
       for (let i = 0; i < others.length; i += 1) {
         for (let j = i + 1; j < others.length; j += 1) {
-          push("TripleZu", [`${color}:zu`, `${others[i]}:zu`, `${others[j]}:zu`]);
+          pushCandidate(candidates, "TripleZu", [`${color}:zu`, `${others[i]}:zu`, `${others[j]}:zu`], 30, pivot);
         }
       }
-      push("QuadZu", COLORS.map((c) => `${c}:zu`));
+      pushCandidate(candidates, "QuadZu", COLORS.map((c) => `${c}:zu`), 40, pivot);
     }
   }
 
-  candidates.sort((a, b) => {
-    const lenDiff = b.remove.length - a.remove.length;
-    if (lenDiff !== 0) {
-      return lenDiff;
-    }
-    return candidatePriority(b.key) - candidatePriority(a.key);
-  });
+  candidates.sort((a, b) => b.priority - a.priority || b.remove.length - a.remove.length || a.key.localeCompare(b.key));
   return candidates;
 }
 
-function dfs(counter: Counter, wild: number, memo: Map<string, string[] | null>): string[] | null {
+function dfs(counter: Counter, memo: Map<string, string[] | null>): string[] | null {
   if (counter.size === 0) {
     return [];
   }
 
-  const key = `${serialize(counter)}|w=${wild}`;
+  const key = serialize(counter);
   if (memo.has(key)) {
     return memo.get(key) ?? null;
   }
@@ -274,12 +165,12 @@ function dfs(counter: Counter, wild: number, memo: Map<string, string[] | null>)
     return null;
   }
 
-  for (const candidate of listCandidatesForPivot(counter, pivot, wild)) {
-    const taken = takeWithWild(counter, candidate.remove, wild);
-    if (!taken) {
+  for (const candidate of listCandidatesForPivot(counter, pivot)) {
+    const next = take(counter, candidate.remove);
+    if (!next) {
       continue;
     }
-    const child = dfs(taken.next, taken.wildLeft, memo);
+    const child = dfs(next, memo);
     if (child) {
       const solved = [candidate.key, ...child];
       memo.set(key, solved);
@@ -300,7 +191,7 @@ function resolveOptions(arg?: number | HuExplainOptions): Required<HuExplainOpti
   }
   return {
     wildcardCount: Math.max(0, Number(arg?.wildcardCount ?? 0)),
-    wildcardPool: Array.isArray(arg?.wildcardPool) ? arg!.wildcardPool : [],
+    wildcardPool: Array.isArray(arg?.wildcardPool) ? arg.wildcardPool : [],
   };
 }
 
@@ -309,9 +200,9 @@ export function validateHu(hand: Card[], responseCard: Card, options?: number | 
 }
 
 export function explainHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): HuResult {
-  const resolved = resolveOptions(options);
-  const allCards = [...hand, ...resolved.wildcardPool, responseCard];
-  const groups = dfs(makeCounter(allCards), resolved.wildcardCount, new Map());
+  resolveOptions(options); // compatibility only: wildcard options are intentionally ignored.
+  const allCards = [...hand, responseCard];
+  const groups = dfs(makeCounter(allCards), new Map());
   return {
     valid: Boolean(groups),
     groups: groups ?? [],

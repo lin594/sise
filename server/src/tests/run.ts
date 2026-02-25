@@ -19,15 +19,21 @@ function c(id: string, color: Card["color"], type: Card["type"], source?: "upper
   return source ? { id, color, type, source } : { id, color, type };
 }
 
-t("actions: kai supports 2 matching + wildcard pool", () => {
+t("actions: kai requires 3 exact cards", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
   const pool = [c("wj", "white", "jiang")];
-  assert.equal(canKai(hand, response, pool), true);
-  const plan = findKaiPlan(hand, response, pool);
+  assert.equal(canKai(hand, response, pool), false);
+});
+
+t("actions: kai exact triplet is valid", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju")];
+  assert.equal(canKai(hand, response, []), true);
+  const plan = findKaiPlan(hand, response, []);
   assert.ok(plan);
-  assert.equal(plan!.handCards.length, 2);
-  assert.equal(plan!.poolCards.length, 1);
+  assert.equal(plan!.handCards.length, 3);
+  assert.equal(plan!.poolCards.length, 0);
 });
 
 t("actions: peng does not consume wildcard", () => {
@@ -126,13 +132,11 @@ t("actions: peng reusable_pair falls back to full triplet group when upgrade mis
   assert.equal(pushed[0].length, 3);
 });
 
-t("actions: chi supports wildcard completion", () => {
+t("actions: chi no longer supports wildcard completion", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rm", "red", "ma")];
   const pool = [c("g1", "gold", "gong")];
-  assert.equal(canChi(hand, response, pool), true);
-  const plans = getChiPlans(hand, response, pool);
-  assert.ok(plans.length > 0);
+  assert.equal(canChi(hand, response, pool), false);
 });
 
 t("actions: chi frame cannot consume two wildcards in one group", () => {
@@ -185,26 +189,24 @@ t("hu: single jiang is valid", () => {
   assert.equal(result.valid, true);
 });
 
-t("hu: wildcard pool participates", () => {
+t("hu: wildcard pool no longer participates in substitution", () => {
   const hand = [c("rju", "red", "ju"), c("rma", "red", "ma")];
-  const response = c("rpa", "red", "pao");
+  const response = c("yzu", "yellow", "zu");
   const wildcardPool = [c("wj", "white", "jiang")];
   const result = explainHu(hand, response, { wildcardPool });
-  assert.equal(result.valid, true);
+  assert.equal(result.valid, false);
 });
 
-t("hu: numeric wildcard option compatible", () => {
+t("hu: numeric wildcard option kept but ignored", () => {
   const hand = [c("rju", "red", "ju")];
   const response = c("rma", "red", "ma");
-  assert.equal(validateHu(hand, response, 1), true);
+  assert.equal(validateHu(hand, response, 1), false);
 });
 
-t("hu: one group cannot consume two wildcards", () => {
-  const result = explainHu([], c("rju", "red", "ju"), {
-    wildcardPool: [c("w1", "white", "jiang"), c("g1", "gold", "gong")],
-  });
+t("hu: multiple single jiang groups are allowed", () => {
+  const result = explainHu([c("rj1", "red", "jiang")], c("rj2", "red", "jiang"));
   assert.equal(result.valid, true);
-  assert.equal(result.groups.includes("Triplet"), false);
+  assert.equal(result.groups.filter((x) => x === "SingleJiang").length, 2);
 });
 
 function mkRoom(seats: string[]) {

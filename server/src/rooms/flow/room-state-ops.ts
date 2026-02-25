@@ -307,10 +307,8 @@ export class RoomStateOps {
    * 副作用：无。
    */
   explainHuForSeat(seatId: SeatId, hand: Card[], responseCard: Card, wildcardCount: number) {
-    return explainHu(hand, responseCard, {
-      wildcardCount,
-      wildcardPool: this.getWildcardPoolCards(seatId),
-    });
+    void seatId;
+    return explainHu(hand, responseCard, { wildcardCount });
   }
 
   /**

@@ -7,16 +7,22 @@ function c(id: string, color: Card["color"], type: Card["type"]): Card {
   return { id, color, type };
 }
 
-test("canKai allows 2 matching cards + 1 wildcard from pool", () => {
+test("canKai requires three exact matching cards in hand", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
   const pool = [c("wj", "white", "jiang")];
 
-  assert.equal(canKai(hand, response, pool), true);
-  const plan = findKaiPlan(hand, response, pool);
+  assert.equal(canKai(hand, response, pool), false);
+});
+
+test("canKai allows three exact cards", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju")];
+  assert.equal(canKai(hand, response, []), true);
+  const plan = findKaiPlan(hand, response, []);
   assert.ok(plan);
-  assert.equal(plan!.handCards.length, 2);
-  assert.equal(plan!.poolCards.length, 1);
+  assert.equal(plan!.handCards.length, 3);
+  assert.equal(plan!.poolCards.length, 0);
 });
 
 test("getKaiPlans returns deterministic plan ids for same input", () => {
@@ -60,22 +66,18 @@ test("canPeng rejects mixed source (hand1 + pair1)", () => {
   assert.equal(canPeng(hand, response, pairCards), false);
 });
 
-test("canChi allows wildcard completion for same-color frame", () => {
+test("canChi rejects missing exact cards even with jiang/gold in hand", () => {
   const response = c("rj", "red", "ju");
-  const hand = [c("rm", "red", "ma")];
+  const hand = [c("rm", "red", "ma"), c("wj", "white", "jiang")];
   const pool = [c("gold1", "gold", "gong")];
 
-  assert.equal(canChi(hand, response, pool), true);
-  const plans = getChiPlans(hand, response, pool);
-  assert.ok(plans.length > 0);
-  assert.equal(plans[0].kind, "jmp");
+  assert.equal(canChi(hand, response, pool), false);
 });
 
-test("canChi rejects using two wildcards in one frame group", () => {
+test("canChi allows exact same-color frame", () => {
   const response = c("rj", "red", "ju");
-  const hand: Card[] = [];
-  const pool = [c("wj1", "white", "jiang"), c("gold1", "gold", "gong")];
-  assert.equal(canChi(hand, response, pool), false);
+  const hand = [c("rm", "red", "ma"), c("rp", "red", "pao")];
+  assert.equal(canChi(hand, response, []), true);
 });
 
 test("canChi rejects gold response card", () => {
@@ -101,6 +103,12 @@ test("canChi pair mode rejects wildcard substitution from pool", () => {
   const hand: Card[] = [];
   const pool = [c("gold1", "gold", "gong")];
   assert.equal(getChiPlans(hand, response, pool).some((x) => x.kind === "pair"), false);
+});
+
+test("canPeng rejects jiang and gold response", () => {
+  const hand = [c("rj1", "red", "jiang"), c("rj2", "red", "jiang")];
+  assert.equal(canPeng(hand, c("rj", "red", "jiang")), false);
+  assert.equal(canPeng([c("g1", "gold", "gong"), c("g2", "gold", "hou")], c("g0", "gold", "bo")), false);
 });
 
 test("canChi pair mode with two exact cards consumes two from hand", () => {

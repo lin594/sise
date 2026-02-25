@@ -121,7 +121,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     }
     const huProbe = input.explainHuForSeat(input.seatId, input.hand, input.pending.card);
     input.logHuCheck("collective", input.seatId, input.hand, input.pending.card, huProbe.valid);
-    const kaiCandidates = buildKaiCandidates(input.hand, input.pending.card, input.wildcardPool).map((item) => item.candidate);
+    const kaiCandidates = buildKaiCandidates(input.hand, input.pending.card, []).map((item) => item.candidate);
     const pengCandidates = buildPengCandidates(input.hand, input.pending.card, input.reusablePairCards).map(
       (item) => item.candidate,
     );
@@ -144,7 +144,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
 
   if (input.responsePhase === "local_upper" || input.responsePhase === "local_draw") {
     const handNoPending = input.getHandWithoutPending(input.seatId, input.pending.card);
-    const chiCandidates = buildChiCandidates(handNoPending, input.pending.card, input.wildcardPool).map(
+    const chiCandidates = buildChiCandidates(handNoPending, input.pending.card, []).map(
       (item) => item.candidate,
     );
     return [
@@ -653,7 +653,7 @@ export function runBotStep(deps: BotRunnerDeps): void {
 
   if (deps.responsePhase === "local_upper") {
     const hand = deps.getHand(ownerId);
-    const canChiNow = buildChiCandidates(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)).length > 0;
+    const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
     const action = pickLocalBotAction("local_upper", canChiNow);
     if (action === "chi") {
       if (!deps.executeEat(ownerId)) {
@@ -667,7 +667,7 @@ export function runBotStep(deps: BotRunnerDeps): void {
 
   if (deps.responsePhase === "local_draw") {
     const hand = deps.getHand(ownerId);
-    const canChiNow = buildChiCandidates(hand, deps.pendingCard, deps.getWildcardPoolCards(ownerId)).length > 0;
+    const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
     const action = pickLocalBotAction("local_draw", canChiNow);
     if (action === "chi") {
       if (!deps.executeEat(ownerId)) {

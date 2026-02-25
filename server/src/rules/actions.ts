@@ -1,14 +1,9 @@
-import { isGeneral, isGold, isSameFace } from "./deck.js";
+import { isGold, isSameFace } from "./deck.js";
 import type { Card } from "./types.js";
 
 type FaceNeed = {
   color: Card["color"];
   type: Card["type"];
-};
-
-type CardRef = {
-  card: Card;
-  from: "hand" | "pool";
 };
 
 export interface ConsumePlan {
@@ -30,28 +25,6 @@ export interface PengPlan {
   kind: "hand" | "reusable_pair";
   handCards: Card[];
   pairCards: Card[];
-}
-
-function isWildcard(card: Card): boolean {
-  return isGeneral(card) || isGold(card);
-}
-
-function splitPlan(refs: CardRef[]): ConsumePlan {
-  const handCards = refs.filter((x) => x.from === "hand").map((x) => x.card);
-  const poolCards = refs.filter((x) => x.from === "pool").map((x) => x.card);
-  return {
-    handCards,
-    poolCards,
-    wildcardFromHand: handCards.filter(isWildcard),
-    wildcardFromPool: poolCards.filter(isWildcard),
-  };
-}
-
-function collectRefs(hand: Card[], wildcardPool: Card[]): CardRef[] {
-  return [
-    ...hand.map((card) => ({ card, from: "hand" as const })),
-    ...wildcardPool.map((card) => ({ card, from: "pool" as const })),
-  ];
 }
 
 function combinations<T>(list: T[], pick: number): T[][] {
@@ -81,85 +54,52 @@ function countMatching(cards: Card[], target: Card): number {
   return cards.filter((card) => isSameFace(card, target)).length;
 }
 
-function removeRefById(refs: CardRef[], cardId: string): CardRef[] {
-  let removed = false;
-  return refs.filter((ref) => {
-    if (removed) {
-      return true;
-    }
-    if (ref.card.id !== cardId) {
-      return true;
-    }
-    removed = true;
-    return false;
-  });
-}
-
-function pickExact(
-  refs: CardRef[],
-  need: FaceNeed,
-): { picked: CardRef | null; rest: CardRef[] } {
-  const picked = refs.find((ref) => ref.card.color === need.color && ref.card.type === need.type) ?? null;
-  if (!picked) {
-    return { picked: null, rest: refs };
-  }
-  return { picked, rest: removeRefById(refs, picked.card.id) };
-}
-
-function pickWildcard(refs: CardRef[]): { picked: CardRef | null; rest: CardRef[] } {
-  const picked = refs.find((ref) => isWildcard(ref.card)) ?? null;
-  if (!picked) {
-    return { picked: null, rest: refs };
-  }
-  return { picked, rest: removeRefById(refs, picked.card.id) };
-}
-
 function buildConsumePlan(
   requirements: FaceNeed[],
   hand: Card[],
-  wildcardPool: Card[],
-  maxWildcardUse = Number.MAX_SAFE_INTEGER,
+  _wildcardPool: Card[],
 ): ConsumePlan | null {
-  let refs = collectRefs(hand, wildcardPool);
-  const picked: CardRef[] = [];
-  let wildcardUsed = 0;
+  const picked: Card[] = [];
+  const consumed = new Set<string>();
 
   for (const need of requirements) {
-    const exact = pickExact(refs, need);
-    if (exact.picked) {
-      picked.push(exact.picked);
-      refs = exact.rest;
+    const exact = hand.find(
+      (card) => !consumed.has(card.id) && card.color === need.color && card.type === need.type,
+    );
+    if (exact) {
+      picked.push(exact);
+      consumed.add(exact.id);
       continue;
     }
-    if (wildcardUsed >= maxWildcardUse) {
-      return null;
-    }
-    const wildcard = pickWildcard(refs);
-    if (!wildcard.picked) {
-      return null;
-    }
-    picked.push(wildcard.picked);
-    refs = wildcard.rest;
-    wildcardUsed += 1;
+    return null;
   }
 
-  return splitPlan(picked);
+  return {
+    handCards: picked,
+    poolCards: [],
+    wildcardFromHand: [],
+    wildcardFromPool: [],
+  };
 }
 
 export function canPeng(hand: Card[], response: Card, pairCards: Card[] = []): boolean {
-  if (isWildcard(response)) {
+  if (response.type === "jiang" || isGold(response)) {
     return false;
   }
   return countMatching(hand, response) >= 2 || countMatching(pairCards, response) >= 2;
 }
 
 export function getKaiPlans(hand: Card[], response: Card, wildcardPool: Card[] = []): KaiPlan[] {
-  const all = collectRefs(hand, wildcardPool);
   const plans: KaiPlan[] = [];
   const seen = new Set<string>();
-  const pushPlan = (kind: KaiPlan["kind"], refs: CardRef[]) => {
-    const consume = splitPlan(refs);
-    const fingerprint = [kind, ...consume.handCards.map((x) => x.id), ...consume.poolCards.map((x) => x.id)]
+  const pushPlan = (kind: KaiPlan["kind"], cards: Card[]) => {
+    const consume: ConsumePlan = {
+      handCards: cards,
+      poolCards: [],
+      wildcardFromHand: [],
+      wildcardFromPool: [],
+    };
+    const fingerprint = [kind, ...consume.handCards.map((x) => x.id)]
       .sort()
       .join("|");
     if (seen.has(fingerprint)) {
@@ -170,27 +110,16 @@ export function getKaiPlans(hand: Card[], response: Card, wildcardPool: Card[] =
   };
 
   if (isGold(response)) {
-    const goldRefs = all.filter((x) => isGold(x.card));
-    for (const picked of combinations(goldRefs, 3)) {
+    const goldCards = hand.filter((x) => isGold(x));
+    for (const picked of combinations(goldCards, 3)) {
       pushPlan("gold", picked);
     }
     return plans;
   }
 
-  const sameRefs = all.filter((x) => isSameFace(x.card, response));
+  const sameRefs = hand.filter((x) => isSameFace(x, response));
   for (const picked of combinations(sameRefs, 3)) {
     pushPlan("regular", picked);
-  }
-
-  const wildcards = all.filter((x) => isWildcard(x.card));
-  for (const exactTwo of combinations(sameRefs, 2)) {
-    const used = new Set(exactTwo.map((x) => x.card.id));
-    for (const wildcard of wildcards) {
-      if (used.has(wildcard.card.id)) {
-        continue;
-      }
-      pushPlan("regular", [...exactTwo, wildcard]);
-    }
   }
 
   return plans;
@@ -209,7 +138,7 @@ export function canKai(hand: Card[], response: Card, wildcardPool: Card[] = []):
 }
 
 export function getPengPlans(hand: Card[], response: Card, pairCards: Card[] = []): PengPlan[] {
-  if (isWildcard(response)) {
+  if (response.type === "jiang" || isGold(response)) {
     return [];
   }
   const plans: PengPlan[] = [];
@@ -311,7 +240,7 @@ export function getChiPlans(hand: Card[], response: Card, wildcardPool: Card[] =
     const consume =
       item.kind === "pair"
         ? buildPairConsumePlan(response, hand)
-        : buildConsumePlan(item.needs, hand, wildcardPool, 1);
+        : buildConsumePlan(item.needs, hand, wildcardPool);
     if (!consume) {
       continue;
     }

@@ -1305,7 +1305,6 @@ export class FourColorGameRoom extends Room<GameState> {
   private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
     const hand = this.playerHands.get(seatId) ?? [];
     const reusablePairCards = this.getReusablePairCards(seatId);
-    const wildcardPool = this.ops.getWildcardPoolCards(seatId);
     return getAvailableActionsFlow({
       phase: this.state.phase,
       seatId,
@@ -1316,7 +1315,7 @@ export class FourColorGameRoom extends Room<GameState> {
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       hand,
       reusablePairCards,
-      wildcardPool,
+      wildcardPool: [],
       explainHuForSeat: (seatIdArg, handArg, responseCard) =>
         this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
       logHuCheck: (stage, seatIdArg, handArg, response, valid) => this.logHuCheck(stage, seatIdArg, handArg, response, valid),

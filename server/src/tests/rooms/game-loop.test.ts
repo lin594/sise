@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
+import { getAvailableActionsFlow } from "../../rooms/flow/playing-flow.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 import type { Card } from "../../rules/types.js";
 
@@ -116,4 +117,22 @@ test("local_draw timeout auto-discards when awaiting discard", async () => {
   await new Promise((resolve) => setTimeout(resolve, 8));
 
   assert.equal(called, true);
+});
+
+test("local_upper action panel does not enable chi via wildcard pool", () => {
+  const actions = getAvailableActionsFlow({
+    phase: "playing",
+    seatId: "A",
+    pending: { ownerId: "A", card: mkCard("p1", "red", "ju", "upper") },
+    responsePhase: "local_upper",
+    collectiveResponderId: null,
+    awaitingDiscardOwnerId: null,
+    hand: [mkCard("h1", "red", "ma", "upper")],
+    reusablePairCards: [],
+    wildcardPool: [mkCard("w1", "white", "jiang", "upper")],
+    explainHuForSeat: () => ({ valid: false }),
+    logHuCheck: () => undefined,
+    getHandWithoutPending: (_seat, _pending) => [mkCard("h1", "red", "ma", "upper")],
+  });
+  assert.equal(actions.find((x) => x.action === "chi")?.enabled, false);
 });
