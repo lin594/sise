@@ -65,7 +65,7 @@ export interface ActionCandidate {
   action: "kai" | "peng" | "chi";
   kind?: string;
   cardIds: string[];
-  source: "hand" | "hand+pool" | "reusable_pair";
+  source: "hand" | "hand+pool";
   title: string;
 }
 

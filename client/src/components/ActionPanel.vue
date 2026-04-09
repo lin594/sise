@@ -91,6 +91,9 @@ function isMeldAction(action: ActionType): action is Exclude<SelectionMode, null
 }
 
 function text(action: ActionType): string {
+  if (action === "pass" && props.responsePhase === "local_upper") {
+    return "抓";
+  }
   const map: Record<ActionType, string> = {
     hu: "胡",
     kai: "开",

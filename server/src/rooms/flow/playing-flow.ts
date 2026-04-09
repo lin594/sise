@@ -81,7 +81,6 @@ export interface ActionPanelInput {
   probeCollectiveResponder?: boolean;
   awaitingDiscardOwnerId: SeatId | null;
   hand: Card[];
-  reusablePairCards: Card[];
   wildcardPool: Card[];
   explainHuForSeat: (seatId: SeatId, hand: Card[], responseCard: Card) => { valid: boolean };
   logHuCheck: (stage: string, seatId: SeatId, hand: Card[], response: Card, valid: boolean) => void;
@@ -122,7 +121,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     const huProbe = input.explainHuForSeat(input.seatId, input.hand, input.pending.card);
     input.logHuCheck("collective", input.seatId, input.hand, input.pending.card, huProbe.valid);
     const kaiCandidates = buildKaiCandidates(input.hand, input.pending.card, []).map((item) => item.candidate);
-    const pengCandidates = buildPengCandidates(input.hand, input.pending.card, input.reusablePairCards).map(
+    const pengCandidates = buildPengCandidates(input.hand, input.pending.card).map(
       (item) => item.candidate,
     );
     return [
@@ -284,7 +283,7 @@ export function executeGrabFlow(deps: ExecuteGrabDeps, ownerId: SeatId): void {
   }
 
   deps.setupCollectiveAfterGrab(ownerId, newCard);
-  deps.setLastAction(`${ownerId} PASS`);
+  deps.setLastAction(`${ownerId} GRAB`);
   deps.syncAllPrivateHands();
   deps.startCollectivePolling();
 }

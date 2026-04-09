@@ -128,7 +128,6 @@ test("local_upper action panel does not enable chi via wildcard pool", () => {
     collectiveResponderId: null,
     awaitingDiscardOwnerId: null,
     hand: [mkCard("h1", "red", "ma", "upper")],
-    reusablePairCards: [],
     wildcardPool: [mkCard("w1", "white", "jiang", "upper")],
     explainHuForSeat: () => ({ valid: false }),
     logHuCheck: () => undefined,

@@ -49,7 +49,6 @@ function createBotGameRoom(): { room: any; hostClient: FakeClient } {
   room.playerOrder = [hostSeatId];
   room.playerHands = new Map<string, any[]>();
   room.playerHands.set(hostSeatId, []);
-  room.reusablePairCardsBySeat = new Map();
   room.botIds = new Set<string>();
   room.seatBySession = new Map<string, string>();
   room.seatByToken = new Map<string, string>();

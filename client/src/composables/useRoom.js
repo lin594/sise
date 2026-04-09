@@ -150,7 +150,7 @@ function normalizeCandidate(raw) {
         return null;
     }
     const sourceRaw = String(raw.source ?? "");
-    const source = sourceRaw === "hand+pool" || sourceRaw === "reusable_pair" ? sourceRaw : "hand";
+    const source = sourceRaw === "hand+pool" ? sourceRaw : "hand";
     const cardIds = Array.isArray(raw.cardIds) ? raw.cardIds.map((x) => String(x)).filter(Boolean) : [];
     const kind = typeof raw.kind === "string" ? raw.kind : undefined;
     const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : action.toUpperCase();
@@ -192,6 +192,7 @@ function toDisplayAction(actionKey) {
         OPEN: "开",
         KAI: "开",
         HU: "胡",
+        GRAB: "抓",
         PASS: "过",
         TIMEOUT_PASS: "超时过",
         DRAW_GAME: "流局",

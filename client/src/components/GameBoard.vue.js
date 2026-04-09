@@ -147,21 +147,21 @@ const responseCard = computed(() => {
     return collective ? latestDiscardFromAction.value : null;
 });
 const currentPlayer = computed(() => {
-    const playerId = props.state?.currentPlayerId;
+    const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
     if (!playerId) {
         return null;
     }
     return props.players.find((x) => x.clientId === playerId) ?? null;
 });
 const currentPlayerName = computed(() => {
-    const playerId = props.state?.currentPlayerId;
+    const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
     if (!playerId) {
         return "-";
     }
     return currentPlayer.value?.name || playerId;
 });
 const isMyTurn = computed(() => Boolean(props.mySeatId) &&
-    props.state?.currentPlayerId === props.mySeatId &&
+    (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
 const activeCandidates = computed(() => props.activeCandidates ?? []);
@@ -200,6 +200,7 @@ const centerEventText = computed(() => {
         EAT: "吃",
         CHI: "吃",
         HU: "胡",
+        GRAB: "抓",
         PASS: "过",
         TIMEOUT_PASS: "超时过",
     };
@@ -245,7 +246,7 @@ const mergedActionLogs = computed(() => {
     }));
 });
 const centerPointerDirection = computed(() => {
-    const currentId = String(props.state?.currentPlayerId ?? "");
+    const currentId = String(props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "");
     if (!currentId) {
         return null;
     }
@@ -269,7 +270,7 @@ const dealerName = computed(() => {
     return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
 function isCurrentTurn(playerId) {
-    return props.state?.currentPlayerId === playerId;
+    return (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === playerId;
 }
 function statusText(player) {
     if (player.isBot) {
@@ -1182,6 +1183,30 @@ for (const [entry] of __VLS_getVForSourceType((__VLS_ctx.seatEntries))) {
             }, ...__VLS_functionalComponentArgsRest(__VLS_15));
         }
     }
+    if (entry.player.discardPile.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "seat-zone" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+        (entry.player.discardPile.length);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((entry.player.discardPile.slice(0, 8)))) {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                key: (`dp-${entry.player.clientId}-${card.id}`),
+                card: (card),
+                size: "sm",
+            }));
+            const __VLS_19 = __VLS_18({
+                key: (`dp-${entry.player.clientId}-${card.id}`),
+                card: (card),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+        }
+    }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "center" },
@@ -1212,31 +1237,31 @@ if (__VLS_ctx.responseCard) {
         ref: "responseLandingRef",
     });
     /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
-    const __VLS_18 = {}.Transition;
+    const __VLS_21 = {}.Transition;
     /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
     // @ts-ignore
-    const __VLS_19 = __VLS_asFunctionalComponent(__VLS_18, new __VLS_18({
+    const __VLS_22 = __VLS_asFunctionalComponent(__VLS_21, new __VLS_21({
         name: "resp-move",
         mode: "out-in",
-    }));
-    const __VLS_20 = __VLS_19({
-        name: "resp-move",
-        mode: "out-in",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_19));
-    __VLS_21.slots.default;
-    /** @type {[typeof CardComp, ]} */ ;
-    // @ts-ignore
-    const __VLS_22 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-        key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
-        card: (__VLS_ctx.responseCard),
-        size: "lg",
     }));
     const __VLS_23 = __VLS_22({
+        name: "resp-move",
+        mode: "out-in",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_22));
+    __VLS_24.slots.default;
+    /** @type {[typeof CardComp, ]} */ ;
+    // @ts-ignore
+    const __VLS_25 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
         size: "lg",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_22));
-    var __VLS_21;
+    }));
+    const __VLS_26 = __VLS_25({
+        key: (`resp-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
+        card: (__VLS_ctx.responseCard),
+        size: "lg",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_25));
+    var __VLS_24;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
 }
 if (__VLS_ctx.mergedActionLogs.length) {
@@ -1269,32 +1294,32 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "deckAnchorRef",
 });
 /** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
-const __VLS_25 = {}.Transition;
+const __VLS_28 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_26 = __VLS_asFunctionalComponent(__VLS_25, new __VLS_25({
+const __VLS_29 = __VLS_asFunctionalComponent(__VLS_28, new __VLS_28({
     name: "deal-fade",
 }));
-const __VLS_27 = __VLS_26({
+const __VLS_30 = __VLS_29({
     name: "deal-fade",
-}, ...__VLS_functionalComponentArgsRest(__VLS_26));
-__VLS_28.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_29));
+__VLS_31.slots.default;
 if (__VLS_ctx.showDealAnimation) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "deal-overlay" },
     });
 }
-var __VLS_28;
-const __VLS_29 = {}.Transition;
+var __VLS_31;
+const __VLS_32 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_30 = __VLS_asFunctionalComponent(__VLS_29, new __VLS_29({
+const __VLS_33 = __VLS_asFunctionalComponent(__VLS_32, new __VLS_32({
     name: "dealer-reveal",
 }));
-const __VLS_31 = __VLS_30({
+const __VLS_34 = __VLS_33({
     name: "dealer-reveal",
-}, ...__VLS_functionalComponentArgsRest(__VLS_30));
-__VLS_32.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_33));
+__VLS_35.slots.default;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -1306,17 +1331,17 @@ if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.dealerReveal.name);
 }
-var __VLS_32;
-const __VLS_33 = {}.Transition;
+var __VLS_35;
+const __VLS_36 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_34 = __VLS_asFunctionalComponent(__VLS_33, new __VLS_33({
+const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({
     name: "dealer-flight",
 }));
-const __VLS_35 = __VLS_34({
+const __VLS_38 = __VLS_37({
     name: "dealer-flight",
-}, ...__VLS_functionalComponentArgsRest(__VLS_34));
-__VLS_36.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_37));
+__VLS_39.slots.default;
 if (__VLS_ctx.dealerFlight) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
@@ -1324,17 +1349,17 @@ if (__VLS_ctx.dealerFlight) {
         ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
     });
 }
-var __VLS_36;
-const __VLS_37 = {}.Transition;
+var __VLS_39;
+const __VLS_40 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_38 = __VLS_asFunctionalComponent(__VLS_37, new __VLS_37({
+const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({
     name: "action-pop",
 }));
-const __VLS_39 = __VLS_38({
+const __VLS_42 = __VLS_41({
     name: "action-pop",
-}, ...__VLS_functionalComponentArgsRest(__VLS_38));
-__VLS_40.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_41));
+__VLS_43.slots.default;
 if (__VLS_ctx.actionEffect) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`act-${__VLS_ctx.actionEffect.id}`),
@@ -1342,7 +1367,7 @@ if (__VLS_ctx.actionEffect) {
     });
     (__VLS_ctx.actionEffect.label);
 }
-var __VLS_40;
+var __VLS_43;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-zone" },
@@ -1394,9 +1419,9 @@ if (__VLS_ctx.selfPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-main" },
-        ...{ class: ({ 'no-open': __VLS_ctx.isCompactLandscape || !(__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length) }) },
+        ...{ class: ({ 'no-open': __VLS_ctx.isCompactLandscape || !(__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length || __VLS_ctx.selfPlayer.discardPile.length) }) },
     });
-    if (!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)) {
+    if (!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length || __VLS_ctx.selfPlayer.discardPile.length)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "self-areas" },
             ref: "selfOpenRef",
@@ -1415,7 +1440,7 @@ if (__VLS_ctx.selfPlayer) {
                     ...{ onClick: (...[$event]) => {
                             if (!(__VLS_ctx.selfPlayer))
                                 return;
-                            if (!(!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length)))
+                            if (!(!__VLS_ctx.isCompactLandscape && (__VLS_ctx.selfOpenGroups.length || __VLS_ctx.selfPlayer.fishArea.length || __VLS_ctx.selfPlayer.discardPile.length)))
                                 return;
                             if (!(__VLS_ctx.selfOpenGroups.length))
                                 return;
@@ -1432,16 +1457,16 @@ if (__VLS_ctx.selfPlayer) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_41 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_44 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`self-exp-card-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_42 = __VLS_41({
+                        const __VLS_45 = __VLS_44({
                             key: (`self-exp-card-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_41));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
                     }
                 }
                 else {
@@ -1451,20 +1476,20 @@ if (__VLS_ctx.selfPlayer) {
                     for (const [card, idx] of __VLS_getVForSourceType((__VLS_ctx.previewGroupCards(group.cards)))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_44 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_47 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`self-exp-stack-${card.id}`),
                             card: (card),
                             size: "sm",
                             ...{ class: "stack-item" },
                             ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
                         }));
-                        const __VLS_45 = __VLS_44({
+                        const __VLS_48 = __VLS_47({
                             key: (`self-exp-stack-${card.id}`),
                             card: (card),
                             size: "sm",
                             ...{ class: "stack-item" },
                             ...{ style: (__VLS_ctx.fanCardStyle(idx, __VLS_ctx.previewGroupSize(group.cards))) },
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_47));
                     }
                     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                         ...{ class: "stack-count" },
@@ -1484,16 +1509,40 @@ if (__VLS_ctx.selfPlayer) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.fishArea))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_47 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`self-fish-${card.id}`),
                     card: (card),
                     size: "sm",
                 }));
-                const __VLS_48 = __VLS_47({
+                const __VLS_51 = __VLS_50({
                     key: (`self-fish-${card.id}`),
                     card: (card),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_47));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_50));
+            }
+        }
+        if (__VLS_ctx.selfPlayer.discardPile.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "self-area" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+            (__VLS_ctx.selfPlayer.discardPile.length);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "cards" },
+            });
+            for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selfPlayer.discardPile.slice(0, 12)))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_53 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`self-dp-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }));
+                const __VLS_54 = __VLS_53({
+                    key: (`self-dp-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_53));
             }
         }
     }
@@ -1536,19 +1585,19 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_56 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             size: "xl",
         }));
-        const __VLS_51 = __VLS_50({
+        const __VLS_57 = __VLS_56({
             card: (card),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_50));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_56));
     }
     if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         /** @type {[typeof ActionPanel, ]} */ ;
         // @ts-ignore
-        const __VLS_53 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        const __VLS_59 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
             ...{ 'onSubmit': {} },
             ...{ 'onSelectionChange': {} },
             ...{ class: "embedded-actions" },
@@ -1560,7 +1609,7 @@ if (__VLS_ctx.selfPlayer) {
             selectionMode: (props.selectionMode ?? null),
             selectedCandidateId: (props.selectedCandidateId ?? null),
         }));
-        const __VLS_54 = __VLS_53({
+        const __VLS_60 = __VLS_59({
             ...{ 'onSubmit': {} },
             ...{ 'onSelectionChange': {} },
             ...{ class: "embedded-actions" },
@@ -1571,17 +1620,17 @@ if (__VLS_ctx.selfPlayer) {
             currentPlayerName: (props.currentPlayerName ?? '-'),
             selectionMode: (props.selectionMode ?? null),
             selectedCandidateId: (props.selectedCandidateId ?? null),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_53));
-        let __VLS_56;
-        let __VLS_57;
-        let __VLS_58;
-        const __VLS_59 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_59));
+        let __VLS_62;
+        let __VLS_63;
+        let __VLS_64;
+        const __VLS_65 = {
             onSubmit: (__VLS_ctx.onSubmitAction)
         };
-        const __VLS_60 = {
+        const __VLS_66 = {
             onSelectionChange: (__VLS_ctx.onSelectionChange)
         };
-        var __VLS_55;
+        var __VLS_61;
     }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1602,14 +1651,14 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             size: "md",
         }));
-        const __VLS_62 = __VLS_61({
+        const __VLS_68 = __VLS_67({
             card: (flight.card),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -1643,6 +1692,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['stacked-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
@@ -1681,6 +1732,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['stacked-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack-count']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;

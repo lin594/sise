@@ -20,7 +20,7 @@ const isMyTurn = computed(() => {
     return !Boolean(me?.isBot);
 });
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
-const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && !canAct.value);
+const canDiscard = computed(() => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && availableActions.value.length === 0);
 const selectionMode = ref(null);
 const selectedCandidateId = ref(null);
 const activeCandidates = computed(() => {
@@ -139,9 +139,6 @@ function candidateSourceText(source) {
     if (source === "hand+pool") {
         return "手牌+将/金条区";
     }
-    if (source === "reusable_pair") {
-        return "对子复用";
-    }
     return "手牌";
 }
 function parseCardIdToCard(cardId) {
@@ -232,6 +229,9 @@ const endSummary = computed(() => {
 const turnHint = computed(() => {
     if (canDiscard.value) {
         return "请点击手牌弃一张";
+    }
+    if (state.value?.responsePhase === "local_upper" && canAct.value) {
+        return isMyTurn.value ? "可选择吃或抓" : "等待对方操作";
     }
     if (state.value?.responsePhase === "collective") {
         if (!isMyTurn.value && canAct.value) {

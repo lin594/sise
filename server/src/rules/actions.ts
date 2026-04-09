@@ -22,9 +22,8 @@ export interface ChiPlan extends ConsumePlan {
 }
 
 export interface PengPlan {
-  kind: "hand" | "reusable_pair";
+  kind: "hand";
   handCards: Card[];
-  pairCards: Card[];
 }
 
 function combinations<T>(list: T[], pick: number): T[][] {
@@ -82,11 +81,11 @@ function buildConsumePlan(
   };
 }
 
-export function canPeng(hand: Card[], response: Card, pairCards: Card[] = []): boolean {
+export function canPeng(hand: Card[], response: Card): boolean {
   if (response.type === "jiang" || isGold(response)) {
     return false;
   }
-  return countMatching(hand, response) >= 2 || countMatching(pairCards, response) >= 2;
+  return countMatching(hand, response) >= 2;
 }
 
 export function getKaiPlans(hand: Card[], response: Card, wildcardPool: Card[] = []): KaiPlan[] {
@@ -137,29 +136,24 @@ export function canKai(hand: Card[], response: Card, wildcardPool: Card[] = []):
   return getKaiPlans(hand, response, wildcardPool).length > 0;
 }
 
-export function getPengPlans(hand: Card[], response: Card, pairCards: Card[] = []): PengPlan[] {
+export function getPengPlans(hand: Card[], response: Card): PengPlan[] {
   if (response.type === "jiang" || isGold(response)) {
     return [];
   }
   const plans: PengPlan[] = [];
   const seen = new Set<string>();
-  const pushPlan = (kind: PengPlan["kind"], handPicked: Card[], pairPicked: Card[]) => {
-    const fingerprint = [kind, ...handPicked.map((x) => x.id), ...pairPicked.map((x) => x.id)].sort().join("|");
+  const pushPlan = (kind: PengPlan["kind"], handPicked: Card[]) => {
+    const fingerprint = [kind, ...handPicked.map((x) => x.id)].sort().join("|");
     if (seen.has(fingerprint)) {
       return;
     }
     seen.add(fingerprint);
-    plans.push({ kind, handCards: handPicked, pairCards: pairPicked });
+    plans.push({ kind, handCards: handPicked });
   };
 
   const handMatches = hand.filter((card) => isSameFace(card, response));
   for (const picked of combinations(handMatches, 2)) {
-    pushPlan("hand", picked, []);
-  }
-
-  const pairMatches = pairCards.filter((card) => isSameFace(card, response));
-  for (const picked of combinations(pairMatches, 2)) {
-    pushPlan("reusable_pair", [], picked);
+    pushPlan("hand", picked);
   }
 
   return plans;

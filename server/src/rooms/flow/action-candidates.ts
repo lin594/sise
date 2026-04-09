@@ -2,7 +2,7 @@ import { getChiPlans, getKaiPlans, getPengPlans, type ChiPlan, type KaiPlan, typ
 import type { Card } from "../../rules/types.js";
 
 export type MeldActionType = "kai" | "peng" | "chi";
-export type ActionCandidateSource = "hand" | "hand+pool" | "reusable_pair";
+export type ActionCandidateSource = "hand" | "hand+pool";
 
 export interface ActionCandidate {
   id: string;
@@ -55,20 +55,18 @@ export function buildKaiCandidates(hand: Card[], response: Card, wildcardPool: C
 export function buildPengCandidates(
   hand: Card[],
   response: Card,
-  reusablePairCards: Card[],
 ): Array<CandidateWithPlan<PengPlan>> {
-  return getPengPlans(hand, response, reusablePairCards).map((plan) => {
-    const source: ActionCandidateSource = plan.kind === "reusable_pair" ? "reusable_pair" : "hand";
+  return getPengPlans(hand, response).map((plan) => {
+    const source: ActionCandidateSource = "hand";
     const handIds = stableIds(plan.handCards);
-    const pairIds = stableIds(plan.pairCards);
     return {
       candidate: {
-        id: makeCandidateId("peng", plan.kind, source, handIds, pairIds),
+        id: makeCandidateId("peng", plan.kind, source, handIds, []),
         action: "peng",
         kind: plan.kind,
-        cardIds: source === "reusable_pair" ? pairIds : handIds,
+        cardIds: handIds,
         source,
-        title: source === "reusable_pair" ? "碰（对子升级）" : "碰",
+        title: "碰",
       },
       plan,
     };

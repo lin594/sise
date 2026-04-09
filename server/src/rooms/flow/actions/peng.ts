@@ -5,10 +5,7 @@ type SeatId = string;
 
 interface OperationDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
-  getReusablePairCards: (seatId: SeatId) => Card[];
   takeMatchingCards: (seatId: SeatId, target: Card, count: number) => Card[];
-  takeMatchingReusablePairCards: (seatId: SeatId, target: Card, count: number) => Card[];
-  upgradeExposedPairToTriplet: (seatId: SeatId, pairCards: Card[], pendingCard: Card, highlight: boolean) => boolean;
   pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean) => void;
 }
 
@@ -19,8 +16,7 @@ export function tryExecutePeng(
   candidateId?: string,
 ): boolean {
   const hand = deps.getHandWithoutPending(seatId, pendingCard);
-  const pairCards = deps.getReusablePairCards(seatId);
-  const candidates = buildPengCandidates(hand, pendingCard, pairCards);
+  const candidates = buildPengCandidates(hand, pendingCard);
   if (candidates.length === 0) {
     return false;
   }
@@ -30,19 +26,6 @@ export function tryExecutePeng(
   }
 
   const plan = picked.plan;
-  if (plan.kind === "reusable_pair") {
-    const takenFromPair = deps.takeMatchingReusablePairCards(seatId, pendingCard, plan.pairCards.length);
-    if (takenFromPair.length < 2) {
-      return false;
-    }
-    if (deps.upgradeExposedPairToTriplet(seatId, takenFromPair, pendingCard, true)) {
-      return true;
-    }
-    // Fallback: keep a full meld group to avoid pair+single split display.
-    deps.pushExposedGroup(seatId, [pendingCard, ...takenFromPair], true);
-    return true;
-  }
-
   const takenFromHand = deps.takeMatchingCards(seatId, pendingCard, plan.handCards.length);
   if (takenFromHand.length < 2) {
     return false;

@@ -12,7 +12,10 @@ const busy = ref(false);
 const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x]));
-    return defaultOrder.map((action) => {
+    const isCollective = props.responsePhase === "collective";
+    return defaultOrder
+        .filter((action) => !(action === "chi" && isCollective))
+        .map((action) => {
         const item = map.get(action);
         return {
             action,
@@ -41,6 +44,9 @@ function isMeldAction(action) {
     return action === "kai" || action === "peng" || action === "chi";
 }
 function text(action) {
+    if (action === "pass" && props.responsePhase === "local_upper") {
+        return "抓";
+    }
     const map = {
         hu: "胡",
         kai: "开",

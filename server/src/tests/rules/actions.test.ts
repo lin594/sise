@@ -43,27 +43,11 @@ test("canPeng does not use wildcard substitution", () => {
   assert.equal(canPeng(hand, response), false);
 });
 
-test("canPeng can consume reusable pair cards", () => {
-  const response = c("rj", "red", "ju");
-  const hand: Card[] = [];
-  const pairCards = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
-  assert.equal(canPeng(hand, response, pairCards), true);
-});
-
-test("getPengPlans separates hand source and reusable pair source", () => {
+test("getPengPlans only builds hand-based plans", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
-  const pairCards = [c("rj3", "red", "ju"), c("rj4", "red", "ju")];
-  const plans = getPengPlans(hand, response, pairCards);
+  const plans = getPengPlans(hand, response);
   assert.equal(plans.some((x) => x.kind === "hand"), true);
-  assert.equal(plans.some((x) => x.kind === "reusable_pair"), true);
-});
-
-test("canPeng rejects mixed source (hand1 + pair1)", () => {
-  const response = c("rj", "red", "ju");
-  const hand = [c("rj1", "red", "ju")];
-  const pairCards = [c("rj2", "red", "ju")];
-  assert.equal(canPeng(hand, response, pairCards), false);
 });
 
 test("canChi rejects missing exact cards even with jiang/gold in hand", () => {

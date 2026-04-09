@@ -286,7 +286,7 @@ const activeCandidates = computed<ActionCandidate[]>(() => {
     return [];
   }
   const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
-  return (item?.candidates ?? []).filter((c) => c.source !== "reusable_pair");
+  return item?.candidates ?? [];
 });
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
@@ -407,9 +407,6 @@ function candidateSourceText(source: ActionCandidate["source"]): string {
   if (source === "hand+pool") {
     return "手牌+将/金条区";
   }
-  if (source === "reusable_pair") {
-    return "对子复用";
-  }
   return "手牌";
 }
 
@@ -520,6 +517,9 @@ const endSummary = computed(() => {
 const turnHint = computed(() => {
   if (canDiscard.value) {
     return "请点击手牌弃一张";
+  }
+  if (state.value?.responsePhase === "local_upper" && canAct.value) {
+    return isMyTurn.value ? "可选择吃或抓" : "等待对方操作";
   }
   if (state.value?.responsePhase === "collective") {
     if (!isMyTurn.value && canAct.value) {

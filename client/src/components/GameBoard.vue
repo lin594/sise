@@ -601,6 +601,7 @@ const centerEventText = computed(() => {
     EAT: "吃",
     CHI: "吃",
     HU: "胡",
+    GRAB: "抓",
     PASS: "过",
     TIMEOUT_PASS: "超时过",
   };

@@ -173,7 +173,7 @@ function normalizeCandidate(raw: any): ActionCandidate | null {
   }
   const sourceRaw = String(raw.source ?? "");
   const source: ActionCandidate["source"] =
-    sourceRaw === "hand+pool" || sourceRaw === "reusable_pair" ? sourceRaw : "hand";
+    sourceRaw === "hand+pool" ? sourceRaw : "hand";
   const cardIds = Array.isArray(raw.cardIds) ? raw.cardIds.map((x: unknown) => String(x)).filter(Boolean) : [];
   const kind = typeof raw.kind === "string" ? raw.kind : undefined;
   const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : action.toUpperCase();
@@ -219,6 +219,7 @@ function toDisplayAction(actionKey: string): string {
     OPEN: "开",
     KAI: "开",
     HU: "胡",
+    GRAB: "抓",
     PASS: "过",
     TIMEOUT_PASS: "超时过",
     DRAW_GAME: "流局",

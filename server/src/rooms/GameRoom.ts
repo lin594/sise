@@ -117,7 +117,6 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private deck: Card[] = [];
   private playerHands = new Map<string, Card[]>(); // seatId -> cards
-  private reusablePairCardsBySeat = new Map<string, Card[]>(); // seatId -> unlocked pair cards from pair-chi
   private playerOrder: string[] = []; // seatIds in round order
   private botIds = new Set<string>(); // currently bot-controlled seatIds
   private seatBySession = new Map<string, string>(); // sessionId -> seatId
@@ -315,7 +314,6 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：清空牌局运行态、座位映射、玩家容器和计时器。
    */
   private resetToFreshLobby(): void {
-    this.reusablePairCardsBySeat.clear();
     resetToFreshLobbyFlow({
       state: this.state,
       targetSeats: this.targetSeats,
@@ -511,17 +509,12 @@ export class FourColorGameRoom extends Room<GameState> {
     this.publicGeneralPool = [];
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
-    this.reusablePairCardsBySeat.clear();
     this.huLogDedup.clear();
     this.huChecksTotal = 0;
     this.huChecksValid = 0;
     this.huChecksBySeat.clear();
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
-    for (const seatId of this.playerOrder) {
-      this.reusablePairCardsBySeat.set(seatId, []);
-    }
-
     const dealerId = pickRandomDealerIdUtil(this.playerOrder);
     this.roundDealerId = dealerId;
     this.state.dealerId = dealerId;
@@ -985,7 +978,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private isEatResponder(ownerId: string, responderId: string): boolean {
     // Rule v1.0: only one adjacent player can eat discarded card.
-    return this.getPreviousPlayerId(ownerId) === responderId;
+    return this.getNextPlayerId(ownerId) === responderId;
   }
 
   /**
@@ -1015,25 +1008,15 @@ export class FourColorGameRoom extends Room<GameState> {
           tryExecutePeng(
             {
               getHandWithoutPending: (seatIdArg, pendingCardArg) => this.ops.getHandWithoutPending(seatIdArg, pendingCardArg),
-              getReusablePairCards: (seatIdArg) => this.getReusablePairCards(seatIdArg),
               takeMatchingCards: (seatIdArg, target, count) => this.ops.takeMatchingCards(seatIdArg, target, count),
-              takeMatchingReusablePairCards: (seatIdArg, target, count) =>
-                this.takeMatchingReusablePairCards(seatIdArg, target, count),
-              upgradeExposedPairToTriplet: (seatIdArg, pairCards, pendingCardArg, highlight) =>
-                this.ops.upgradeExposedPairToTriplet(seatIdArg, pairCards, pendingCardArg, highlight),
               pushExposedGroup: (seatIdArg, cards, highlight) => this.ops.pushExposedGroup(seatIdArg, cards, highlight),
             },
             seatId,
             pendingCard,
             candidateId,
           ),
-        executeChiOperation: (seatId, pendingCard, candidateId) => {
-          const chiResult = tryExecuteChi(operationDeps, seatId, pendingCard, candidateId);
-          if (chiResult.ok && chiResult.kind === "pair" && chiResult.groupCards && chiResult.groupCards.length === 2) {
-            this.addReusablePairCards(seatId, chiResult.groupCards);
-          }
-          return chiResult.ok;
-        },
+        executeChiOperation: (seatId, pendingCard, candidateId) =>
+          tryExecuteChi(operationDeps, seatId, pendingCard, candidateId).ok,
         isEatResponder: (ownerId, responderId) => this.isEatResponder(ownerId, responderId),
         getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
         setLastAction: (value) => {
@@ -1118,13 +1101,8 @@ export class FourColorGameRoom extends Room<GameState> {
     const ok = executeEatFlow(
       {
         pending: this.pendingResponse,
-        executeChiOperation: (ownerIdArg, pendingCard) => {
-          const chiResult = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId);
-          if (chiResult.ok && chiResult.kind === "pair" && chiResult.groupCards && chiResult.groupCards.length === 2) {
-            this.addReusablePairCards(ownerIdArg, chiResult.groupCards);
-          }
-          return chiResult.ok;
-        },
+        executeChiOperation: (ownerIdArg, pendingCard) =>
+          tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId).ok,
         setLastAction: (action) => {
           this.state.lastAction = action;
         },
@@ -1270,7 +1248,6 @@ export class FourColorGameRoom extends Room<GameState> {
         this.pendingResponse = null;
         this.publicGeneralPool = [];
         this.awaitingDiscardOwnerId = null;
-        this.reusablePairCardsBySeat.clear();
         this.lastTerminalFingerprint = "";
         this.huLogDedup.clear();
         this.huChecksTotal = 0;
@@ -1307,7 +1284,6 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
     const hand = this.playerHands.get(seatId) ?? [];
-    const reusablePairCards = this.getReusablePairCards(seatId);
     return getAvailableActionsFlow({
       phase: this.state.phase,
       seatId,
@@ -1317,7 +1293,6 @@ export class FourColorGameRoom extends Room<GameState> {
       probeCollectiveResponder,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       hand,
-      reusablePairCards,
       wildcardPool: [],
       explainHuForSeat: (seatIdArg, handArg, responseCard) =>
         this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
@@ -1392,34 +1367,6 @@ export class FourColorGameRoom extends Room<GameState> {
   private getHuWildcardCount(): number {
     // Wildcards are now passed by per-seat wildcardPool in explainHuForSeat.
     return 0;
-  }
-
-  private getReusablePairCards(seatId: string): Card[] {
-    return this.reusablePairCardsBySeat.get(seatId) ?? [];
-  }
-
-  private addReusablePairCards(seatId: string, cards: Card[]): void {
-    if (cards.length === 0) {
-      return;
-    }
-    const current = this.reusablePairCardsBySeat.get(seatId) ?? [];
-    current.push(...cards.map((card) => ({ ...card })));
-    this.reusablePairCardsBySeat.set(seatId, current);
-  }
-
-  private takeMatchingReusablePairCards(seatId: string, target: Card, count: number): Card[] {
-    const pool = this.reusablePairCardsBySeat.get(seatId) ?? [];
-    let rest = count;
-    const removed: Card[] = [];
-    for (let i = pool.length - 1; i >= 0 && rest > 0; i -= 1) {
-      const card = pool[i];
-      if (card.color === target.color && card.type === target.type) {
-        removed.push(...pool.splice(i, 1));
-        rest -= 1;
-      }
-    }
-    this.reusablePairCardsBySeat.set(seatId, pool);
-    return removed;
   }
 
   private summarizeCards(cards: Card[]): string {

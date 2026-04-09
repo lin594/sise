@@ -22,9 +22,9 @@ declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {
     }) => any) | undefined;
     onSubmit?: ((request: ActionRequest) => any) | undefined;
 }>, {
-    responsePhase: string;
     canAct: boolean;
     isCurrentTurn: boolean;
+    responsePhase: string;
     currentPlayerName: string;
     selectionMode: SelectionMode;
     selectedCandidateId: string | null;

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
-import { tryExecutePeng } from "../rooms/flow/actions/peng.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
@@ -40,20 +39,6 @@ t("actions: peng does not consume wildcard", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("rj1", "red", "ju"), c("wj", "white", "jiang")];
   assert.equal(canPeng(hand, response), false);
-});
-
-t("actions: peng can use reusable pair cards", () => {
-  const response = c("rj", "red", "ju");
-  const hand: Card[] = [];
-  const pairCards = [c("rj1", "red", "ju"), c("rj2", "red", "ju")];
-  assert.equal(canPeng(hand, response, pairCards), true);
-});
-
-t("actions: peng rejects mixed source hand1+pair1", () => {
-  const response = c("rj", "red", "ju");
-  const hand = [c("rj1", "red", "ju")];
-  const pairCards = [c("rj2", "red", "ju")];
-  assert.equal(canPeng(hand, response, pairCards), false);
 });
 
 t("room-state-ops: upgrade pair group to triplet in-place", () => {
@@ -106,30 +91,6 @@ t("room-state-ops: upgrade targets matching pair when multiple groups exist", ()
   assert.equal(player.exposedArea[2].id, "gm1");
   assert.equal(player.exposedArea[3].id, "gm2");
   assert.equal(player.exposedArea[4].id, "gm3");
-});
-
-t("actions: peng reusable_pair falls back to full triplet group when upgrade misses", () => {
-  const pending = c("rj3", "red", "ju", "upper");
-  const pairA = c("rj1", "red", "ju");
-  const pairB = c("rj2", "red", "ju");
-  const pushed: Card[][] = [];
-
-  const ok = tryExecutePeng(
-    {
-      getHandWithoutPending: () => [],
-      getReusablePairCards: () => [pairA, pairB],
-      takeMatchingCards: () => [],
-      takeMatchingReusablePairCards: () => [pairA, pairB],
-      upgradeExposedPairToTriplet: () => false,
-      pushExposedGroup: (_seatId, cards) => pushed.push(cards),
-    },
-    "B",
-    pending,
-  );
-
-  assert.equal(ok, true);
-  assert.equal(pushed.length, 1);
-  assert.equal(pushed[0].length, 3);
 });
 
 t("actions: chi no longer supports wildcard completion", () => {

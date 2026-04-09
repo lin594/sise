@@ -183,7 +183,7 @@ export declare function useRoom(playerName?: string): {
             action: "kai" | "peng" | "chi";
             kind?: string | undefined;
             cardIds: string[];
-            source: "hand" | "hand+pool" | "reusable_pair";
+            source: "hand" | "hand+pool";
             title: string;
         }[] | undefined;
     }[], AvailableAction[] | {
@@ -194,7 +194,7 @@ export declare function useRoom(playerName?: string): {
             action: "kai" | "peng" | "chi";
             kind?: string | undefined;
             cardIds: string[];
-            source: "hand" | "hand+pool" | "reusable_pair";
+            source: "hand" | "hand+pool";
             title: string;
         }[] | undefined;
     }[]>;
