@@ -277,7 +277,7 @@ const isMyTurn = computed(() => {
 
 const canAct = computed(() => isPlaying.value && availableActions.value.some((x) => x.enabled));
 const canDiscard = computed(
-  () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && !canAct.value,
+  () => isPlaying.value && isMyTurn.value && state.value?.responsePhase === "local_draw" && availableActions.value.length === 0,
 );
 const selectionMode = ref<"kai" | "peng" | "chi" | null>(null);
 const selectedCandidateId = ref<string | null>(null);
@@ -286,7 +286,7 @@ const activeCandidates = computed<ActionCandidate[]>(() => {
     return [];
   }
   const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
-  return item?.candidates ?? [];
+  return (item?.candidates ?? []).filter((c) => c.source !== "reusable_pair");
 });
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;

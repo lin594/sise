@@ -125,6 +125,7 @@ function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
   if (type === "jiang") {
     pushCandidate(candidates, "JiangQuad", [pivot, pivot, pivot, pivot], 100, pivot);
     pushCandidate(candidates, "JiangTriplet", [pivot, pivot, pivot], 90, pivot);
+    pushCandidate(candidates, "FrameJSX", [`${color}:jiang`, `${color}:shi`, `${color}:xiang`], 30, pivot);
     pushCandidate(candidates, "SingleJiang", [pivot], 10, pivot);
   } else {
     pushCandidate(candidates, "Triplet", [pivot, pivot, pivot], 90, pivot);
@@ -132,6 +133,10 @@ function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
 
     if (type === "ju" || type === "ma" || type === "pao") {
       pushCandidate(candidates, "FrameJMP", [`${color}:ju`, `${color}:ma`, `${color}:pao`], 30, pivot);
+    }
+
+    if (type === "shi" || type === "xiang") {
+      pushCandidate(candidates, "FrameJSX", [`${color}:jiang`, `${color}:shi`, `${color}:xiang`], 30, pivot);
     }
 
     if (type === "zu") {

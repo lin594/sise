@@ -652,7 +652,7 @@ export function runBotStep(deps: BotRunnerDeps): void {
   }
 
   if (deps.responsePhase === "local_upper") {
-    const hand = deps.getHand(ownerId);
+    const hand = deps.getHand(ownerId).filter((c) => c.id !== deps.pendingCard.id);
     const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
     const action = pickLocalBotAction("local_upper", canChiNow);
     if (action === "chi") {
@@ -666,7 +666,7 @@ export function runBotStep(deps: BotRunnerDeps): void {
   }
 
   if (deps.responsePhase === "local_draw") {
-    const hand = deps.getHand(ownerId);
+    const hand = deps.getHand(ownerId).filter((c) => c.id !== deps.pendingCard.id);
     const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
     const action = pickLocalBotAction("local_draw", canChiNow);
     if (action === "chi") {

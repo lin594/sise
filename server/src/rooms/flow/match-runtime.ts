@@ -585,6 +585,7 @@ function getScoreRules(): Record<string, { label: string; unit: number }> {
   return {
     Pair: { label: "对子", unit: 0 },
     FrameJMP: { label: "车马炮架", unit: 1 },
+    FrameJSX: { label: "将士象架", unit: 1 },
     TripleZu: { label: "三兵组", unit: 1 },
     QuadZu: { label: "四兵组", unit: 2 },
     Triplet: { label: "坎", unit: 3 },

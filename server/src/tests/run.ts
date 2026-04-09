@@ -189,6 +189,21 @@ t("hu: single jiang is valid", () => {
   assert.equal(result.valid, true);
 });
 
+t("hu: jiang+shi+xiang frame is valid (将士象架)", () => {
+  const hand = [c("rs", "red", "shi"), c("rx", "red", "xiang")];
+  const response = c("rj", "red", "jiang");
+  const result = explainHu(hand, response);
+  assert.equal(result.valid, true);
+  assert.ok(result.groups.includes("FrameJSX"));
+});
+
+t("hu: mixed-color jiang+shi+xiang is invalid", () => {
+  const hand = [c("rs", "red", "shi"), c("gx", "green", "xiang")];
+  const response = c("rj", "red", "jiang");
+  const result = explainHu(hand, response);
+  assert.equal(result.valid, false);
+});
+
 t("hu: wildcard pool no longer participates in substitution", () => {
   const hand = [c("rju", "red", "ju"), c("rma", "red", "ma")];
   const response = c("yzu", "yellow", "zu");

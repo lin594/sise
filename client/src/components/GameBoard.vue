@@ -114,6 +114,18 @@
             />
           </div>
         </div>
+
+        <div class="seat-zone" v-if="entry.player.discardPile.length">
+          <p>弃牌（{{ entry.player.discardPile.length }}张）</p>
+          <div class="cards">
+            <CardComp
+              v-for="card in entry.player.discardPile.slice(0, 8)"
+              :key="`dp-${entry.player.clientId}-${card.id}`"
+              :card="card"
+              size="sm"
+            />
+          </div>
+        </div>
       </section>
 
       <section class="center" :class="{ 'my-turn': isMyTurn }">
@@ -194,11 +206,11 @@
       </div>
       <div
         class="self-main"
-        :class="{ 'no-open': isCompactLandscape || !(selfOpenGroups.length || selfPlayer.fishArea.length) }"
+        :class="{ 'no-open': isCompactLandscape || !(selfOpenGroups.length || selfPlayer.fishArea.length || selfPlayer.discardPile.length) }"
       >
         <div
           class="self-areas"
-          v-if="!isCompactLandscape && (selfOpenGroups.length || selfPlayer.fishArea.length)"
+          v-if="!isCompactLandscape && (selfOpenGroups.length || selfPlayer.fishArea.length || selfPlayer.discardPile.length)"
           ref="selfOpenRef"
         >
           <div class="self-area" v-if="selfOpenGroups.length">
@@ -233,6 +245,18 @@
             <p>亮鱼区</p>
             <div class="cards">
               <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" size="sm" />
+            </div>
+          </div>
+
+          <div class="self-area" v-if="selfPlayer.discardPile.length">
+            <p>弃牌（{{ selfPlayer.discardPile.length }}张）</p>
+            <div class="cards">
+              <CardComp
+                v-for="card in selfPlayer.discardPile.slice(0, 12)"
+                :key="`self-dp-${card.id}`"
+                :card="card"
+                size="sm"
+              />
             </div>
           </div>
         </div>
@@ -515,7 +539,7 @@ const responseCard = computed<Card | null>(() => {
 });
 
 const currentPlayer = computed(() => {
-  const playerId = props.state?.currentPlayerId;
+  const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
   if (!playerId) {
     return null;
   }
@@ -523,7 +547,7 @@ const currentPlayer = computed(() => {
 });
 
 const currentPlayerName = computed(() => {
-  const playerId = props.state?.currentPlayerId;
+  const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
   if (!playerId) {
     return "-";
   }
@@ -533,7 +557,7 @@ const currentPlayerName = computed(() => {
 const isMyTurn = computed(
   () =>
     Boolean(props.mySeatId) &&
-    props.state?.currentPlayerId === props.mySeatId &&
+    (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot),
 );
 
@@ -627,7 +651,7 @@ const mergedActionLogs = computed(() => {
 });
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
-  const currentId = String(props.state?.currentPlayerId ?? "");
+  const currentId = String(props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "");
   if (!currentId) {
     return null;
   }
@@ -653,7 +677,7 @@ const dealerName = computed(() => {
 });
 
 function isCurrentTurn(playerId: string): boolean {
-  return props.state?.currentPlayerId === playerId;
+  return (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === playerId;
 }
 
 function statusText(player: PlayerState): string {

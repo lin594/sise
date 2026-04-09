@@ -55,14 +55,17 @@ const busy = ref(false);
 const defaultOrder: ActionType[] = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
   const map = new Map(props.actions.map((x) => [x.action, x]));
-  return defaultOrder.map((action) => {
-    const item = map.get(action);
-    return {
-      action,
-      enabled: Boolean(item?.enabled),
-      candidates: item?.candidates ?? [],
-    };
-  });
+  const isCollective = props.responsePhase === "collective";
+  return defaultOrder
+    .filter((action) => !(action === "chi" && isCollective))
+    .map((action) => {
+      const item = map.get(action);
+      return {
+        action,
+        enabled: Boolean(item?.enabled),
+        candidates: item?.candidates ?? [],
+      };
+    });
 });
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);

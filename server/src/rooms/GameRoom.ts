@@ -728,6 +728,9 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：清理 awaitingDiscardOwner、写入弃牌并进入 collective。
    */
   private discardFromAndCollective(ownerId: string): void {
+    if (this.state.phase !== "playing" || this.awaitingDiscardOwnerId !== ownerId) {
+      return;
+    }
     discardFromAndCollectiveFlow(
       {
         pickDiscardCard: (ownerIdArg) => this.ops.pickDiscardCard(ownerIdArg),
