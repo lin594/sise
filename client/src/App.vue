@@ -19,7 +19,7 @@
       <h2>等待大厅</h2>
       <p>房主手动开始。人数不足 4 人时，开始后自动补机器人。</p>
       <div class="lobby-actions">
-        <button class="primary" :disabled="!isHost" @click="startGame">
+        <button class="primary" :disabled="!canPressStartGame" @click="startGame">
           {{ isHost ? "开始游戏" : "等待房主开始" }}
         </button>
       </div>
@@ -127,6 +127,7 @@
           暗坎数量
           <input v-model.number="declareKongsInput" type="number" min="0" step="1" :disabled="isDeclareSubmitted" />
         </label>
+        <p class="declare-tip">系统建议暗坎数: {{ suggestedDeclaredKongs }}</p>
 
         <section class="declare-zone">
           <p class="zone-title">选择亮鱼（点击手牌切换）</p>
@@ -135,7 +136,7 @@
               v-for="card in privateHand"
               :key="`declare-hand-${card.id}`"
               class="declare-card-btn"
-              :class="{ selected: selectedFishCardIds.has(card.id) }"
+              :class="{ selected: selectedFishCardIds.has(card.id), suggested: suggestedKongCardIds.has(card.id) }"
               :disabled="isDeclareSubmitted"
               @click="toggleFish(card.id)"
             >
@@ -267,8 +268,18 @@ const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
+const canPressStartGame = computed(
+  () =>
+    Boolean(connected.value) && Boolean(state.value) && Boolean(mySeatId.value) && isWaiting.value && isHost.value,
+);
+const displayTurnPlayerId = computed(() => {
+  if (state.value?.responsePhase === "collective") {
+    return state.value?.pollOriginPlayerId || state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
+  }
+  return state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
+});
 const isMyTurn = computed(() => {
-  if (!mySeatId.value || state.value?.currentPlayerId !== mySeatId.value) {
+  if (!mySeatId.value || displayTurnPlayerId.value !== mySeatId.value) {
     return false;
   }
   const me = players.value.find((x) => x.clientId === mySeatId.value);
@@ -310,6 +321,33 @@ const nowMs = ref(Date.now());
 let declareTick: number | null = null;
 const selectedFishCardIds = ref<Set<string>>(new Set());
 const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
+const suggestedKongCardIds = computed<Set<string>>(() => {
+  const byFace = new Map<string, Card[]>();
+  const goldCards: Card[] = [];
+  for (const card of privateHand.value) {
+    if (card.color === "gold") {
+      goldCards.push(card);
+      continue;
+    }
+    const key = `${card.color}:${card.type}`;
+    const list = byFace.get(key) ?? [];
+    list.push(card);
+    byFace.set(key, list);
+  }
+
+  const picked = new Set<string>();
+  for (const cards of byFace.values()) {
+    const count = Math.floor(cards.length / 3) * 3;
+    for (const card of cards.slice(0, count)) {
+      picked.add(card.id);
+    }
+  }
+  for (const card of goldCards.slice(0, Math.floor(goldCards.length / 3) * 3)) {
+    picked.add(card.id);
+  }
+  return picked;
+});
+const suggestedDeclaredKongs = computed(() => Math.floor(suggestedKongCardIds.value.size / 3));
 const declareSecondsLeft = computed(() => {
   const endsAt = Number(state.value?.declareEndsAt ?? 0);
   if (!endsAt) {
@@ -439,7 +477,10 @@ function submitDeclaration() {
 watch(shouldShowDeclarePanel, (show) => {
   if (show) {
     selectedFishCardIds.value = new Set();
-    declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
+    declareKongsInput.value = Math.max(
+      Number(mePlayer.value?.declaredKongs ?? 0),
+      Number(suggestedDeclaredKongs.value ?? 0),
+    );
   }
 });
 
@@ -521,6 +562,9 @@ const turnHint = computed(() => {
   if (state.value?.responsePhase === "local_upper" && canAct.value) {
     return isMyTurn.value ? "可选择吃或抓" : "等待对方操作";
   }
+  if (state.value?.responsePhase === "local_draw" && canAct.value) {
+    return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
+  }
   if (state.value?.responsePhase === "collective") {
     if (!isMyTurn.value && canAct.value) {
       return "他人待响阶段：你可以选择胡/开/碰/过";
@@ -533,7 +577,7 @@ const turnHint = computed(() => {
 });
 
 const currentPlayerName = computed(() => {
-  const playerId = state.value?.currentPlayerId;
+  const playerId = displayTurnPlayerId.value;
   if (!playerId) {
     return "-";
   }
@@ -873,6 +917,12 @@ async function rebuildLobby() {
   border-radius: 8px;
 }
 
+.declare-tip {
+  margin: -4px 0 10px;
+  color: #475569;
+  font-size: 13px;
+}
+
 .declare-zone {
   margin-top: 10px;
   padding-top: 8px;
@@ -896,6 +946,12 @@ async function rebuildLobby() {
 .declare-card-btn.selected {
   border-color: #16a34a;
   box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.declare-card-btn.suggested {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+  background: rgba(245, 158, 11, 0.06);
 }
 
 .hu-panel {

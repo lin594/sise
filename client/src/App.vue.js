@@ -12,8 +12,15 @@ const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
+const canPressStartGame = computed(() => Boolean(connected.value) && Boolean(state.value) && Boolean(mySeatId.value) && isWaiting.value && isHost.value);
+const displayTurnPlayerId = computed(() => {
+    if (state.value?.responsePhase === "collective") {
+        return state.value?.pollOriginPlayerId || state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
+    }
+    return state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
+});
 const isMyTurn = computed(() => {
-    if (!mySeatId.value || state.value?.currentPlayerId !== mySeatId.value) {
+    if (!mySeatId.value || displayTurnPlayerId.value !== mySeatId.value) {
         return false;
     }
     const me = players.value.find((x) => x.clientId === mySeatId.value);
@@ -48,6 +55,32 @@ const nowMs = ref(Date.now());
 let declareTick = null;
 const selectedFishCardIds = ref(new Set());
 const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
+const suggestedKongCardIds = computed(() => {
+    const byFace = new Map();
+    const goldCards = [];
+    for (const card of privateHand.value) {
+        if (card.color === "gold") {
+            goldCards.push(card);
+            continue;
+        }
+        const key = `${card.color}:${card.type}`;
+        const list = byFace.get(key) ?? [];
+        list.push(card);
+        byFace.set(key, list);
+    }
+    const picked = new Set();
+    for (const cards of byFace.values()) {
+        const count = Math.floor(cards.length / 3) * 3;
+        for (const card of cards.slice(0, count)) {
+            picked.add(card.id);
+        }
+    }
+    for (const card of goldCards.slice(0, Math.floor(goldCards.length / 3) * 3)) {
+        picked.add(card.id);
+    }
+    return picked;
+});
+const suggestedDeclaredKongs = computed(() => Math.floor(suggestedKongCardIds.value.size / 3));
 const declareSecondsLeft = computed(() => {
     const endsAt = Number(state.value?.declareEndsAt ?? 0);
     if (!endsAt) {
@@ -167,7 +200,7 @@ function submitDeclaration() {
 watch(shouldShowDeclarePanel, (show) => {
     if (show) {
         selectedFishCardIds.value = new Set();
-        declareKongsInput.value = Number(mePlayer.value?.declaredKongs ?? 0);
+        declareKongsInput.value = Math.max(Number(mePlayer.value?.declaredKongs ?? 0), Number(suggestedDeclaredKongs.value ?? 0));
     }
 });
 watch(() => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`, () => {
@@ -233,6 +266,9 @@ const turnHint = computed(() => {
     if (state.value?.responsePhase === "local_upper" && canAct.value) {
         return isMyTurn.value ? "可选择吃或抓" : "等待对方操作";
     }
+    if (state.value?.responsePhase === "local_draw" && canAct.value) {
+        return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
+    }
     if (state.value?.responsePhase === "collective") {
         if (!isMyTurn.value && canAct.value) {
             return "他人待响阶段：你可以选择胡/开/碰/过";
@@ -244,7 +280,7 @@ const turnHint = computed(() => {
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
 const currentPlayerName = computed(() => {
-    const playerId = state.value?.currentPlayerId;
+    const playerId = displayTurnPlayerId.value;
     if (!playerId) {
         return "-";
     }
@@ -306,6 +342,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
@@ -375,7 +412,7 @@ if (__VLS_ctx.isWaiting) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.startGame) },
         ...{ class: "primary" },
-        disabled: (!__VLS_ctx.isHost),
+        disabled: (!__VLS_ctx.canPressStartGame),
     });
     (__VLS_ctx.isHost ? "开始游戏" : "等待房主开始");
     if (__VLS_ctx.joinError) {
@@ -629,6 +666,10 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         disabled: (__VLS_ctx.isDeclareSubmitted),
     });
     (__VLS_ctx.declareKongsInput);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "declare-tip" },
+    });
+    (__VLS_ctx.suggestedDeclaredKongs);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "declare-zone" },
     });
@@ -650,7 +691,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
                     } },
                 key: (`declare-hand-${card.id}`),
                 ...{ class: "declare-card-btn" },
-                ...{ class: ({ selected: __VLS_ctx.selectedFishCardIds.has(card.id) }) },
+                ...{ class: ({ selected: __VLS_ctx.selectedFishCardIds.has(card.id), suggested: __VLS_ctx.suggestedKongCardIds.has(card.id) }) },
                 disabled: (__VLS_ctx.isDeclareSubmitted),
             });
             /** @type {[typeof CardComp, ]} */ ;
@@ -918,6 +959,7 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['declare-progress']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-progress-fill']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-input']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
@@ -981,6 +1023,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isPlaying: isPlaying,
             isEnded: isEnded,
             isHost: isHost,
+            canPressStartGame: canPressStartGame,
             isMyTurn: isMyTurn,
             canAct: canAct,
             canDiscard: canDiscard,
@@ -997,6 +1040,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             declareKongsInput: declareKongsInput,
             selectedFishCardIds: selectedFishCardIds,
             selectedFishCards: selectedFishCards,
+            suggestedKongCardIds: suggestedKongCardIds,
+            suggestedDeclaredKongs: suggestedDeclaredKongs,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             fishSelectionValid: fishSelectionValid,

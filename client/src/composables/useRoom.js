@@ -125,6 +125,44 @@ function normalizePlayer(raw) {
         fishArea: asCardArray(raw?.fishArea),
     };
 }
+function normalizeSnapshot(next) {
+    const rawState = next && typeof next.toJSON === "function"
+        ? next.toJSON()
+        : next;
+    const rawPlayers = rawState?.players;
+    const normalizedPlayers = [];
+    if (Array.isArray(rawPlayers)) {
+        normalizedPlayers.push(...rawPlayers.map((value) => normalizePlayer(value)));
+    }
+    else if (rawPlayers && typeof rawPlayers.forEach === "function") {
+        rawPlayers.forEach((value) => {
+            normalizedPlayers.push(normalizePlayer(value));
+        });
+    }
+    else if (rawPlayers && typeof rawPlayers === "object") {
+        normalizedPlayers.push(...Object.values(rawPlayers).map((value) => normalizePlayer(value)));
+    }
+    return {
+        roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
+        phase: String(rawState?.phase ?? ""),
+        hostPlayerId: String(rawState?.hostPlayerId ?? ""),
+        dealerId: String(rawState?.dealerId ?? ""),
+        currentPlayerId: String(rawState?.currentPlayerId ?? ""),
+        currentTurnPlayerId: String(rawState?.currentTurnPlayerId ?? ""),
+        previousPlayerId: String(rawState?.previousPlayerId ?? ""),
+        pollOriginPlayerId: String(rawState?.pollOriginPlayerId ?? ""),
+        responsePhase: normalizeResponsePhase(String(rawState?.responsePhase ?? "")),
+        responseEndsAt: Number(rawState?.responseEndsAt ?? 0),
+        lastAction: String(rawState?.lastAction ?? ""),
+        deckCount: Number(rawState?.deckCount ?? 0),
+        isMoCard: Boolean(rawState?.isMoCard),
+        targetCard: asCard(rawState?.targetCard),
+        responseCard: asCard(rawState?.responseCard),
+        publicDiscardPile: asCardArray(rawState?.publicDiscardPile),
+        declareEndsAt: Number(rawState?.declareEndsAt ?? 0),
+        players: normalizedPlayers,
+    };
+}
 function normalizeAction(action) {
     if (action === "open") {
         return "kai";
@@ -132,10 +170,13 @@ function normalizeAction(action) {
     if (action === "eat") {
         return "chi";
     }
-    if (action === "grab") {
+    if (action === "grab" || action === "zhua") {
         return "pass";
     }
-    return action;
+    if (action === "hu" || action === "kai" || action === "peng" || action === "chi" || action === "pass") {
+        return action;
+    }
+    return null;
 }
 function normalizeCandidate(raw) {
     if (!raw || typeof raw !== "object") {
@@ -187,12 +228,10 @@ function toDisplayAction(actionKey) {
     const label = {
         DISCARD: "出牌",
         PENG: "碰",
-        EAT: "吃",
         CHI: "吃",
-        OPEN: "开",
         KAI: "开",
         HU: "胡",
-        GRAB: "抓",
+        ZHUA: "抓",
         PASS: "过",
         TIMEOUT_PASS: "超时过",
         DRAW_GAME: "流局",
@@ -222,6 +261,76 @@ export function useRoom(playerName = "Player") {
     let logSeq = 0;
     let lastFingerprint = "";
     let lastPhase = "";
+    let roomStateSyncTimer = null;
+    let stateSyncFingerprint = "";
+    function clearRoomStateSyncTimer() {
+        if (roomStateSyncTimer !== null) {
+            window.clearInterval(roomStateSyncTimer);
+            roomStateSyncTimer = null;
+        }
+    }
+    function buildStateSyncFingerprint(snapshot) {
+        if (!snapshot) {
+            return "";
+        }
+        const playerMarks = snapshot.players
+            .map((player) => `${player.clientId}:${player.connected ? 1 : 0}:${player.declaredReady ? 1 : 0}:${player.discardPile.length}:${player.exposedArea.length}:${player.generalArea.length}:${player.fishArea.length}`)
+            .join("|");
+        return [
+            snapshot.phase,
+            snapshot.responsePhase,
+            snapshot.hostPlayerId,
+            snapshot.dealerId,
+            snapshot.currentPlayerId,
+            snapshot.currentTurnPlayerId,
+            snapshot.previousPlayerId,
+            snapshot.pollOriginPlayerId,
+            String(snapshot.responseEndsAt),
+            snapshot.lastAction,
+            String(snapshot.deckCount),
+            snapshot.targetCard?.id ?? "",
+            snapshot.responseCard?.id ?? "",
+            String(snapshot.publicDiscardPile.length),
+            playerMarks,
+        ].join("::");
+    }
+    function applySnapshot(next) {
+        const normalized = normalizeSnapshot(next);
+        const nextFingerprint = buildStateSyncFingerprint(normalized);
+        if (nextFingerprint === stateSyncFingerprint) {
+            return;
+        }
+        stateSyncFingerprint = nextFingerprint;
+        state.value = normalized;
+        const currentPhase = String(state.value?.phase ?? "");
+        if ((lastPhase === "ended" || lastPhase === "waiting") &&
+            (currentPhase === "declaring" || currentPhase === "playing")) {
+            clearActionLogs();
+        }
+        if (currentPhase === "waiting" || currentPhase === "declaring" || currentPhase === "playing") {
+            joinError.value = "";
+        }
+        lastPhase = currentPhase;
+        const lastAction = String(state.value?.lastAction ?? "").trim();
+        const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
+        if (lastAction && fingerprint !== lastFingerprint) {
+            pushLog(lastAction);
+            lastFingerprint = fingerprint;
+        }
+        if (state.value?.phase !== "ended") {
+            huResult.value = null;
+            roundResult.value = null;
+        }
+    }
+    function startRoomStateSync() {
+        clearRoomStateSyncTimer();
+        roomStateSyncTimer = window.setInterval(() => {
+            if (!room.value?.state) {
+                return;
+            }
+            applySnapshot(room.value.state);
+        }, 250);
+    }
     function readStored(key) {
         return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
     }
@@ -327,57 +436,18 @@ export function useRoom(playerName = "Player") {
                 updateInviteUrl(joined.roomId);
             }
             joined.onStateChange((next) => {
-                const normalizedPlayers = [];
-                const playersMap = next?.players;
-                if (playersMap && typeof playersMap.forEach === "function") {
-                    playersMap.forEach((value) => {
-                        normalizedPlayers.push(normalizePlayer(value));
-                    });
-                }
-                else if (playersMap && typeof playersMap === "object") {
-                    normalizedPlayers.push(...Object.values(playersMap).map((value) => normalizePlayer(value)));
-                }
-                state.value = {
-                    phase: String(next?.phase ?? ""),
-                    hostPlayerId: String(next?.hostPlayerId ?? ""),
-                    dealerId: String(next?.dealerId ?? ""),
-                    currentPlayerId: String(next?.currentPlayerId ?? ""),
-                    currentTurnPlayerId: String(next?.currentTurnPlayerId ?? ""),
-                    previousPlayerId: String(next?.previousPlayerId ?? ""),
-                    responsePhase: normalizeResponsePhase(String(next?.responsePhase ?? "")),
-                    responseEndsAt: Number(next?.responseEndsAt ?? 0),
-                    lastAction: String(next?.lastAction ?? ""),
-                    deckCount: Number(next?.deckCount ?? 0),
-                    isMoCard: Boolean(next?.isMoCard),
-                    targetCard: asCard(next?.targetCard),
-                    responseCard: asCard(next?.responseCard),
-                    publicDiscardPile: asCardArray(next?.publicDiscardPile),
-                    declareEndsAt: Number(next?.declareEndsAt ?? 0),
-                    players: normalizedPlayers,
-                };
-                const currentPhase = String(state.value?.phase ?? "");
-                if ((lastPhase === "ended" || lastPhase === "waiting") &&
-                    (currentPhase === "declaring" || currentPhase === "playing")) {
-                    clearActionLogs();
-                }
-                lastPhase = currentPhase;
-                const lastAction = String(state.value?.lastAction ?? "").trim();
-                const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
-                if (lastAction && fingerprint !== lastFingerprint) {
-                    pushLog(lastAction);
-                    lastFingerprint = fingerprint;
-                }
-                if (state.value?.phase !== "ended") {
-                    huResult.value = null;
-                    roundResult.value = null;
-                }
+                applySnapshot(next);
+            });
+            startRoomStateSync();
+            joined.onMessage("room_snapshot", (payload) => {
+                applySnapshot(payload);
             });
             joined.onMessage("private_hand", (payload) => {
                 privateHand.value = sortHandCards(payload ?? []);
             });
             joined.onMessage("available_actions", (payload) => {
                 availableActions.value = (payload ?? []).map((item) => ({
-                    action: normalizeAction(item.action),
+                    action: normalizeAction(item.action) ?? "pass",
                     enabled: Boolean(item.enabled),
                     candidates: Array.isArray(item?.candidates)
                         ? item.candidates
@@ -446,10 +516,17 @@ export function useRoom(playerName = "Player") {
             return;
         }
         if (typeof input === "string") {
-            room.value.send("action", normalizeAction(input));
+            const action = normalizeAction(input);
+            if (!action) {
+                return;
+            }
+            room.value.send("action", action);
             return;
         }
         const action = normalizeAction(input.action);
+        if (!action) {
+            return;
+        }
         const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
         if (candidateId) {
             room.value.send("action", { action, candidateId });
@@ -475,6 +552,7 @@ export function useRoom(playerName = "Player") {
     }
     function startGame() {
         clearActionLogs();
+        joinError.value = "";
         room.value?.send("start_game");
     }
     function nextRound() {
@@ -489,6 +567,7 @@ export function useRoom(playerName = "Player") {
         void connect();
     });
     onUnmounted(() => {
+        clearRoomStateSyncTimer();
         room.value?.leave();
     });
     const players = computed(() => {

@@ -147,7 +147,15 @@ export function planLocalPhaseAfterNoResponse(
   ownerId: SeatId,
   cardSource: "upper" | "draw" | undefined,
   nextPlayerId: SeatId,
+  responsePhaseOverride?: "local_upper" | "local_draw",
 ): LocalPhasePlan {
+  if (responsePhaseOverride) {
+    return {
+      localOwnerId: cardSource === "draw" ? ownerId : nextPlayerId,
+      responsePhase: responsePhaseOverride,
+      rebindPendingOwner: cardSource !== "draw",
+    };
+  }
   const fromDraw = cardSource === "draw";
   return {
     localOwnerId: fromDraw ? ownerId : nextPlayerId,
@@ -279,17 +287,20 @@ export function applyEnterDiscardStageState(state: GameState, ownerId: string, t
  * 关键输入/输出：输入客户端动作，输出当前语义动作。
  * 副作用：无。
  */
-export function normalizeAction(action: ActionType): ActionType {
+export function normalizeAction(action: string): ActionType | null {
   if (action === "open") {
     return "kai";
   }
   if (action === "eat") {
     return "chi";
   }
-  if (action === "grab") {
+  if (action === "grab" || action === "zhua") {
     return "pass";
   }
-  return action;
+  if (action === "hu" || action === "kai" || action === "peng" || action === "chi" || action === "pass") {
+    return action;
+  }
+  return null;
 }
 
 export function normalizeName(input: unknown): string {
@@ -424,18 +435,18 @@ export function pickCollectiveBotAction(actions: ActionOption[]): ActionType {
 
 /**
  * 作用：生成机器人在 local 阶段的默认动作选择。
- * 关键输入/输出：输入 local 相位与是否可吃，输出 `chi/grab/pass_to_next`。
+ * 关键输入/输出：输入 local 相位与是否可吃，输出 `chi/zhua/pass_to_next`。
  * 副作用：无。
  */
 export function pickLocalBotAction(
   responsePhase: "local_upper" | "local_draw",
   canChi: boolean,
-): "chi" | "grab" | "pass_to_next" {
+): "chi" | "zhua" | "pass_to_next" {
   if (canChi) {
     return "chi";
   }
   if (responsePhase === "local_upper") {
-    return "grab";
+    return "zhua";
   }
   return "pass_to_next";
 }
@@ -444,6 +455,7 @@ export interface PendingResponseSnapshot {
   ownerId: string;
   card: Card;
   collectives: Map<string, { action: ActionType; candidateId?: string }>;
+  responsePhaseAfterNoResponse?: "local_upper" | "local_draw";
 }
 
 /**
@@ -455,10 +467,12 @@ export function createPendingResponse(
   ownerId: string,
   card: Card,
   source: "upper" | "draw",
+  responsePhaseAfterNoResponse?: "local_upper" | "local_draw",
 ): PendingResponseSnapshot {
   return {
     ownerId,
     card: { ...card, source },
     collectives: new Map(),
+    responsePhaseAfterNoResponse,
   };
 }

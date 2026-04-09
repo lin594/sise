@@ -18,7 +18,7 @@ export interface KaiPlan extends ConsumePlan {
 }
 
 export interface ChiPlan extends ConsumePlan {
-  kind: "jmp" | "jsx" | "zu3" | "zu4" | "pair";
+  kind: "jmp" | "jsx" | "zu3" | "zu4" | "pair" | "single";
 }
 
 export interface PengPlan {
@@ -161,7 +161,7 @@ export function getPengPlans(hand: Card[], response: Card): PengPlan[] {
 
 function chiRequirements(response: Card): Array<{ kind: ChiPlan["kind"]; needs: FaceNeed[] }> {
   if (isGold(response)) {
-    return [];
+    return [{ kind: "single", needs: [] }];
   }
 
   const list: Array<{ kind: ChiPlan["kind"]; needs: FaceNeed[] }> = [];
@@ -178,6 +178,10 @@ function chiRequirements(response: Card): Array<{ kind: ChiPlan["kind"]; needs: 
       .filter((type) => type !== response.type)
       .map((type) => ({ color: response.color, type }));
     list.push({ kind: "jsx", needs: need });
+  }
+
+  if (response.type === "jiang") {
+    list.push({ kind: "single", needs: [] });
   }
 
   if (response.type === "zu") {

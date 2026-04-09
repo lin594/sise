@@ -146,24 +146,69 @@ function normalizePlayer(raw: any): PlayerState {
   };
 }
 
-function normalizeAction(action: ActionType): ActionType {
+function normalizeSnapshot(next: unknown): RoomStateSnapshot {
+  const rawState =
+    next && typeof (next as any).toJSON === "function"
+      ? (next as any).toJSON()
+      : (next as any);
+
+  const rawPlayers = rawState?.players;
+  const normalizedPlayers: PlayerState[] = [];
+  if (Array.isArray(rawPlayers)) {
+    normalizedPlayers.push(...rawPlayers.map((value) => normalizePlayer(value)));
+  } else if (rawPlayers && typeof rawPlayers.forEach === "function") {
+    rawPlayers.forEach((value: unknown) => {
+      normalizedPlayers.push(normalizePlayer(value));
+    });
+  } else if (rawPlayers && typeof rawPlayers === "object") {
+    normalizedPlayers.push(
+      ...Object.values(rawPlayers as Record<string, unknown>).map((value) => normalizePlayer(value)),
+    );
+  }
+
+  return {
+    roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
+    phase: String(rawState?.phase ?? ""),
+    hostPlayerId: String(rawState?.hostPlayerId ?? ""),
+    dealerId: String(rawState?.dealerId ?? ""),
+    currentPlayerId: String(rawState?.currentPlayerId ?? ""),
+    currentTurnPlayerId: String(rawState?.currentTurnPlayerId ?? ""),
+    previousPlayerId: String(rawState?.previousPlayerId ?? ""),
+    pollOriginPlayerId: String(rawState?.pollOriginPlayerId ?? ""),
+    responsePhase: normalizeResponsePhase(String(rawState?.responsePhase ?? "")),
+    responseEndsAt: Number(rawState?.responseEndsAt ?? 0),
+    lastAction: String(rawState?.lastAction ?? ""),
+    deckCount: Number(rawState?.deckCount ?? 0),
+    isMoCard: Boolean(rawState?.isMoCard),
+    targetCard: asCard(rawState?.targetCard),
+    responseCard: asCard(rawState?.responseCard),
+    publicDiscardPile: asCardArray(rawState?.publicDiscardPile),
+    declareEndsAt: Number(rawState?.declareEndsAt ?? 0),
+    players: normalizedPlayers,
+  };
+}
+
+function normalizeAction(action: string): ActionType | null {
   if (action === "open") {
     return "kai";
   }
   if (action === "eat") {
     return "chi";
   }
-  if (action === "grab") {
+  if (action === "grab" || action === "zhua") {
     return "pass";
   }
-  return action;
+  if (action === "hu" || action === "kai" || action === "peng" || action === "chi" || action === "pass") {
+    return action;
+  }
+  return null;
 }
 
 function normalizeCandidate(raw: any): ActionCandidate | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
-  const action = normalizeAction(String(raw.action ?? "") as ActionType);
+  const action = normalizeAction(String(raw.action ?? ""));
   if (action !== "kai" && action !== "peng" && action !== "chi") {
     return null;
   }
@@ -214,12 +259,10 @@ function toDisplayAction(actionKey: string): string {
   const label: Record<string, string> = {
     DISCARD: "出牌",
     PENG: "碰",
-    EAT: "吃",
     CHI: "吃",
-    OPEN: "开",
     KAI: "开",
     HU: "胡",
-    GRAB: "抓",
+    ZHUA: "抓",
     PASS: "过",
     TIMEOUT_PASS: "超时过",
     DRAW_GAME: "流局",
@@ -252,6 +295,88 @@ export function useRoom(playerName = "Player") {
   let logSeq = 0;
   let lastFingerprint = "";
   let lastPhase = "";
+  let roomStateSyncTimer: number | null = null;
+  let stateSyncFingerprint = "";
+
+  function clearRoomStateSyncTimer() {
+    if (roomStateSyncTimer !== null) {
+      window.clearInterval(roomStateSyncTimer);
+      roomStateSyncTimer = null;
+    }
+  }
+
+  function buildStateSyncFingerprint(snapshot: RoomStateSnapshot | null): string {
+    if (!snapshot) {
+      return "";
+    }
+    const playerMarks = snapshot.players
+      .map(
+        (player) =>
+          `${player.clientId}:${player.connected ? 1 : 0}:${player.declaredReady ? 1 : 0}:${player.discardPile.length}:${player.exposedArea.length}:${player.generalArea.length}:${player.fishArea.length}`,
+      )
+      .join("|");
+    return [
+      snapshot.phase,
+      snapshot.responsePhase,
+      snapshot.hostPlayerId,
+      snapshot.dealerId,
+      snapshot.currentPlayerId,
+      snapshot.currentTurnPlayerId,
+      snapshot.previousPlayerId,
+      snapshot.pollOriginPlayerId,
+      String(snapshot.responseEndsAt),
+      snapshot.lastAction,
+      String(snapshot.deckCount),
+      snapshot.targetCard?.id ?? "",
+      snapshot.responseCard?.id ?? "",
+      String(snapshot.publicDiscardPile.length),
+      playerMarks,
+    ].join("::");
+  }
+
+  function applySnapshot(next: unknown) {
+    const normalized = normalizeSnapshot(next);
+    const nextFingerprint = buildStateSyncFingerprint(normalized);
+    if (nextFingerprint === stateSyncFingerprint) {
+      return;
+    }
+    stateSyncFingerprint = nextFingerprint;
+    state.value = normalized;
+
+    const currentPhase = String(state.value?.phase ?? "");
+    if (
+      (lastPhase === "ended" || lastPhase === "waiting") &&
+      (currentPhase === "declaring" || currentPhase === "playing")
+    ) {
+      clearActionLogs();
+    }
+    if (currentPhase === "waiting" || currentPhase === "declaring" || currentPhase === "playing") {
+      joinError.value = "";
+    }
+    lastPhase = currentPhase;
+
+    const lastAction = String(state.value?.lastAction ?? "").trim();
+    const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
+    if (lastAction && fingerprint !== lastFingerprint) {
+      pushLog(lastAction);
+      lastFingerprint = fingerprint;
+    }
+
+    if (state.value?.phase !== "ended") {
+      huResult.value = null;
+      roundResult.value = null;
+    }
+  }
+
+  function startRoomStateSync() {
+    clearRoomStateSyncTimer();
+    roomStateSyncTimer = window.setInterval(() => {
+      if (!room.value?.state) {
+        return;
+      }
+      applySnapshot(room.value.state);
+    }, 250);
+  }
 
   function readStored(key: string): string {
     return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
@@ -366,65 +491,19 @@ export function useRoom(playerName = "Player") {
         updateInviteUrl(joined.roomId);
       }
 
-    joined.onStateChange((next) => {
-      const normalizedPlayers: PlayerState[] = [];
-      const playersMap = (next as any)?.players;
-      if (playersMap && typeof playersMap.forEach === "function") {
-        playersMap.forEach((value: unknown) => {
-          normalizedPlayers.push(normalizePlayer(value));
-        });
-      } else if (playersMap && typeof playersMap === "object") {
-        normalizedPlayers.push(
-          ...Object.values(playersMap as Record<string, unknown>).map((value) => normalizePlayer(value)),
-        );
-      }
-
-      state.value = {
-        phase: String((next as any)?.phase ?? ""),
-        hostPlayerId: String((next as any)?.hostPlayerId ?? ""),
-        dealerId: String((next as any)?.dealerId ?? ""),
-        currentPlayerId: String((next as any)?.currentPlayerId ?? ""),
-        currentTurnPlayerId: String((next as any)?.currentTurnPlayerId ?? ""),
-        previousPlayerId: String((next as any)?.previousPlayerId ?? ""),
-        responsePhase: normalizeResponsePhase(String((next as any)?.responsePhase ?? "")),
-        responseEndsAt: Number((next as any)?.responseEndsAt ?? 0),
-        lastAction: String((next as any)?.lastAction ?? ""),
-        deckCount: Number((next as any)?.deckCount ?? 0),
-        isMoCard: Boolean((next as any)?.isMoCard),
-        targetCard: asCard((next as any)?.targetCard),
-        responseCard: asCard((next as any)?.responseCard),
-        publicDiscardPile: asCardArray((next as any)?.publicDiscardPile),
-        declareEndsAt: Number((next as any)?.declareEndsAt ?? 0),
-        players: normalizedPlayers,
-      };
-
-      const currentPhase = String(state.value?.phase ?? "");
-      if (
-        (lastPhase === "ended" || lastPhase === "waiting") &&
-        (currentPhase === "declaring" || currentPhase === "playing")
-      ) {
-        clearActionLogs();
-      }
-      lastPhase = currentPhase;
-
-      const lastAction = String(state.value?.lastAction ?? "").trim();
-      const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
-      if (lastAction && fingerprint !== lastFingerprint) {
-        pushLog(lastAction);
-        lastFingerprint = fingerprint;
-      }
-
-      if (state.value?.phase !== "ended") {
-        huResult.value = null;
-        roundResult.value = null;
-      }
-    });
+      joined.onStateChange((next) => {
+        applySnapshot(next);
+      });
+      startRoomStateSync();
+      joined.onMessage("room_snapshot", (payload: RoomStateSnapshot) => {
+        applySnapshot(payload);
+      });
     joined.onMessage("private_hand", (payload: Card[]) => {
       privateHand.value = sortHandCards(payload ?? []);
     });
     joined.onMessage("available_actions", (payload: AvailableAction[]) => {
       availableActions.value = (payload ?? []).map((item) => ({
-        action: normalizeAction(item.action),
+        action: normalizeAction(item.action) ?? "pass",
         enabled: Boolean(item.enabled),
         candidates: Array.isArray((item as any)?.candidates)
           ? ((item as any).candidates as unknown[])
@@ -493,10 +572,17 @@ export function useRoom(playerName = "Player") {
       return;
     }
     if (typeof input === "string") {
-      room.value.send("action", normalizeAction(input));
+      const action = normalizeAction(input);
+      if (!action) {
+        return;
+      }
+      room.value.send("action", action);
       return;
     }
     const action = normalizeAction(input.action);
+    if (!action) {
+      return;
+    }
     const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
     if (candidateId) {
       room.value.send("action", { action, candidateId });
@@ -527,6 +613,7 @@ export function useRoom(playerName = "Player") {
 
   function startGame() {
     clearActionLogs();
+    joinError.value = "";
     room.value?.send("start_game");
   }
 
@@ -545,6 +632,7 @@ export function useRoom(playerName = "Player") {
   });
 
   onUnmounted(() => {
+    clearRoomStateSyncTimer();
     room.value?.leave();
   });
 
@@ -578,5 +666,3 @@ export function useRoom(playerName = "Player") {
     returnLobby,
   };
 }
-
-

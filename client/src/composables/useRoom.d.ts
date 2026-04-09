@@ -5,12 +5,14 @@ export declare function useRoom(playerName?: string): {
     mySeatId: import("vue").Ref<string, string>;
     playerToken: import("vue").Ref<string, string>;
     state: import("vue").Ref<{
+        roomId?: string | undefined;
         phase: string;
         hostPlayerId: string;
         dealerId: string;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
+        pollOriginPlayerId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         lastAction: string;
@@ -83,12 +85,14 @@ export declare function useRoom(playerName?: string): {
             }[];
         }[];
     } | null, RoomStateSnapshot | {
+        roomId?: string | undefined;
         phase: string;
         hostPlayerId: string;
         dealerId: string;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
+        pollOriginPlayerId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         lastAction: string;

@@ -43,6 +43,7 @@ interface ActionDeps {
   getNextPlayerId: (playerId: SeatId) => SeatId;
   setLastAction: (action: string) => void;
   startTurn: (ownerId: SeatId, tag: string) => void;
+  enterDiscardStage: (ownerId: SeatId, tag: string) => void;
 }
 
 interface PendingLike {
@@ -53,7 +54,7 @@ interface PendingLike {
 /**
  * 作用：执行 collective 胜出后的开动作流程。
  * 关键输入/输出：输入 pending 与胜者，输出无返回值。
- * 副作用：成功则胜者 `KONG_DRAW`；失败回退到下家 `TURN_DRAW`。
+ * 副作用：成功则胜者进入强制弃牌；失败回退到下家 `TURN_DRAW`。
  */
 export function executeKaiAction(
   deps: ActionDeps,
@@ -69,5 +70,5 @@ export function executeKaiAction(
     return;
   }
   deps.setLastAction(`${winnerId} KAI`);
-  deps.startTurn(winnerId, "KONG_DRAW");
+  deps.enterDiscardStage(winnerId, "KAI");
 }

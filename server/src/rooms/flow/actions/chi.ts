@@ -12,7 +12,7 @@ interface OperationDeps {
 
 export interface ChiExecutionResult {
   ok: boolean;
-  kind?: "jmp" | "jsx" | "zu3" | "zu4" | "pair";
+  kind?: "jmp" | "jsx" | "zu3" | "zu4" | "pair" | "single";
   groupCards?: Card[];
 }
 

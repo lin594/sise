@@ -10,8 +10,7 @@ export interface Card {
   source?: "upper" | "draw";
 }
 
-// Keep legacy actions for incremental migration. New flow should use kai/chi.
-export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass" | "open" | "eat" | "grab";
+export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass";
 
 export type ResponseSource = "draw" | "discard";
 
@@ -29,4 +28,3 @@ export interface HuResult {
   valid: boolean;
   groups: string[];
 }
-

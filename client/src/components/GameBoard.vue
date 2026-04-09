@@ -115,16 +115,19 @@
           </div>
         </div>
 
-        <div class="seat-zone" v-if="entry.player.discardPile.length">
+        <div class="seat-zone discard-zone">
           <p>弃牌（{{ entry.player.discardPile.length }}张）</p>
-          <div class="cards">
-            <CardComp
-              v-for="card in entry.player.discardPile.slice(0, 8)"
+          <div v-if="entry.player.discardPile.length" class="discard-strip">
+            <span
+              v-for="(card, index) in entry.player.discardPile.slice(0, 10)"
               :key="`dp-${entry.player.clientId}-${card.id}`"
-              :card="card"
-              size="sm"
-            />
+              class="discard-token"
+              :class="{ active: isActiveDiscardCard(entry.player.clientId, card, index) }"
+            >
+              {{ compactCardLabel(card) }}
+            </span>
           </div>
+          <div v-else class="discard-empty">暂无弃牌</div>
         </div>
       </section>
 
@@ -206,11 +209,11 @@
       </div>
       <div
         class="self-main"
-        :class="{ 'no-open': isCompactLandscape || !(selfOpenGroups.length || selfPlayer.fishArea.length || selfPlayer.discardPile.length) }"
+        :class="{ 'no-open': isCompactLandscape }"
       >
         <div
           class="self-areas"
-          v-if="!isCompactLandscape && (selfOpenGroups.length || selfPlayer.fishArea.length || selfPlayer.discardPile.length)"
+          v-if="!isCompactLandscape"
           ref="selfOpenRef"
         >
           <div class="self-area" v-if="selfOpenGroups.length">
@@ -248,23 +251,26 @@
             </div>
           </div>
 
-          <div class="self-area" v-if="selfPlayer.discardPile.length">
+          <div class="self-area discard-zone">
             <p>弃牌（{{ selfPlayer.discardPile.length }}张）</p>
-            <div class="cards">
-              <CardComp
-                v-for="card in selfPlayer.discardPile.slice(0, 12)"
+            <div v-if="selfPlayer.discardPile.length" class="discard-strip">
+              <span
+                v-for="(card, index) in selfPlayer.discardPile.slice(0, 14)"
                 :key="`self-dp-${card.id}`"
-                :card="card"
-                size="sm"
-              />
+                class="discard-token"
+                :class="{ active: isActiveDiscardCard(selfPlayer.clientId, card, index) }"
+              >
+                {{ compactCardLabel(card) }}
+              </span>
             </div>
+            <div v-else class="discard-empty">暂无弃牌</div>
           </div>
         </div>
         <div class="self-hand-panel">
           <p v-if="canDiscard" class="discard-tip">点击手牌弃一张（将牌/金条不可弃）</p>
           <div class="cards hand" ref="selfHandRef">
             <button
-              v-for="card in privateHand"
+              v-for="card in displayPrivateHand"
               :key="`me-${card.id}`"
               class="hand-card"
               :class="{
@@ -398,6 +404,7 @@ const discardingCardId = ref<string | null>(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
+const visibleHandCount = ref(0);
 const actionEffect = ref<{ id: number; label: string } | null>(null);
 const dealerReveal = ref<{ id: number; name: string } | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
@@ -538,8 +545,30 @@ const responseCard = computed<Card | null>(() => {
   return collective ? latestDiscardFromAction.value : null;
 });
 
+function isActiveDiscardCard(playerId: string, card: Card, index: number): boolean {
+  if (index !== 0) {
+    return false;
+  }
+  const pending = responseCard.value;
+  if (!pending || pending.source !== "upper") {
+    return false;
+  }
+  if (pending.id !== card.id) {
+    return false;
+  }
+  const player = props.players.find((item) => item.clientId === playerId);
+  return Boolean(player?.discardPile?.[0]?.id === card.id);
+}
+
+const displayTurnPlayerId = computed(() => {
+  if (props.state?.responsePhase === "collective") {
+    return props.state?.pollOriginPlayerId || props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "";
+  }
+  return props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "";
+});
+
 const currentPlayer = computed(() => {
-  const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
+  const playerId = displayTurnPlayerId.value;
   if (!playerId) {
     return null;
   }
@@ -547,7 +576,7 @@ const currentPlayer = computed(() => {
 });
 
 const currentPlayerName = computed(() => {
-  const playerId = props.state?.currentTurnPlayerId || props.state?.currentPlayerId;
+  const playerId = displayTurnPlayerId.value;
   if (!playerId) {
     return "-";
   }
@@ -557,11 +586,15 @@ const currentPlayerName = computed(() => {
 const isMyTurn = computed(
   () =>
     Boolean(props.mySeatId) &&
-    (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === props.mySeatId &&
+    displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot),
 );
 
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const displayPrivateHand = computed<Card[]>(() => {
+  const limit = Math.max(0, visibleHandCount.value || 0);
+  return props.privateHand.slice(0, limit);
+});
 
 const activeCandidates = computed<ActionCandidate[]>(() => props.activeCandidates ?? []);
 const selectedCandidate = computed<ActionCandidate | null>(() => {
@@ -596,12 +629,10 @@ const centerEventText = computed(() => {
   const actionMap: Record<string, string> = {
     DISCARD: "出牌",
     PENG: "碰",
-    OPEN: "开",
     KAI: "开",
-    EAT: "吃",
     CHI: "吃",
     HU: "胡",
-    GRAB: "抓",
+    ZHUA: "抓",
     PASS: "过",
     TIMEOUT_PASS: "超时过",
   };
@@ -640,6 +671,12 @@ const compactCenterHint = computed(() => {
   if (String(props.state?.responsePhase ?? "") === "collective") {
     return isMyTurn.value ? "等待他人响应" : "待响应阶段";
   }
+  if (String(props.state?.responsePhase ?? "") === "local_upper" && Boolean(props.canAct)) {
+    return "可吃或抓";
+  }
+  if (String(props.state?.responsePhase ?? "") === "local_draw" && Boolean(props.canAct)) {
+    return "可吃或过";
+  }
   return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
 
@@ -652,7 +689,7 @@ const mergedActionLogs = computed(() => {
 });
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
-  const currentId = String(props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "");
+  const currentId = String(displayTurnPlayerId.value || "");
   if (!currentId) {
     return null;
   }
@@ -678,7 +715,7 @@ const dealerName = computed(() => {
 });
 
 function isCurrentTurn(playerId: string): boolean {
-  return (props.state?.currentTurnPlayerId || props.state?.currentPlayerId) === playerId;
+  return displayTurnPlayerId.value === playerId;
 }
 
 function statusText(player: PlayerState): string {
@@ -764,6 +801,14 @@ function cardLabel(card: Card): string {
     nan: "男",
   };
   return `${colorMap[card.color] ?? card.color}${typeMap[card.type] ?? card.type}`;
+}
+
+function compactCardLabel(card: Card): string {
+  const label = cardLabel(card);
+  if (label.length <= 2) {
+    return label;
+  }
+  return label.slice(0, 2);
 }
 
 function previewGroupCards(cards: Card[]): Card[] {
@@ -990,7 +1035,7 @@ function triggerMeldAnimation(actorId: string, keyword: string): void {
   if (!baseCard) {
     return;
   }
-  const count = keyword === "OPEN" || keyword === "KAI" ? 4 : 3;
+  const count = keyword === "KAI" ? 4 : 3;
   const offsets = groupOffsets(count);
   offsets.forEach((offset, index) => {
     spawnFlight({
@@ -1050,6 +1095,7 @@ function clearDealAnimationRuntime(): void {
     clearInterval(dealInterval);
     dealInterval = null;
   }
+  visibleHandCount.value = props.privateHand.length;
 }
 
 function triggerDealAnimation(): number {
@@ -1064,6 +1110,7 @@ function triggerDealAnimation(): number {
 
   const runId = ++dealRunSeq;
   showDealAnimation.value = true;
+  visibleHandCount.value = 0;
   let index = 0;
   const finishMs = plan.length * 32 + 320;
   dealAnimatingUntil = Date.now() + finishMs;
@@ -1087,11 +1134,17 @@ function triggerDealAnimation(): number {
       });
     }
     index += 1;
+    const fullHand = props.privateHand.length;
+    if (fullHand > 0) {
+      const reveal = Math.min(fullHand, Math.ceil((index / plan.length) * fullHand));
+      visibleHandCount.value = Math.max(visibleHandCount.value, reveal);
+    }
     if (index >= plan.length) {
       clearDealAnimationRuntime();
       dealTimer = setTimeout(() => {
         if (runId === dealRunSeq) {
           showDealAnimation.value = false;
+          visibleHandCount.value = props.privateHand.length;
         }
       }, 320);
     }
@@ -1230,13 +1283,11 @@ watch(
     }
     const labelMap: Record<string, string> = {
       PENG: "碰",
-      EAT: "吃",
       CHI: "吃",
-      OPEN: "开",
       KAI: "开",
       HU: "胡",
       KONG_DRAW: "补牌",
-      GRAB: "抓",
+      ZHUA: "抓",
     };
     const label = labelMap[keyword];
     if (label) {
@@ -1248,7 +1299,7 @@ watch(
       }
       return;
     }
-    if ((keyword === "PENG" || keyword === "EAT" || keyword === "OPEN" || keyword === "KAI" || keyword === "CHI") && actor) {
+    if ((keyword === "PENG" || keyword === "KAI" || keyword === "CHI") && actor) {
       triggerMeldAnimation(actor, keyword);
     }
   },
@@ -1257,6 +1308,9 @@ watch(
 watch(
   () => props.privateHand.map((x) => x.id).join("|"),
   () => {
+    if (!showDealAnimation.value) {
+      visibleHandCount.value = props.privateHand.length;
+    }
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
       discardingCardId.value = null;
     }
@@ -1453,6 +1507,10 @@ watch(
   overflow: auto;
 }
 
+.discard-zone {
+  min-height: 5.2rem;
+}
+
 .seat-zone p {
   margin: 0 0 6px;
   font-size: 12px;
@@ -1463,6 +1521,51 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.discard-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.discard-token {
+  min-width: 1.9rem;
+  height: 1.55rem;
+  padding: 0 0.36rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(100, 116, 139, 0.65);
+  background: rgba(15, 23, 42, 0.32);
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.discard-token.active {
+  border-color: rgba(250, 204, 21, 0.92);
+  background: rgba(250, 204, 21, 0.16);
+  color: #fef08a;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.28), 0 0 16px rgba(250, 204, 21, 0.16);
+  transform: translateY(-1px);
+}
+
+.discard-empty {
+  min-height: 3.2rem;
+  border: 1px dashed rgba(100, 116, 139, 0.55);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 12px;
+  background: rgba(15, 23, 42, 0.18);
 }
 
 .grouped-cards {

@@ -1,5 +1,4 @@
-// Keep legacy actions for transition compatibility.
-export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass" | "open" | "eat" | "grab";
+export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass";
 export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 
 export interface Card {
@@ -26,12 +25,14 @@ export interface PlayerState {
 }
 
 export interface RoomStateSnapshot {
+  roomId?: string;
   phase: string;
   hostPlayerId: string;
   dealerId: string;
   currentPlayerId: string;
   currentTurnPlayerId: string;
   previousPlayerId: string;
+  pollOriginPlayerId?: string;
   responsePhase: string;
   responseEndsAt: number;
   lastAction: string;

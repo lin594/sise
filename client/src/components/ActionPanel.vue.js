@@ -35,6 +35,12 @@ const panelHint = computed(() => {
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
         return "他人待响阶段：你可以选择胡/开/碰/过";
     }
+    if (props.responsePhase === "local_upper") {
+        return "当前待响牌来自上家，可选择吃或抓";
+    }
+    if (props.responsePhase === "local_draw") {
+        return "当前待响牌需要你决定吃或过";
+    }
     if (!normalized.value.some((x) => x.enabled)) {
         return "当前阶段没有可执行动作";
     }
@@ -52,10 +58,7 @@ function text(action) {
         kai: "开",
         chi: "吃",
         pass: "过",
-        open: "开",
         peng: "碰",
-        eat: "吃",
-        grab: "抓",
     };
     return map[action];
 }

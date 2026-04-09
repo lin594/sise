@@ -161,6 +161,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
 export interface PendingOwnerLocal {
   ownerId: SeatId;
   card: Card;
+  responsePhaseAfterNoResponse?: "local_upper" | "local_draw";
 }
 
 export interface EnterOwnerLocalDeps {
@@ -191,7 +192,12 @@ export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDep
   if (!pending || pending.ownerId !== deps.ownerId) {
     return;
   }
-  const plan = planLocalPhaseAfterNoResponse(deps.ownerId, pending.card.source, deps.getNextPlayerId(deps.ownerId));
+  const plan = planLocalPhaseAfterNoResponse(
+    deps.ownerId,
+    pending.card.source,
+    deps.getNextPlayerId(deps.ownerId),
+    pending.responsePhaseAfterNoResponse,
+  );
   // 设计原因：只有“上家来牌无人响应”才要把 pending.owner 重绑到下家；
   // 若来源是 draw，则 owner 仍是原摸牌者，不应重绑。
   if (plan.rebindPendingOwner) {
@@ -204,7 +210,7 @@ export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDep
   deps.clearActiveResponder();
   deps.clearResponseEndsAt();
 
-  if (plan.responsePhase === "local_draw" && (isGeneral(pending.card) || isGold(pending.card))) {
+  if (pending.card.source === "draw" && plan.responsePhase === "local_draw" && (isGeneral(pending.card) || isGold(pending.card))) {
     deps.addWildcardCardToPlayer(plan.localOwnerId, pending.card, "draw");
     deps.setLastAction(`${plan.localOwnerId} FORCE_TAKE`);
     deps.enterDiscardStage(plan.localOwnerId, "FORCE_TAKE");
@@ -248,7 +254,6 @@ export function executeEatFlow(deps: ExecuteEatDeps, ownerId: SeatId): boolean {
 export interface ExecuteGrabDeps {
   pending: PendingLike | null;
   deck: Card[];
-  pushDiscard: (ownerId: SeatId, card: Card) => void;
   shouldEndDrawAfterUpperPass: (deckCount: number) => boolean;
   endRound: (lastAction: string) => void;
   setDeckCount: (deckCount: number) => void;
@@ -268,8 +273,6 @@ export function executeGrabFlow(deps: ExecuteGrabDeps, ownerId: SeatId): void {
   if (!pending) {
     return;
   }
-  deps.pushDiscard(ownerId, pending.card);
-
   if (deps.shouldEndDrawAfterUpperPass(deps.deck.length)) {
     deps.endRound("DRAW_GAME");
     return;
@@ -283,7 +286,7 @@ export function executeGrabFlow(deps: ExecuteGrabDeps, ownerId: SeatId): void {
   }
 
   deps.setupCollectiveAfterGrab(ownerId, newCard);
-  deps.setLastAction(`${ownerId} GRAB`);
+  deps.setLastAction(`${ownerId} ZHUA`);
   deps.syncAllPrivateHands();
   deps.startCollectivePolling();
 }
@@ -478,9 +481,9 @@ export interface AdvanceToNextOwnerDeps<Pending> {
 }
 
 /**
- * 作用：将当前响应牌交给下家，进入新的 collective 轮询。
+ * 作用：将当前响应牌视作当前牌主打给下家，进入新的 collective 轮询。
  * 关键输入/输出：输入当前牌主与牌，输出无返回值。
- * 副作用：重建 pending.owner，更新 current/previous/pollOrigin 并启动轮询。
+ * 副作用：保留出牌者为 pending.owner，更新当前行动位到下家并启动轮询。
  */
 export function advanceToNextOwnerFlow<Pending>(
   deps: AdvanceToNextOwnerDeps<Pending>,
@@ -490,7 +493,7 @@ export function advanceToNextOwnerFlow<Pending>(
   const nextId = deps.getNextPlayerId(currentOwnerId);
   deps.setPendingResponse(
     deps.createPendingResponse({
-      ownerId: nextId,
+      ownerId: currentOwnerId,
       card: cardToNext,
       source: "upper",
     }),

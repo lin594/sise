@@ -42,6 +42,7 @@ import {
   normalizeDiscardCardId,
   normalizeName as normalizeNameUtil,
   normalizeToken as normalizeTokenUtil,
+  planLocalPhaseAfterNoResponse,
   pickRandomDealerId as pickRandomDealerIdUtil,
   shouldEndDrawAfterUpperPass,
   shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
@@ -73,6 +74,7 @@ interface PendingResponse {
   ownerId: string;
   card: Card;
   collectives: Map<string, { action: ActionType; candidateId?: string }>;
+  responsePhaseAfterNoResponse?: "local_upper" | "local_draw";
 }
 
 type ActionRequest =
@@ -127,11 +129,11 @@ export class FourColorGameRoom extends Room<GameState> {
   private awaitingDiscardOwnerId: string | null = null;
   private readonly botThinkMinMs = Math.max(
     0,
-    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 1200),
+    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 1800),
   );
   private readonly botThinkMaxMs = Math.max(
     this.botThinkMinMs,
-    Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1000),
+    Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1400),
   );
   private readonly operationTimeoutMs = Math.max(1000, Number(process.env.OP_TIMEOUT_MS ?? 20000));
   private readonly collectiveTimeoutMs = Math.max(
@@ -139,6 +141,7 @@ export class FourColorGameRoom extends Room<GameState> {
     Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
+  private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 5000));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
@@ -771,11 +774,12 @@ export class FourColorGameRoom extends Room<GameState> {
   /**
    * 作用：处理 action 消息并按当前 responsePhase 分发动作。
    * 关键输入/输出：输入客户端动作；输出无返回值。
-   * 副作用：可能写入 collective 选择，或触发 chi/grab/pass_to_next。
+   * 副作用：可能写入 collective 选择，或触发 chi/zhua/pass_to_next。
    */
   private normalizeActionRequest(payload: ActionRequest): { action: ActionType; candidateId?: string } | null {
     if (typeof payload === "string") {
-      return { action: normalizeActionUtil(payload) };
+      const action = normalizeActionUtil(payload);
+      return action ? { action } : null;
     }
     if (!payload || typeof payload !== "object") {
       return null;
@@ -784,7 +788,10 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!rawAction) {
       return null;
     }
-    const action = normalizeActionUtil(rawAction as ActionType);
+    const action = normalizeActionUtil(rawAction);
+    if (!action) {
+      return null;
+    }
     const candidateId = typeof payload.candidateId === "string" ? payload.candidateId.trim() : "";
     return { action, candidateId: candidateId || undefined };
   }
@@ -1045,7 +1052,40 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.state.lastAction = "NO_RESPONSE";
     this.traceStep("no_response_path", `owner=${ownerId}`);
-    this.enterOwnerLocalPhaseAfterNoResponse(ownerId);
+    this.scheduleOwnerLocalPhaseAfterNoResponse(ownerId);
+  }
+
+  private scheduleOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
+    const pending = this.pendingResponse;
+    if (!pending) {
+      return;
+    }
+    const plan = planLocalPhaseAfterNoResponse(
+      ownerId,
+      pending.card.source,
+      this.getNextPlayerId(ownerId),
+      pending.responsePhaseAfterNoResponse,
+    );
+    this.state.currentPlayerId = plan.localOwnerId;
+    this.state.currentTurnPlayerId = plan.localOwnerId;
+    this.state.activeResponderId = "";
+    this.state.loopStage = "transition";
+    if (this.localTransitionDelayMs <= 0) {
+      this.state.responseEndsAt = 0;
+      this.enterOwnerLocalPhaseAfterNoResponse(ownerId);
+      return;
+    }
+    this.clearCollectiveTimer();
+    this.state.responseEndsAt = Date.now() + this.localTransitionDelayMs;
+    this.collectiveTimer = setTimeout(() => {
+      this.collectiveTimer = null;
+      this.state.responseEndsAt = 0;
+      if (this.state.phase !== "playing" || this.state.lastAction !== "NO_RESPONSE") {
+        return;
+      }
+      this.enterOwnerLocalPhaseAfterNoResponse(ownerId);
+    }, this.localTransitionDelayMs);
+    this.broadcastAvailableActions();
   }
 
   /**
@@ -1125,21 +1165,22 @@ export class FourColorGameRoom extends Room<GameState> {
       {
         pending: this.pendingResponse,
         deck: this.deck,
-        pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         shouldEndDrawAfterUpperPass,
         endRound: (lastAction) => this.endRound(lastAction),
         setDeckCount: (deckCount) => {
           this.state.deckCount = deckCount;
         },
         setupCollectiveAfterGrab: (ownerIdArg, card) => {
-          this.pendingResponse = createPendingResponse(ownerIdArg, card, "draw");
+          const previousPlayerId = this.getPreviousPlayerId(ownerIdArg);
+          this.pendingResponse = createPendingResponse(previousPlayerId, card, "upper", "local_draw");
           this.state.responsePhase = "collective";
-          this.ops.setResponseCard(card, "draw");
+          this.ops.setResponseCard(card, "upper");
+          this.state.currentPlayerId = ownerIdArg;
           this.state.currentTurnPlayerId = ownerIdArg;
-          this.state.previousPlayerId = ownerIdArg;
+          this.state.previousPlayerId = previousPlayerId;
           this.state.loopStage = "global_poll";
           this.state.activeResponderId = "";
-          this.state.pollOriginPlayerId = ownerIdArg;
+          this.state.pollOriginPlayerId = previousPlayerId;
           this.state.responseEndsAt = 0;
         },
         setLastAction: (action) => {
@@ -1310,13 +1351,97 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private broadcastAvailableActions(): void {
     this.logStateSnapshot("STATE");
+    const snapshot = this.buildRoomSnapshot();
     for (const client of this.clients) {
       const seatId = this.seatBySession.get(client.sessionId);
       if (!seatId) {
         continue;
       }
+      client.send("room_snapshot", snapshot);
       client.send("available_actions", this.getAvailableActions(seatId));
     }
+  }
+
+  private buildCardSnapshot(card: CardSchema | null | undefined): {
+    id: string;
+    color: string;
+    type: string;
+    source?: "upper" | "draw";
+    isResponseCard?: boolean;
+  } | null {
+    if (!card?.id || !card?.color || !card?.type) {
+      return null;
+    }
+    const source = card.source === "draw" || card.source === "upper" ? card.source : undefined;
+    return {
+      id: card.id,
+      color: card.color,
+      type: card.type,
+      source,
+      isResponseCard: Boolean(card.isResponseCard),
+    };
+  }
+
+  private buildCardListSnapshot(cards: ArrayLike<CardSchema>): Array<{
+    id: string;
+    color: string;
+    type: string;
+    source?: "upper" | "draw";
+    isResponseCard?: boolean;
+  }> {
+    const out: Array<{
+      id: string;
+      color: string;
+      type: string;
+      source?: "upper" | "draw";
+      isResponseCard?: boolean;
+    }> = [];
+    for (let i = 0; i < cards.length; i += 1) {
+      const snapshot = this.buildCardSnapshot(cards[i]);
+      if (snapshot) {
+        out.push(snapshot);
+      }
+    }
+    return out;
+  }
+
+  private buildRoomSnapshot() {
+    return {
+      roomId: this.roomId,
+      phase: this.state.phase,
+      hostPlayerId: this.state.hostPlayerId,
+      dealerId: this.state.dealerId,
+      currentPlayerId: this.state.currentPlayerId,
+      currentTurnPlayerId: this.state.currentTurnPlayerId,
+      previousPlayerId: this.state.previousPlayerId,
+      pollOriginPlayerId: this.state.pollOriginPlayerId,
+      responsePhase: this.state.responsePhase,
+      responseEndsAt: this.state.responseEndsAt,
+      lastAction: this.state.lastAction,
+      deckCount: this.state.deckCount,
+      isMoCard: this.state.isMoCard,
+      targetCard: this.buildCardSnapshot(this.state.targetCard),
+      responseCard: this.buildCardSnapshot(this.state.responseCard),
+      publicDiscardPile: this.buildCardListSnapshot(this.state.publicDiscardPile),
+      declareEndsAt: this.state.declareEndsAt,
+      players: this.playerOrder
+        .map((seatId) => this.state.players.get(seatId))
+        .filter((player): player is PlayerState => Boolean(player))
+        .map((player) => ({
+          clientId: player.clientId,
+          name: player.name,
+          declaredKongs: player.declaredKongs,
+          declaredReady: player.declaredReady,
+          isBot: player.isBot,
+          connected: player.connected,
+          discardPile: this.buildCardListSnapshot(player.discardPile),
+          exposedArea: this.buildCardListSnapshot(player.exposedArea),
+          exposedGroupSizes: Array.from(player.exposedGroupSizes),
+          generalArea: this.buildCardListSnapshot(player.generalArea),
+          wildcardPool: this.buildCardListSnapshot(player.wildcardPool),
+          fishArea: this.buildCardListSnapshot(player.fishArea),
+        })),
+    };
   }
 
   private declareNoDiscardWin(ownerId: string, tag: string): void {
@@ -1807,4 +1932,3 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
 }
-

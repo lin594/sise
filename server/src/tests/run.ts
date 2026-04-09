@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
+import { buildRoundResultPlayers } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
@@ -120,6 +121,27 @@ t("actions: chi pair rejects jiang response", () => {
   assert.equal(plans.some((x) => x.kind === "pair"), false);
 });
 
+t("actions: chi single supports jiang response", () => {
+  const response = c("rj", "red", "jiang");
+  const plans = getChiPlans([], response, []);
+  assert.equal(plans.some((x) => x.kind === "single"), true);
+});
+
+t("actions: chi single supports gold response", () => {
+  const response = c("g1", "gold", "gong");
+  const plans = getChiPlans([], response, []);
+  assert.equal(plans.some((x) => x.kind === "single"), true);
+});
+
+t("actions: chi jsx supports jiang response with shi-xiang in hand", () => {
+  const response = c("rj", "red", "jiang");
+  const hand = [c("rs1", "red", "shi"), c("rx1", "red", "xiang")];
+  const plans = getChiPlans(hand, response, []);
+  const jsx = plans.find((x) => x.kind === "jsx");
+  assert.ok(jsx);
+  assert.equal(jsx!.handCards.length, 2);
+});
+
 t("actions: chi pair rejects wildcard substitution from hand", () => {
   const response = c("rj", "red", "ju");
   const hand = [c("wj", "white", "jiang")];
@@ -183,6 +205,40 @@ t("hu: multiple single jiang groups are allowed", () => {
   const result = explainHu([c("rj1", "red", "jiang")], c("rj2", "red", "jiang"));
   assert.equal(result.valid, true);
   assert.equal(result.groups.filter((x) => x === "SingleJiang").length, 2);
+});
+
+t("round_result: non-winner exposed triplet still scores", () => {
+  const state = new GameState();
+  const winner = new PlayerState();
+  winner.clientId = "A";
+  winner.name = "A";
+  const other = new PlayerState();
+  other.clientId = "B";
+  other.name = "B";
+  state.players.set("A", winner);
+  state.players.set("B", other);
+  const hands = new Map<string, Card[]>([
+    ["A", []],
+    ["B", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  other.exposedArea.push(ops.toSchemaCard(c("rj1", "red", "ju"), false, "upper"));
+  other.exposedArea.push(ops.toSchemaCard(c("rj2", "red", "ju"), false, "upper"));
+  other.exposedArea.push(ops.toSchemaCard(c("rj3", "red", "ju"), false, "upper"));
+  other.exposedGroupSizes.push(3);
+
+  const players = buildRoundResultPlayers(
+    ["A", "B"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    "A",
+    ["SingleJiang"],
+  );
+  const seatB = players.find((item) => item.clientId === "B");
+  assert.ok(seatB);
+  assert.equal(seatB!.totalScore, 3);
+  assert.equal(seatB!.scoreBreakdown.some((item) => item.key === "Triplet" && item.total === 3), true);
 });
 
 function mkRoom(seats: string[]) {
@@ -354,8 +410,87 @@ t("room: local upper pass draws new target without adding to hand", () => {
 
   assert.equal((room.playerHands.get("B") ?? []).length, before);
   assert.equal(room.pendingResponse?.card.id, "draw1");
-  assert.equal(room.pendingResponse?.card.source, "draw");
-  assert.notEqual(room.state.responsePhase, "local_upper");
+  assert.equal(room.pendingResponse?.card.source, "upper");
+  assert.equal(room.pendingResponse?.ownerId, "B");
+  assert.equal(room.pendingResponse?.responsePhaseAfterNoResponse, "local_draw");
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
+  assert.equal(room.state.currentPlayerId, "B");
+  assert.equal(room.state.responsePhase, "local_draw");
+});
+
+t("room: zhua follow-up to single jiang enables local chi candidate", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("draw1", "red", "jiang", "upper"),
+    collectives: new Map(),
+    responsePhaseAfterNoResponse: "local_draw",
+  };
+  room.state.responsePhase = "collective";
+  room.playerHands.set("B", [c("ym1", "yellow", "ma")]);
+  room.enterOwnerLocalPhaseAfterNoResponse("A");
+
+  const chi = room.getAvailableActions("B").find((item: any) => item.action === "chi");
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(Boolean(chi?.enabled), true);
+  assert.equal(chi?.candidates?.some((item: any) => item.kind === "single"), true);
+});
+
+t("room: zhua follow-up to jiang still offers jsx chi candidate", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("draw1", "red", "jiang", "upper"),
+    collectives: new Map(),
+    responsePhaseAfterNoResponse: "local_draw",
+  };
+  room.state.responsePhase = "collective";
+  room.playerHands.set("B", [c("rs1", "red", "shi"), c("rx1", "red", "xiang")]);
+  room.enterOwnerLocalPhaseAfterNoResponse("A");
+
+  const chi = room.getAvailableActions("B").find((item: any) => item.action === "chi");
+  assert.equal(chi?.candidates?.some((item: any) => item.kind === "jsx"), true);
+});
+
+t("room: local draw pass_to_next keeps recipient as next local upper owner", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("pass1", "white", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+
+  room.executePassToNext("B");
+
+  assert.equal(room.pendingResponse?.ownerId, "C");
+  assert.equal(room.state.responsePhase, "local_upper");
+  assert.equal(room.state.currentPlayerId, "C");
+});
+
+t("room: collective kai enters discard stage instead of kong draw", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju"), c("ym1", "yellow", "ma")]);
+  const candidateId = room
+    .getAvailableActions("B")
+    .find((item: any) => item.action === "kai")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+
+  room.executeResponseWinner("B", { action: "kai", candidateId });
+
+  assert.equal(room.awaitingDiscardOwnerId, "B");
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.state.currentPlayerId, "B");
+  assert.equal(room.state.lastAction, "B KAI");
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
 });
 
 t("room: entering discard stage with no legal card ends with winner instead of draw", () => {

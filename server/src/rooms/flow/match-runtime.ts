@@ -589,13 +589,134 @@ function getScoreRules(): Record<string, { label: string; unit: number }> {
     TripleZu: { label: "三兵组", unit: 1 },
     QuadZu: { label: "四兵组", unit: 2 },
     Triplet: { label: "坎", unit: 3 },
+    Quad: { label: "开", unit: 6 },
     JiangTriplet: { label: "将坎", unit: 3 },
     JiangQuad: { label: "将开", unit: 6 },
     GoldTriplet: { label: "金条坎", unit: 9 },
     GoldQuad: { label: "金条开", unit: 18 },
+    Fish: { label: "普通鱼", unit: 8 },
+    GoldFish: { label: "金条鱼", unit: 24 },
     SingleJiang: { label: "单将组", unit: 1 },
     SingleGold: { label: "单金条组", unit: 3 },
   };
+}
+
+function splitCardGroups(cards: Card[], sizes: number[]): Card[][] {
+  const groups: Card[][] = [];
+  let offset = 0;
+  for (const size of sizes) {
+    if (!Number.isFinite(size) || size <= 0) {
+      continue;
+    }
+    const chunk = cards.slice(offset, offset + size);
+    offset += size;
+    if (chunk.length === size) {
+      groups.push(chunk);
+    }
+  }
+  return groups;
+}
+
+function isSameFaceGroup(cards: Card[]): boolean {
+  if (cards.length === 0) {
+    return false;
+  }
+  const head = cards[0];
+  return cards.every((card) => card.color === head.color && card.type === head.type);
+}
+
+function classifyExposedGroup(cards: Card[]): string[] {
+  if (!cards.length) {
+    return [];
+  }
+  if (cards.every((card) => card.color === "gold")) {
+    if (cards.length >= 4) {
+      return ["GoldQuad"];
+    }
+    if (cards.length === 3) {
+      return ["GoldTriplet"];
+    }
+    if (cards.length === 1) {
+      return ["SingleGold"];
+    }
+    return [];
+  }
+
+  if (isSameFaceGroup(cards)) {
+    const type = cards[0].type;
+    if (type === "jiang") {
+      if (cards.length >= 4) {
+        return ["JiangQuad"];
+      }
+      if (cards.length === 3) {
+        return ["JiangTriplet"];
+      }
+      if (cards.length === 1) {
+        return ["SingleJiang"];
+      }
+      if (cards.length === 2) {
+        return ["Pair"];
+      }
+      return [];
+    }
+    if (cards.length >= 4) {
+      return ["Quad"];
+    }
+    if (cards.length === 3) {
+      return ["Triplet"];
+    }
+    if (cards.length === 2) {
+      return ["Pair"];
+    }
+    return [];
+  }
+
+  if (cards.length === 3) {
+    const color = cards[0].color;
+    const sameColor = cards.every((card) => card.color === color);
+    const types = new Set(cards.map((card) => card.type));
+    if (sameColor && types.has("ju") && types.has("ma") && types.has("pao")) {
+      return ["FrameJMP"];
+    }
+    if (sameColor && types.has("jiang") && types.has("shi") && types.has("xiang")) {
+      return ["FrameJSX"];
+    }
+    if (cards.every((card) => card.type === "zu") && new Set(cards.map((card) => card.color)).size === 3) {
+      return ["TripleZu"];
+    }
+  }
+
+  if (cards.length === 4 && cards.every((card) => card.type === "zu") && new Set(cards.map((card) => card.color)).size === 4) {
+    return ["QuadZu"];
+  }
+
+  return [];
+}
+
+function buildVisibleAreaGroups(exposedArea: Card[], exposedGroupSizes: number[], fishArea: Card[]): string[] {
+  const groups: string[] = [];
+  for (const group of splitCardGroups(exposedArea, exposedGroupSizes)) {
+    groups.push(...classifyExposedGroup(group));
+  }
+
+  if (fishArea.length > 0) {
+    if (fishArea.every((card) => card.color === "gold") && (fishArea.length === 4 || fishArea.length === 5)) {
+      groups.push("GoldFish");
+    } else {
+      const counter = new Map<string, number>();
+      for (const card of fishArea) {
+        const key = `${card.color}:${card.type}`;
+        counter.set(key, (counter.get(key) ?? 0) + 1);
+      }
+      for (const count of counter.values()) {
+        if (count === 4) {
+          groups.push("Fish");
+        }
+      }
+    }
+  }
+
+  return groups;
 }
 
 /**
@@ -643,7 +764,6 @@ export function buildRoundResultPlayers(
   winnerId: string | null,
   groups: string[],
 ): RoundResultPlayer[] {
-  const winnerScore = winnerId ? buildScoreBreakdown(groups) : { items: [], total: 0 };
   const result: RoundResultPlayer[] = [];
   for (const seatId of playerOrder) {
     const player = players.get(seatId);
@@ -654,6 +774,8 @@ export function buildRoundResultPlayers(
     const fishArea = [...(player?.fishArea ?? [])].map((card) => toPlainCard(card));
     const discardCount = player?.discardPile.length ?? 0;
     const isWinner = winnerId === seatId;
+    const visibleGroups = buildVisibleAreaGroups(exposedArea, exposedGroupSizes, fishArea);
+    const score = buildScoreBreakdown(isWinner ? [...visibleGroups, ...groups] : visibleGroups);
     result.push({
       clientId: seatId,
       name: player?.name ?? seatId,
@@ -663,8 +785,8 @@ export function buildRoundResultPlayers(
       generalArea,
       fishArea,
       discardCount,
-      scoreBreakdown: isWinner ? winnerScore.items : [],
-      totalScore: isWinner ? winnerScore.total : 0,
+      scoreBreakdown: score.items,
+      totalScore: score.total,
     });
   }
   return result;
