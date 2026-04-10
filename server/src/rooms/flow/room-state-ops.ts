@@ -1,5 +1,5 @@
 import { isDiscardRestricted, isSameFace } from "../../rules/deck.js";
-import { explainHu } from "../../rules/hu.js";
+import { analyzeCardGrouping, explainHu } from "../../rules/hu.js";
 import type { Card } from "../../rules/types.js";
 import { CardSchema, type GameState } from "../../schema/game-state.schema.js";
 
@@ -50,11 +50,33 @@ export class RoomStateOps {
    */
   pickDiscardCard(playerId: SeatId): Card | null {
     const hand = this.playerHands.get(playerId) ?? [];
-    const idx = hand.findIndex((card) => !isDiscardRestricted(card));
-    if (idx < 0) {
+    const candidates = hand
+      .map((card, index) => ({ card, index }))
+      .filter((item) => !isDiscardRestricted(item.card));
+    if (!candidates.length) {
       return null;
     }
-    const [discard] = hand.splice(idx, 1);
+    let bestLeftover = Number.POSITIVE_INFINITY;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    let bestIndexes: number[] = [];
+    candidates.forEach(({ index }) => {
+      const remaining = hand.filter((_, cardIndex) => cardIndex !== index);
+      const analysis = analyzeCardGrouping(remaining);
+      if (
+        analysis.leftoverCount < bestLeftover ||
+        (analysis.leftoverCount === bestLeftover && analysis.score > bestScore)
+      ) {
+        bestLeftover = analysis.leftoverCount;
+        bestScore = analysis.score;
+        bestIndexes = [index];
+        return;
+      }
+      if (analysis.leftoverCount === bestLeftover && analysis.score === bestScore) {
+        bestIndexes.push(index);
+      }
+    });
+    const pickedIndex = bestIndexes[Math.floor(Math.random() * bestIndexes.length)] ?? candidates[0]!.index;
+    const [discard] = hand.splice(pickedIndex, 1);
     this.playerHands.set(playerId, hand);
     return discard;
   }

@@ -19,6 +19,18 @@ export interface HuExplainOptions {
   wildcardPool?: Card[];
 }
 
+export interface GroupingAnalysis {
+  groupedCount: number;
+  leftoverCount: number;
+  score: number;
+}
+
+type GroupingCandidate = {
+  groupedCount: number;
+  leftoverCount: number;
+  score: number;
+};
+
 const COLORS = ["yellow", "red", "green", "white"] as const;
 
 function token(card: Card): string {
@@ -159,6 +171,116 @@ function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
   return candidates;
 }
 
+function groupingScore(key: string): number {
+  switch (key) {
+    case "SingleGold":
+      return 3;
+    case "SingleJiang":
+      return 1;
+    case "FrameJMP":
+    case "FrameJSX":
+    case "TripleZu":
+      return 1;
+    case "QuadZu":
+      return 2;
+    case "Pair":
+      return 0;
+    case "Triplet":
+    case "JiangTriplet":
+      return 3;
+    case "Quad":
+    case "JiangQuad":
+      return 6;
+    case "GoldTriplet":
+      return 9;
+    case "GoldQuad":
+      return 18;
+    default:
+      return 0;
+  }
+}
+
+function consumeOne(counter: Counter, key: string): Counter | null {
+  const value = counter.get(key) ?? 0;
+  if (value <= 0) {
+    return null;
+  }
+  const next = new Map(counter);
+  if (value === 1) {
+    next.delete(key);
+  } else {
+    next.set(key, value - 1);
+  }
+  return next;
+}
+
+function pickBetterGrouping(current: GroupingCandidate | null, next: GroupingCandidate): GroupingCandidate {
+  if (!current) {
+    return next;
+  }
+  if (next.leftoverCount !== current.leftoverCount) {
+    return next.leftoverCount < current.leftoverCount ? next : current;
+  }
+  if (next.score !== current.score) {
+    return next.score > current.score ? next : current;
+  }
+  if (next.groupedCount !== current.groupedCount) {
+    return next.groupedCount > current.groupedCount ? next : current;
+  }
+  return current;
+}
+
+function analyzeGroupingDfs(counter: Counter, memo: Map<string, GroupingCandidate>): GroupingCandidate {
+  if (counter.size === 0) {
+    return {
+      groupedCount: 0,
+      leftoverCount: 0,
+      score: 0,
+    };
+  }
+
+  const key = serialize(counter);
+  const cached = memo.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const pivot = pickPivot(counter);
+  let best: GroupingCandidate | null = null;
+  for (const candidate of listCandidatesForPivot(counter, pivot)) {
+    const next = take(counter, candidate.remove);
+    if (!next) {
+      continue;
+    }
+    const child = analyzeGroupingDfs(next, memo);
+    best = pickBetterGrouping(best, {
+      groupedCount: child.groupedCount + candidate.remove.length,
+      leftoverCount: child.leftoverCount,
+      score: child.score + groupingScore(candidate.key),
+    });
+  }
+
+  const leftoverNext = consumeOne(counter, pivot);
+  if (leftoverNext) {
+    const child = analyzeGroupingDfs(leftoverNext, memo);
+    best = pickBetterGrouping(best, {
+      groupedCount: child.groupedCount,
+      leftoverCount: child.leftoverCount + 1,
+      score: child.score,
+    });
+  }
+
+  const resolved =
+    best ??
+    ({
+      groupedCount: 0,
+      leftoverCount: [...counter.values()].reduce((sum, count) => sum + count, 0),
+      score: 0,
+    } satisfies GroupingCandidate);
+  memo.set(key, resolved);
+  return resolved;
+}
+
 function dfs(counter: Counter, memo: Map<string, ResolvedCandidate[] | null>): ResolvedCandidate[] | null {
   if (counter.size === 0) {
     return [];
@@ -236,5 +358,14 @@ export function explainHu(hand: Card[], responseCard: Card, options?: number | H
     valid: Boolean(resolved),
     groups: resolved?.map((item) => item.key) ?? [],
     details,
+  };
+}
+
+export function analyzeCardGrouping(cards: Card[]): GroupingAnalysis {
+  const resolved = analyzeGroupingDfs(makeCounter(cards), new Map());
+  return {
+    groupedCount: resolved.groupedCount,
+    leftoverCount: resolved.leftoverCount,
+    score: resolved.score,
   };
 }

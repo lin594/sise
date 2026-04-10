@@ -65,6 +65,23 @@ t("room-state-ops: upgrade pair group to triplet in-place", () => {
   assert.equal(player.exposedArea[2].id, "rj3");
 });
 
+t("room-state-ops: auto discard prefers preserving complete groups over first available card", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "B";
+  player.name = "B";
+  state.players.set("B", player);
+  const hands = new Map<string, Card[]>([
+    ["B", [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju"), c("ym1", "yellow", "ma")]],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+
+  const discard = ops.pickDiscardCard("B");
+
+  assert.ok(discard);
+  assert.equal(discard!.id, "ym1");
+});
+
 t("room-state-ops: upgrade targets matching pair when multiple groups exist", () => {
   const state = new GameState();
   const player = new PlayerState();
