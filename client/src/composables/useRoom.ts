@@ -13,11 +13,10 @@ import type {
   SessionTokenPayload,
 } from "@/types/game";
 import { sortHandCards } from "@/utils/cardSort";
+import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 
-const DEFAULT_WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:2567`;
-const WS_URL = (import.meta.env.VITE_SERVER_URL as string) || DEFAULT_WS_URL;
-const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
-const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
+const WS_URL = BACKEND_WS_URL;
+const HTTP_URL = BACKEND_HTTP_URL;
 
 function asCardArray(input: unknown): Card[] {
   const isCard = (x: any): x is Card =>

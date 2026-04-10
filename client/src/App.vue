@@ -381,6 +381,7 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
+import { BACKEND_HTTP_URL } from "@/config/backend";
 import type { ActionCandidate, ActionRequest, Card, RoundResultPlayer } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
 
@@ -391,8 +392,7 @@ type SettlementGroupBlock = {
   tone: "meld" | "fish" | "public" | "strong";
 };
 
-const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
-const HTTP_URL = (import.meta.env.VITE_SERVER_HTTP_URL as string) || DEFAULT_HTTP_URL;
+const HTTP_URL = BACKEND_HTTP_URL;
 
 const {
   connected,

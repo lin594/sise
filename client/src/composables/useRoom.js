@@ -1,10 +1,9 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { Client } from "colyseus.js";
 import { sortHandCards } from "@/utils/cardSort";
-const DEFAULT_WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:2567`;
-const WS_URL = import.meta.env.VITE_SERVER_URL || DEFAULT_WS_URL;
-const DEFAULT_HTTP_URL = `${window.location.protocol}//${window.location.hostname}:2567`;
-const HTTP_URL = import.meta.env.VITE_SERVER_HTTP_URL || DEFAULT_HTTP_URL;
+import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
+const WS_URL = BACKEND_WS_URL;
+const HTTP_URL = BACKEND_HTTP_URL;
 function asCardArray(input) {
     const isCard = (x) => x &&
         typeof x === "object" &&
