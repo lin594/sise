@@ -115,6 +115,17 @@ function onClick(action: ActionType): void {
     return;
   }
   if (isMeldAction(action)) {
+    const item = normalized.value.find((entry) => entry.action === action);
+    if ((item?.candidates?.length ?? 0) === 1) {
+      busy.value = true;
+      const candidateId = item?.candidates?.[0]?.id ?? "";
+      emit("selectionChange", { mode: null, selectedCandidateId: candidateId || null });
+      emit("submit", { action, candidateId });
+      window.setTimeout(() => {
+        busy.value = false;
+      }, 220);
+      return;
+    }
     if (selectionMode.value === action) {
       emit("selectionChange", { mode: null, selectedCandidateId: null });
     } else {

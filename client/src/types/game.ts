@@ -12,6 +12,7 @@ export interface Card {
 export interface PlayerState {
   clientId: string;
   name: string;
+  handCount?: number;
   declaredKongs: number;
   declaredReady: boolean;
   isBot: boolean;
@@ -19,6 +20,7 @@ export interface PlayerState {
   discardPile: Card[];
   exposedArea: Card[];
   exposedGroupSizes: number[];
+  exposedGroupKinds: string[];
   generalArea: Card[];
   wildcardPool: Card[];
   fishArea: Card[];
@@ -29,10 +31,12 @@ export interface RoomStateSnapshot {
   phase: string;
   hostPlayerId: string;
   dealerId: string;
+  dealerPickerId?: string;
   currentPlayerId: string;
   currentTurnPlayerId: string;
   previousPlayerId: string;
   pollOriginPlayerId?: string;
+  activeResponderId?: string;
   responsePhase: string;
   responseEndsAt: number;
   lastAction: string;
@@ -40,7 +44,9 @@ export interface RoomStateSnapshot {
   isMoCard: boolean;
   targetCard: Card | null;
   responseCard: Card | null;
+  dealerCard?: Card | null;
   publicDiscardPile: Card[];
+  publicGeneralPool?: Card[];
   declareEndsAt: number;
   players: PlayerState[];
 }
@@ -89,8 +95,18 @@ export interface RoundResultPlayer {
   clientId: string;
   name: string;
   hand: Card[];
+  huType?: "small" | "big" | null;
+  winningGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+  resolvedHandGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
   exposedArea: Card[];
   exposedGroupSizes: number[];
+  exposedGroupKinds: string[];
   generalArea: Card[];
   fishArea: Card[];
   discardCount: number;
@@ -108,4 +124,5 @@ export interface RoundResultPayload {
   winnerId: string | null;
   groups: string[];
   players: RoundResultPlayer[];
+  remainingDeck?: Card[];
 }

@@ -129,10 +129,34 @@ function asNumberArray(input: unknown): number[] {
   return [];
 }
 
+function asStringArray(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map((x) => String(x ?? "")).filter(Boolean);
+  }
+  if (input && typeof (input as any).toArray === "function") {
+    return ((input as any).toArray() as unknown[]).map((x) => String(x ?? "")).filter(Boolean);
+  }
+  if (input && typeof (input as any).forEach === "function") {
+    const out: string[] = [];
+    (input as any).forEach((value: unknown) => {
+      const next = String(value ?? "");
+      if (next) {
+        out.push(next);
+      }
+    });
+    return out;
+  }
+  if (input && typeof input === "object") {
+    return Object.values(input as Record<string, unknown>).map((x) => String(x ?? "")).filter(Boolean);
+  }
+  return [];
+}
+
 function normalizePlayer(raw: any): PlayerState {
   return {
     clientId: String(raw?.clientId ?? ""),
     name: String(raw?.name ?? ""),
+    handCount: Number(raw?.handCount ?? 0),
     declaredKongs: Number(raw?.declaredKongs ?? 0),
     declaredReady: Boolean(raw?.declaredReady),
     isBot: Boolean(raw?.isBot),
@@ -140,6 +164,7 @@ function normalizePlayer(raw: any): PlayerState {
     discardPile: asCardArray(raw?.discardPile),
     exposedArea: asCardArray(raw?.exposedArea),
     exposedGroupSizes: asNumberArray(raw?.exposedGroupSizes),
+    exposedGroupKinds: asStringArray(raw?.exposedGroupKinds),
     generalArea: asCardArray(raw?.generalArea),
     wildcardPool: asCardArray(raw?.wildcardPool),
     fishArea: asCardArray(raw?.fishArea),
@@ -171,10 +196,12 @@ function normalizeSnapshot(next: unknown): RoomStateSnapshot {
     phase: String(rawState?.phase ?? ""),
     hostPlayerId: String(rawState?.hostPlayerId ?? ""),
     dealerId: String(rawState?.dealerId ?? ""),
+    dealerPickerId: String(rawState?.dealerPickerId ?? ""),
     currentPlayerId: String(rawState?.currentPlayerId ?? ""),
     currentTurnPlayerId: String(rawState?.currentTurnPlayerId ?? ""),
     previousPlayerId: String(rawState?.previousPlayerId ?? ""),
     pollOriginPlayerId: String(rawState?.pollOriginPlayerId ?? ""),
+    activeResponderId: String(rawState?.activeResponderId ?? ""),
     responsePhase: normalizeResponsePhase(String(rawState?.responsePhase ?? "")),
     responseEndsAt: Number(rawState?.responseEndsAt ?? 0),
     lastAction: String(rawState?.lastAction ?? ""),
@@ -182,7 +209,9 @@ function normalizeSnapshot(next: unknown): RoomStateSnapshot {
     isMoCard: Boolean(rawState?.isMoCard),
     targetCard: asCard(rawState?.targetCard),
     responseCard: asCard(rawState?.responseCard),
+    dealerCard: asCard(rawState?.dealerCard),
     publicDiscardPile: asCardArray(rawState?.publicDiscardPile),
+    publicGeneralPool: asCardArray(rawState?.publicGeneralPool),
     declareEndsAt: Number(rawState?.declareEndsAt ?? 0),
     players: normalizedPlayers,
   };
@@ -312,7 +341,17 @@ export function useRoom(playerName = "Player") {
     const playerMarks = snapshot.players
       .map(
         (player) =>
-          `${player.clientId}:${player.connected ? 1 : 0}:${player.declaredReady ? 1 : 0}:${player.discardPile.length}:${player.exposedArea.length}:${player.generalArea.length}:${player.fishArea.length}`,
+          [
+            player.clientId,
+            player.handCount ?? 0,
+            player.connected ? 1 : 0,
+            player.declaredReady ? 1 : 0,
+            player.discardPile.map((card) => card.id).join(","),
+            player.exposedArea.map((card) => card.id).join(","),
+            player.exposedGroupKinds.join(","),
+            player.generalArea.map((card) => card.id).join(","),
+            player.fishArea.map((card) => card.id).join(","),
+          ].join(":"),
       )
       .join("|");
     return [
@@ -320,16 +359,20 @@ export function useRoom(playerName = "Player") {
       snapshot.responsePhase,
       snapshot.hostPlayerId,
       snapshot.dealerId,
+      snapshot.dealerPickerId ?? "",
       snapshot.currentPlayerId,
       snapshot.currentTurnPlayerId,
       snapshot.previousPlayerId,
       snapshot.pollOriginPlayerId,
+      snapshot.activeResponderId,
       String(snapshot.responseEndsAt),
       snapshot.lastAction,
       String(snapshot.deckCount),
       snapshot.targetCard?.id ?? "",
       snapshot.responseCard?.id ?? "",
-      String(snapshot.publicDiscardPile.length),
+      snapshot.dealerCard?.id ?? "",
+      snapshot.publicDiscardPile.map((card) => card.id).join("|"),
+      (snapshot.publicGeneralPool ?? []).map((card) => card.id).join("|"),
       playerMarks,
     ].join("::");
   }
@@ -526,14 +569,25 @@ export function useRoom(playerName = "Player") {
         players: (payload.players ?? []).map((p) => ({
           ...p,
           hand: sortHandCards(p.hand ?? []),
+          huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
+          winningGroups: (p.winningGroups ?? []).map((group) => ({
+            key: String(group?.key ?? ""),
+            cards: sortHandCards(group?.cards ?? []),
+          })),
+          resolvedHandGroups: (p.resolvedHandGroups ?? []).map((group) => ({
+            key: String(group?.key ?? ""),
+            cards: sortHandCards(group?.cards ?? []),
+          })),
           exposedArea: p.exposedArea ?? [],
           exposedGroupSizes: asNumberArray(p.exposedGroupSizes),
+          exposedGroupKinds: asStringArray((p as { exposedGroupKinds?: unknown }).exposedGroupKinds),
           generalArea: sortHandCards(p.generalArea ?? []),
           fishArea: sortHandCards(p.fishArea ?? []),
           discardCount: Number(p.discardCount ?? 0),
           scoreBreakdown: p.scoreBreakdown ?? [],
           totalScore: Number(p.totalScore ?? 0),
         })),
+        remainingDeck: asCardArray((payload as { remainingDeck?: unknown }).remainingDeck),
       };
       pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
     });

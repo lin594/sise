@@ -9,10 +9,12 @@ export declare function useRoom(playerName?: string): {
         phase: string;
         hostPlayerId: string;
         dealerId: string;
+        dealerPickerId?: string | undefined;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
         pollOriginPlayerId?: string | undefined;
+        activeResponderId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         lastAction: string;
@@ -32,6 +34,13 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         } | null;
+        dealerCard?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null | undefined;
         publicDiscardPile: {
             id: string;
             color: string;
@@ -39,10 +48,18 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         }[];
+        publicGeneralPool?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
         declareEndsAt: number;
         players: {
             clientId: string;
             name: string;
+            handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
             isBot: boolean;
@@ -62,6 +79,7 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
             exposedGroupSizes: number[];
+            exposedGroupKinds: string[];
             generalArea: {
                 id: string;
                 color: string;
@@ -89,10 +107,12 @@ export declare function useRoom(playerName?: string): {
         phase: string;
         hostPlayerId: string;
         dealerId: string;
+        dealerPickerId?: string | undefined;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
         pollOriginPlayerId?: string | undefined;
+        activeResponderId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         lastAction: string;
@@ -112,6 +132,13 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         } | null;
+        dealerCard?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        } | null | undefined;
         publicDiscardPile: {
             id: string;
             color: string;
@@ -119,10 +146,18 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         }[];
+        publicGeneralPool?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
         declareEndsAt: number;
         players: {
             clientId: string;
             name: string;
+            handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
             isBot: boolean;
@@ -142,6 +177,7 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
             exposedGroupSizes: number[];
+            exposedGroupKinds: string[];
             generalArea: {
                 id: string;
                 color: string;
@@ -225,6 +261,27 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            huType?: "small" | "big" | null | undefined;
+            winningGroups: {
+                key: string;
+                cards: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
+            resolvedHandGroups: {
+                key: string;
+                cards: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
             exposedArea: {
                 id: string;
                 color: string;
@@ -233,6 +290,7 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
             exposedGroupSizes: number[];
+            exposedGroupKinds: string[];
             generalArea: {
                 id: string;
                 color: string;
@@ -257,6 +315,13 @@ export declare function useRoom(playerName?: string): {
             }[];
             totalScore: number;
         }[];
+        remainingDeck?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
     } | null, RoundResultPayload | {
         winnerId: string | null;
         groups: string[];
@@ -270,6 +335,27 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            huType?: "small" | "big" | null | undefined;
+            winningGroups: {
+                key: string;
+                cards: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
+            resolvedHandGroups: {
+                key: string;
+                cards: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
             exposedArea: {
                 id: string;
                 color: string;
@@ -278,6 +364,7 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
             exposedGroupSizes: number[];
+            exposedGroupKinds: string[];
             generalArea: {
                 id: string;
                 color: string;
@@ -302,6 +389,13 @@ export declare function useRoom(playerName?: string): {
             }[];
             totalScore: number;
         }[];
+        remainingDeck?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
     } | null>;
     debugApplied: import("vue").Ref<{
         scenario: string;

@@ -9,6 +9,11 @@ type Candidate = {
   priority: number;
 };
 
+type ResolvedCandidate = {
+  key: string;
+  remove: string[];
+};
+
 export interface HuExplainOptions {
   wildcardCount?: number;
   wildcardPool?: Card[];
@@ -154,7 +159,7 @@ function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
   return candidates;
 }
 
-function dfs(counter: Counter, memo: Map<string, string[] | null>): string[] | null {
+function dfs(counter: Counter, memo: Map<string, ResolvedCandidate[] | null>): ResolvedCandidate[] | null {
   if (counter.size === 0) {
     return [];
   }
@@ -177,7 +182,7 @@ function dfs(counter: Counter, memo: Map<string, string[] | null>): string[] | n
     }
     const child = dfs(next, memo);
     if (child) {
-      const solved = [candidate.key, ...child];
+      const solved = [{ key: candidate.key, remove: candidate.remove }, ...child];
       memo.set(key, solved);
       return solved;
     }
@@ -207,9 +212,29 @@ export function validateHu(hand: Card[], responseCard: Card, options?: number | 
 export function explainHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): HuResult {
   resolveOptions(options); // compatibility only: wildcard options are intentionally ignored.
   const allCards = [...hand, responseCard];
-  const groups = dfs(makeCounter(allCards), new Map());
+  const resolved = dfs(makeCounter(allCards), new Map());
+  const cardBuckets = new Map<string, Card[]>();
+  for (const card of allCards) {
+    const key = token(card);
+    const list = cardBuckets.get(key) ?? [];
+    list.push(card);
+    cardBuckets.set(key, list);
+  }
+  const details =
+    resolved?.map(({ key, remove }) => {
+      const cards: Card[] = [];
+      for (const removeKey of remove) {
+        const bucket = cardBuckets.get(removeKey) ?? [];
+        const picked = bucket.shift();
+        if (picked) {
+          cards.push(picked);
+        }
+      }
+      return { key, cards };
+    }) ?? [];
   return {
-    valid: Boolean(groups),
-    groups: groups ?? [],
+    valid: Boolean(resolved),
+    groups: resolved?.map((item) => item.key) ?? [],
+    details,
   };
 }

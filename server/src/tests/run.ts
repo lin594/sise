@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
-import { buildRoundResultPlayers } from "../rooms/flow/match-runtime.js";
+import { buildRoundResultPlayers, dealInitialHands } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
+import { resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 
@@ -207,38 +208,173 @@ t("hu: multiple single jiang groups are allowed", () => {
   assert.equal(result.groups.filter((x) => x === "SingleJiang").length, 2);
 });
 
-t("round_result: non-winner exposed triplet still scores", () => {
+t("dealer: public card determines dealer seat and enters dealer hand", () => {
+  const order = ["A", "B", "C", "D"];
+  assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dy", "yellow", "ju")), "A");
+  assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dr", "red", "ju")), "B");
+  assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dg", "green", "ju")), "C");
+  assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dw", "white", "ju")), "D");
+  assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dgold", "gold", "zi")), "B");
+
+  const hands = new Map<string, Card[]>();
+  const deck = Array.from({ length: 80 }, (_, index) => c(`c${index}`, "red", "ju"));
+  dealInitialHands(order, deck, hands);
+  for (const seatId of order) {
+    assert.equal(hands.get(seatId)?.length ?? 0, 20);
+  }
+  const dealerCard = c("marker", "white", "ju");
+  const dealerId = resolveDealerFromAnchorAndCard(order, "A", dealerCard);
+  const dealerHand = hands.get(dealerId) ?? [];
+  dealerHand.unshift(dealerCard);
+  hands.set(dealerId, dealerHand);
+  assert.equal(hands.get("D")?.[0]?.id, "marker");
+  assert.equal(hands.get("D")?.length ?? 0, 21);
+});
+
+t("round_result: hu winner collects from all three opponents", () => {
   const state = new GameState();
-  const winner = new PlayerState();
-  winner.clientId = "A";
-  winner.name = "A";
-  const other = new PlayerState();
-  other.clientId = "B";
-  other.name = "B";
-  state.players.set("A", winner);
-  state.players.set("B", other);
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
   const hands = new Map<string, Card[]>([
     ["A", []],
     ["B", []],
+    ["C", []],
+    ["D", []],
   ]);
   const ops = createRoomStateOps(state, hands, () => null);
-  other.exposedArea.push(ops.toSchemaCard(c("rj1", "red", "ju"), false, "upper"));
-  other.exposedArea.push(ops.toSchemaCard(c("rj2", "red", "ju"), false, "upper"));
-  other.exposedArea.push(ops.toSchemaCard(c("rj3", "red", "ju"), false, "upper"));
-  other.exposedGroupSizes.push(3);
+  const players = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    "A",
+    ["GoldTriplet"],
+  );
+  const seatA = players.find((item) => item.clientId === "A");
+  const seatB = players.find((item) => item.clientId === "B");
+  const seatC = players.find((item) => item.clientId === "C");
+  const seatD = players.find((item) => item.clientId === "D");
+  assert.ok(seatA);
+  assert.ok(seatB);
+  assert.ok(seatC);
+  assert.ok(seatD);
+  assert.equal(seatA!.totalScore, 36);
+  assert.equal(seatB!.totalScore, -12);
+  assert.equal(seatC!.totalScore, -12);
+  assert.equal(seatD!.totalScore, -12);
+  assert.equal(seatA!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:GoldTriplet") && item.total === 27), true);
+});
+
+t("round_result: exposed peng no longer counts as kan in mutual settlement", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([
+    ["A", []],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const seatBPlayer = state.players.get("B");
+  assert.ok(seatBPlayer);
+  seatBPlayer!.exposedArea.push(ops.toSchemaCard(c("rj1", "red", "ju"), false, "upper"));
+  seatBPlayer!.exposedArea.push(ops.toSchemaCard(c("rj2", "red", "ju"), false, "upper"));
+  seatBPlayer!.exposedArea.push(ops.toSchemaCard(c("rj3", "red", "ju"), false, "upper"));
+  seatBPlayer!.exposedGroupSizes.push(3);
 
   const players = buildRoundResultPlayers(
-    ["A", "B"],
+    ["A", "B", "C", "D"],
     state.players,
     hands,
     (card) => ops.toPlainCard(card),
     "A",
     ["SingleJiang"],
   );
+  const seatA = players.find((item) => item.clientId === "A");
   const seatB = players.find((item) => item.clientId === "B");
+  const seatC = players.find((item) => item.clientId === "C");
+  const seatD = players.find((item) => item.clientId === "D");
+  assert.ok(seatA);
   assert.ok(seatB);
-  assert.equal(seatB!.totalScore, 3);
-  assert.equal(seatB!.scoreBreakdown.some((item) => item.key === "Triplet" && item.total === 3), true);
+  assert.ok(seatC);
+  assert.ok(seatD);
+  assert.equal(seatA!.totalScore, 12);
+  assert.equal(seatB!.totalScore, -4);
+  assert.equal(seatC!.totalScore, -4);
+  assert.equal(seatD!.totalScore, -4);
+  assert.equal(seatB!.scoreBreakdown.filter((item) => item.key.startsWith("MutualGain:")).reduce((sum, item) => sum + item.total, 0), 0);
+  assert.equal(seatB!.scoreBreakdown.some((item) => item.key.startsWith("HuLose:SingleJiang") && item.total === -1), true);
+});
+
+t("round_result: winner response gold is shown as winning group and hand leftovers do not inflate hu score", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([
+    [
+      "A",
+      [
+        c("yj1", "yellow", "jiang"),
+        c("yj2", "yellow", "jiang"),
+        c("gj1", "green", "jiang"),
+        c("wj2", "white", "jiang"),
+        c("rz1", "red", "zu"),
+        c("gz1", "green", "zu"),
+        c("yz1", "yellow", "zu"),
+        c("wj1", "white", "jiang"),
+        c("ws1", "white", "shi"),
+        c("wx1", "white", "xiang"),
+      ],
+    ],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const seatAPlayer = state.players.get("A");
+  assert.ok(seatAPlayer);
+  seatAPlayer!.generalArea.push(ops.toSchemaCard(c("rj_open", "red", "jiang"), false, "upper"));
+  [
+    [c("rs1", "red", "shi"), c("rs2", "red", "shi"), c("rs3", "red", "shi")],
+    [c("gx1", "green", "xiang"), c("gx2", "green", "xiang"), c("gx3", "green", "xiang")],
+    [c("yj3", "yellow", "ju"), c("yj4", "yellow", "ju"), c("yj5", "yellow", "ju")],
+  ].forEach((group) => {
+    group.forEach((card) => seatAPlayer!.exposedArea.push(ops.toSchemaCard(card, false, "upper")));
+    seatAPlayer!.exposedGroupSizes.push(group.length);
+    seatAPlayer!.exposedGroupKinds.push("peng");
+  });
+
+  const players = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    "A",
+    [],
+    c("gold_zi_01", "gold", "zi", "upper"),
+  );
+  const winner = players.find((item) => item.clientId === "A");
+  const loser = players.find((item) => item.clientId === "B");
+  assert.ok(winner);
+  assert.ok(loser);
+  assert.equal(winner!.winningGroups.length, 1);
+  assert.equal(winner!.winningGroups[0]?.cards[0]?.type, "zi");
+  assert.equal(winner!.resolvedHandGroups.some((group) => group.cards.some((card) => card.type === "zi")), false);
+  assert.equal(winner!.totalScore, 48);
+  assert.equal(loser!.totalScore, -16);
 });
 
 function mkRoom(seats: string[]) {
@@ -355,6 +491,20 @@ t("room: force-take draw wildcard can directly win when no legal discard", () =>
   room.enterOwnerLocalPhaseAfterNoResponse("A");
   assert.equal(room.state.phase, "ended");
   assert.match(String(room.state.lastAction), /^A HU$/);
+});
+
+t("room: declaring finish immediately enters dealer discard stage after declarations", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.state.phase = "declaring";
+  room.roundDealerId = "A";
+  room.playerHands.set("A", [c("m1", "red", "ma")]);
+  room.finishDeclaringPhase();
+  assert.equal(room.state.phase, "playing");
+  assert.equal(room.state.lastAction, "A OPENING_DISCARD");
+  assert.equal(room.awaitingDiscardOwnerId, "A");
+  assert.equal(room.pendingResponse?.ownerId, "A");
+  assert.equal(room.state.responseEndsAt > 0, true);
+  room.onDispose();
 });
 
 t("room: local chi enters manual discard stage instead of auto discard", () => {
@@ -534,10 +684,85 @@ t("room: bot auto-discard skips gold cards", () => {
 
   room.runBotStepNow();
 
-  const top = room.state.players.get("B")?.discardPile[0];
+  const discard = room.state.players.get("B")?.discardPile ?? [];
+  const top = discard[discard.length - 1];
   assert.ok(top);
   assert.equal(top!.color, "red");
   assert.equal(top!.id, "m1");
+});
+
+t("room: bot local chi uses candidate id instead of falling back to pass", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: c("resp", "red", "jiang", "draw"),
+    collectives: new Map(),
+    responsePhaseAfterNoResponse: "local_draw",
+  };
+  room.state.responsePhase = "local_draw";
+  room.state.currentPlayerId = "B";
+  room.state.currentTurnPlayerId = "B";
+  room.botIds.add("B");
+  room.playerHands.set("B", [c("m1", "yellow", "ma")]);
+
+  room.runBotStepNow();
+
+  assert.equal(room.state.players.get("B")?.exposedArea.length ?? 0, 1);
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
+  assert.equal(room.awaitingDiscardOwnerId, "B");
+});
+
+t("room: collective peng consumes source discard from flow", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  const discard = c("resp", "red", "ju", "upper");
+  room.ops.pushDiscard("A", discard);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: discard,
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("m1", "yellow", "ma")]);
+  const candidateId = room
+    .getAvailableActions("B")
+    .find((item: any) => item.action === "peng")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+
+  room.executeResponseWinner("B", { action: "peng", candidateId });
+
+  assert.equal(room.state.players.get("A")?.discardPile.length ?? 0, 0);
+  assert.equal(room.state.publicDiscardPile.length, 0);
+});
+
+t("room: local chi consumes source discard from original flow after owner rebind", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  const discard = c("resp", "red", "ju", "upper");
+  room.ops.pushDiscard("A", discard);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: discard,
+    collectives: new Map(),
+    responsePhaseAfterNoResponse: "local_upper",
+  };
+  room.state.responsePhase = "local_upper";
+  room.state.currentPlayerId = "B";
+  room.state.currentTurnPlayerId = "B";
+  room.state.pollOriginPlayerId = "A";
+  room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("m1", "yellow", "ma")]);
+
+  const candidateId = room
+    .getAvailableActions("B")
+    .find((item: any) => item.action === "chi")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+
+  const ok = room.executeEat("B", candidateId);
+
+  assert.equal(ok, true);
+  assert.equal(room.state.players.get("A")?.discardPile.length ?? 0, 0);
+  assert.equal(room.state.publicDiscardPile.length, 0);
 });
 
 t("room: local human phase schedules response timeout", () => {

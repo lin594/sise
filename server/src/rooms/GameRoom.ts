@@ -5,6 +5,7 @@ import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi } from "./flow/actions/chi.js";
 import { tryExecuteKai } from "./flow/actions/kai.js";
 import { tryExecutePeng } from "./flow/actions/peng.js";
+import { buildChiCandidates, buildKaiCandidates, buildPengCandidates } from "./flow/action-candidates.js";
 import { executeResponseWinner } from "./flow/response-winner.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
 import {
@@ -44,6 +45,7 @@ import {
   normalizeToken as normalizeTokenUtil,
   planLocalPhaseAfterNoResponse,
   pickRandomDealerId as pickRandomDealerIdUtil,
+  resolveDealerFromAnchorAndCard,
   shouldEndDrawAfterUpperPass,
   shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
   summarizeAllPlayersCards,
@@ -89,6 +91,10 @@ interface DeclareSetupPayload {
   fishCardIds?: string[];
 }
 
+type RoundBootstrapSetup =
+  | { mode: "picker"; pickerId: string }
+  | { mode: "fixed"; dealerId: string };
+
 type HuLogMode = "off" | "all" | "success" | "fail";
 type StateLogMode = "off" | "all" | "compact";
 
@@ -126,6 +132,9 @@ export class FourColorGameRoom extends Room<GameState> {
   private baseNameBySeat = new Map<string, string>(); // seatId -> human display name
   private pendingResponse: PendingResponse | null = null;
   private publicGeneralPool: Card[] = [];
+  private dealerCard: Card | null = null;
+  private dealerPickerId: string | null = null;
+  private nextRoundSetup: RoundBootstrapSetup | null = null;
   private awaitingDiscardOwnerId: string | null = null;
   private readonly botThinkMinMs = Math.max(
     0,
@@ -142,6 +151,9 @@ export class FourColorGameRoom extends Room<GameState> {
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 5000));
+  private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
+  private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 1200));
+  private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
@@ -160,6 +172,8 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly huChecksBySeat = new Map<string, { total: number; valid: number }>();
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
+  private declareIntroTimer: ReturnType<typeof setTimeout> | null = null;
+  private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
   private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
@@ -306,6 +320,7 @@ export class FourColorGameRoom extends Room<GameState> {
   onDispose(): void {
     this.clearBotTimer();
     this.clearDeclareTimer();
+    this.clearDeclareIntroTimer();
     this.clearCollectiveTimer();
   }
 
@@ -317,6 +332,7 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：清空牌局运行态、座位映射、玩家容器和计时器。
    */
   private resetToFreshLobby(): void {
+    this.clearDeclareIntroTimer();
     resetToFreshLobbyFlow({
       state: this.state,
       targetSeats: this.targetSeats,
@@ -337,6 +353,9 @@ export class FourColorGameRoom extends Room<GameState> {
       },
       setRoundDealerNull: () => {
         this.roundDealerId = null;
+        this.dealerCard = null;
+        this.dealerPickerId = null;
+        this.nextRoundSetup = null;
       },
       clearPlayerHands: () => this.playerHands.clear(),
       setPlayerOrder: (order) => {
@@ -498,6 +517,74 @@ export class FourColorGameRoom extends Room<GameState> {
     ensureBotSeatsForStartFlow(this.state, this.playerOrder, this.playerHands, this.botIds, this.targetSeats);
   }
 
+  private resolveBootstrapSetup(): RoundBootstrapSetup {
+    if (this.nextRoundSetup?.mode === "fixed" && this.state.players.has(this.nextRoundSetup.dealerId)) {
+      return this.nextRoundSetup;
+    }
+    if (this.nextRoundSetup?.mode === "picker" && this.state.players.has(this.nextRoundSetup.pickerId)) {
+      return this.nextRoundSetup;
+    }
+    return {
+      mode: "picker",
+      pickerId: pickRandomDealerIdUtil(this.playerOrder),
+    };
+  }
+
+  private chooseDealerCardFromDealerHand(dealerId: string): Card | null {
+    const hand = this.playerHands.get(dealerId) ?? [];
+    if (!hand.length) {
+      return null;
+    }
+    const index = Math.floor(Math.random() * hand.length);
+    const picked = hand[index];
+    return picked ? { ...picked } : null;
+  }
+
+  private startDeclareIntroSequence(dealerId: string, pickerId: string | null): void {
+    this.clearDeclareIntroTimer();
+    const leadMs = pickerId ? this.dealerPickIntroMs + this.dealerRevealIntroMs : this.dealerRevealIntroMs;
+    const totalIntroMs = leadMs + this.openingDealDelayMs;
+    this.state.responseEndsAt = totalIntroMs > 0 ? Date.now() + totalIntroMs : 0;
+    this.state.lastAction = pickerId ? `DEALER_PICK ${pickerId}` : `DEALER_CARD ${dealerId}`;
+    this.broadcastAvailableActions();
+
+    if (totalIntroMs <= 0) {
+      this.state.lastAction = `DECLARING ${this.declareTimeoutMs}ms`;
+      this.startDeclaringPhase();
+      return;
+    }
+
+    const registerTimer = (delayMs: number, run: () => void) => {
+      const timer = setTimeout(() => {
+        if (this.state.phase !== "declaring") {
+          return;
+        }
+        run();
+      }, delayMs);
+      this.declareIntroStageTimers.push(timer);
+      return timer;
+    };
+
+    if (pickerId) {
+      registerTimer(this.dealerPickIntroMs, () => {
+        this.state.lastAction = `DEALER_CARD ${dealerId}`;
+        this.broadcastAvailableActions();
+      });
+    }
+
+    registerTimer(leadMs, () => {
+      this.state.lastAction = `DEALER ${dealerId}`;
+      this.broadcastAvailableActions();
+    });
+
+    this.declareIntroTimer = registerTimer(totalIntroMs, () => {
+      this.declareIntroTimer = null;
+      this.state.responseEndsAt = 0;
+      this.startDeclaringPhase();
+      this.declareIntroStageTimers = [];
+    });
+  }
+
   // ===== 开局与声明阶段 =====
 
   /**
@@ -507,9 +594,12 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private bootstrapRound(): void {
     this.clearDeclareTimer();
+    this.clearDeclareIntroTimer();
     this.state.phase = "declaring";
     this.deck = shuffle(createDeck());
     this.publicGeneralPool = [];
+    this.dealerCard = null;
+    this.dealerPickerId = null;
     this.pendingResponse = null;
     this.awaitingDiscardOwnerId = null;
     this.huLogDedup.clear();
@@ -518,25 +608,49 @@ export class FourColorGameRoom extends Room<GameState> {
     this.huChecksBySeat.clear();
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
-    const dealerId = pickRandomDealerIdUtil(this.playerOrder);
-    this.roundDealerId = dealerId;
-    this.state.dealerId = dealerId;
-    dealInitialHandsFlow(this.playerOrder, dealerId, this.deck, this.playerHands);
+    const setup = this.resolveBootstrapSetup();
+    const pickerId = setup.mode === "picker" ? setup.pickerId : null;
 
-    // Rule v1.0: dealer flips one shared public general card from deck top.
-    const publicGeneral = this.deck.shift();
-    if (publicGeneral) {
-      this.publicGeneralPool.push(publicGeneral);
-      this.ops.addWildcardCardToPlayer(dealerId, publicGeneral, "upper");
+    let dealerId = setup.mode === "fixed" ? setup.dealerId : "";
+    let dealerCard: Card | null = null;
+    if (setup.mode === "picker") {
+      dealerCard = this.deck.shift() ?? null;
+      dealerId = dealerCard
+        ? resolveDealerFromAnchorAndCard(this.playerOrder, setup.pickerId, dealerCard)
+        : setup.pickerId;
     }
+
+    this.roundDealerId = dealerId;
+    this.dealerPickerId = pickerId;
+    this.state.dealerId = dealerId;
+    this.state.dealerPickerId = pickerId ?? "";
+    dealInitialHandsFlow(this.playerOrder, this.deck, this.playerHands);
+
+    if (setup.mode === "picker" && dealerCard) {
+      const dealerHand = this.playerHands.get(dealerId) ?? [];
+      dealerHand.unshift(dealerCard);
+      this.playerHands.set(dealerId, dealerHand);
+    } else {
+      const extraCard = this.deck.shift();
+      if (extraCard) {
+        const dealerHand = this.playerHands.get(dealerId) ?? [];
+        dealerHand.unshift(extraCard);
+        this.playerHands.set(dealerId, dealerHand);
+      }
+      dealerCard = this.chooseDealerCardFromDealerHand(dealerId);
+    }
+    this.dealerCard = dealerCard;
+    this.state.dealerCard = dealerCard
+      ? this.ops.toSchemaCard(dealerCard, false, dealerCard.source ?? "upper")
+      : new CardSchema();
 
     this.state.deckCount = this.deck.length;
     this.state.currentPlayerId = dealerId;
     this.state.responsePhase = "collective";
-    this.state.declareEndsAt = Date.now() + this.declareTimeoutMs;
-    this.state.lastAction = `DECLARING ${this.declareTimeoutMs}ms`;
+    this.state.declareEndsAt = 0;
     this.syncAllPrivateHands();
-    this.startDeclaringPhase();
+    this.startDeclareIntroSequence(dealerId, pickerId);
+    this.nextRoundSetup = null;
   }
 
   /**
@@ -545,6 +659,9 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：可能推进到声明完成并进入 playing。
    */
   private startDeclaringPhase(): void {
+    this.clearDeclareIntroTimer();
+    this.state.responseEndsAt = 0;
+    this.state.declareEndsAt = Date.now() + this.declareTimeoutMs;
     startDeclaringFlow({
       playerOrder: this.playerOrder,
       getPlayer: (seatId) => this.state.players.get(seatId),
@@ -591,6 +708,19 @@ export class FourColorGameRoom extends Room<GameState> {
     }
   }
 
+  private clearDeclareIntroTimer(): void {
+    if (this.declareIntroStageTimers.length > 0) {
+      for (const timer of this.declareIntroStageTimers) {
+        clearTimeout(timer);
+      }
+      this.declareIntroStageTimers = [];
+    }
+    if (this.declareIntroTimer) {
+      clearTimeout(this.declareIntroTimer);
+      this.declareIntroTimer = null;
+    }
+  }
+
   /**
    * 作用：判断是否所有玩家都完成声明。
    * 关键输入/输出：无入参；输出布尔值。
@@ -612,7 +742,6 @@ export class FourColorGameRoom extends Room<GameState> {
       : this.playerOrder[0];
     applyPlayingStartAfterDeclaring(this.state, dealerId, this.getPreviousPlayerId(dealerId));
     this.syncAllPrivateHands();
-    // Round opening: dealer must discard one legal card from own hand first.
     this.enterDiscardStage(dealerId, "OPENING_DISCARD");
   }
 
@@ -998,6 +1127,13 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!pending) {
       return;
     }
+    const sourceOwnerId = String(this.state.pollOriginPlayerId || pending.ownerId || "");
+    if (
+      pending.card.source === "upper" &&
+      (choice.action === "hu" || choice.action === "kai" || choice.action === "peng" || choice.action === "chi")
+    ) {
+      this.ops.consumePendingDiscard(sourceOwnerId, pending.card);
+    }
     this.traceStep(
       "execute_response_winner",
       `winner=${winnerId} action=${choice.action} candidate=${choice.candidateId ?? "-"}`,
@@ -1009,21 +1145,37 @@ export class FourColorGameRoom extends Room<GameState> {
         explainHuForSeat: (seatId, hand, responseCard) =>
           this.ops.explainHuForSeat(seatId, hand, responseCard, this.getHuWildcardCount()),
         logHuCheck: (stage, seatId, hand, response, valid) => this.logHuCheck(stage, seatId, hand, response, valid),
-        executeKaiOperation: (seatId, pendingCard, candidateId) =>
-          tryExecuteKai(operationDeps, seatId, pendingCard, candidateId),
-        executePengOperation: (seatId, pendingCard, candidateId) =>
-          tryExecutePeng(
+        executeKaiOperation: (seatId, pendingCard, candidateId) => {
+          if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "kai", pendingCard, candidateId)) {
+            return false;
+          }
+          const ok = tryExecuteKai(operationDeps, seatId, pendingCard, candidateId);
+          if (ok) {
+            this.consumeDeclaredKongForKai(seatId);
+          }
+          return ok;
+        },
+        executePengOperation: (seatId, pendingCard, candidateId) => {
+          if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "peng", pendingCard, candidateId)) {
+            return false;
+          }
+          return tryExecutePeng(
             {
               getHandWithoutPending: (seatIdArg, pendingCardArg) => this.ops.getHandWithoutPending(seatIdArg, pendingCardArg),
               takeMatchingCards: (seatIdArg, target, count) => this.ops.takeMatchingCards(seatIdArg, target, count),
-              pushExposedGroup: (seatIdArg, cards, highlight) => this.ops.pushExposedGroup(seatIdArg, cards, highlight),
+              pushExposedGroup: (seatIdArg, cards, highlight, kind) => this.ops.pushExposedGroup(seatIdArg, cards, highlight, kind),
             },
             seatId,
             pendingCard,
             candidateId,
-          ),
-        executeChiOperation: (seatId, pendingCard, candidateId) =>
-          tryExecuteChi(operationDeps, seatId, pendingCard, candidateId).ok,
+          );
+        },
+        executeChiOperation: (seatId, pendingCard, candidateId) => {
+          if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "chi", pendingCard, candidateId)) {
+            return false;
+          }
+          return tryExecuteChi(operationDeps, seatId, pendingCard, candidateId).ok;
+        },
         isEatResponder: (ownerId, responderId) => this.isEatResponder(ownerId, responderId),
         getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
         setLastAction: (value) => {
@@ -1141,8 +1293,17 @@ export class FourColorGameRoom extends Room<GameState> {
     const ok = executeEatFlow(
       {
         pending: this.pendingResponse,
-        executeChiOperation: (ownerIdArg, pendingCard) =>
-          tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId).ok,
+        executeChiOperation: (ownerIdArg, pendingCard) => {
+          if (!candidateId || !this.preservesDeclaredKongsAfterAction(ownerIdArg, "chi", pendingCard, candidateId)) {
+            return false;
+          }
+          const result = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId).ok;
+          if (result && pendingCard.source === "upper" && this.pendingResponse) {
+            const sourceOwnerId = String(this.state.pollOriginPlayerId || this.pendingResponse.ownerId || "");
+            this.ops.consumePendingDiscard(sourceOwnerId, pendingCard);
+          }
+          return result;
+        },
         setLastAction: (action) => {
           this.state.lastAction = action;
         },
@@ -1268,7 +1429,81 @@ export class FourColorGameRoom extends Room<GameState> {
       (card) => this.ops.toPlainCard(card),
       winnerId,
       groups,
+      this.pendingResponse?.card ? { ...this.pendingResponse.card } : null,
     );
+  }
+
+  private buildRemainingDeckPreview(): Card[] {
+    return this.deck.slice(0, 8).map((card) => ({ ...card }));
+  }
+
+  private countHiddenTriplets(cards: Card[]): number {
+    const counter = new Map<string, number>();
+    for (const card of cards) {
+      const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
+      counter.set(key, (counter.get(key) ?? 0) + 1);
+    }
+    let total = 0;
+    for (const count of counter.values()) {
+      total += Math.floor(count / 3);
+    }
+    return total;
+  }
+
+  private removeCardsByIdFromHand(hand: Card[], cardIds: string[]): Card[] {
+    if (!cardIds.length) {
+      return [...hand];
+    }
+    const wanted = new Set(cardIds);
+    return hand.filter((card) => !wanted.has(card.id));
+  }
+
+  private preservesDeclaredKongsAfterAction(
+    seatId: string,
+    action: "kai" | "peng" | "chi",
+    pendingCard: Card,
+    candidateId?: string,
+  ): boolean {
+    const player = this.state.players.get(seatId);
+    const declaredKongs = Number(player?.declaredKongs ?? 0);
+    if (declaredKongs <= 0) {
+      return true;
+    }
+    const handNoPending = this.ops.getHandWithoutPending(seatId, pendingCard);
+    if (action === "kai") {
+      const picked = buildKaiCandidates(handNoPending, pendingCard, this.ops.getWildcardPoolCards(seatId)).find(
+        (item) => item.candidate.id === candidateId,
+      );
+      if (!picked) {
+        return false;
+      }
+      const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
+      return this.countHiddenTriplets(nextHand) >= Math.max(0, declaredKongs - 1);
+    }
+    if (action === "peng") {
+      const picked = buildPengCandidates(handNoPending, pendingCard).find((item) => item.candidate.id === candidateId);
+      if (!picked) {
+        return false;
+      }
+      const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
+      return this.countHiddenTriplets(nextHand) >= declaredKongs;
+    }
+    const picked = buildChiCandidates(handNoPending, pendingCard, this.ops.getWildcardPoolCards(seatId)).find(
+      (item) => item.candidate.id === candidateId,
+    );
+    if (!picked) {
+      return false;
+    }
+    const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
+    return this.countHiddenTriplets(nextHand) >= declaredKongs;
+  }
+
+  private consumeDeclaredKongForKai(seatId: string): void {
+    const player = this.state.players.get(seatId);
+    if (!player) {
+      return;
+    }
+    player.declaredKongs = Math.max(0, Number(player.declaredKongs ?? 0) - 1);
   }
 
   private backToLobby(): void {
@@ -1284,10 +1519,14 @@ export class FourColorGameRoom extends Room<GameState> {
       resetRuntime: () => {
         this.clearBotTimer();
         this.clearDeclareTimer();
+        this.clearDeclareIntroTimer();
         this.resetCollectivePolling();
         this.deck = [];
         this.pendingResponse = null;
         this.publicGeneralPool = [];
+        this.dealerCard = null;
+        this.dealerPickerId = null;
+        this.nextRoundSetup = null;
         this.awaitingDiscardOwnerId = null;
         this.lastTerminalFingerprint = "";
         this.huLogDedup.clear();
@@ -1302,6 +1541,13 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
+    if (winnerId) {
+      const previewPlayers = this.buildRoundResultPlayers(winnerId, groups);
+      const winnerView = previewPlayers.find((player) => player.clientId === winnerId);
+      this.prepareNextRoundSetup(winnerId, winnerView?.huType ?? null);
+    } else {
+      this.prepareNextRoundSetup(null, null);
+    }
     endRoundFlow(
       {
         state: this.state,
@@ -1315,6 +1561,7 @@ export class FourColorGameRoom extends Room<GameState> {
         },
         broadcast: (event, payload) => this.broadcast(event, payload),
         buildRoundResultPlayers: (winnerIdArg, groupArgs) => this.buildRoundResultPlayers(winnerIdArg, groupArgs),
+        buildRemainingDeckPreview: () => this.buildRemainingDeckPreview(),
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
       },
       lastAction,
@@ -1325,7 +1572,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
     const hand = this.playerHands.get(seatId) ?? [];
-    return getAvailableActionsFlow({
+    const entries = getAvailableActionsFlow({
       phase: this.state.phase,
       seatId,
       pending: this.pendingResponse,
@@ -1339,6 +1586,24 @@ export class FourColorGameRoom extends Room<GameState> {
         this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
       logHuCheck: (stage, seatIdArg, handArg, response, valid) => this.logHuCheck(stage, seatIdArg, handArg, response, valid),
       getHandWithoutPending: (seatIdArg, pendingCard) => this.ops.getHandWithoutPending(seatIdArg, pendingCard),
+    });
+    const pendingCard = this.pendingResponse?.card;
+    if (!pendingCard) {
+      return entries;
+    }
+    return entries.map((entry) => {
+      if ((entry.action !== "kai" && entry.action !== "peng" && entry.action !== "chi") || !entry.candidates?.length) {
+        return entry;
+      }
+      const meldAction = entry.action;
+      const filtered = entry.candidates.filter((candidate) =>
+        this.preservesDeclaredKongsAfterAction(seatId, meldAction, pendingCard, candidate.id),
+      );
+      return {
+        ...entry,
+        enabled: filtered.length > 0,
+        candidates: filtered,
+      };
     });
   }
 
@@ -1411,10 +1676,12 @@ export class FourColorGameRoom extends Room<GameState> {
       phase: this.state.phase,
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,
+      dealerPickerId: this.state.dealerPickerId,
       currentPlayerId: this.state.currentPlayerId,
       currentTurnPlayerId: this.state.currentTurnPlayerId,
       previousPlayerId: this.state.previousPlayerId,
       pollOriginPlayerId: this.state.pollOriginPlayerId,
+      activeResponderId: this.state.activeResponderId,
       responsePhase: this.state.responsePhase,
       responseEndsAt: this.state.responseEndsAt,
       lastAction: this.state.lastAction,
@@ -1422,7 +1689,21 @@ export class FourColorGameRoom extends Room<GameState> {
       isMoCard: this.state.isMoCard,
       targetCard: this.buildCardSnapshot(this.state.targetCard),
       responseCard: this.buildCardSnapshot(this.state.responseCard),
+      dealerCard: this.dealerCard
+        ? {
+            id: this.dealerCard.id,
+            color: this.dealerCard.color,
+            type: this.dealerCard.type,
+            source: this.dealerCard.source === "draw" ? "draw" : "upper",
+          }
+        : null,
       publicDiscardPile: this.buildCardListSnapshot(this.state.publicDiscardPile),
+      publicGeneralPool: [...this.publicGeneralPool].map((card) => ({
+        id: card.id,
+        color: card.color,
+        type: card.type,
+        source: card.source === "draw" ? "draw" : "upper",
+      })),
       declareEndsAt: this.state.declareEndsAt,
       players: this.playerOrder
         .map((seatId) => this.state.players.get(seatId))
@@ -1430,6 +1711,7 @@ export class FourColorGameRoom extends Room<GameState> {
         .map((player) => ({
           clientId: player.clientId,
           name: player.name,
+          handCount: this.playerHands.get(player.clientId)?.length ?? 0,
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
           isBot: player.isBot,
@@ -1437,6 +1719,7 @@ export class FourColorGameRoom extends Room<GameState> {
           discardPile: this.buildCardListSnapshot(player.discardPile),
           exposedArea: this.buildCardListSnapshot(player.exposedArea),
           exposedGroupSizes: Array.from(player.exposedGroupSizes),
+          exposedGroupKinds: Array.from(player.exposedGroupKinds),
           generalArea: this.buildCardListSnapshot(player.generalArea),
           wildcardPool: this.buildCardListSnapshot(player.wildcardPool),
           fishArea: this.buildCardListSnapshot(player.fishArea),
@@ -1598,6 +1881,31 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private getPreviousPlayerId(playerId: string): string {
     return getPreviousPlayerIdOrder(this.playerOrder, playerId);
+  }
+
+  private getOppositePlayerId(playerId: string): string {
+    const index = this.playerOrder.indexOf(playerId);
+    if (index < 0 || this.playerOrder.length === 0) {
+      return this.playerOrder[0] ?? "";
+    }
+    return this.playerOrder[(index + Math.floor(this.playerOrder.length / 2)) % this.playerOrder.length] ?? playerId;
+  }
+
+  private prepareNextRoundSetup(winnerId: string | null, huType: "small" | "big" | null): void {
+    if (winnerId && huType === "small") {
+      this.nextRoundSetup = { mode: "fixed", dealerId: winnerId };
+      return;
+    }
+    if (winnerId && huType === "big") {
+      this.nextRoundSetup = { mode: "picker", pickerId: this.getOppositePlayerId(winnerId) };
+      return;
+    }
+    const fallbackDealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
+      ? this.roundDealerId
+      : this.playerOrder[0];
+    if (fallbackDealerId) {
+      this.nextRoundSetup = { mode: "fixed", dealerId: fallbackDealerId };
+    }
   }
 
   // ===== AI 与计时器 =====
@@ -1890,9 +2198,7 @@ export class FourColorGameRoom extends Room<GameState> {
       advanceCollectivePolling: () => this.advanceCollectivePolling(),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       discardFromAndCollective: (ownerId) => this.discardFromAndCollective(ownerId),
-      getHand: (seatId) => this.playerHands.get(seatId) ?? [],
-      getWildcardPoolCards: (seatId) => this.ops.getWildcardPoolCards(seatId),
-      executeEat: (ownerId) => this.executeEat(ownerId),
+      executeEat: (ownerId, candidateId) => this.executeEat(ownerId, candidateId),
       executeGrab: (ownerId) => this.executeGrab(ownerId),
       executePassToNext: (ownerId) => this.executePassToNext(ownerId),
     });

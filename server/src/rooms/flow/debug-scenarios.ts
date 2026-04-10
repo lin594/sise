@@ -105,7 +105,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       player.discardPile.clear();
       const card = context.toSchemaCard({ id: `${id}_d1_${seq}`, color: "yellow", type: "ma" }, false, "upper");
       player.discardPile.push(card);
-      context.state.publicDiscardPile.unshift(
+      context.state.publicDiscardPile.push(
         context.toSchemaCard({ id: `${id}_d1_${seq}`, color: "yellow", type: "ma" }, false, "upper"),
       );
     }
@@ -113,7 +113,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     if (me) {
       const card = context.toSchemaCard({ id: `self_d2_${seq}`, color: "red", type: "ju" }, false, "upper");
       me.discardPile.push(card);
-      context.state.publicDiscardPile.unshift(
+      context.state.publicDiscardPile.push(
         context.toSchemaCard({ id: `self_d2_${seq}`, color: "red", type: "ju" }, false, "upper"),
       );
     }

@@ -9,28 +9,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Card } from "@/types/game";
+import { getCardFaceText } from "@/utils/cardText";
 
 const props = defineProps<{
   card: Card;
   size?: "sm" | "md" | "lg" | "xl";
 }>();
 
-const labelMap: Record<string, string> = {
-  jiang: "将",
-  shi: "士",
-  xiang: "象",
-  ju: "车",
-  ma: "马",
-  pao: "炮",
-  zu: "卒",
-  gong: "公",
-  hou: "侯",
-  bo: "伯",
-  zi: "子",
-  nan: "男",
-};
-
-const label = computed(() => `${labelMap[props.card.type] ?? props.card.type}`);
+const label = computed(() => getCardFaceText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");

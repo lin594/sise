@@ -324,6 +324,25 @@ export function pickRandomDealerId(playerOrder: string[]): string {
   return playerOrder[idx];
 }
 
+export function resolveDealerFromAnchorAndCard(playerOrder: string[], anchorSeatId: string, card: Card): string {
+  if (!playerOrder.length || !anchorSeatId) {
+    return "";
+  }
+  const startIndex = playerOrder.indexOf(anchorSeatId);
+  if (startIndex < 0) {
+    return anchorSeatId;
+  }
+  const offsetMap: Record<string, number> = {
+    yellow: 0,
+    red: 1,
+    gold: 1,
+    green: 2,
+    white: 3,
+  };
+  const offset = offsetMap[card.color] ?? 0;
+  return playerOrder[(startIndex + offset) % playerOrder.length];
+}
+
 export function getStateActionKeyword(action: string): string {
   const parts = action.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) {

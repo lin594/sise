@@ -7,7 +7,7 @@ interface OperationDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   getWildcardPoolCards: (seatId: SeatId) => Card[];
   consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[];
-  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean) => void;
+  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
 export interface ChiExecutionResult {
@@ -41,7 +41,7 @@ export function tryExecuteChi(
   const plan = picked.plan;
   const taken = deps.consumePlanCards(seatId, plan.handCards, plan.poolCards);
   const groupCards = [pendingCard, ...taken];
-  deps.pushExposedGroup(seatId, groupCards, true);
+  deps.pushExposedGroup(seatId, groupCards, true, "chi");
   return { ok: true, kind: plan.kind, groupCards };
 }
 

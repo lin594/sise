@@ -6,7 +6,7 @@ type SeatId = string;
 interface OperationDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   takeMatchingCards: (seatId: SeatId, target: Card, count: number) => Card[];
-  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean) => void;
+  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
 export function tryExecutePeng(
@@ -30,7 +30,7 @@ export function tryExecutePeng(
   if (takenFromHand.length < 2) {
     return false;
   }
-  deps.pushExposedGroup(seatId, [pendingCard, ...takenFromHand], true);
+  deps.pushExposedGroup(seatId, [pendingCard, ...takenFromHand], true, "peng");
   return true;
 }
 

@@ -1,160 +1,320 @@
 ﻿<template>
   <div class="board">
     <div class="table" ref="tableRef">
-      <section
-        class="self-open-left"
-        v-if="isCompactLandscape && selfPlayer && (selfOpenGroups.length || selfPlayer.fishArea.length)"
-        ref="selfOpenCompactRef"
-      >
-        <p>你的明示区</p>
-        <div class="grouped-cards">
-          <button
-            v-for="group in selfOpenGroups"
-            :key="`self-open-left-${group.id}`"
-            class="group-chip"
-            :class="{ expanded: isOpenGroupExpanded(selfPlayer.clientId, group.id), stacked: !isOpenGroupExpanded(selfPlayer.clientId, group.id) }"
-            @click="toggleOpenGroup(selfPlayer.clientId, group.id)"
+      <section v-if="leftPlayer" class="flow-card flow-top-left">
+        <p>{{ flowTitle(leftPlayer.clientId) }}</p>
+        <div v-if="flowCardCount(leftPlayer.clientId)" class="discard-strip">
+          <span
+            v-for="(card, index) in visibleFlowCards(leftPlayer.clientId)"
+            :key="`flow-top-left-${card.id}`"
+            class="discard-token"
+            :class="[cardColorClass(card), { active: isActiveDiscardCard(leftPlayer.clientId, card, index) }]"
+            :title="cardLabel(card)"
           >
-            <div v-if="isOpenGroupExpanded(selfPlayer.clientId, group.id)" class="expanded-preview cards">
-              <CardComp v-for="card in group.cards" :key="`self-open-left-card-${card.id}`" :card="card" size="sm" />
-            </div>
-            <div v-else class="stacked-preview">
-              <CardComp
-                v-for="(card, idx) in previewGroupCards(group.cards)"
-                :key="`self-open-left-stack-${card.id}`"
-                :card="card"
-                size="sm"
-                class="stack-item"
-                :style="fanCardStyle(idx, previewGroupSize(group.cards))"
-              />
-              <span class="stack-count">x{{ group.cards.length }}</span>
-            </div>
-          </button>
-          <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-left-${card.id}`" :card="card" size="sm" />
+            {{ cardGlyph(card) }}
+          </span>
         </div>
+        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <section
-        v-for="entry in seatEntries"
-        :key="entry.position"
-        :ref="(el) => setSeatRef(entry.player.clientId, el as HTMLElement | null)"
-        class="seat"
-        :class="[
-          entry.position,
-          {
-            active: isCurrentTurn(entry.player.clientId),
-            'with-fish': entry.player.fishArea.length > 0,
-            dealer: isDealer(entry.player.clientId),
-            'actor-flash': flashActorId === entry.player.clientId,
-          },
-        ]"
+        v-if="topPlayer"
+        :ref="(el) => topPlayer && setSeatRef(topPlayer.clientId, el as HTMLElement | null)"
+        class="player-card player-top"
+        :class="{
+          active: isCurrentTurn(topPlayer.clientId),
+          dealer: isDealer(topPlayer.clientId),
+          'actor-flash': flashActorId === topPlayer.clientId,
+        }"
       >
-        <div v-if="isCurrentTurn(entry.player.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
+        <div v-if="isCurrentTurn(topPlayer.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
-          <strong>{{ entry.player.name }}</strong>
+          <strong>{{ topPlayer.name }}</strong>
           <div class="seat-tags">
-            <span v-if="isDealer(entry.player.clientId)" class="tag dealer">庄家</span>
-            <span v-if="isCurrentTurn(entry.player.clientId)" class="tag turn">当前回合</span>
+            <span v-if="isCurrentTurn(topPlayer.clientId)" class="tag turn">当前回合</span>
             <span
-              v-if="isCurrentTurn(entry.player.clientId) && seatCountdownSeconds !== null"
+              v-if="isCurrentTurn(topPlayer.clientId) && seatCountdownSeconds !== null"
               class="turn-countdown"
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status">{{ statusText(entry.player) }}</span>
+            <span class="tag status">{{ statusText(topPlayer) }}</span>
           </div>
         </header>
-        <div v-if="isCurrentTurn(entry.player.clientId) && seatCountdownSeconds !== null" class="turn-timer-bar">
-          <span :style="{ width: `${seatCountdownPercent}%` }"></span>
-        </div>
-
-        <p class="seat-meta">声明暗坎: {{ entry.player.declaredKongs }}</p>
-
-        <div class="seat-zone" v-if="entry.openGroups.length">
-          <p>明示区</p>
-          <div class="grouped-cards">
-            <button
-              v-for="group in entry.openGroups"
-              :key="`exp-${entry.player.clientId}-${group.id}`"
-              class="group-chip"
-              :class="{ expanded: isOpenGroupExpanded(entry.player.clientId, group.id), stacked: !isOpenGroupExpanded(entry.player.clientId, group.id) }"
-              @click="toggleOpenGroup(entry.player.clientId, group.id)"
-            >
-              <div v-if="isOpenGroupExpanded(entry.player.clientId, group.id)" class="expanded-preview cards">
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`exp-card-${entry.player.clientId}-${card.id}`"
-                  :card="card"
-                  size="sm"
-                />
-              </div>
-              <div v-else class="stacked-preview">
-                <CardComp
-                  v-for="(card, idx) in previewGroupCards(group.cards)"
-                  :key="`exp-stack-${entry.player.clientId}-${card.id}`"
-                  :card="card"
-                  size="sm"
-                  class="stack-item"
-                  :style="fanCardStyle(idx, previewGroupSize(group.cards))"
-                />
-                <span class="stack-count">x{{ group.cards.length }}</span>
-              </div>
-            </button>
+        <p class="seat-meta">手牌 {{ playerHandCount(topPlayer) }} 张 · 牌组 {{ topGroupBlocks.length }} 组 · 暗坎 {{ topPlayer.declaredKongs }}</p>
+        <div v-if="topGroupBlocks.length" class="group-block-list compact">
+          <div
+            v-for="group in topGroupBlocks"
+            :key="`top-group-${group.id}`"
+            class="group-block"
+            :class="group.tone"
+          >
+            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+            <div class="mini-card-strip">
+              <span
+                v-for="card in group.cards"
+                :key="`top-group-card-${card.id}`"
+                class="mini-card"
+                :class="cardColorClass(card)"
+                :title="cardLabel(card)"
+              >
+                {{ cardGlyph(card) }}
+              </span>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div class="seat-zone" v-if="entry.player.fishArea.length">
-          <p>亮鱼区</p>
-          <div class="cards">
-            <CardComp
-              v-for="card in entry.player.fishArea"
-              :key="`fish-${entry.player.clientId}-${card.id}`"
-              :card="card"
-              size="sm"
-            />
-          </div>
+      <section v-if="topPlayer" class="flow-card flow-top-right">
+        <p>{{ flowTitle(topPlayer.clientId) }}</p>
+        <div v-if="flowCardCount(topPlayer.clientId)" class="discard-strip">
+          <span
+            v-for="(card, index) in visibleFlowCards(topPlayer.clientId)"
+            :key="`flow-top-right-${card.id}`"
+            class="discard-token"
+            :class="[cardColorClass(card), { active: isActiveDiscardCard(topPlayer.clientId, card, index) }]"
+            :title="cardLabel(card)"
+          >
+            {{ cardGlyph(card) }}
+          </span>
         </div>
+        <div v-else class="discard-empty">暂无流水</div>
+      </section>
 
-        <div class="seat-zone discard-zone">
-          <p>弃牌（{{ entry.player.discardPile.length }}张）</p>
-          <div v-if="entry.player.discardPile.length" class="discard-strip">
+      <section
+        v-if="leftPlayer"
+        :ref="(el) => leftPlayer && setSeatRef(leftPlayer.clientId, el as HTMLElement | null)"
+        class="player-card player-left"
+        :class="{
+          active: isCurrentTurn(leftPlayer.clientId),
+          dealer: isDealer(leftPlayer.clientId),
+          'actor-flash': flashActorId === leftPlayer.clientId,
+        }"
+      >
+        <div v-if="isCurrentTurn(leftPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
+        <header class="seat-head">
+          <strong>{{ leftPlayer.name }}</strong>
+          <div class="seat-tags">
+            <span v-if="isCurrentTurn(leftPlayer.clientId)" class="tag turn">当前回合</span>
             <span
-              v-for="(card, index) in entry.player.discardPile.slice(0, 10)"
-              :key="`dp-${entry.player.clientId}-${card.id}`"
-              class="discard-token"
-              :class="{ active: isActiveDiscardCard(entry.player.clientId, card, index) }"
+              v-if="isCurrentTurn(leftPlayer.clientId) && seatCountdownSeconds !== null"
+              class="turn-countdown"
             >
-              {{ compactCardLabel(card) }}
+              剩余 {{ seatCountdownSeconds }}s
             </span>
+            <span class="tag status">{{ statusText(leftPlayer) }}</span>
           </div>
-          <div v-else class="discard-empty">暂无弃牌</div>
+        </header>
+        <p class="seat-meta">手牌 {{ playerHandCount(leftPlayer) }} 张 · 牌组 {{ leftGroupBlocks.length }} 组 · 暗坎 {{ leftPlayer.declaredKongs }}</p>
+        <div v-if="leftGroupBlocks.length" class="group-block-list compact">
+          <div
+            v-for="group in leftGroupBlocks"
+            :key="`left-group-${group.id}`"
+            class="group-block"
+            :class="group.tone"
+          >
+            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+            <div class="mini-card-strip">
+              <span
+                v-for="card in group.cards"
+                :key="`left-group-card-${card.id}`"
+                class="mini-card"
+                :class="cardColorClass(card)"
+                :title="cardLabel(card)"
+              >
+                {{ cardGlyph(card) }}
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
       <section class="center" :class="{ 'my-turn': isMyTurn }">
-        <div class="center-text">
-          <p>当前行动者: <strong>{{ currentPlayerName }}</strong><span v-if="isMyTurn">（你）</span></p>
-          <p class="center-turn-hint">{{ compactCenterHint }}</p>
-          <p v-if="centerEventText" class="center-event">{{ centerEventText }}</p>
+        <div class="center-board">
+          <div
+            v-if="topPlayer"
+            class="center-seat center-seat-top"
+            :class="{ active: displayTurnPlayerId === topPlayer.clientId, responding: isCollectiveResponder(topPlayer.clientId), action: hasSeatAction(topPlayer.clientId) }"
+          >
+            <div v-if="seatActionText(topPlayer.clientId) || isCollectiveResponder(topPlayer.clientId)" class="center-seat-action">{{ seatActionText(topPlayer.clientId) || "待响" }}</div>
+          </div>
+          <div
+            v-if="leftPlayer"
+            class="center-seat center-seat-left"
+            :class="{ active: displayTurnPlayerId === leftPlayer.clientId, responding: isCollectiveResponder(leftPlayer.clientId), action: hasSeatAction(leftPlayer.clientId) }"
+          >
+            <div v-if="seatActionText(leftPlayer.clientId) || isCollectiveResponder(leftPlayer.clientId)" class="center-seat-action">{{ seatActionText(leftPlayer.clientId) || "待响" }}</div>
+          </div>
+          <div class="center-core">
+            <div class="center-core-cell dealer-cell">
+              <span class="center-core-label">庄家 {{ dealerName }}</span>
+              <small v-if="dealerPickerName" class="center-core-subtle">抽牌者 {{ dealerPickerName }}</small>
+              <div v-if="dealerInfoCard" class="center-core-card">
+                <CardComp
+                  v-if="props.tableCardMode === 'full'"
+                  :card="dealerInfoCard"
+                  size="md"
+                />
+                <div v-else class="corner-card" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</div>
+              </div>
+            </div>
+            <div class="center-core-cell deck-cell">
+              <span class="center-core-label">牌堆</span>
+              <div class="deck-stack" :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`">
+                <span class="deck-stack-card"></span>
+                <span class="deck-stack-card"></span>
+                <span class="deck-stack-card"></span>
+                <strong class="deck-stack-count">{{ props.state?.deckCount ?? 0 }}</strong>
+              </div>
+            </div>
+            <div class="center-core-cell response-cell">
+              <span class="center-core-label">待响牌</span>
+              <div v-if="responseCard" class="pending-inline" ref="responseLandingRef">
+                <Transition name="resp-move" mode="out-in">
+                  <CardComp
+                    v-if="props.tableCardMode === 'full'"
+                    :key="`resp-full-${responseCard.id}-${responseCard.source || 'upper'}`"
+                    :card="responseCard"
+                    size="lg"
+                  />
+                  <div
+                    v-else
+                    :key="`resp-simple-${responseCard.id}-${responseCard.source || 'upper'}`"
+                    class="corner-card response-card-simple"
+                    :class="cardColorClass(responseCard)"
+                  >
+                    {{ cardGlyph(responseCard) }}
+                  </div>
+                </Transition>
+              </div>
+              <div v-else class="pending-placeholder">暂无待响牌</div>
+            </div>
+          </div>
+          <div
+            v-if="rightPlayer"
+            class="center-seat center-seat-right"
+            :class="{ active: displayTurnPlayerId === rightPlayer.clientId, responding: isCollectiveResponder(rightPlayer.clientId), action: hasSeatAction(rightPlayer.clientId) }"
+          >
+            <div v-if="seatActionText(rightPlayer.clientId) || isCollectiveResponder(rightPlayer.clientId)" class="center-seat-action">{{ seatActionText(rightPlayer.clientId) || "待响" }}</div>
+          </div>
+          <div
+            v-if="selfPlayer"
+            class="center-seat center-seat-bottom"
+            :class="{ active: displayTurnPlayerId === selfPlayer.clientId, responding: isCollectiveResponder(selfPlayer.clientId), action: hasSeatAction(selfPlayer.clientId) }"
+          >
+            <div v-if="seatActionText(selfPlayer.clientId) || isCollectiveResponder(selfPlayer.clientId)" class="center-seat-action">{{ seatActionText(selfPlayer.clientId) || "待响" }}</div>
+          </div>
         </div>
-        <div class="response-wrap" v-if="responseCard" ref="responseLandingRef">
-          <Transition name="resp-move" mode="out-in">
-            <CardComp :key="`resp-${responseCard.id}-${responseCard.source || 'upper'}`" :card="responseCard" size="lg" />
-          </Transition>
-          <small>待响牌</small>
-        </div>
-        <section class="table-action-log" v-if="mergedActionLogs.length">
-          <ul>
-            <li v-for="log in mergedActionLogs" :key="`merged-log-${log.id}`">
-              <time>{{ log.at }}</time>
-              <span>{{ log.actorLabel }} {{ log.displayText }}</span>
-            </li>
-          </ul>
-        </section>
         <div v-if="centerPointerDirection" class="center-pointer" :class="`pointer-${centerPointerDirection}`">
           <i class="center-pointer-head"></i>
         </div>
         <div class="deck-anchor" ref="deckAnchorRef"></div>
+      </section>
+
+      <section
+        v-if="rightPlayer"
+        :ref="(el) => rightPlayer && setSeatRef(rightPlayer.clientId, el as HTMLElement | null)"
+        class="player-card player-right"
+        :class="{
+          active: isCurrentTurn(rightPlayer.clientId),
+          dealer: isDealer(rightPlayer.clientId),
+          'actor-flash': flashActorId === rightPlayer.clientId,
+        }"
+      >
+        <div v-if="isCurrentTurn(rightPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
+        <header class="seat-head">
+          <strong>{{ rightPlayer.name }}</strong>
+          <div class="seat-tags">
+            <span v-if="isCurrentTurn(rightPlayer.clientId)" class="tag turn">当前回合</span>
+            <span
+              v-if="isCurrentTurn(rightPlayer.clientId) && seatCountdownSeconds !== null"
+              class="turn-countdown"
+            >
+              剩余 {{ seatCountdownSeconds }}s
+            </span>
+            <span class="tag status">{{ statusText(rightPlayer) }}</span>
+          </div>
+        </header>
+        <p class="seat-meta">手牌 {{ playerHandCount(rightPlayer) }} 张 · 牌组 {{ rightGroupBlocks.length }} 组 · 暗坎 {{ rightPlayer.declaredKongs }}</p>
+        <div v-if="rightGroupBlocks.length" class="group-block-list compact">
+          <div
+            v-for="group in rightGroupBlocks"
+            :key="`right-group-${group.id}`"
+            class="group-block"
+            :class="group.tone"
+          >
+            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+            <div class="mini-card-strip">
+              <span
+                v-for="card in group.cards"
+                :key="`right-group-card-${card.id}`"
+                class="mini-card"
+                :class="cardColorClass(card)"
+                :title="cardLabel(card)"
+              >
+                {{ cardGlyph(card) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="selfPlayer" class="flow-card flow-bottom-left">
+        <p>{{ flowTitle(selfPlayer.clientId) }}</p>
+        <div v-if="flowCardCount(selfPlayer.clientId)" class="discard-strip">
+          <span
+            v-for="(card, index) in visibleFlowCards(selfPlayer.clientId)"
+            :key="`flow-bottom-left-${card.id}`"
+            class="discard-token"
+            :class="[cardColorClass(card), { active: isActiveDiscardCard(selfPlayer.clientId, card, index) }]"
+            :title="cardLabel(card)"
+          >
+            {{ cardGlyph(card) }}
+          </span>
+        </div>
+        <div v-else class="discard-empty">暂无流水</div>
+      </section>
+
+      <section v-if="selfPlayer" class="self-groups-card" ref="selfOpenRef">
+        <p>牌组（{{ selfGroupBlocks.length }}组）</p>
+        <div v-if="selfGroupBlocks.length" class="group-block-list">
+          <div
+            v-for="group in selfGroupBlocks"
+            :key="`self-exp-${group.id}`"
+            class="group-block"
+            :class="group.tone"
+          >
+            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+            <div class="mini-card-strip">
+              <span
+                v-for="card in group.cards"
+                :key="`self-exp-card-${card.id}`"
+                class="mini-card"
+                :class="cardColorClass(card)"
+                :title="cardLabel(card)"
+              >
+                {{ cardGlyph(card) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="discard-empty">暂无牌组</div>
+      </section>
+
+      <section v-if="rightPlayer" class="flow-card flow-bottom-right">
+        <p>{{ flowTitle(rightPlayer.clientId) }}</p>
+        <div v-if="flowCardCount(rightPlayer.clientId)" class="discard-strip">
+          <span
+            v-for="(card, index) in visibleFlowCards(rightPlayer.clientId)"
+            :key="`flow-bottom-right-${card.id}`"
+            class="discard-token"
+            :class="[cardColorClass(card), { active: isActiveDiscardCard(rightPlayer.clientId, card, index) }]"
+            :title="cardLabel(card)"
+          >
+            {{ cardGlyph(card) }}
+          </span>
+        </div>
+        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <Transition name="deal-fade">
@@ -163,8 +323,16 @@
 
       <Transition name="dealer-reveal">
         <div v-if="dealerReveal" :key="`dealer-${dealerReveal.id}`" class="dealer-reveal">
-          <span class="dealer-reveal-label">本局庄家</span>
+          <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
           <strong>{{ dealerReveal.name }}</strong>
+          <div v-if="dealerReveal.card" class="dealer-reveal-card">
+            <CardComp
+              v-if="props.tableCardMode === 'full'"
+              :card="dealerReveal.card"
+              size="md"
+            />
+            <div v-else class="corner-card" :class="cardColorClass(dealerReveal.card)">{{ cardGlyph(dealerReveal.card) }}</div>
+          </div>
         </div>
       </Transition>
 
@@ -178,130 +346,68 @@
           庄家
         </div>
       </Transition>
-
-      <Transition name="action-pop">
-        <div v-if="actionEffect" :key="`act-${actionEffect.id}`" class="action-effect">
-          {{ actionEffect.label }}
-        </div>
-      </Transition>
     </div>
 
     <section
-      class="self-zone"
-      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       v-if="selfPlayer"
+      class="self-info-card"
+      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
           <h3>{{ selfPlayer.name }}（你）</h3>
-          <p>声明暗坎: {{ selfPlayer.declaredKongs }}</p>
+          <p>手牌 {{ playerHandCount(selfPlayer) }} 张 · 牌组 {{ selfGroupBlocks.length }} 组 · 暗坎 {{ selfPlayer.declaredKongs }}</p>
         </div>
         <div class="seat-tags">
-          <span v-if="isDealer(selfPlayer.clientId)" class="tag dealer">庄家</span>
+          <span v-if="isMyTurn" class="tag turn">当前回合</span>
           <span v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-countdown">剩余 {{ seatCountdownSeconds }}s</span>
-          <span v-if="!isCompactLandscape" class="tag status">{{ statusText(selfPlayer) }}</span>
+          <span class="tag status">{{ statusText(selfPlayer) }}</span>
         </div>
       </header>
       <div v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-timer-bar self-turn-timer">
         <span :style="{ width: `${seatCountdownPercent}%` }"></span>
       </div>
-      <div
-        class="self-main"
-        :class="{ 'no-open': isCompactLandscape }"
-      >
-        <div
-          class="self-areas"
-          v-if="!isCompactLandscape"
-          ref="selfOpenRef"
-        >
-          <div class="self-area" v-if="selfOpenGroups.length">
-            <p>明示区</p>
-            <div class="grouped-cards">
-              <button
-                v-for="group in selfOpenGroups"
-                :key="`self-exp-${group.id}`"
-                class="group-chip"
-                :class="{ expanded: isOpenGroupExpanded(selfPlayer.clientId, group.id), stacked: !isOpenGroupExpanded(selfPlayer.clientId, group.id) }"
-                @click="toggleOpenGroup(selfPlayer.clientId, group.id)"
-              >
-                <div v-if="isOpenGroupExpanded(selfPlayer.clientId, group.id)" class="expanded-preview cards">
-                  <CardComp v-for="card in group.cards" :key="`self-exp-card-${card.id}`" :card="card" size="sm" />
-                </div>
-                <div v-else class="stacked-preview">
-                  <CardComp
-                    v-for="(card, idx) in previewGroupCards(group.cards)"
-                    :key="`self-exp-stack-${card.id}`"
-                    :card="card"
-                    size="sm"
-                    class="stack-item"
-                    :style="fanCardStyle(idx, previewGroupSize(group.cards))"
-                  />
-                  <span class="stack-count">x{{ group.cards.length }}</span>
-                </div>
-              </button>
-            </div>
-          </div>
+      <p class="self-info-hint">{{ compactCenterHint }}</p>
+    </section>
 
-          <div class="self-area" v-if="selfPlayer.fishArea.length">
-            <p>亮鱼区</p>
-            <div class="cards">
-              <CardComp v-for="card in selfPlayer.fishArea" :key="`self-fish-${card.id}`" :card="card" size="sm" />
-            </div>
-          </div>
-
-          <div class="self-area discard-zone">
-            <p>弃牌（{{ selfPlayer.discardPile.length }}张）</p>
-            <div v-if="selfPlayer.discardPile.length" class="discard-strip">
-              <span
-                v-for="(card, index) in selfPlayer.discardPile.slice(0, 14)"
-                :key="`self-dp-${card.id}`"
-                class="discard-token"
-                :class="{ active: isActiveDiscardCard(selfPlayer.clientId, card, index) }"
-              >
-                {{ compactCardLabel(card) }}
-              </span>
-            </div>
-            <div v-else class="discard-empty">暂无弃牌</div>
-          </div>
+    <section v-if="selfPlayer" class="self-hand-card">
+      <div class="self-hand-panel">
+        <p class="discard-tip">手牌（{{ displayPrivateHand.length }}张）<span v-if="canDiscard"> · 点击弃一张（将牌/金条不可弃）</span></p>
+        <div class="cards hand" ref="selfHandRef">
+          <button
+            v-for="card in displayPrivateHand"
+            :key="`me-${card.id}`"
+            class="hand-card"
+            :class="{
+              playable: canDiscardCard(card),
+              blocked: !canDiscardCard(card),
+              'gold-blocked': card.color === 'gold',
+              'candidate-active': isCandidateCard(card.id),
+              'candidate-selected': isSelectedCandidateCard(card.id),
+            }"
+            :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
+            @click="onDiscard(card.id, $event)"
+          >
+            <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
+            <CardComp :card="card" size="xl" />
+          </button>
         </div>
-        <div class="self-hand-panel">
-          <p v-if="canDiscard" class="discard-tip">点击手牌弃一张（将牌/金条不可弃）</p>
-          <div class="cards hand" ref="selfHandRef">
-            <button
-              v-for="card in displayPrivateHand"
-              :key="`me-${card.id}`"
-              class="hand-card"
-              :class="{
-                playable: canDiscardCard(card),
-                blocked: !canDiscardCard(card),
-                'gold-blocked': card.color === 'gold',
-                'candidate-active': isCandidateCard(card.id),
-                'candidate-selected': isSelectedCandidateCard(card.id),
-              }"
-              :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
-              @click="onDiscard(card.id, $event)"
-            >
-              <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
-              <CardComp :card="card" size="xl" />
-            </button>
-          </div>
 
-          <ActionPanel
-            v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
-            class="embedded-actions"
-            :actions="props.actions ?? []"
-            :can-act="Boolean(props.canAct)"
-            :is-current-turn="Boolean(props.isCurrentTurn)"
-            :response-phase="props.responsePhase ?? ''"
-            :current-player-name="props.currentPlayerName ?? '-'"
-            :selection-mode="props.selectionMode ?? null"
-            :selected-candidate-id="props.selectedCandidateId ?? null"
-            @submit="onSubmitAction"
-            @selection-change="onSelectionChange"
-          />
-        </div>
+        <ActionPanel
+          v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
+          class="embedded-actions"
+          :actions="props.actions ?? []"
+          :can-act="Boolean(props.canAct)"
+          :is-current-turn="Boolean(props.isCurrentTurn)"
+          :response-phase="props.responsePhase ?? ''"
+          :current-player-name="props.currentPlayerName ?? '-'"
+          :selection-mode="props.selectionMode ?? null"
+          :selected-candidate-id="props.selectedCandidateId ?? null"
+          @submit="onSubmitAction"
+          @selection-change="onSelectionChange"
+        />
       </div>
     </section>
 
@@ -324,11 +430,19 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import type { ActionCandidate, ActionRequest, AvailableAction, Card, ParsedActionLog, PlayerState } from "@/types/game";
+import type { ActionCandidate, ActionRequest, AvailableAction, Card, PlayerState } from "@/types/game";
+import { getCardFaceText, getCardLabelText } from "@/utils/cardText";
 
 type ExposedGroup = {
   id: string;
   cards: Card[];
+};
+
+type VisibleGroupBlock = {
+  id: string;
+  cards: Card[];
+  badge?: string;
+  tone: "meld" | "fish" | "public";
 };
 
 type FlightMode = "deal" | "discard" | "meld";
@@ -368,10 +482,10 @@ const props = defineProps<{
   currentPlayerName?: string;
   turnHint?: string;
   embeddedActionPanel?: boolean;
+  tableCardMode?: "simple" | "full";
   selectionMode?: "kai" | "peng" | "chi" | null;
   selectedCandidateId?: string | null;
   activeCandidates?: ActionCandidate[];
-  parsedActionLogs?: ParsedActionLog[];
 }>();
 
 const emit = defineEmits<{
@@ -399,14 +513,12 @@ const selfPlayer = computed<PlayerState | null>(() => orderedPlayers.value[0] ??
 const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
-const expandedOpenGroups = ref<Record<string, string | null>>({});
 const discardingCardId = ref<string | null>(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(0);
-const actionEffect = ref<{ id: number; label: string } | null>(null);
-const dealerReveal = ref<{ id: number; name: string } | null>(null);
+const dealerReveal = ref<{ id: number; label: string; name: string; card?: Card | null } | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
 const flashActorId = ref("");
 
@@ -419,14 +531,12 @@ const selfOpenRef = ref<HTMLElement | null>(null);
 const selfOpenCompactRef = ref<HTMLElement | null>(null);
 const seatRefMap = new Map<string, HTMLElement>();
 
-let actionEffectSeq = 0;
 let dealerRevealSeq = 0;
 let dealerFlightSeq = 0;
 let flightSeq = 0;
 let dealRunSeq = 0;
 let dealTimer: ReturnType<typeof setTimeout> | null = null;
 let dealInterval: ReturnType<typeof setInterval> | null = null;
-let actionTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
 let dealAnimatingUntil = 0;
@@ -471,27 +581,70 @@ function buildOpenGroups(player: PlayerState, prefix: string): ExposedGroup[] {
   return [...exposed, ...generals];
 }
 
-const seatEntries = computed<Array<{ position: "top" | "left" | "right"; player: PlayerState; openGroups: ExposedGroup[] }>>(() => {
-  const entries: Array<{ position: "top" | "left" | "right"; player: PlayerState | null }> = [
-    { position: "top", player: topPlayer.value },
-    { position: "left", player: leftPlayer.value },
-    { position: "right", player: rightPlayer.value },
-  ];
+function splitFishGroups(cards: Card[], prefix: string): ExposedGroup[] {
+  const groups: ExposedGroup[] = [];
+  const buckets = new Map<string, Card[]>();
+  const order: string[] = [];
+  for (const card of cards) {
+    const key = `${card.color}:${card.type}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+      order.push(key);
+    }
+    buckets.get(key)!.push({ ...card });
+  }
+  order.forEach((key, index) => {
+    const cardsInGroup = buckets.get(key) ?? [];
+    if (cardsInGroup.length) {
+      groups.push({ id: `${prefix}-fish-${index}`, cards: cardsInGroup });
+    }
+  });
+  return groups;
+}
 
-  return entries
-    .filter((x): x is { position: "top" | "left" | "right"; player: PlayerState } => Boolean(x.player))
-    .map((entry) => ({
-      ...entry,
-      openGroups: buildOpenGroups(entry.player, `seat-${entry.player.clientId}`),
-    }));
-});
+function buildPlayerGroupBlocks(player: PlayerState, prefix: string): VisibleGroupBlock[] {
+  const fish = splitFishGroups(player.fishArea ?? [], prefix).map((group) => ({
+    ...group,
+    badge: "鱼",
+    tone: "fish" as const,
+  }));
+  const exposed = splitExposedGroups(player.exposedArea ?? [], player.exposedGroupSizes ?? [], `${prefix}-exp`).map((group) => ({
+    ...group,
+    tone: "meld" as const,
+  }));
+  return [...fish, ...exposed];
+}
 
-const selfOpenGroups = computed<ExposedGroup[]>(() => {
+const selfGroupBlocks = computed<VisibleGroupBlock[]>(() => {
   const player = selfPlayer.value;
   if (!player) {
     return [];
   }
-  return buildOpenGroups(player, `self-${player.clientId}`);
+  return buildPlayerGroupBlocks(player, `self-${player.clientId}`);
+});
+
+const topGroupBlocks = computed<VisibleGroupBlock[]>(() => {
+  const player = topPlayer.value;
+  if (!player) {
+    return [];
+  }
+  return buildPlayerGroupBlocks(player, `seat-${player.clientId}`);
+});
+
+const leftGroupBlocks = computed<VisibleGroupBlock[]>(() => {
+  const player = leftPlayer.value;
+  if (!player) {
+    return [];
+  }
+  return buildPlayerGroupBlocks(player, `seat-${player.clientId}`);
+});
+
+const rightGroupBlocks = computed<VisibleGroupBlock[]>(() => {
+  const player = rightPlayer.value;
+  if (!player) {
+    return [];
+  }
+  return buildPlayerGroupBlocks(player, `seat-${player.clientId}`);
 });
 
 const latestDiscardFromAction = computed<Card | null>(() => {
@@ -502,12 +655,13 @@ const latestDiscardFromAction = computed<Card | null>(() => {
 
   const ownerId = match[1];
   const owner = props.players.find((x) => x.clientId === ownerId);
-  const latestDiscard = owner?.discardPile?.[0];
+  const ownerDiscardCount = owner?.discardPile?.length ?? 0;
+  const latestDiscard = ownerDiscardCount > 0 ? owner?.discardPile?.[ownerDiscardCount - 1] : undefined;
   if (latestDiscard?.id) {
     return { ...latestDiscard, source: "upper" };
   }
 
-  const publicTop = props.state?.publicDiscardPile?.[0];
+  const publicTop = props.state?.publicDiscardPile?.[props.state?.publicDiscardPile?.length - 1];
   if (publicTop?.id) {
     return { ...(publicTop as Card), source: "upper" };
   }
@@ -528,7 +682,8 @@ const responseCard = computed<Card | null>(() => {
 
   const collective = props.state?.responsePhase === "collective";
   if (collective) {
-    const publicTop = props.state?.publicDiscardPile?.[0];
+    const publicCount = props.state?.publicDiscardPile?.length ?? 0;
+    const publicTop = publicCount > 0 ? props.state?.publicDiscardPile?.[publicCount - 1] : undefined;
     if (publicTop?.id) {
       return { ...(publicTop as Card), source: "upper" };
     }
@@ -545,8 +700,87 @@ const responseCard = computed<Card | null>(() => {
   return collective ? latestDiscardFromAction.value : null;
 });
 
+function getPreviousPlayer(playerId: string): PlayerState | null {
+  const list = props.players ?? [];
+  const idx = list.findIndex((player) => player.clientId === playerId);
+  if (idx < 0 || list.length === 0) {
+    return null;
+  }
+  return list[(idx - 1 + list.length) % list.length] ?? null;
+}
+
+function getNextPlayer(playerId: string): PlayerState | null {
+  const list = props.players ?? [];
+  const idx = list.findIndex((player) => player.clientId === playerId);
+  if (idx < 0 || list.length === 0) {
+    return null;
+  }
+  return list[(idx + 1) % list.length] ?? null;
+}
+
+function flowOwner(playerId: string): PlayerState | null {
+  return getPreviousPlayer(playerId);
+}
+
+function flowTitle(playerId: string): string {
+  const receiver = props.players.find((player) => player.clientId === playerId);
+  const sender = flowOwner(playerId);
+  if (!receiver?.name || !sender?.name) {
+    return "流水";
+  }
+  return `${sender.name} -> ${receiver.name} 的流水`;
+}
+
+const activeFlowSourcePlayerId = computed(() => {
+  const pending = responseCard.value;
+  if (!pending || pending.source !== "upper") {
+    return "";
+  }
+  return String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || "");
+});
+
+const activeFlowTargetPlayerId = computed(() => {
+  const sourcePlayerId = activeFlowSourcePlayerId.value;
+  if (!sourcePlayerId) {
+    return "";
+  }
+  return getNextPlayer(sourcePlayerId)?.clientId ?? "";
+});
+
+function shouldAppendPendingToFlow(playerId: string): boolean {
+  const pending = responseCard.value;
+  if (!pending || pending.source !== "upper") {
+    return false;
+  }
+  if (activeFlowTargetPlayerId.value !== playerId) {
+    return false;
+  }
+  const owner = props.players.find((player) => player.clientId === activeFlowSourcePlayerId.value);
+  return !owner?.discardPile?.some((card) => card.id === pending.id);
+}
+
+function flowCards(playerId: string): Card[] {
+  const owner = flowOwner(playerId);
+  const cards = owner?.discardPile ? [...owner.discardPile] : [];
+  if (shouldAppendPendingToFlow(playerId) && responseCard.value) {
+    cards.push(responseCard.value);
+  }
+  return cards;
+}
+
+function flowCardCount(playerId: string): number {
+  return flowCards(playerId).length;
+}
+
+function visibleFlowCards(playerId: string): Card[] {
+  const cards = flowCards(playerId);
+  const limit = isCompactLandscape.value ? 10 : 14;
+  return cards.slice(Math.max(0, cards.length - limit));
+}
+
 function isActiveDiscardCard(playerId: string, card: Card, index: number): boolean {
-  if (index !== 0) {
+  const cards = visibleFlowCards(playerId);
+  if (index !== cards.length - 1) {
     return false;
   }
   const pending = responseCard.value;
@@ -556,13 +790,24 @@ function isActiveDiscardCard(playerId: string, card: Card, index: number): boole
   if (pending.id !== card.id) {
     return false;
   }
-  const player = props.players.find((item) => item.clientId === playerId);
-  return Boolean(player?.discardPile?.[0]?.id === card.id);
+  if (shouldAppendPendingToFlow(playerId)) {
+    return activeFlowTargetPlayerId.value === playerId;
+  }
+  const owner = flowOwner(playerId);
+  const latestCount = owner?.discardPile?.length ?? 0;
+  const latest = latestCount > 0 ? owner?.discardPile?.[latestCount - 1] : undefined;
+  return Boolean(latest?.id === card.id);
 }
 
 const displayTurnPlayerId = computed(() => {
   if (props.state?.responsePhase === "collective") {
-    return props.state?.pollOriginPlayerId || props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "";
+    return (
+      props.state?.activeResponderId ||
+      props.state?.currentTurnPlayerId ||
+      props.state?.currentPlayerId ||
+      props.state?.pollOriginPlayerId ||
+      ""
+    );
   }
   return props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "";
 });
@@ -617,36 +862,40 @@ const candidateIndexesByCardId = computed(() => {
   return map;
 });
 
-const centerEventText = computed(() => {
+const ACTION_LABELS: Record<string, string> = {
+  DISCARD: "出牌",
+  PENG: "碰",
+  KAI: "开",
+  CHI: "吃",
+  HU: "胡",
+  ZHUA: "抓",
+  PASS: "过",
+  TIMEOUT_PASS: "超时过",
+};
+
+const latestSeatAction = computed<{ actorId: string; label: string } | null>(() => {
   const action = String(props.state?.lastAction ?? "").trim();
   if (!action) {
-    return "";
+    return null;
   }
   const { actor, keyword } = parseActionDescriptor(action);
-  if (isSystemAction(keyword)) {
-    return "";
+  if (!actor) {
+    return null;
   }
-  const actionMap: Record<string, string> = {
-    DISCARD: "出牌",
-    PENG: "碰",
-    KAI: "开",
-    CHI: "吃",
-    HU: "胡",
-    ZHUA: "抓",
-    PASS: "过",
-    TIMEOUT_PASS: "超时过",
-  };
-  const label = actionMap[keyword];
+  const label = ACTION_LABELS[keyword];
   if (!label) {
-    return "";
+    return null;
   }
-  const actorName = props.players.find((player) => player.clientId === actor)?.name || actor || "系统";
-  const target = responseCard.value ?? latestDiscardFromAction.value;
-  const targetLabel = target ? cardLabel(target) : "-";
-  return `${actorName} ${label}（target: ${targetLabel}）`;
+  return { actorId: actor, label };
 });
 
 const seatCountdownSeconds = computed<number | null>(() => {
+  if (
+    /^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
+    Number(props.state?.responseEndsAt ?? 0) > nowMs.value
+  ) {
+    return null;
+  }
   const endsAt = Number(props.state?.responseEndsAt ?? 0);
   if (!endsAt || endsAt <= nowMs.value) {
     return null;
@@ -655,6 +904,12 @@ const seatCountdownSeconds = computed<number | null>(() => {
 });
 
 const seatCountdownPercent = computed<number>(() => {
+  if (
+    /^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
+    Number(props.state?.responseEndsAt ?? 0) > nowMs.value
+  ) {
+    return 0;
+  }
   const endsAt = Number(props.state?.responseEndsAt ?? 0);
   if (!endsAt || endsAt <= nowMs.value) {
     return 0;
@@ -665,6 +920,9 @@ const seatCountdownPercent = computed<number>(() => {
 });
 
 const compactCenterHint = computed(() => {
+  if (props.turnHint) {
+    return props.turnHint;
+  }
   if (canDiscard.value) {
     return "请选择弃牌";
   }
@@ -678,14 +936,6 @@ const compactCenterHint = computed(() => {
     return "可吃或过";
   }
   return isMyTurn.value ? "轮到你操作" : "等待对方操作";
-});
-
-const mergedActionLogs = computed(() => {
-  const logs = props.parsedActionLogs ?? [];
-  return logs.slice(0, 12).map((log) => ({
-    ...log,
-    actorLabel: props.players.find((player) => player.clientId === log.actorId)?.name || log.actorId || "系统",
-  }));
 });
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
@@ -714,6 +964,31 @@ const dealerName = computed(() => {
   return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
 
+const dealerPickerName = computed(() => {
+  const pickerId = String(props.state?.dealerPickerId ?? "");
+  if (!pickerId) {
+    return "";
+  }
+  return props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
+});
+
+const dealerInfoCard = computed<Card | null>(() => {
+  const card = props.state?.dealerCard;
+  return card?.id ? (card as Card) : null;
+});
+
+function isCollectiveResponder(playerId: string): boolean {
+  return String(props.state?.responsePhase ?? "") === "collective" && String(props.state?.activeResponderId ?? "") === playerId;
+}
+
+function seatActionText(playerId: string): string {
+  return latestSeatAction.value?.actorId === playerId ? latestSeatAction.value.label : "";
+}
+
+function hasSeatAction(playerId: string): boolean {
+  return seatActionText(playerId).length > 0;
+}
+
 function isCurrentTurn(playerId: string): boolean {
   return displayTurnPlayerId.value === playerId;
 }
@@ -723,6 +998,13 @@ function statusText(player: PlayerState): string {
     return "BOT托管";
   }
   return player.connected ? "在线" : "离线";
+}
+
+function playerHandCount(player: PlayerState): number {
+  if (player.clientId === props.mySeatId) {
+    return props.privateHand.length;
+  }
+  return Number(player.handCount ?? 0);
 }
 
 function isDealer(playerId: string): boolean {
@@ -779,66 +1061,15 @@ function candidateBadgeText(cardId: string): string {
 }
 
 function cardLabel(card: Card): string {
-  const colorMap: Record<string, string> = {
-    red: "红",
-    yellow: "黄",
-    green: "绿",
-    white: "白",
-    gold: "金",
-  };
-  const typeMap: Record<string, string> = {
-    jiang: "将",
-    shi: "士",
-    xiang: "相",
-    ju: "车",
-    ma: "马",
-    pao: "炮",
-    zu: "卒",
-    gong: "条",
-    hou: "侯",
-    bo: "伯",
-    zi: "子",
-    nan: "男",
-  };
-  return `${colorMap[card.color] ?? card.color}${typeMap[card.type] ?? card.type}`;
+  return getCardLabelText(card);
 }
 
-function compactCardLabel(card: Card): string {
-  const label = cardLabel(card);
-  if (label.length <= 2) {
-    return label;
-  }
-  return label.slice(0, 2);
+function cardGlyph(card: Card): string {
+  return getCardFaceText(card);
 }
 
-function previewGroupCards(cards: Card[]): Card[] {
-  return cards.slice(0, previewGroupSize(cards));
-}
-
-function previewGroupSize(cards: Card[]): number {
-  return Math.min(4, cards.length);
-}
-
-function fanCardStyle(index: number, total: number): Record<string, string> {
-  const center = (total - 1) / 2;
-  const offset = index - center;
-  return {
-    zIndex: String(index + 1),
-    marginLeft: index === 0 ? "0" : "-0.68rem",
-    transform: `rotate(${offset * 8}deg) translateY(${Math.abs(offset) * 1.4}px)`,
-  };
-}
-
-function isOpenGroupExpanded(playerId: string, groupId: string): boolean {
-  return expandedOpenGroups.value[playerId] === groupId;
-}
-
-function toggleOpenGroup(playerId: string, groupId: string): void {
-  const current = expandedOpenGroups.value[playerId];
-  expandedOpenGroups.value = {
-    ...expandedOpenGroups.value,
-    [playerId]: current === groupId ? null : groupId,
-  };
+function cardColorClass(card: Card): string {
+  return `tone-${card.color || "white"}`;
 }
 
 function parseActionDescriptor(action: string): { actor: string; keyword: string } {
@@ -873,8 +1104,16 @@ function resolvePlayerPosition(playerId: string): "top" | "left" | "right" | "se
   if (selfPlayer.value?.clientId === playerId) {
     return "self";
   }
-  const seat = seatEntries.value.find((entry) => entry.player.clientId === playerId);
-  return seat?.position ?? "self";
+  if (topPlayer.value?.clientId === playerId) {
+    return "top";
+  }
+  if (leftPlayer.value?.clientId === playerId) {
+    return "left";
+  }
+  if (rightPlayer.value?.clientId === playerId) {
+    return "right";
+  }
+  return "self";
 }
 
 function pointFromElement(el: HTMLElement | null): { x: number; y: number } | null {
@@ -1162,18 +1401,6 @@ function clearDealerIntroTimer(): void {
   }
 }
 
-function triggerActionEffect(label: string) {
-  if (actionTimer) {
-    clearTimeout(actionTimer);
-    actionTimer = null;
-  }
-  actionEffect.value = { id: ++actionEffectSeq, label };
-  actionTimer = setTimeout(() => {
-    actionEffect.value = null;
-    actionTimer = null;
-  }, 760);
-}
-
 function triggerActorFlash(actorId: string): void {
   if (!actorId) {
     return;
@@ -1189,7 +1416,7 @@ function triggerActorFlash(actorId: string): void {
   }, 780);
 }
 
-function triggerDealerReveal(name: string, dealerId?: string) {
+function triggerDealerReveal(label: string, name: string, card?: Card | null, dealerId?: string) {
   if (!name || name === "-") {
     return;
   }
@@ -1197,7 +1424,7 @@ function triggerDealerReveal(name: string, dealerId?: string) {
     clearTimeout(dealerTimer);
     dealerTimer = null;
   }
-  dealerReveal.value = { id: ++dealerRevealSeq, name };
+  dealerReveal.value = { id: ++dealerRevealSeq, label, name, card: card ?? null };
   dealerTimer = setTimeout(() => {
     dealerReveal.value = null;
     dealerTimer = null;
@@ -1205,15 +1432,6 @@ function triggerDealerReveal(name: string, dealerId?: string) {
   if (dealerId) {
     triggerDealerFlight(dealerId);
   }
-}
-
-function queueDealerIntro(name: string, dealerId?: string): void {
-  clearDealerIntroTimer();
-  const delay = Math.max(0, dealAnimatingUntil - Date.now());
-  dealerIntroTimer = setTimeout(() => {
-    dealerIntroTimer = null;
-    triggerDealerReveal(name, dealerId);
-  }, delay);
 }
 
 function updateCompactLandscape() {
@@ -1235,10 +1453,6 @@ onMounted(() => {
 onUnmounted(() => {
   clearDealAnimationRuntime();
   clearDealerIntroTimer();
-  if (actionTimer) {
-    clearTimeout(actionTimer);
-    actionTimer = null;
-  }
   if (dealerTimer) {
     clearTimeout(dealerTimer);
     dealerTimer = null;
@@ -1258,40 +1472,30 @@ onUnmounted(() => {
 });
 
 watch(
-  () => props.state?.phase,
-  (phase, prev) => {
-    if (prev === "declaring" && phase === "playing") {
-      triggerDealAnimation();
-      queueDealerIntro(dealerName.value, String(props.state?.dealerId ?? ""));
-    }
-  },
-);
-
-watch(
   () => props.state?.lastAction,
   (action) => {
-    const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
-    if (dealerMatch) {
-      const dealerId = dealerMatch[1];
+    const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
+    if (dealerPickMatch) {
+      const pickerId = dealerPickMatch[1];
+      const name = props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
+      triggerDealerReveal("抽取定庄牌", name);
+      return;
+    }
+    const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
+    if (dealerCardMatch) {
+      const dealerId = dealerCardMatch[1];
       const name = props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
-      queueDealerIntro(name, dealerId);
+      triggerDealerReveal("定庄牌", name, dealerInfoCard.value, dealerId);
+      return;
+    }
+    const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
+    if (dealerMatch && props.state?.phase === "declaring") {
+      triggerDealAnimation();
       return;
     }
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {
       triggerActorFlash(actor);
-    }
-    const labelMap: Record<string, string> = {
-      PENG: "碰",
-      CHI: "吃",
-      KAI: "开",
-      HU: "胡",
-      KONG_DRAW: "补牌",
-      ZHUA: "抓",
-    };
-    const label = labelMap[keyword];
-    if (label) {
-      triggerActionEffect(label);
     }
     if (keyword === "DISCARD" && actor) {
       if (!(actor === props.mySeatId && Date.now() - lastLocalDiscardAt.value < 650)) {
@@ -1324,13 +1528,15 @@ watch(
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) clamp(9rem, 26vh, 13rem);
+  grid-template-columns: minmax(10rem, 22%) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
   gap: clamp(0.3rem, 0.9vh, 0.5rem);
   overflow: hidden;
 }
 
 .table {
   position: relative;
+  grid-column: 1 / -1;
   width: 100%;
   aspect-ratio: auto;
   height: 100%;
@@ -1344,71 +1550,145 @@ watch(
     linear-gradient(160deg, #0b1220 0%, #020617 100%);
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 24%);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 23%) minmax(0, 1fr) minmax(0, 23%);
+  grid-template-rows: minmax(4.6rem, 0.82fr) minmax(5.2rem, 1fr) minmax(4.8rem, 0.9fr);
   grid-template-areas:
-    ". top ."
-    "left center right";
+    "flowtl top flowtr"
+    "left center right"
+    "flowbl selfgroups flowbr";
   column-gap: clamp(0.3rem, 1vw, 0.75rem);
   row-gap: clamp(0.25rem, 0.9vh, 0.6rem);
-  padding: clamp(0.25rem, 1vh, 0.7rem);
+  padding: clamp(0.35rem, 1vh, 0.7rem);
 }
 
-.self-open-left {
-  display: none;
+.corner-card {
+  min-width: 4.3rem;
+  min-height: 2rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.7rem;
+  border: 2px solid rgba(15, 23, 42, 0.42);
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 800;
 }
 
-.seat {
+.response-card-simple {
+  min-width: clamp(2.2rem, 5vh, 2.9rem);
+  min-height: clamp(3rem, 7vh, 4rem);
+  font-size: clamp(1rem, 2.4vh, 1.38rem);
+}
+
+.player-card,
+.flow-card,
+.self-groups-card,
+.self-info-card,
+.self-hand-card {
   position: relative;
   background: rgba(11, 18, 32, 0.88);
   border: 1px solid #1e293b;
   border-radius: clamp(0.4rem, 1vh, 0.8rem);
   padding: clamp(0.25rem, 0.8vh, 0.5rem);
   color: #e2e8f0;
-  display: grid;
-  grid-template-rows: auto auto minmax(86px, 1fr);
-  gap: 6px;
-  overflow: auto;
   min-height: 0;
 }
 
-.seat.with-fish {
-  grid-template-rows: auto auto minmax(62px, 1fr) minmax(62px, 1fr);
+.player-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 6px;
+  overflow: auto;
 }
 
-.seat.top {
+.player-top {
   grid-area: top;
   width: 100%;
   justify-self: center;
   height: auto;
-  min-height: clamp(6rem, 16vh, 8.2rem);
+  min-height: clamp(4.6rem, 13vh, 6.6rem);
 }
 
-.seat.left {
+.player-left {
   grid-area: left;
   width: 100%;
   height: 100%;
 }
 
-.seat.right {
+.player-right {
   grid-area: right;
   width: 100%;
   height: 100%;
 }
 
-.seat.active {
+.player-card.active,
+.self-info-card.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
   animation: seat-turn-pulse 1.45s ease-in-out infinite;
 }
 
-.seat.actor-flash {
+.player-card.actor-flash,
+.self-info-card.actor-flash {
   animation: actor-flash 0.8s ease-out;
 }
 
-.seat.dealer {
+.player-card.dealer,
+.self-info-card.dealer {
   border-color: rgba(245, 158, 11, 0.92);
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.34) inset, 0 0 18px rgba(245, 158, 11, 0.2);
+}
+
+.flow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: auto;
+}
+
+.flow-card p,
+.self-groups-card p {
+  margin: 0;
+  font-size: clamp(0.72rem, 1.3vh, 0.86rem);
+  color: #cbd5e1;
+}
+
+.flow-top-left {
+  grid-area: flowtl;
+}
+
+.flow-top-right {
+  grid-area: flowtr;
+}
+
+.flow-bottom-left {
+  grid-area: flowbl;
+}
+
+.flow-bottom-right {
+  grid-area: flowbr;
+}
+
+.self-groups-card {
+  grid-area: selfgroups;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: auto;
+}
+
+.self-info-card {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: hidden;
+}
+
+.self-hand-card {
+  grid-column: 2 / 4;
+  overflow: hidden;
 }
 
 .turn-arrow {
@@ -1424,6 +1704,10 @@ watch(
   pointer-events: none;
 }
 
+.turn-arrow-side {
+  top: 2px;
+}
+
 .seat-head {
   display: flex;
   justify-content: space-between;
@@ -1434,7 +1718,7 @@ watch(
 .seat-meta {
   margin: 0;
   color: #93c5fd;
-  font-size: 12px;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 
 .seat-tags {
@@ -1446,7 +1730,7 @@ watch(
 .tag {
   border-radius: 999px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: clamp(0.68rem, 1.15vh, 0.82rem);
   line-height: 18px;
   white-space: nowrap;
   border: 1px solid #334155;
@@ -1499,6 +1783,13 @@ watch(
   color: #fde68a;
 }
 
+.self-info-hint {
+  margin: 0;
+  color: #bfdbfe;
+  font-size: clamp(0.74rem, 1.35vh, 0.88rem);
+  line-height: 1.35;
+}
+
 .seat-zone {
   margin: 0;
   border-top: 1px dashed #334155;
@@ -1513,7 +1804,7 @@ watch(
 
 .seat-zone p {
   margin: 0 0 6px;
-  font-size: 12px;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
   color: #cbd5e1;
 }
 
@@ -1531,29 +1822,40 @@ watch(
 }
 
 .discard-token {
-  min-width: 1.9rem;
-  height: 1.55rem;
-  padding: 0 0.36rem;
+  position: relative;
+  width: clamp(1.72rem, 3.3vh, 1.95rem);
+  height: clamp(1.72rem, 3.3vh, 1.95rem);
   border-radius: 0.45rem;
-  border: 1px solid rgba(100, 116, 139, 0.65);
-  background: rgba(15, 23, 42, 0.32);
-  color: #e2e8f0;
+  border: 2px solid rgba(15, 23, 42, 0.45);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: clamp(0.84rem, 1.55vh, 0.98rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  color: #020617;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
 .discard-token.active {
-  border-color: rgba(250, 204, 21, 0.92);
-  background: rgba(250, 204, 21, 0.16);
-  color: #fef08a;
-  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.28), 0 0 16px rgba(250, 204, 21, 0.16);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
+}
+
+.discard-token.active::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 0.62rem;
+  padding: 3px;
+  background: linear-gradient(135deg, #f43f5e, #f59e0b, #22c55e, #38bdf8, #a855f7);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: flow-active-glow 1.35s linear infinite;
+  pointer-events: none;
 }
 
 .discard-empty {
@@ -1564,7 +1866,7 @@ watch(
   align-items: center;
   justify-content: center;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
   background: rgba(15, 23, 42, 0.18);
 }
 
@@ -1573,6 +1875,77 @@ watch(
   flex-wrap: wrap;
   gap: 6px;
   align-content: flex-start;
+}
+
+.group-block-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+.group-block-list.compact {
+  gap: 4px;
+}
+
+.group-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 2rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(71, 85, 105, 0.9);
+  background: rgba(15, 23, 42, 0.56);
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.group-block.fish {
+  border-color: rgba(56, 189, 248, 0.7);
+  background: rgba(8, 47, 73, 0.42);
+}
+
+.group-block.public {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: rgba(113, 63, 18, 0.32);
+}
+
+.group-badge {
+  flex: 0 0 auto;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.68rem, 1.15vh, 0.8rem);
+  font-weight: 700;
+}
+
+.mini-card-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mini-card {
+  width: clamp(1.55rem, 3vh, 1.8rem);
+  height: clamp(1.68rem, 3.2vh, 1.95rem);
+  border-radius: 0.45rem;
+  border: 2px solid rgba(15, 23, 42, 0.42);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #020617;
+  font-size: clamp(0.84rem, 1.5vh, 0.98rem);
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .group-chip {
@@ -1615,7 +1988,7 @@ watch(
 
 .stack-count {
   margin-left: 6px;
-  font-size: 12px;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
   color: #bfdbfe;
   font-weight: 700;
 }
@@ -1636,8 +2009,8 @@ watch(
 .center {
   position: relative;
   grid-area: center;
-  width: min(100%, 66%);
-  justify-self: center;
+  width: 100%;
+  justify-self: stretch;
   min-width: 0;
   min-height: 0;
   background: rgba(11, 18, 32, 0.82);
@@ -1645,51 +2018,195 @@ watch(
   border-radius: clamp(0.5rem, 1.4vh, 0.9rem);
   padding: clamp(0.3rem, 0.95vh, 0.65rem);
   color: #e2e8f0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: stretch;
-  gap: clamp(0.25rem, 0.8vh, 0.55rem);
   align-self: stretch;
 }
 
-.center-text {
+.center-board {
+  width: 100%;
+  min-height: 0;
   display: grid;
-  grid-auto-rows: min-content;
+  grid-template-columns: minmax(0, 1fr) minmax(7.6rem, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-areas:
+    ". top ."
+    "left core right"
+    ". bottom .";
+  gap: clamp(0.22rem, 0.7vh, 0.48rem);
+}
+
+.center-seat {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  justify-items: center;
   align-content: center;
-  gap: 6px;
-  text-align: left;
+  gap: clamp(0.18rem, 0.55vh, 0.35rem);
+  pointer-events: none;
 }
 
-.center-text p {
-  margin: 0;
-  font-size: clamp(0.64rem, 1.45vh, 0.82rem);
+.center-seat-top {
+  grid-area: top;
+  align-self: start;
 }
 
-.center-text strong {
-  color: #e2e8f0;
+.center-seat-left {
+  grid-area: left;
+  justify-self: start;
+  align-self: center;
 }
 
-.center-turn-hint {
-  margin: 0;
-  color: #bfdbfe;
-  font-size: clamp(0.58rem, 1.45vh, 0.78rem);
+.center-seat-right {
+  grid-area: right;
+  justify-self: end;
+  align-self: center;
 }
 
-.response-wrap {
-  border: 1px solid rgba(51, 65, 85, 0.6);
-  border-radius: clamp(0.35rem, 0.9vh, 0.7rem);
-  background: rgba(15, 23, 42, 0.5);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.center-seat-bottom {
+  grid-area: bottom;
+  align-self: end;
+}
+
+.center-seat-name {
+  font-size: clamp(0.62rem, 1.2vh, 0.76rem);
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.center-seat-action {
+  min-width: clamp(3rem, 7vw, 4.3rem);
+  min-height: clamp(2rem, 4.8vh, 2.8rem);
+  padding: 0.18rem 0.42rem;
+  border-radius: 0.8rem;
+  border: 1px dashed rgba(71, 85, 105, 0.8);
+  background: rgba(15, 23, 42, 0.46);
+  display: inline-flex;
   align-items: center;
-  gap: clamp(0.2rem, 0.65vh, 0.5rem);
-  padding: clamp(0.2rem, 0.7vh, 0.5rem);
-  min-height: clamp(3.8rem, 10vh, 5.2rem);
+  justify-content: center;
+  font-size: clamp(0.84rem, 1.6vh, 1.02rem);
+  font-weight: 800;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.1;
 }
 
-.response-wrap small {
-  color: #bfdbfe;
+.center-seat.action .center-seat-action {
+  border-style: solid;
+  border-color: rgba(251, 191, 36, 0.88);
+  background: rgba(120, 53, 15, 0.34);
+  color: #fef3c7;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.18);
+}
+
+.center-seat.responding .center-seat-action,
+.center-seat.active .center-seat-action {
+  border-color: rgba(34, 197, 94, 0.88);
+  color: #dcfce7;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.24) inset, 0 0 16px rgba(34, 197, 94, 0.16);
+}
+
+.center-core {
+  grid-area: core;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(51, 65, 85, 0.68);
+  border-radius: clamp(0.45rem, 1vh, 0.8rem);
+  background: rgba(2, 6, 23, 0.32);
+  padding: clamp(0.24rem, 0.75vh, 0.48rem);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.28rem, 0.8vh, 0.55rem);
+  align-items: stretch;
+}
+
+.center-core-cell {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.28rem;
+  text-align: center;
+}
+
+.center-core-subtle {
+  font-size: clamp(0.56rem, 1.1vh, 0.68rem);
+  color: #94a3b8;
+}
+
+.center-core-card {
+  display: grid;
+  place-items: center;
+}
+
+.pending-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.center-core-label {
+  font-size: clamp(0.62rem, 1.15vh, 0.74rem);
+  color: #93c5fd;
+}
+
+.pending-placeholder {
+  min-height: clamp(3.4rem, 7vh, 4.4rem);
+  display: grid;
+  place-items: center;
+  padding: 0.35rem;
+  border-radius: 0.7rem;
+  border: 1px dashed rgba(71, 85, 105, 0.72);
+  color: #64748b;
+  font-size: clamp(0.62rem, 1.15vh, 0.74rem);
+}
+
+.deck-stack {
+  position: relative;
+  width: clamp(2.6rem, 5.6vh, 3.4rem);
+  height: clamp(3.4rem, 7vh, 4.4rem);
+  display: grid;
+  place-items: center;
+}
+
+.deck-stack-card {
+  position: absolute;
+  inset: auto;
+  width: clamp(2rem, 4.8vh, 2.7rem);
+  height: clamp(2.8rem, 6.1vh, 3.6rem);
+  border-radius: 0.5rem;
+  background: linear-gradient(180deg, #b91c1c, #7f1d1d);
+  border: 1px solid rgba(127, 29, 29, 0.9);
+  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.24);
+}
+
+.deck-stack-card:nth-child(1) {
+  transform: translate(-8px, -6px);
+}
+
+.deck-stack-card:nth-child(2) {
+  transform: translate(0, 0);
+}
+
+.deck-stack-card:nth-child(3) {
+  transform: translate(8px, 6px);
+}
+
+.deck-stack-count {
+  position: relative;
+  z-index: 1;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.84);
+  color: #fef2f2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.7rem, 1.6vh, 0.96rem);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.28);
 }
 
 .resp-move-enter-active {
@@ -1704,48 +2221,6 @@ watch(
 .resp-move-enter-to {
   transform: translateY(0) scale(1);
   opacity: 1;
-}
-
-.center-event {
-  margin: 0;
-  color: #fde68a;
-  font-size: clamp(0.65rem, 1.5vh, 0.86rem);
-  font-weight: 700;
-}
-
-.table-action-log {
-  position: absolute;
-  left: clamp(0.3rem, 1vw, 0.55rem);
-  bottom: clamp(0.3rem, 1vh, 0.55rem);
-  width: min(54%, 18rem);
-  max-height: clamp(5.2rem, 18vh, 8.6rem);
-  overflow: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(51, 65, 85, 0.8);
-  background: rgba(2, 6, 23, 0.64);
-  padding: 0.3rem 0.42rem;
-  z-index: 3;
-}
-
-.table-action-log ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.16rem;
-}
-
-.table-action-log li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.35rem;
-  font-size: clamp(0.56rem, 1.2vh, 0.7rem);
-  color: #dbeafe;
-}
-
-.table-action-log time {
-  color: #93c5fd;
-  font-variant-numeric: tabular-nums;
 }
 
 .center-pointer {
@@ -1806,7 +2281,11 @@ watch(
 .empty {
   margin: 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
+}
+
+.self-hand-card {
+  display: flex;
 }
 
 .self-zone {
@@ -1912,8 +2391,28 @@ watch(
 
 .discard-tip {
   margin: 0;
-  color: #facc15;
+  color: #bfdbfe;
   font-size: 13px;
+}
+
+.tone-red {
+  background: #e53935;
+}
+
+.tone-yellow {
+  background: #ffd700;
+}
+
+.tone-green {
+  background: #43a047;
+}
+
+.tone-white {
+  background: #ffffff;
+}
+
+.tone-gold {
+  background: #c41e1e;
 }
 
 .hand {
@@ -2068,26 +2567,6 @@ watch(
   text-shadow: 0 0 12px rgba(148, 163, 184, 0.55);
 }
 
-.action-effect {
-  position: absolute;
-  z-index: 10;
-  left: 50%;
-  top: 52%;
-  transform: translate(-50%, -50%);
-  min-width: clamp(2.2rem, 5vw, 3.6rem);
-  min-height: clamp(2.2rem, 5vw, 3.6rem);
-  border-radius: 999px;
-  border: 1px solid rgba(34, 197, 94, 0.7);
-  background: rgba(15, 23, 42, 0.88);
-  color: #bbf7d0;
-  display: grid;
-  place-items: center;
-  font-size: clamp(0.88rem, 2.1vh, 1.2rem);
-  font-weight: 800;
-  pointer-events: none;
-  box-shadow: 0 0 24px rgba(34, 197, 94, 0.35);
-}
-
 .dealer-reveal {
   position: absolute;
   z-index: 10;
@@ -2144,20 +2623,6 @@ watch(
 
 .deal-fade-enter-from,
 .deal-fade-leave-to {
-  opacity: 0;
-}
-
-.action-pop-enter-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-
-.action-pop-leave-active {
-  transition: transform 0.22s ease, opacity 0.22s ease;
-}
-
-.action-pop-enter-from,
-.action-pop-leave-to {
-  transform: translate(-50%, -38%) scale(0.76);
   opacity: 0;
 }
 
@@ -2252,6 +2717,15 @@ watch(
   }
 }
 
+@keyframes flow-active-glow {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
 @keyframes fly-card {
   0% {
     transform: translate(var(--sx), var(--sy)) scale(1);
@@ -2280,12 +2754,7 @@ watch(
 
 @media (max-width: 1200px) {
   .table {
-    max-height: none;
-    grid-template-columns: minmax(0, 25%) minmax(0, 1fr) minmax(0, 25%);
-  }
-
-  .center {
-    width: min(100%, 72%);
+    grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 24%);
   }
 }
 
@@ -2301,19 +2770,18 @@ watch(
     padding: 0.25rem;
   }
 
-  .seat {
-    padding: 0.2rem;
-    gap: 0.2rem;
-  }
-
-  .seat.top {
-    height: clamp(3.3rem, 11vh, 4.8rem);
-  }
-
   .center {
-    width: min(100%, 74%);
     padding: 0.25rem;
-    gap: 0.2rem;
+  }
+
+  .center-board {
+    gap: 0.18rem;
+  }
+
+  .center-seat-action {
+    min-width: 2.6rem;
+    min-height: 1.7rem;
+    font-size: clamp(0.68rem, 1.35vh, 0.84rem);
   }
 
   .response-wrap {
@@ -2322,10 +2790,6 @@ watch(
 
   .response-wrap small {
     font-size: 11px;
-  }
-
-  .self-zone {
-    gap: 0.2rem;
   }
 
   .self-head h3 {
@@ -2343,73 +2807,70 @@ watch(
   .turn-timer-bar {
     height: 6px;
   }
-
-  .table-action-log {
-    max-height: clamp(4.4rem, 15vh, 6.6rem);
-    width: min(58%, 15rem);
-  }
 }
 
 @media (orientation: landscape) and (max-width: 960px) {
   .board {
-    grid-template-columns: minmax(0, 66%) minmax(0, 34%);
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 1vh;
+    grid-template-columns: minmax(8.5rem, 28%) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) clamp(7.6rem, 24vh, 10.5rem);
+    gap: 0.55vh;
   }
 
   .table {
-    grid-column: 1;
-    grid-row: 1;
     height: 100%;
     max-height: none;
     aspect-ratio: auto;
-    padding: 1vh;
+    padding: 0.7vh;
     border-radius: 1.6vh;
-    grid-template-columns: minmax(0, 22%) minmax(0, 1fr) minmax(0, 22%);
-    grid-template-rows: minmax(0, 40%) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 24%);
+    grid-template-rows: minmax(3.9rem, 0.82fr) minmax(4.6rem, 1fr) minmax(4rem, 0.88fr);
     grid-template-areas:
-      "selfopen top ."
-      "left center right";
-    column-gap: 1vh;
-    row-gap: 1vh;
+      "flowtl top flowtr"
+      "left center right"
+      "flowbl selfgroups flowbr";
+    column-gap: 0.55vh;
+    row-gap: 0.55vh;
   }
 
-  .self-open-left {
-    grid-area: selfopen;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    border: 1px solid #334155;
-    border-radius: 1.1vh;
-    background: rgba(11, 18, 32, 0.88);
-    padding: 0.35vh 0.5vh;
-    overflow: auto;
+  .corner-card {
+    min-width: 3rem;
+    min-height: 1.55rem;
+    font-size: 0.76rem;
   }
 
-  .self-open-left p {
-    margin: 0 0 0.35vh;
-    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
-    color: #cbd5e1;
-  }
-
-  .self-open-left .cards {
-    gap: 0.35vh;
-    align-content: flex-start;
-    overflow: auto;
-  }
-
-  .self-open-left .grouped-cards {
+  .group-block-list {
     gap: 0.35vh;
   }
 
-  .seat {
+  .group-block {
+    gap: 0.35vh;
+    padding: 0.28vh 0.4vh;
+    border-radius: 0.9vh;
+  }
+
+  .group-badge {
+    min-width: 1.28rem;
+    height: 1.28rem;
+    font-size: clamp(0.5rem, 1.15vh, 0.62rem);
+  }
+
+  .mini-card {
+    width: 1.3rem;
+    height: 1.45rem;
+    font-size: clamp(0.62rem, 1.32vh, 0.74rem);
+  }
+
+  .player-card,
+  .flow-card,
+  .self-groups-card,
+  .self-info-card,
+  .self-hand-card {
     padding: 0.45vh 0.55vh;
     gap: 0.35vh;
   }
 
-  .seat.top {
-    height: auto;
-    min-height: 15vh;
+  .player-top {
+    min-height: 0;
   }
 
   .seat-head strong {
@@ -2426,43 +2887,44 @@ watch(
     font-size: clamp(0.54rem, 1.25vh, 0.65rem);
   }
 
-  .seat-zone {
-    padding-top: 0.35vh;
-  }
-
-  .seat-zone p {
-    margin-bottom: 0.35vh;
+  .flow-card p,
+  .self-groups-card p {
     font-size: clamp(0.55rem, 1.3vh, 0.66rem);
   }
 
-  .seat-zone .cards {
-    max-height: none;
-    overflow: visible;
-  }
-
-  .grouped-cards {
-    gap: 0.35vh;
-  }
-
-  .group-chip {
-    padding: 0.24vh 0.28vh;
-    border-radius: 0.8vh;
-  }
-
-  .stack-count {
-    margin-left: 0.35vh;
-    font-size: clamp(0.5rem, 1.2vh, 0.62rem);
-  }
-
   .center {
-    width: 100%;
     padding: 0.7vh 0.9vh;
-    gap: 0.65vh;
     border-radius: 1.4vh;
+  }
+
+  .center-board {
+    grid-template-columns: minmax(0, 1fr) minmax(6.4rem, 1.2fr) minmax(0, 1fr);
+    gap: 0.45vh;
   }
 
   .center-text p {
     font-size: clamp(0.62rem, 1.4vh, 0.76rem);
+  }
+
+  .center-info-row {
+    gap: 0.22rem;
+  }
+
+  .info-chip {
+    min-height: 1.25rem;
+    padding: 0.08rem 0.35rem;
+    font-size: clamp(0.5rem, 1.15vh, 0.64rem);
+  }
+
+  .center-seat-name {
+    font-size: clamp(0.5rem, 1.1vh, 0.62rem);
+  }
+
+  .center-seat-action {
+    min-width: 2.4rem;
+    min-height: 1.55rem;
+    padding: 0.12rem 0.28rem;
+    font-size: clamp(0.62rem, 1.28vh, 0.76rem);
   }
 
   .response-wrap {
@@ -2472,18 +2934,6 @@ watch(
 
   .response-wrap small {
     font-size: clamp(0.54rem, 1.28vh, 0.66rem);
-  }
-
-  .self-zone {
-    grid-column: 2;
-    grid-row: 1;
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    align-content: stretch;
-    max-height: none;
-    border-radius: 1.4vh;
-    padding: 0.65vh 1vw;
-    gap: 0.55vh;
   }
 
   .self-head {
@@ -2507,45 +2957,37 @@ watch(
     gap: 0.35vh;
   }
 
-  .self-areas {
-    max-height: none;
-    gap: 0.45vh;
-    overflow: auto;
+  .self-info-card {
+    border-radius: 1.4vh;
+    padding: 0.55vh 0.8vh;
   }
 
-  .self-main {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .self-area {
+  .self-groups-card,
+  .self-hand-card {
     border-radius: 1.1vh;
     padding: 0.35vh 0.55vh;
   }
 
-  .self-area p {
-    margin-bottom: 0.2vh;
+  .self-info-hint {
     font-size: clamp(0.54rem, 1.28vh, 0.66rem);
-  }
-
-  .self-area .cards {
-    max-height: none;
-    overflow: auto;
-  }
-
-  .self-area .grouped-cards {
-    gap: 0.35vh;
   }
 
   .discard-tip {
     font-size: clamp(0.56rem, 1.35vh, 0.72rem);
   }
 
+  .discard-token {
+    width: 1.45rem;
+    height: 1.45rem;
+    font-size: clamp(0.62rem, 1.35vh, 0.76rem);
+  }
+
   .hand {
     overflow: auto;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(clamp(1.7rem, 4.6vw, 2.4rem), 1fr));
-    column-gap: 0.08vh;
-    row-gap: 0.7vh;
+    column-gap: 0.18vh;
+    row-gap: 0.45vh;
     min-height: 0;
     align-content: start;
     padding-bottom: 0.2vh;
@@ -2600,11 +3042,6 @@ watch(
 
   .embedded-actions :deep(.btn:disabled) {
     opacity: 0.58;
-  }
-
-  .table-action-log {
-    width: min(62%, 12.5rem);
-    max-height: clamp(4rem, 13vh, 5.6rem);
   }
 }
 
@@ -2665,13 +3102,6 @@ watch(
 
   .self-main {
     grid-template-columns: 1fr;
-  }
-
-  .table-action-log {
-    position: static;
-    width: 100%;
-    max-height: 6rem;
-    margin-top: 0.2rem;
   }
 }
 </style>

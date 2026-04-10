@@ -18,6 +18,7 @@ export class PlayerState extends Schema {
   @type([CardSchema]) discardPile = new ArraySchema<CardSchema>();
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
   @type(["number"]) exposedGroupSizes = new ArraySchema<number>();
+  @type(["string"]) exposedGroupKinds = new ArraySchema<string>();
   @type([CardSchema]) generalArea = new ArraySchema<CardSchema>();
   // Unbound wildcards for the new rule flow. Kept separate from exposed groups.
   @type([CardSchema]) wildcardPool = new ArraySchema<CardSchema>();
@@ -28,6 +29,7 @@ export class GameState extends Schema {
   @type("string") phase: "waiting" | "declaring" | "playing" | "ended" = "waiting";
   @type("string") hostPlayerId: string = "";
   @type("string") dealerId: string = "";
+  @type("string") dealerPickerId: string = "";
   @type("string") currentPlayerId: string = "";
   @type("string") responsePhase: "collective" | "local_upper" | "local_draw" = "collective";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
@@ -49,4 +51,5 @@ export class GameState extends Schema {
   // Remaining response time for current poll (ms epoch).
   @type("number") responseEndsAt: number = 0;
   @type(CardSchema) responseCard: CardSchema = new CardSchema();
+  @type(CardSchema) dealerCard: CardSchema = new CardSchema();
 }

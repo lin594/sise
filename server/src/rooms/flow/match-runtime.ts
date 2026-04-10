@@ -1,5 +1,6 @@
 import type { MapSchema } from "@colyseus/schema";
 import { CardSchema, GameState, PlayerState } from "../../schema/game-state.schema.js";
+import { explainHu } from "../../rules/hu.js";
 import type { Card } from "../../rules/types.js";
 
 /**
@@ -109,6 +110,7 @@ export function resetToFreshLobbyFlow(ctx: FreshLobbyContext): void {
   ctx.state.currentPlayerId = "";
   ctx.state.hostPlayerId = "";
   ctx.state.dealerId = "";
+  ctx.state.dealerPickerId = "";
   ctx.state.deckCount = 0;
   ctx.state.declareEndsAt = 0;
   ctx.state.targetCard = new CardSchema();
@@ -120,6 +122,7 @@ export function resetToFreshLobbyFlow(ctx: FreshLobbyContext): void {
   ctx.state.pollOriginPlayerId = "";
   ctx.state.responseEndsAt = 0;
   ctx.state.responseCard = new CardSchema();
+  ctx.state.dealerCard = new CardSchema();
   ctx.state.lastAction = `LOBBY 0/${ctx.targetSeats}`;
   ctx.broadcastAvailableActions();
 }
@@ -266,6 +269,7 @@ export function resetRoundPlayers(
     player.discardPile.clear();
     player.exposedArea.clear();
     player.exposedGroupSizes.clear();
+    player.exposedGroupKinds.clear();
     player.generalArea.clear();
     player.wildcardPool.clear();
     player.fishArea.clear();
@@ -280,12 +284,11 @@ export function resetRoundPlayers(
  */
 export function dealInitialHands(
   playerOrder: string[],
-  dealerId: string,
   deck: Card[],
   playerHands: Map<string, Card[]>,
 ): void {
   for (const seatId of playerOrder) {
-    const count = seatId === dealerId ? 21 : 20;
+    const count = 20;
     const hand: Card[] = [];
     for (let i = 0; i < count; i += 1) {
       const card = deck.shift();
@@ -480,6 +483,7 @@ export function resetToLobby(context: LobbyResetContext): void {
     player.discardPile.clear();
     player.exposedArea.clear();
     player.exposedGroupSizes.clear();
+    player.exposedGroupKinds.clear();
     player.generalArea.clear();
     player.wildcardPool.clear();
     player.fishArea.clear();
@@ -495,6 +499,7 @@ export function resetToLobby(context: LobbyResetContext): void {
 
   context.state.phase = "waiting";
   context.state.dealerId = "";
+  context.state.dealerPickerId = "";
   context.state.currentPlayerId = "";
   context.state.responsePhase = "collective";
   context.state.deckCount = 0;
@@ -509,6 +514,7 @@ export function resetToLobby(context: LobbyResetContext): void {
   context.state.responseEndsAt = 0;
   context.state.publicDiscardPile.clear();
   context.state.responseCard = new CardSchema();
+  context.state.dealerCard = new CardSchema();
   context.state.lastAction = `LOBBY ${context.seatByToken.size}/${context.targetSeats}`;
   context.syncAllPrivateHands();
   context.broadcastAvailableActions();
@@ -522,6 +528,7 @@ export interface RoundEndContext<RoundResultPlayer> {
   setAwaitingDiscardOwnerNull: () => void;
   broadcast: (event: string, payload: unknown) => void;
   buildRoundResultPlayers: (winnerId: string | null, groups: string[]) => RoundResultPlayer[];
+  buildRemainingDeckPreview: () => Card[];
   broadcastAvailableActions: () => void;
 }
 
@@ -536,6 +543,8 @@ export function endRoundFlow<RoundResultPlayer>(
   winnerId: string | null = null,
   groups: string[] = [],
 ): void {
+  const roundResultPlayers = context.buildRoundResultPlayers(winnerId, groups);
+  const remainingDeck = context.buildRemainingDeckPreview();
   context.state.phase = "ended";
   context.state.lastAction = lastAction;
   context.setPendingResponseNull();
@@ -554,7 +563,8 @@ export function endRoundFlow<RoundResultPlayer>(
   context.broadcast("round_result", {
     winnerId,
     groups,
-    players: context.buildRoundResultPlayers(winnerId, groups),
+    players: roundResultPlayers,
+    remainingDeck,
   });
 
   context.broadcastAvailableActions();
@@ -572,8 +582,18 @@ export interface RoundResultPlayer {
   clientId: string;
   name: string;
   hand: Card[];
+  huType?: "small" | "big" | null;
+  winningGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+  resolvedHandGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
   exposedArea: Card[];
   exposedGroupSizes: number[];
+  exposedGroupKinds: string[];
   generalArea: Card[];
   fishArea: Card[];
   discardCount: number;
@@ -581,9 +601,43 @@ export interface RoundResultPlayer {
   totalScore: number;
 }
 
+interface RoundResultView {
+  clientId: string;
+  name: string;
+  hand: Card[];
+  huType: "small" | "big" | null;
+  winningGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+  resolvedHandGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+  exposedArea: Card[];
+  exposedGroupSizes: number[];
+  exposedGroupKinds: string[];
+  generalArea: Card[];
+  fishArea: Card[];
+  discardCount: number;
+  exposedGroupDetails: SettlementGroupDetail[];
+  generalGroupDetails: SettlementGroupDetail[];
+  fishGroupDetails: SettlementGroupDetail[];
+  winningGroupDetails: SettlementGroupDetail[];
+  resolvedHandGroupDetails: SettlementGroupDetail[];
+}
+
+interface SettlementGroupDetail {
+  key: string;
+  label: string;
+  unit: number;
+  cards: Card[];
+}
+
 function getScoreRules(): Record<string, { label: string; unit: number }> {
   return {
     Pair: { label: "对子", unit: 0 },
+    Peng: { label: "碰", unit: 1 },
     FrameJMP: { label: "车马炮架", unit: 1 },
     FrameJSX: { label: "将士象架", unit: 1 },
     TripleZu: { label: "三兵组", unit: 1 },
@@ -615,6 +669,36 @@ function splitCardGroups(cards: Card[], sizes: number[]): Card[][] {
     }
   }
   return groups;
+}
+
+const COLOR_LABELS: Record<string, string> = {
+  red: "红",
+  yellow: "黄",
+  green: "绿",
+  white: "白",
+};
+
+const FACE_LABELS: Record<string, string> = {
+  jiang: "将",
+  shi: "士",
+  xiang: "相",
+  ju: "车",
+  ma: "马",
+  pao: "炮",
+  zu: "卒",
+  gong: "公",
+  hou: "侯",
+  bo: "伯",
+  zi: "子",
+  nan: "男",
+};
+
+function cardShortLabel(card: Card): string {
+  const face = FACE_LABELS[card.type] ?? card.type;
+  if (card.color === "gold") {
+    return face;
+  }
+  return `${COLOR_LABELS[card.color] ?? card.color}${face}`;
 }
 
 function isSameFaceGroup(cards: Card[]): boolean {
@@ -693,30 +777,272 @@ function classifyExposedGroup(cards: Card[]): string[] {
   return [];
 }
 
-function buildVisibleAreaGroups(exposedArea: Card[], exposedGroupSizes: number[], fishArea: Card[]): string[] {
-  const groups: string[] = [];
-  for (const group of splitCardGroups(exposedArea, exposedGroupSizes)) {
-    groups.push(...classifyExposedGroup(group));
-  }
+function scoreUnitForKey(key: string): number {
+  return getScoreRules()[key]?.unit ?? 0;
+}
 
-  if (fishArea.length > 0) {
-    if (fishArea.every((card) => card.color === "gold") && (fishArea.length === 4 || fishArea.length === 5)) {
-      groups.push("GoldFish");
-    } else {
-      const counter = new Map<string, number>();
-      for (const card of fishArea) {
-        const key = `${card.color}:${card.type}`;
-        counter.set(key, (counter.get(key) ?? 0) + 1);
-      }
-      for (const count of counter.values()) {
-        if (count === 4) {
-          groups.push("Fish");
-        }
-      }
+function describeGroupLabel(key: string, cards: Card[]): string {
+  const head = cards[0];
+  if (!head) {
+    return key;
+  }
+  switch (key) {
+    case "Triplet":
+    case "JiangTriplet":
+    case "GoldTriplet":
+      return `${cardShortLabel(head)}坎`;
+    case "Quad":
+    case "JiangQuad":
+    case "GoldQuad":
+      return `${cardShortLabel(head)}开`;
+    case "FrameJMP":
+      return `${COLOR_LABELS[head.color] ?? head.color}车马炮架`;
+    case "FrameJSX":
+      return `${COLOR_LABELS[head.color] ?? head.color}将士相架`;
+    case "TripleZu":
+      return "三卒组";
+    case "QuadZu":
+      return "四卒组";
+    case "Fish":
+    case "GoldFish":
+      return `${cardShortLabel(head)}鱼`;
+    case "SingleJiang":
+    case "SingleGold":
+      return `${cardShortLabel(head)}单张`;
+    case "Pair":
+      return `${cardShortLabel(head)}对子`;
+    default:
+      return `${cardShortLabel(head)}组`;
+  }
+}
+
+function toGroupDetails(groups: Card[][]): SettlementGroupDetail[] {
+  const details: SettlementGroupDetail[] = [];
+  for (const cards of groups) {
+    for (const key of classifyExposedGroup(cards)) {
+      details.push({
+        key,
+        label: describeGroupLabel(key, cards),
+        unit: scoreUnitForKey(key),
+        cards,
+      });
     }
   }
+  return details;
+}
 
+function splitExposedGroupsWithKinds(cards: Card[], sizes: number[], kinds: string[]): Array<{ cards: Card[]; kind: string }> {
+  const groups: Array<{ cards: Card[]; kind: string }> = [];
+  let offset = 0;
+  for (let index = 0; index < sizes.length; index += 1) {
+    const size = sizes[index];
+    if (!Number.isFinite(size) || size <= 0) {
+      continue;
+    }
+    const chunk = cards.slice(offset, offset + size);
+    offset += size;
+    if (chunk.length === size) {
+      groups.push({ cards: chunk, kind: kinds[index] ?? "" });
+    }
+  }
   return groups;
+}
+
+function detailFromKey(key: string, cards: Card[]): SettlementGroupDetail {
+  return {
+    key,
+    label: describeGroupLabel(key, cards),
+    unit: scoreUnitForKey(key),
+    cards,
+  };
+}
+
+function classifyChiLikeGroup(cards: Card[]): SettlementGroupDetail[] {
+  if (!cards.length) {
+    return [];
+  }
+  if (cards.every((card) => card.color === "gold")) {
+    return cards.length === 1 ? [detailFromKey("SingleGold", cards)] : [];
+  }
+  if (isSameFaceGroup(cards)) {
+    const head = cards[0];
+    if (head.type === "jiang") {
+      if (cards.length === 1) {
+        return [detailFromKey("SingleJiang", cards)];
+      }
+      return [detailFromKey("Pair", cards)];
+    }
+    if (cards.length >= 2) {
+      return [detailFromKey("Pair", cards)];
+    }
+    return [];
+  }
+  return toGroupDetails([cards]);
+}
+
+function classifyExposedGroupByKind(cards: Card[], kind: string): SettlementGroupDetail[] {
+  if (!cards.length) {
+    return [];
+  }
+  const head = cards[0];
+  const normalizedKind = kind || "";
+  if (normalizedKind === "kai" || (!normalizedKind && isSameFaceGroup(cards) && cards.length >= 4)) {
+    if (cards.every((card) => card.color === "gold")) {
+      return [detailFromKey("GoldQuad", cards)];
+    }
+    if (head.type === "jiang") {
+      return [detailFromKey("JiangQuad", cards)];
+    }
+    return [detailFromKey("Quad", cards)];
+  }
+  if (normalizedKind === "peng" || (!normalizedKind && isSameFaceGroup(cards) && cards.length === 3 && head.type !== "jiang" && head.color !== "gold")) {
+    return [
+      {
+        key: "Peng",
+        label: `${cardShortLabel(head)}碰`,
+        unit: scoreUnitForKey("Peng"),
+        cards,
+      },
+    ];
+  }
+  return classifyChiLikeGroup(cards);
+}
+
+function buildExposedVisibleGroupDetails(
+  exposedArea: Card[],
+  exposedGroupSizes: number[],
+  exposedGroupKinds: string[],
+): SettlementGroupDetail[] {
+  return splitExposedGroupsWithKinds(exposedArea, exposedGroupSizes, exposedGroupKinds).flatMap((group) =>
+    classifyExposedGroupByKind(group.cards, group.kind),
+  );
+}
+
+function buildGeneralGroupDetails(generalArea: Card[]): SettlementGroupDetail[] {
+  return generalArea.flatMap((card) => classifyChiLikeGroup([card]));
+}
+
+function buildFishGroupDetails(fishArea: Card[]): SettlementGroupDetail[] {
+  if (!fishArea.length) {
+    return [];
+  }
+  if (fishArea.every((card) => card.color === "gold") && (fishArea.length === 4 || fishArea.length === 5)) {
+    return [
+      {
+        key: "GoldFish",
+        label: `${cardShortLabel(fishArea[0])}鱼`,
+        unit: scoreUnitForKey("GoldFish"),
+        cards: [...fishArea],
+      },
+    ];
+  }
+  const counter = new Map<string, Card[]>();
+  for (const card of fishArea) {
+    const groupKey = `${card.color}:${card.type}`;
+    const list = counter.get(groupKey) ?? [];
+    list.push(card);
+    counter.set(groupKey, list);
+  }
+  const details: SettlementGroupDetail[] = [];
+  for (const cards of counter.values()) {
+    if (cards.length === 4) {
+      details.push({
+        key: "Fish",
+        label: `${cardShortLabel(cards[0])}鱼`,
+        unit: scoreUnitForKey("Fish"),
+        cards,
+      });
+    }
+  }
+  return details;
+}
+
+function buildResolvedHandGroupDetails(
+  groups: Array<{
+    key: string;
+    cards: Card[];
+  }>,
+): SettlementGroupDetail[] {
+  return groups.map((group) => detailFromKey(group.key, group.cards));
+}
+
+function splitWinnerResponseGroups(
+  groups: Array<{
+    key: string;
+    cards: Card[];
+  }>,
+  winnerResponseCard: Card | null,
+): {
+  winningGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+  remainingGroups: Array<{
+    key: string;
+    cards: Card[];
+  }>;
+} {
+  if (!winnerResponseCard?.id) {
+    return {
+      winningGroups: [],
+      remainingGroups: groups,
+    };
+  }
+  const winningGroups: Array<{ key: string; cards: Card[] }> = [];
+  const remainingGroups: Array<{ key: string; cards: Card[] }> = [];
+  groups.forEach((group) => {
+    if (group.cards.some((card) => card.id === winnerResponseCard.id)) {
+      winningGroups.push(group);
+      return;
+    }
+    remainingGroups.push(group);
+  });
+  return { winningGroups, remainingGroups };
+}
+
+function buildHiddenKanDetailsFromHand(hand: Card[]): SettlementGroupDetail[] {
+  const counter = new Map<string, Card[]>();
+  for (const card of hand) {
+    const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
+    const list = counter.get(key) ?? [];
+    list.push(card);
+    counter.set(key, list);
+  }
+  const details: SettlementGroupDetail[] = [];
+  for (const cards of counter.values()) {
+    const fullTriplets = Math.floor(cards.length / 3);
+    for (let index = 0; index < fullTriplets; index += 1) {
+      const chunk = cards.slice(index * 3, index * 3 + 3);
+      if (chunk.length < 3) {
+        continue;
+      }
+      if (chunk.every((card) => card.color === "gold")) {
+        details.push(detailFromKey("GoldTriplet", chunk));
+        continue;
+      }
+      if (chunk[0].type === "jiang") {
+        details.push(detailFromKey("JiangTriplet", chunk));
+        continue;
+      }
+      details.push(detailFromKey("Triplet", chunk));
+    }
+  }
+  return details;
+}
+
+const CHI_DETAIL_KEYS = new Set(["FrameJMP", "FrameJSX", "TripleZu", "QuadZu", "Pair"]);
+const PENG_DETAIL_KEYS = new Set(["Peng"]);
+const HIDDEN_KAN_DETAIL_KEYS = new Set(["Triplet", "JiangTriplet", "GoldTriplet"]);
+const KAI_DETAIL_KEYS = new Set(["Quad", "JiangQuad", "GoldQuad"]);
+const FISH_DETAIL_KEYS = new Set(["Fish", "GoldFish"]);
+const SINGLE_DETAIL_KEYS = new Set(["SingleJiang", "SingleGold"]);
+
+interface WinnerHuBreakdown {
+  huType: "small" | "big";
+  perOpponent: number;
+  subtotal: number;
+  itemsForWinner: ScoreBreakdownItem[];
+  itemsForLoser: ScoreBreakdownItem[];
 }
 
 /**
@@ -751,6 +1077,226 @@ export function buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownIt
   return { items, total };
 }
 
+function sortSettlementBreakdown(items: ScoreBreakdownItem[]): ScoreBreakdownItem[] {
+  return [...items].sort(
+    (a, b) =>
+      Math.abs(b.total) - Math.abs(a.total) ||
+      b.total - a.total ||
+      Math.abs(b.unit) - Math.abs(a.unit) ||
+      a.key.localeCompare(b.key),
+  );
+}
+
+function buildWinnerHuBreakdown(view: RoundResultView, payerCount: number): WinnerHuBreakdown {
+  const lineDetails = [
+    ...view.exposedGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || PENG_DETAIL_KEYS.has(detail.key) || KAI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
+    ...view.generalGroupDetails.filter((detail) => SINGLE_DETAIL_KEYS.has(detail.key)),
+    ...view.fishGroupDetails.filter((detail) => FISH_DETAIL_KEYS.has(detail.key)),
+    ...view.winningGroupDetails.filter((detail) => detail.unit > 0),
+    ...view.resolvedHandGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
+    ...buildHiddenKanDetailsFromHand(view.hand).filter((detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key)),
+  ].filter((detail) => detail.unit > 0);
+
+  const subtotal = 3 + lineDetails.reduce((sum, detail) => sum + detail.unit, 0);
+  const huType: "small" | "big" =
+    lineDetails.some((detail) => KAI_DETAIL_KEYS.has(detail.key) || FISH_DETAIL_KEYS.has(detail.key)) ? "big" : "small";
+  const perOpponent = huType === "big" ? subtotal * 2 : subtotal;
+  const itemsForWinner: ScoreBreakdownItem[] = [];
+  const itemsForLoser: ScoreBreakdownItem[] = [];
+
+  if (payerCount > 0) {
+    itemsForWinner.push({
+      key: "HuBase",
+      label: "胡底",
+      count: payerCount,
+      unit: 3,
+      total: 3 * payerCount,
+    });
+    itemsForLoser.push({
+      key: "HuBase",
+      label: "胡底",
+      count: 1,
+      unit: -3,
+      total: -3,
+    });
+  }
+
+  lineDetails.forEach((detail, index) => {
+    if (payerCount <= 0) {
+      return;
+    }
+    itemsForWinner.push({
+      key: `HuWin:${detail.key}:${index}`,
+      label: detail.label,
+      count: payerCount,
+      unit: detail.unit,
+      total: detail.unit * payerCount,
+    });
+    itemsForLoser.push({
+      key: `HuLose:${detail.key}:${index}`,
+      label: detail.label,
+      count: 1,
+      unit: -detail.unit,
+      total: -detail.unit,
+    });
+  });
+
+  if (huType === "big" && subtotal > 0 && payerCount > 0) {
+    itemsForWinner.push({
+      key: "HuBigMultiplier",
+      label: "大胡翻倍",
+      count: payerCount,
+      unit: subtotal,
+      total: subtotal * payerCount,
+    });
+    itemsForLoser.push({
+      key: "HuBigMultiplier",
+      label: "大胡翻倍",
+      count: 1,
+      unit: -subtotal,
+      total: -subtotal,
+    });
+  }
+
+  return { huType, perOpponent, subtotal, itemsForWinner, itemsForLoser };
+}
+
+function buildWinnerHuBreakdownFromKeys(groups: string[], payerCount: number): WinnerHuBreakdown {
+  const lineDetails = groups
+    .map((key) => ({
+      key,
+      label: key,
+      unit: scoreUnitForKey(key),
+      cards: [] as Card[],
+    }))
+    .filter((detail) => detail.unit > 0);
+  const subtotal = 3 + lineDetails.reduce((sum, detail) => sum + detail.unit, 0);
+  const huType: "small" | "big" =
+    lineDetails.some((detail) => KAI_DETAIL_KEYS.has(detail.key) || FISH_DETAIL_KEYS.has(detail.key)) ? "big" : "small";
+  const perOpponent = huType === "big" ? subtotal * 2 : subtotal;
+  const itemsForWinner: ScoreBreakdownItem[] = [];
+  const itemsForLoser: ScoreBreakdownItem[] = [];
+  if (payerCount > 0) {
+    itemsForWinner.push({
+      key: "HuBase",
+      label: "胡底",
+      count: payerCount,
+      unit: 3,
+      total: 3 * payerCount,
+    });
+    itemsForLoser.push({
+      key: "HuBase",
+      label: "胡底",
+      count: 1,
+      unit: -3,
+      total: -3,
+    });
+  }
+  lineDetails.forEach((detail, index) => {
+    if (payerCount <= 0) {
+      return;
+    }
+    itemsForWinner.push({
+      key: `HuWin:${detail.key}:${index}`,
+      label: detail.label,
+      count: payerCount,
+      unit: detail.unit,
+      total: detail.unit * payerCount,
+    });
+    itemsForLoser.push({
+      key: `HuLose:${detail.key}:${index}`,
+      label: detail.label,
+      count: 1,
+      unit: -detail.unit,
+      total: -detail.unit,
+    });
+  });
+  if (huType === "big" && subtotal > 0 && payerCount > 0) {
+    itemsForWinner.push({
+      key: "HuBigMultiplier",
+      label: "大胡翻倍",
+      count: payerCount,
+      unit: subtotal,
+      total: subtotal * payerCount,
+    });
+    itemsForLoser.push({
+      key: "HuBigMultiplier",
+      label: "大胡翻倍",
+      count: 1,
+      unit: -subtotal,
+      total: -subtotal,
+    });
+  }
+  return { huType, perOpponent, subtotal, itemsForWinner, itemsForLoser };
+}
+
+function buildMutualSettlementDetails(view: RoundResultView): SettlementGroupDetail[] {
+  return [
+    ...buildHiddenKanDetailsFromHand(view.hand),
+    ...view.exposedGroupDetails.filter((detail) => KAI_DETAIL_KEYS.has(detail.key)),
+  ];
+}
+
+function buildSettlementLines(
+  view: RoundResultView,
+  allViews: RoundResultView[],
+  winnerId: string | null,
+  winnerHuBreakdown: WinnerHuBreakdown | null,
+): { items: ScoreBreakdownItem[]; total: number } {
+  const items: ScoreBreakdownItem[] = [];
+  const nonWinnerViews = winnerId ? allViews.filter((player) => player.clientId !== winnerId) : allViews;
+
+  if (winnerId && winnerHuBreakdown) {
+    if (view.clientId === winnerId) {
+      items.push(...winnerHuBreakdown.itemsForWinner);
+    } else {
+      const winnerName = allViews.find((player) => player.clientId === winnerId)?.name ?? winnerId;
+      items.push(
+        ...winnerHuBreakdown.itemsForLoser.map((item) => ({
+          ...item,
+          key: `${item.key}:${view.clientId}`,
+          label: `${winnerName} ${item.label}`,
+        })),
+      );
+    }
+  }
+
+  if (!winnerId || view.clientId !== winnerId) {
+    for (const owner of nonWinnerViews) {
+      for (const [index, detail] of buildMutualSettlementDetails(owner).entries()) {
+        if (detail.unit <= 0) {
+          continue;
+        }
+        if (owner.clientId === view.clientId) {
+          for (const other of nonWinnerViews) {
+            if (other.clientId === owner.clientId) {
+              continue;
+            }
+            items.push({
+              key: `MutualGain:${owner.clientId}:${other.clientId}:${detail.key}:${index}`,
+              label: `${other.name}付 ${detail.label}`,
+              count: 1,
+              unit: detail.unit,
+              total: detail.unit,
+            });
+          }
+        } else {
+          items.push({
+            key: `MutualLose:${owner.clientId}:${view.clientId}:${detail.key}:${index}`,
+            label: `${owner.name} ${detail.label}`,
+            count: 1,
+            unit: -detail.unit,
+            total: -detail.unit,
+          });
+        }
+      }
+    }
+  }
+
+  const total = items.reduce((sum, item) => sum + item.total, 0);
+  return { items: sortSettlementBreakdown(items), total };
+}
+
 /**
  * 作用：构建 round_result 玩家视图（手牌/明牌/得分）。
  * 关键输入/输出：输入座位顺序、玩家容器与赢家信息，输出可广播数组。
@@ -763,31 +1309,85 @@ export function buildRoundResultPlayers(
   toPlainCard: (card: { id: string; color: string; type: string; source?: string }) => Card,
   winnerId: string | null,
   groups: string[],
+  winnerResponseCard: Card | null = null,
 ): RoundResultPlayer[] {
-  const result: RoundResultPlayer[] = [];
+  const views: RoundResultView[] = [];
   for (const seatId of playerOrder) {
     const player = players.get(seatId);
     const hand = playerHands.get(seatId) ?? [];
     const exposedArea = [...(player?.exposedArea ?? [])].map((card) => toPlainCard(card));
     const exposedGroupSizes = [...(player?.exposedGroupSizes ?? [])];
+    const exposedGroupKinds = [...(player?.exposedGroupKinds ?? [])];
     const generalArea = [...(player?.generalArea ?? [])].map((card) => toPlainCard(card));
     const fishArea = [...(player?.fishArea ?? [])].map((card) => toPlainCard(card));
     const discardCount = player?.discardPile.length ?? 0;
-    const isWinner = winnerId === seatId;
-    const visibleGroups = buildVisibleAreaGroups(exposedArea, exposedGroupSizes, fishArea);
-    const score = buildScoreBreakdown(isWinner ? [...visibleGroups, ...groups] : visibleGroups);
-    result.push({
+    const resolvedGroups =
+      winnerId && seatId === winnerId && winnerResponseCard
+        ? (explainHu(hand, winnerResponseCard).details ?? []).map((detail) => ({
+            key: detail.key,
+            cards: detail.cards,
+          }))
+        : [];
+    const { winningGroups, remainingGroups: resolvedHandGroups } =
+      winnerId && seatId === winnerId ? splitWinnerResponseGroups(resolvedGroups, winnerResponseCard) : { winningGroups: [], remainingGroups: resolvedGroups };
+    const exposedGroupDetails = buildExposedVisibleGroupDetails(exposedArea, exposedGroupSizes, exposedGroupKinds);
+    const generalGroupDetails = buildGeneralGroupDetails(generalArea);
+    const fishGroupDetails = buildFishGroupDetails(fishArea);
+    const winningGroupDetails = buildResolvedHandGroupDetails(winningGroups);
+    const resolvedHandGroupDetails = buildResolvedHandGroupDetails(resolvedHandGroups);
+    views.push({
       clientId: seatId,
       name: player?.name ?? seatId,
       hand: hand.map((card) => toPlainCard(card)),
+      huType: null,
+      winningGroups,
+      resolvedHandGroups,
       exposedArea,
       exposedGroupSizes,
+      exposedGroupKinds,
       generalArea,
       fishArea,
       discardCount,
-      scoreBreakdown: score.items,
-      totalScore: score.total,
+      exposedGroupDetails,
+      generalGroupDetails,
+      fishGroupDetails,
+      winningGroupDetails,
+      resolvedHandGroupDetails,
     });
   }
-  return result;
+
+  const winnerView = winnerId ? views.find((view) => view.clientId === winnerId) ?? null : null;
+  const payerCount = Math.max(0, views.filter((view) => view.clientId !== winnerId).length);
+  const winnerHuBreakdown = winnerView
+    ? (() => {
+        const computed = buildWinnerHuBreakdown(winnerView, payerCount);
+        if (computed.subtotal > 3 || groups.length === 0) {
+          return computed;
+        }
+        return buildWinnerHuBreakdownFromKeys(groups, payerCount);
+      })()
+    : null;
+  if (winnerView && winnerHuBreakdown) {
+    winnerView.huType = winnerHuBreakdown.huType;
+  }
+
+  return views.map((view) => {
+    const settlement = buildSettlementLines(view, views, winnerId, winnerHuBreakdown);
+    return {
+      clientId: view.clientId,
+      name: view.name,
+      hand: view.hand,
+      huType: view.huType,
+      winningGroups: view.winningGroups,
+      resolvedHandGroups: view.resolvedHandGroups,
+      exposedArea: view.exposedArea,
+      exposedGroupSizes: view.exposedGroupSizes,
+      exposedGroupKinds: view.exposedGroupKinds,
+      generalArea: view.generalArea,
+      fishArea: view.fishArea,
+      discardCount: view.discardCount,
+      scoreBreakdown: settlement.items,
+      totalScore: settlement.total,
+    };
+  });
 }

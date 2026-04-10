@@ -27,4 +27,8 @@ export interface ActionAvailability {
 export interface HuResult {
   valid: boolean;
   groups: string[];
+  details?: Array<{
+    key: string;
+    cards: Card[];
+  }>;
 }

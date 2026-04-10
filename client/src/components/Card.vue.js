@@ -1,20 +1,7 @@
 import { computed } from "vue";
+import { getCardFaceText } from "@/utils/cardText";
 const props = defineProps();
-const labelMap = {
-    jiang: "将",
-    shi: "士",
-    xiang: "象",
-    ju: "车",
-    ma: "马",
-    pao: "炮",
-    zu: "卒",
-    gong: "公",
-    hou: "侯",
-    bo: "伯",
-    zi: "子",
-    nan: "男",
-};
-const label = computed(() => `${labelMap[props.card.type] ?? props.card.type}`);
+const label = computed(() => getCardFaceText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");

@@ -11,7 +11,7 @@ export interface OperationExecutorDeps {
   consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[];
   removeFromHand: (seatId: SeatId, card: Card) => void;
   takeMatchingCards: (seatId: SeatId, target: Card, count: number) => Card[];
-  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean) => void;
+  pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
 /**
@@ -175,8 +175,31 @@ export class RoomStateOps {
       return;
     }
     const schemaCard = this.toSchemaCard(card, false, "upper");
-    player.discardPile.unshift(schemaCard);
-    this.state.publicDiscardPile.unshift(this.toSchemaCard(card, false, "upper"));
+    player.discardPile.push(schemaCard);
+    this.state.publicDiscardPile.push(this.toSchemaCard(card, false, "upper"));
+  }
+
+  /**
+   * 作用：从指定玩家流水区移除一张指定牌，并同步移除公共流水中的对应牌。
+   * 关键输入/输出：输入座位和目标牌；输出是否移除成功。
+   * 副作用：修改 `player.discardPile/state.publicDiscardPile`。
+   */
+  consumePendingDiscard(playerId: SeatId, card: Card): boolean {
+    const player = this.state.players.get(playerId);
+    if (!player) {
+      return false;
+    }
+    const discardIndex = player.discardPile.findIndex((item) => item.id === card.id);
+    if (discardIndex < 0) {
+      return false;
+    }
+    player.discardPile.splice(discardIndex, 1);
+
+    const publicIndex = this.state.publicDiscardPile.findIndex((item) => item.id === card.id);
+    if (publicIndex >= 0) {
+      this.state.publicDiscardPile.splice(publicIndex, 1);
+    }
+    return true;
   }
 
   /**
@@ -184,13 +207,14 @@ export class RoomStateOps {
    * 关键输入/输出：输入座位与组合牌，输出无返回值。
    * 副作用：修改 `exposedArea/exposedGroupSizes`。
    */
-  pushExposedGroup(playerId: SeatId, cards: Card[], highlight: boolean): void {
+  pushExposedGroup(playerId: SeatId, cards: Card[], highlight: boolean, kind: string): void {
     const player = this.state.players.get(playerId);
     if (!player) {
       return;
     }
     if (cards.length > 0) {
       player.exposedGroupSizes.push(cards.length);
+      player.exposedGroupKinds.push(kind || "chi");
     }
     for (const card of cards) {
       player.exposedArea.push(this.toSchemaCard(card, highlight, card.source ?? "upper"));
@@ -202,7 +226,13 @@ export class RoomStateOps {
    * 关键输入/输出：输入目标玩家、对子牌与响应牌；输出是否升级成功。
    * 副作用：修改 `exposedArea/exposedGroupSizes`，不新增单张组。
    */
-  upgradeExposedPairToTriplet(playerId: SeatId, pairCards: Card[], pendingCard: Card, highlight: boolean): boolean {
+  upgradeExposedPairToTriplet(
+    playerId: SeatId,
+    pairCards: Card[],
+    pendingCard: Card,
+    highlight: boolean,
+    nextKind?: string,
+  ): boolean {
     const player = this.state.players.get(playerId);
     if (!player || pairCards.length < 2) {
       return false;
@@ -224,6 +254,9 @@ export class RoomStateOps {
             player.exposedArea.push(card);
           }
           player.exposedGroupSizes[idx] = size + 1;
+          if (nextKind) {
+            player.exposedGroupKinds[idx] = nextKind;
+          }
           return true;
         }
       }
@@ -323,7 +356,7 @@ export class RoomStateOps {
       consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
       removeFromHand: (id, card) => this.removeFromHand(id, card),
       takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
-      pushExposedGroup: (id, cards, highlight) => this.pushExposedGroup(id, cards, highlight),
+      pushExposedGroup: (id, cards, highlight, kind) => this.pushExposedGroup(id, cards, highlight, kind),
     };
   }
 }

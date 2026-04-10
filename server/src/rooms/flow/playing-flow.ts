@@ -610,9 +610,7 @@ export interface BotRunnerDeps {
   advanceCollectivePolling: () => void;
   broadcastAvailableActions: () => void;
   discardFromAndCollective: (ownerId: string) => void;
-  getHand: (seatId: string) => Card[];
-  getWildcardPoolCards: (seatId: string) => Card[];
-  executeEat: (ownerId: string) => boolean;
+  executeEat: (ownerId: string, candidateId?: string) => boolean;
   executeGrab: (ownerId: string) => void;
   executePassToNext: (ownerId: string) => void;
 }
@@ -654,11 +652,11 @@ export function runBotStep(deps: BotRunnerDeps): void {
   }
 
   if (deps.responsePhase === "local_upper") {
-    const hand = deps.getHand(ownerId).filter((c) => c.id !== deps.pendingCard.id);
-    const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
-    const action = pickLocalBotAction("local_upper", canChiNow);
+    const actions = deps.getAvailableActions(ownerId);
+    const chiEntry = actions.find((item) => item.action === "chi");
+    const action = pickLocalBotAction("local_upper", Boolean(chiEntry?.enabled));
     if (action === "chi") {
-      if (!deps.executeEat(ownerId)) {
+      if (!deps.executeEat(ownerId, chiEntry?.candidates?.[0]?.id)) {
         deps.executeGrab(ownerId);
       }
     } else {
@@ -668,11 +666,11 @@ export function runBotStep(deps: BotRunnerDeps): void {
   }
 
   if (deps.responsePhase === "local_draw") {
-    const hand = deps.getHand(ownerId).filter((c) => c.id !== deps.pendingCard.id);
-    const canChiNow = buildChiCandidates(hand, deps.pendingCard, []).length > 0;
-    const action = pickLocalBotAction("local_draw", canChiNow);
+    const actions = deps.getAvailableActions(ownerId);
+    const chiEntry = actions.find((item) => item.action === "chi");
+    const action = pickLocalBotAction("local_draw", Boolean(chiEntry?.enabled));
     if (action === "chi") {
-      if (!deps.executeEat(ownerId)) {
+      if (!deps.executeEat(ownerId, chiEntry?.candidates?.[0]?.id)) {
         deps.executePassToNext(ownerId);
       }
     } else {
