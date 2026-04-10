@@ -359,7 +359,7 @@ export function useRoom(playerName = "Player") {
             pushLog(lastAction);
             lastFingerprint = fingerprint;
         }
-        if (state.value?.phase !== "ended") {
+        if (lastPhase === "ended" && state.value?.phase !== "ended") {
             huResult.value = null;
             roundResult.value = null;
         }

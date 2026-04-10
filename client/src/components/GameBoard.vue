@@ -802,7 +802,6 @@ function isActiveDiscardCard(playerId: string, card: Card, index: number): boole
 const displayTurnPlayerId = computed(() => {
   if (props.state?.responsePhase === "collective") {
     return (
-      props.state?.activeResponderId ||
       props.state?.currentTurnPlayerId ||
       props.state?.currentPlayerId ||
       props.state?.pollOriginPlayerId ||
@@ -830,6 +829,7 @@ const currentPlayerName = computed(() => {
 
 const isMyTurn = computed(
   () =>
+    String(props.state?.responsePhase ?? "") !== "collective" &&
     Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot),
@@ -927,7 +927,7 @@ const compactCenterHint = computed(() => {
     return "请选择弃牌";
   }
   if (String(props.state?.responsePhase ?? "") === "collective") {
-    return isMyTurn.value ? "等待他人响应" : "待响应阶段";
+    return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
   }
   if (String(props.state?.responsePhase ?? "") === "local_upper" && Boolean(props.canAct)) {
     return "可吃或抓";
@@ -939,6 +939,9 @@ const compactCenterHint = computed(() => {
 });
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
+  if (String(props.state?.responsePhase ?? "") === "collective") {
+    return null;
+  }
   const currentId = String(displayTurnPlayerId.value || "");
   if (!currentId) {
     return null;
@@ -978,7 +981,8 @@ const dealerInfoCard = computed<Card | null>(() => {
 });
 
 function isCollectiveResponder(playerId: string): boolean {
-  return String(props.state?.responsePhase ?? "") === "collective" && String(props.state?.activeResponderId ?? "") === playerId;
+  void playerId;
+  return false;
 }
 
 function seatActionText(playerId: string): string {
@@ -990,6 +994,9 @@ function hasSeatAction(playerId: string): boolean {
 }
 
 function isCurrentTurn(playerId: string): boolean {
+  if (String(props.state?.responsePhase ?? "") === "collective") {
+    return false;
+  }
   return displayTurnPlayerId.value === playerId;
 }
 

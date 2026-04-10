@@ -17,8 +17,7 @@ const canPressStartGame = computed(() => Boolean(connected.value) && Boolean(sta
 const nowMs = ref(Date.now());
 const displayTurnPlayerId = computed(() => {
     if (state.value?.responsePhase === "collective") {
-        return (state.value?.activeResponderId ||
-            state.value?.currentTurnPlayerId ||
+        return (state.value?.currentTurnPlayerId ||
             state.value?.currentPlayerId ||
             state.value?.pollOriginPlayerId ||
             "");
@@ -26,6 +25,9 @@ const displayTurnPlayerId = computed(() => {
     return state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
 });
 const isMyTurn = computed(() => {
+    if (state.value?.responsePhase === "collective") {
+        return false;
+    }
     if (!mySeatId.value || displayTurnPlayerId.value !== mySeatId.value) {
         return false;
     }
@@ -308,13 +310,21 @@ watch(tableCardMode, (mode) => {
     window.localStorage.setItem("sise_table_card_mode", mode);
 });
 const endPanelTitle = computed(() => {
-    if (roundResult.value?.winnerId || huResult.value?.winnerId) {
+    if (derivedWinnerId.value) {
         return "胡牌结算";
     }
     return "流局结算";
 });
+const derivedWinnerId = computed(() => {
+    const explicit = huResult.value?.winnerId ?? roundResult.value?.winnerId;
+    if (explicit) {
+        return explicit;
+    }
+    const match = String(state.value?.lastAction ?? "").match(/^(\S+)\s+HU$/);
+    return match?.[1] ?? "";
+});
 const winnerName = computed(() => {
-    const winnerId = huResult.value?.winnerId ?? roundResult.value?.winnerId;
+    const winnerId = derivedWinnerId.value;
     if (!winnerId) {
         return "-";
     }
@@ -544,12 +554,10 @@ const turnHint = computed(() => {
         return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
     }
     if (state.value?.responsePhase === "collective") {
-        if (!isMyTurn.value && canAct.value) {
-            return "他人待响阶段：你可以选择胡/开/碰/过";
+        if (canAct.value) {
+            return "全局待响阶段：你可以选择胡/开/碰/过";
         }
-        if (isMyTurn.value) {
-            return "等待他人响应";
-        }
+        return "等待三家响应";
     }
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
@@ -1148,7 +1156,7 @@ if (__VLS_ctx.showEndPanel) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
     (__VLS_ctx.endPanelTitle);
-    if (__VLS_ctx.huResult) {
+    if (__VLS_ctx.derivedWinnerId) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
         (__VLS_ctx.winnerName);
     }
@@ -1491,7 +1499,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             players: players,
             privateHand: privateHand,
             availableActions: availableActions,
-            huResult: huResult,
             joinError: joinError,
             declareError: declareError,
             sendDiscardCard: sendDiscardCard,
@@ -1540,6 +1547,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             adjustDeclareKongs: adjustDeclareKongs,
             useSuggestedDeclaredKongs: useSuggestedDeclaredKongs,
             endPanelTitle: endPanelTitle,
+            derivedWinnerId: derivedWinnerId,
             winnerName: winnerName,
             settlementPlayers: settlementPlayers,
             remainingDeckPreview: remainingDeckPreview,

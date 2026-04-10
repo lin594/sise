@@ -276,8 +276,7 @@ function isActiveDiscardCard(playerId, card, index) {
 }
 const displayTurnPlayerId = computed(() => {
     if (props.state?.responsePhase === "collective") {
-        return (props.state?.activeResponderId ||
-            props.state?.currentTurnPlayerId ||
+        return (props.state?.currentTurnPlayerId ||
             props.state?.currentPlayerId ||
             props.state?.pollOriginPlayerId ||
             "");
@@ -298,7 +297,8 @@ const currentPlayerName = computed(() => {
     }
     return currentPlayer.value?.name || playerId;
 });
-const isMyTurn = computed(() => Boolean(props.mySeatId) &&
+const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "collective" &&
+    Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
@@ -382,7 +382,7 @@ const compactCenterHint = computed(() => {
         return "请选择弃牌";
     }
     if (String(props.state?.responsePhase ?? "") === "collective") {
-        return isMyTurn.value ? "等待他人响应" : "待响应阶段";
+        return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
     }
     if (String(props.state?.responsePhase ?? "") === "local_upper" && Boolean(props.canAct)) {
         return "可吃或抓";
@@ -393,6 +393,9 @@ const compactCenterHint = computed(() => {
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
 const centerPointerDirection = computed(() => {
+    if (String(props.state?.responsePhase ?? "") === "collective") {
+        return null;
+    }
     const currentId = String(displayTurnPlayerId.value || "");
     if (!currentId) {
         return null;
@@ -428,7 +431,8 @@ const dealerInfoCard = computed(() => {
     return card?.id ? card : null;
 });
 function isCollectiveResponder(playerId) {
-    return String(props.state?.responsePhase ?? "") === "collective" && String(props.state?.activeResponderId ?? "") === playerId;
+    void playerId;
+    return false;
 }
 function seatActionText(playerId) {
     return latestSeatAction.value?.actorId === playerId ? latestSeatAction.value.label : "";
@@ -437,6 +441,9 @@ function hasSeatAction(playerId) {
     return seatActionText(playerId).length > 0;
 }
 function isCurrentTurn(playerId) {
+    if (String(props.state?.responsePhase ?? "") === "collective") {
+        return false;
+    }
     return displayTurnPlayerId.value === playerId;
 }
 function statusText(player) {
