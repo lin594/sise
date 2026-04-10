@@ -7,7 +7,11 @@
     "build": "npm --prefix server run build && npm --prefix client run build",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
-    "install:all": "npm install --prefix server && npm install --prefix client"
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "compose:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "compose:prod": "docker compose up --build -d",
+    "compose:down": "docker compose down",
+    "compose:down:dev": "docker compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

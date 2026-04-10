@@ -8,28 +8,36 @@ services:
   server:
     build:
       context: ./server
-      target: production
+      target: development
+    working_dir: /app
+    command: sh -lc "npm install && npm run dev"
     restart: unless-stopped
+    volumes:
+      - ./server:/app
+    ports:
+      - "2567:2567"
     environment:
       PORT: "2567"
       REDIS_URL: redis://redis:6379
       BOT_THINK_MIN_MS: "1800"
       BOT_THINK_MAX_MS: "3200"
       LOCAL_TRANSITION_DELAY_MS: "5000"
-    ports:
-      - "2567:2567"
     depends_on:
       - redis
 
-  web:
+  client:
     build:
       context: ./client
-      target: production
-      args:
-        VITE_SERVER_URL: ${VITE_SERVER_URL:-}
-        VITE_SERVER_HTTP_URL: ${VITE_SERVER_HTTP_URL:-}
+      target: development
+    working_dir: /app
+    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0 --port 80"
     restart: unless-stopped
+    volumes:
+      - ./client:/app
     ports:
       - "3000:80"
+    environment:
+      VITE_SERVER_URL: ${VITE_SERVER_URL:-}
+      VITE_SERVER_HTTP_URL: ${VITE_SERVER_HTTP_URL:-}
     depends_on:
       - server
