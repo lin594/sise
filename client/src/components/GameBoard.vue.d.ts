@@ -18,18 +18,18 @@ type __VLS_Props = {
     activeCandidates?: ActionCandidate[];
 };
 declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {
-    discardCard: (cardId: string) => any;
-    submitAction: (request: ActionRequest) => any;
     selectionChange: (payload: {
         mode: "kai" | "peng" | "chi" | null;
         selectedCandidateId: string | null;
     }) => any;
+    discardCard: (cardId: string) => any;
+    submitAction: (request: ActionRequest) => any;
 }, string, import("vue").PublicProps, Readonly<__VLS_Props> & Readonly<{
-    onDiscardCard?: ((cardId: string) => any) | undefined;
-    onSubmitAction?: ((request: ActionRequest) => any) | undefined;
     onSelectionChange?: ((payload: {
         mode: "kai" | "peng" | "chi" | null;
         selectedCandidateId: string | null;
     }) => any) | undefined;
+    onDiscardCard?: ((cardId: string) => any) | undefined;
+    onSubmitAction?: ((request: ActionRequest) => any) | undefined;
 }>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, false, {}, any>;
 export default _default;

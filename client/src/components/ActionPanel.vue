@@ -56,7 +56,7 @@ const defaultOrder: ActionType[] = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
   const map = new Map(props.actions.map((x) => [x.action, x]));
   const isCollective = props.responsePhase === "collective";
-  return defaultOrder
+  const ordered = defaultOrder
     .filter((action) => !(action === "chi" && isCollective))
     .map((action) => {
       const item = map.get(action);
@@ -66,6 +66,13 @@ const normalized = computed(() => {
         candidates: item?.candidates ?? [],
       };
     });
+  if (props.canAct) {
+    const enabledOnly = ordered.filter((item) => item.enabled);
+    if (enabledOnly.length > 0) {
+      return enabledOnly;
+    }
+  }
+  return ordered;
 });
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
@@ -212,10 +219,29 @@ function onClick(action: ActionType): void {
     padding: 0.25rem 0.45rem;
   }
 
+  .actions {
+    gap: 0.35rem;
+  }
+
   .btn {
-    min-width: 48px;
-    min-height: 48px;
-    font-size: clamp(0.95rem, 2.1vh, 1.2rem);
+    min-width: 42px;
+    min-height: 42px;
+    font-size: clamp(0.84rem, 1.85vh, 1.08rem);
+    padding: 0.1rem 0.28rem;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 960px) {
+  .actions {
+    gap: 0.28rem;
+  }
+
+  .btn {
+    min-width: 42px;
+    min-height: 42px;
+    font-size: clamp(0.82rem, 1.78vh, 1rem);
+    padding: 0.08rem 0.22rem;
+    border-radius: 0.7rem;
   }
 }
 

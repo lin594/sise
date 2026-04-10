@@ -370,6 +370,19 @@
         <span :style="{ width: `${seatCountdownPercent}%` }"></span>
       </div>
       <p class="self-info-hint">{{ compactCenterHint }}</p>
+      <ActionPanel
+        v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
+        class="embedded-actions embedded-actions-side"
+        :actions="props.actions ?? []"
+        :can-act="Boolean(props.canAct)"
+        :is-current-turn="Boolean(props.isCurrentTurn)"
+        :response-phase="props.responsePhase ?? ''"
+        :current-player-name="props.currentPlayerName ?? '-'"
+        :selection-mode="props.selectionMode ?? null"
+        :selected-candidate-id="props.selectedCandidateId ?? null"
+        @submit="onSubmitAction"
+        @selection-change="onSelectionChange"
+      />
     </section>
 
     <section v-if="selfPlayer" class="self-hand-card">
@@ -394,20 +407,6 @@
             <CardComp :card="card" size="xl" />
           </button>
         </div>
-
-        <ActionPanel
-          v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
-          class="embedded-actions"
-          :actions="props.actions ?? []"
-          :can-act="Boolean(props.canAct)"
-          :is-current-turn="Boolean(props.isCurrentTurn)"
-          :response-phase="props.responsePhase ?? ''"
-          :current-player-name="props.currentPlayerName ?? '-'"
-          :selection-mode="props.selectionMode ?? null"
-          :selected-candidate-id="props.selectedCandidateId ?? null"
-          @submit="onSubmitAction"
-          @selection-change="onSelectionChange"
-        />
       </div>
     </section>
 
@@ -1535,7 +1534,7 @@ watch(
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(10rem, 22%) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 23%) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
   gap: clamp(0.3rem, 0.9vh, 0.5rem);
   overflow: hidden;
@@ -1687,8 +1686,8 @@ watch(
 
 .self-info-card {
   grid-column: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 0.35rem;
   overflow: hidden;
 }
@@ -2368,8 +2367,8 @@ watch(
 .self-hand-panel {
   min-width: 0;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(0.25rem, 0.7vh, 0.5rem);
 }
 
@@ -2494,6 +2493,10 @@ watch(
 .embedded-actions {
   flex: 0 0 auto;
   min-height: 0;
+}
+
+.embedded-actions-side {
+  margin-top: auto;
 }
 
 .embedded-actions :deep(.panel) {
@@ -2818,8 +2821,8 @@ watch(
 
 @media (orientation: landscape) and (max-width: 960px) {
   .board {
-    grid-template-columns: minmax(8.5rem, 28%) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) clamp(7.6rem, 24vh, 10.5rem);
+    grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) clamp(8.8rem, 27vh, 11.2rem);
     gap: 0.55vh;
   }
 
@@ -2967,6 +2970,8 @@ watch(
   .self-info-card {
     border-radius: 1.4vh;
     padding: 0.55vh 0.8vh;
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
   }
 
   .self-groups-card,
@@ -2991,10 +2996,9 @@ watch(
 
   .hand {
     overflow: auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(clamp(1.7rem, 4.6vw, 2.4rem), 1fr));
-    column-gap: 0.18vh;
-    row-gap: 0.45vh;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45vh 0.18vh;
     min-height: 0;
     align-content: start;
     padding-bottom: 0.2vh;
@@ -3002,13 +3006,13 @@ watch(
 
   .hand-card {
     border-radius: 0.7vh;
-    min-width: 0;
-    width: 100%;
+    flex: 0 0 clamp(1.7rem, 4.6vw, 2.4rem);
+    width: auto;
     min-height: 48px;
   }
 
   .hand :deep(.size-xl) {
-    width: min(100%, clamp(0.9rem, 2.2vw, 1.3rem));
+    width: clamp(0.9rem, 2.2vw, 1.3rem);
     height: clamp(2.7rem, 6.6vh, 3.8rem);
     font-size: clamp(0.62rem, 1.55vh, 0.82rem);
   }
@@ -3049,6 +3053,31 @@ watch(
 
   .embedded-actions :deep(.btn:disabled) {
     opacity: 0.58;
+  }
+
+  .embedded-actions-side {
+    border-top: 1px solid rgba(51, 65, 85, 0.8);
+    padding-top: 0.35vh;
+    margin-top: auto;
+  }
+
+  .embedded-actions-side :deep(.actions) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35vh;
+  }
+
+  .embedded-actions-side :deep(.btn) {
+    min-width: 0;
+    min-height: 42px;
+    padding: 0;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (orientation: landscape) and (max-width: 960px) {
+    .hand {
+      -webkit-overflow-scrolling: touch;
+    }
   }
 }
 

@@ -13,7 +13,7 @@ const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x]));
     const isCollective = props.responsePhase === "collective";
-    return defaultOrder
+    const ordered = defaultOrder
         .filter((action) => !(action === "chi" && isCollective))
         .map((action) => {
         const item = map.get(action);
@@ -23,6 +23,13 @@ const normalized = computed(() => {
             candidates: item?.candidates ?? [],
         };
     });
+    if (props.canAct) {
+        const enabledOnly = ordered.filter((item) => item.enabled);
+        if (enabledOnly.length > 0) {
+            return enabledOnly;
+        }
+    }
+    return ordered;
 });
 const selectionMode = computed(() => props.selectionMode ?? null);
 const panelHint = computed(() => {
@@ -114,6 +121,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
