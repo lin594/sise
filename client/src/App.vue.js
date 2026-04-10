@@ -65,6 +65,7 @@ const isCompactLandscape = ref(false);
 const tableCardMode = ref(window.localStorage.getItem("sise_table_card_mode") ?? "simple");
 const resettingLobby = ref(false);
 const globalError = ref("");
+const showRules = ref(false);
 const updateCompactLandscape = () => {
     isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
 };
@@ -628,6 +629,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
@@ -639,6 +642,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['winner']} */ ;
@@ -730,6 +735,9 @@ if (__VLS_ctx.isWaiting) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "lobby" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "lobby-slogan" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -741,6 +749,17 @@ if (__VLS_ctx.isWaiting) {
         disabled: (!__VLS_ctx.canPressStartGame),
     });
     (__VLS_ctx.isHost ? "开始游戏" : "等待房主开始");
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.isWaiting))
+                    return;
+                __VLS_ctx.showRules = true;
+            } },
+        ...{ class: "ghost" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "lobby-rule-tip" },
+    });
     if (__VLS_ctx.joinError) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "error" },
@@ -1375,6 +1394,104 @@ if (__VLS_ctx.showEndPanel) {
         disabled: (!__VLS_ctx.isEnded),
     });
 }
+if (__VLS_ctx.showRules) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.showRules))
+                    return;
+                __VLS_ctx.showRules = false;
+            } },
+        ...{ class: "rules-mask" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "rules-panel" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "rules-head" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "rules-kicker" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "rules-slogan" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.showRules))
+                    return;
+                __VLS_ctx.showRules = false;
+            } },
+        ...{ class: "ghost" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "rules-section" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "rules-chip-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "rules-chip" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "rules-chip" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "rules-chip" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "rules-chip" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+        ...{ class: "rules-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "rules-section" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+        ...{ class: "rules-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "rules-section" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+        ...{ class: "rules-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "rules-section" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+        ...{ class: "rules-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "rules-section" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({
+        ...{ class: "rules-list" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({});
+}
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
@@ -1388,8 +1505,11 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby']} */ ;
+/** @type {__VLS_StyleScopedClasses['lobby-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['lobby-rule-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-item']} */ ;
@@ -1485,6 +1605,27 @@ if (__VLS_ctx.showEndPanel) {
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-kicker']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-slogan']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-chip-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -1521,6 +1662,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             tableCardMode: tableCardMode,
             resettingLobby: resettingLobby,
             globalError: globalError,
+            showRules: showRules,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,

@@ -20,13 +20,16 @@
     <p v-if="globalError" class="error global-error">{{ globalError }}</p>
 
     <section v-if="isWaiting" class="lobby">
+      <p class="lobby-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       <h2>等待大厅</h2>
       <p>房主手动开始。人数不足 4 人时，开始后自动补机器人。</p>
       <div class="lobby-actions">
         <button class="primary" :disabled="!canPressStartGame" @click="startGame">
           {{ isHost ? "开始游戏" : "等待房主开始" }}
         </button>
+        <button class="ghost" @click="showRules = true">查看规则</button>
       </div>
+      <p class="lobby-rule-tip">第一次玩可以先看规则速查，开局后再慢慢熟悉吃、碰、开、抓的节奏。</p>
       <p v-if="joinError" class="error">{{ joinError }}</p>
 
       <div class="player-grid">
@@ -303,6 +306,71 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showRules" class="rules-mask" @click.self="showRules = false">
+      <div class="rules-panel">
+        <div class="rules-head">
+          <div>
+            <p class="rules-kicker">玩家速查</p>
+            <h2>四色牌规则</h2>
+            <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
+          </div>
+          <button class="ghost" @click="showRules = false">关闭</button>
+        </div>
+
+        <section class="rules-section">
+          <h3>快速上手</h3>
+          <div class="rules-chip-list">
+            <span class="rules-chip">4 人对局</span>
+            <span class="rules-chip">庄家 21 张</span>
+            <span class="rules-chip">闲家 20 张</span>
+            <span class="rules-chip">将 / 金条不能主动打出</span>
+          </div>
+          <ul class="rules-list">
+            <li>牌有黄、红、绿、白四色，将、士、象、车、马、炮、卒各 4 张，另有公侯伯子男 5 张金条牌。</li>
+            <li>定庄牌会决定谁是庄家，而且这张牌本身也属于庄家的手牌，所以庄家比别人多 1 张。</li>
+            <li>开局先模拟发牌，再声明暗坎和亮鱼，四家都确认后正式进入出牌循环。</li>
+          </ul>
+        </section>
+
+        <section class="rules-section">
+          <h3>轮到你时怎么做</h3>
+          <ul class="rules-list">
+            <li>全局先轮询胡、开、碰；如果没人响应，当前玩家再处理自己面前的牌。</li>
+            <li>当前玩家的基本顺序是：能吃就吃，不能吃就抓；抓出来的新牌再重新轮询一次胡、开、碰。</li>
+            <li>如果重新轮询后仍然没人响应，这张牌会继续作为你打给下家的牌，进入对应的流水。</li>
+          </ul>
+        </section>
+
+        <section class="rules-section">
+          <h3>常见牌组</h3>
+          <ul class="rules-list">
+            <li>吃牌可形成：车马炮架、将士象架、三异色卒、四异色卒、对子、单将组、单金条组。</li>
+            <li>碰是 3 张同色同字的明示组；开是在已有暗坎基础上接第 4 张；鱼是亮出的 4 张同牌或 4/5 张金条。</li>
+            <li>将和金条都不能主动弃牌，通常只会在抓到后被组成单张组、架子、开，或者直接拿来胡。</li>
+          </ul>
+        </section>
+
+        <section class="rules-section">
+          <h3>胡牌与结算</h3>
+          <ul class="rules-list">
+            <li>胡牌的本质是：响应当前那张牌后，你的手牌和牌组可以完全拆成有效牌组，没有零散牌。</li>
+            <li>小胡：3 + 吃分 + 碰分 + 未开坎分 + 单张将 / 金条分。</li>
+            <li>大胡：在上面基础上加上开分和鱼分后整体翻倍；只要含至少 1 个鱼或开，就算大胡。</li>
+            <li>赢家会向另外三家分别收胡牌分；闲家之间再单独结算开和坎的互付分。</li>
+          </ul>
+        </section>
+
+        <section class="rules-section">
+          <h3>界面怎么看</h3>
+          <ul class="rules-list">
+            <li>流水表示牌从谁传给谁；被吃、碰、开、胡走的待响牌，会从原来的流水里移除。</li>
+            <li>牌组区显示已经亮出的牌组，手牌区显示你还握在手里的牌。</li>
+            <li>中央区会显示庄家、定庄牌、牌堆剩余数量和当前待响牌。</li>
+          </ul>
+        </section>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -417,6 +485,7 @@ const tableCardMode = ref<"simple" | "full">(
 );
 const resettingLobby = ref(false);
 const globalError = ref("");
+const showRules = ref(false);
 const updateCompactLandscape = () => {
   isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
 };
@@ -1115,8 +1184,23 @@ async function rebuildLobby() {
   color: #e2e8f0;
 }
 
+.lobby-slogan {
+  margin: 0 0 0.65rem;
+  color: #fef3c7;
+  font-size: clamp(0.82rem, 1.8vh, 1rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.lobby-rule-tip {
+  margin: 0 0 0.8rem;
+  color: #93c5fd;
+  font-size: clamp(0.72rem, 1.5vh, 0.88rem);
+}
+
 .lobby-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 10px 0;
 }
@@ -1183,6 +1267,17 @@ async function rebuildLobby() {
   justify-content: center;
   align-items: center;
   z-index: 90;
+}
+
+.rules-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.72);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 92;
+  padding: 12px;
 }
 
 .candidate-mask {
@@ -1283,6 +1378,92 @@ async function rebuildLobby() {
 .candidate-empty {
   margin: 0;
   color: #fca5a5;
+}
+
+.rules-panel {
+  width: min(920px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), transparent 30%),
+    linear-gradient(180deg, #fffdf7 0%, #f8fafc 100%);
+  color: #0f172a;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.42);
+  padding: clamp(1rem, 2.4vh, 1.35rem);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rules-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.rules-kicker {
+  margin: 0 0 0.2rem;
+  color: #b45309;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rules-head h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.5vh, 1.55rem);
+}
+
+.rules-slogan {
+  margin: 0.35rem 0 0;
+  color: #7c2d12;
+  font-weight: 700;
+  font-size: clamp(0.84rem, 1.75vh, 0.98rem);
+}
+
+.rules-section {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.rules-section h3 {
+  margin: 0;
+  font-size: clamp(0.96rem, 1.9vh, 1.1rem);
+}
+
+.rules-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.38rem;
+  color: #334155;
+  font-size: clamp(0.78rem, 1.6vh, 0.92rem);
+  line-height: 1.55;
+}
+
+.rules-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.rules-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.2rem 0.68rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .declare-panel {
@@ -1497,6 +1678,18 @@ async function rebuildLobby() {
 .settlement h3 {
   margin: 0 0 8px;
   font-size: 15px;
+}
+
+@media (max-width: 720px) {
+  .rules-head {
+    flex-direction: column;
+  }
+
+  .rules-panel {
+    width: min(100vw, 100%);
+    max-height: 100vh;
+    border-radius: 16px;
+  }
 }
 
 .end-global-info {
