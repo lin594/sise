@@ -102,6 +102,100 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
         }[];
+        privateHand?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
+        availableActions?: {
+            action: ActionType;
+            enabled: boolean;
+            candidates?: {
+                id: string;
+                action: "kai" | "peng" | "chi";
+                kind?: string | undefined;
+                cardIds: string[];
+                source: "hand" | "hand+pool";
+                title: string;
+            }[] | undefined;
+        }[] | undefined;
+        roundResult?: {
+            winnerId: string | null;
+            groups: string[];
+            players: {
+                clientId: string;
+                name: string;
+                hand: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                huType?: "small" | "big" | null | undefined;
+                winningGroups: {
+                    key: string;
+                    cards: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    }[];
+                }[];
+                resolvedHandGroups: {
+                    key: string;
+                    cards: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    }[];
+                }[];
+                exposedArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                exposedGroupSizes: number[];
+                exposedGroupKinds: string[];
+                generalArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                fishArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                discardCount: number;
+                scoreBreakdown: {
+                    key: string;
+                    label: string;
+                    count: number;
+                    unit: number;
+                    total: number;
+                }[];
+                totalScore: number;
+            }[];
+            remainingDeck?: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[] | undefined;
+        } | null | undefined;
     } | null, RoomStateSnapshot | {
         roomId?: string | undefined;
         phase: string;
@@ -200,6 +294,100 @@ export declare function useRoom(playerName?: string): {
                 isResponseCard?: boolean | undefined;
             }[];
         }[];
+        privateHand?: {
+            id: string;
+            color: string;
+            type: string;
+            source?: "upper" | "draw" | undefined;
+            isResponseCard?: boolean | undefined;
+        }[] | undefined;
+        availableActions?: {
+            action: ActionType;
+            enabled: boolean;
+            candidates?: {
+                id: string;
+                action: "kai" | "peng" | "chi";
+                kind?: string | undefined;
+                cardIds: string[];
+                source: "hand" | "hand+pool";
+                title: string;
+            }[] | undefined;
+        }[] | undefined;
+        roundResult?: {
+            winnerId: string | null;
+            groups: string[];
+            players: {
+                clientId: string;
+                name: string;
+                hand: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                huType?: "small" | "big" | null | undefined;
+                winningGroups: {
+                    key: string;
+                    cards: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    }[];
+                }[];
+                resolvedHandGroups: {
+                    key: string;
+                    cards: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    }[];
+                }[];
+                exposedArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                exposedGroupSizes: number[];
+                exposedGroupKinds: string[];
+                generalArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                fishArea: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+                discardCount: number;
+                scoreBreakdown: {
+                    key: string;
+                    label: string;
+                    count: number;
+                    unit: number;
+                    total: number;
+                }[];
+                totalScore: number;
+            }[];
+            remainingDeck?: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[] | undefined;
+        } | null | undefined;
     } | null>;
     players: import("vue").ComputedRef<PlayerState[]>;
     privateHand: import("vue").Ref<{
@@ -429,6 +617,12 @@ export declare function useRoom(playerName?: string): {
         displayText: string;
         isSystem: boolean;
     }[]>;
+    connect: (options?: string | {
+        nameOverride?: string;
+        roomId?: string;
+        playerToken?: string;
+        forceNew?: boolean;
+    }) => Promise<boolean>;
     clearActionLogs: () => void;
     sendAction: (input: ActionRequest) => void;
     sendDiscardCard: (cardId: string) => void;

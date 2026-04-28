@@ -6,3 +6,8 @@ dist/
 .env
 .env.*
 !.env.example
+
+test-results/
+client/src/**/*.js
+client/src/**/*.d.ts
+!client/src/env.d.ts

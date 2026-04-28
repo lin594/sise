@@ -7,6 +7,8 @@
     "build": "npm --prefix server run build && npm --prefix client run build",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
+    "e2e": "npm run build && playwright test",
+    "e2e:headed": "npm run build && playwright test --headed",
     "install:all": "npm install --prefix server && npm install --prefix client",
     "compose:dev": "docker compose -f docker-compose.dev.yml up --build",
     "compose:prod": "docker compose up --build -d",
@@ -14,6 +16,9 @@
     "compose:down:dev": "docker compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@playwright/test": "^1.55.0",
+    "concurrently": "^9.2.1",
+    "start-server-and-test": "^2.1.2",
+    "wait-on": "^8.0.5"
   }
 }

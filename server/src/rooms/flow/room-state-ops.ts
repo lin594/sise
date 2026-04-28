@@ -390,7 +390,9 @@ export function syncAllPrivateHands(clients: { sessionId: string; send: (event: 
       continue;
     }
     const hand = playerHands.get(seatId) ?? [];
-    client.send("private_hand", hand.map((card) => ({ ...card, isHidden: false })));
+    client.send("private_hand", {
+      cards: hand.map((card) => ({ ...card, isHidden: false })),
+    });
   }
 }
 

@@ -12,10 +12,10 @@ services:
     restart: unless-stopped
     environment:
       PORT: "2567"
-      REDIS_URL: redis://redis:6379
-      BOT_THINK_MIN_MS: "1800"
-      BOT_THINK_MAX_MS: "3200"
-      LOCAL_TRANSITION_DELAY_MS: "5000"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
+      BOT_THINK_MIN_MS: "${BOT_THINK_MIN_MS:-1800}"
+      BOT_THINK_MAX_MS: "${BOT_THINK_MAX_MS:-3200}"
+      LOCAL_TRANSITION_DELAY_MS: "${LOCAL_TRANSITION_DELAY_MS:-5000}"
     ports:
       - "2567:2567"
     depends_on:
@@ -26,8 +26,8 @@ services:
       context: ./client
       target: production
       args:
-        VITE_SERVER_URL: ${VITE_SERVER_URL:-}
-        VITE_SERVER_HTTP_URL: ${VITE_SERVER_HTTP_URL:-}
+        VITE_SERVER_URL: "${VITE_SERVER_URL:-}"
+        VITE_SERVER_HTTP_URL: "${VITE_SERVER_HTTP_URL:-}"
     restart: unless-stopped
     ports:
       - "3000:80"

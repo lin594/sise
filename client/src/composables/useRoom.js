@@ -1,9 +1,12 @@
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { Client } from "colyseus.js";
 import { sortHandCards } from "@/utils/cardSort";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
+function generateLocalPlayerToken() {
+    return `pt_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
 function asCardArray(input) {
     const isCard = (x) => x &&
         typeof x === "object" &&
@@ -15,6 +18,12 @@ function asCardArray(input) {
     const collectIterable = (iter) => Array.from(iter).filter(isCard);
     if (Array.isArray(input)) {
         return input.filter(isCard);
+    }
+    if (input && typeof input === "object" && Array.isArray(input.cards)) {
+        return (input.cards ?? []).filter(isCard);
+    }
+    if (input && typeof input === "object" && Array.isArray(input.items)) {
+        return (input.items ?? []).filter(isCard);
     }
     if (input && typeof input.toArray === "function") {
         const out = input.toArray().filter(isCard);
@@ -149,9 +158,8 @@ function normalizePlayer(raw) {
     };
 }
 function normalizeSnapshot(next) {
-    const rawState = next && typeof next.toJSON === "function"
-        ? next.toJSON()
-        : next;
+    // Access Proxy properties directly without calling toJSON() to avoid circular reference
+    const rawState = next;
     const rawPlayers = rawState?.players;
     const normalizedPlayers = [];
     if (Array.isArray(rawPlayers)) {
@@ -231,6 +239,53 @@ function normalizeCandidate(raw) {
         title,
     };
 }
+function normalizeAvailableActions(input) {
+    const rawInput = input && typeof input === "object" && Array.isArray(input.items)
+        ? input.items
+        : input;
+    if (!Array.isArray(rawInput)) {
+        return [];
+    }
+    return rawInput.map((item) => {
+        const rawItem = item;
+        return {
+            action: normalizeAction(String(rawItem?.action ?? "")) ?? "pass",
+            enabled: Boolean(rawItem?.enabled),
+            candidates: Array.isArray(rawItem?.candidates)
+                ? rawItem.candidates
+                    .map((raw) => normalizeCandidate(raw))
+                    .filter((candidate) => Boolean(candidate))
+                : undefined,
+        };
+    });
+}
+function normalizeRoundResultPayload(payload) {
+    return {
+        ...payload,
+        players: (payload.players ?? []).map((p) => ({
+            ...p,
+            hand: sortHandCards(p.hand ?? []),
+            huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
+            winningGroups: (p.winningGroups ?? []).map((group) => ({
+                key: String(group?.key ?? ""),
+                cards: sortHandCards(group?.cards ?? []),
+            })),
+            resolvedHandGroups: (p.resolvedHandGroups ?? []).map((group) => ({
+                key: String(group?.key ?? ""),
+                cards: sortHandCards(group?.cards ?? []),
+            })),
+            exposedArea: p.exposedArea ?? [],
+            exposedGroupSizes: asNumberArray(p.exposedGroupSizes),
+            exposedGroupKinds: asStringArray(p.exposedGroupKinds),
+            generalArea: sortHandCards(p.generalArea ?? []),
+            fishArea: sortHandCards(p.fishArea ?? []),
+            discardCount: Number(p.discardCount ?? 0),
+            scoreBreakdown: p.scoreBreakdown ?? [],
+            totalScore: Number(p.totalScore ?? 0),
+        })),
+        remainingDeck: asCardArray(payload.remainingDeck),
+    };
+}
 function normalizeResponsePhase(input) {
     if (input === "self_eat") {
         return "local_upper";
@@ -277,6 +332,8 @@ export function useRoom(playerName = "Player") {
     const myId = ref("");
     const mySeatId = ref("");
     const playerToken = ref("");
+    const activeRoomId = ref("");
+    const localPlayerName = ref(playerName);
     const privateHand = ref([]);
     const availableActions = ref([]);
     const huResult = ref(null);
@@ -289,11 +346,285 @@ export function useRoom(playerName = "Player") {
     let lastFingerprint = "";
     let lastPhase = "";
     let roomStateSyncTimer = null;
+    let missingHandSyncTimer = null;
+    let reconnectTimer = null;
+    let privateStatePollTimer = null;
     let stateSyncFingerprint = "";
+    let privateHandFingerprint = "";
+    let availableActionsFingerprint = "";
+    let connectInFlight = false;
+    let activeConnectionSeq = 0;
+    let lastManualSyncAt = 0;
+    let reconnectAttempts = 0;
+    let suppressReconnect = false;
+    let missingPrivateReconnectAttempts = 0;
+    function inferSeatId(snapshot) {
+        if (!snapshot) {
+            return "";
+        }
+        const connectedHumans = snapshot.players.filter((player) => !player.isBot && player.connected);
+        const exactNameMatches = connectedHumans.filter((player) => localPlayerName.value && player.name === localPlayerName.value);
+        if (exactNameMatches.length === 1) {
+            return exactNameMatches[0]?.clientId ?? "";
+        }
+        if (connectedHumans.length === 1) {
+            return connectedHumans[0]?.clientId ?? "";
+        }
+        return "";
+    }
     function clearRoomStateSyncTimer() {
         if (roomStateSyncTimer !== null) {
             window.clearInterval(roomStateSyncTimer);
             roomStateSyncTimer = null;
+        }
+    }
+    function clearMissingHandSyncTimer() {
+        if (missingHandSyncTimer !== null) {
+            window.clearInterval(missingHandSyncTimer);
+            missingHandSyncTimer = null;
+        }
+    }
+    function clearReconnectTimer() {
+        if (reconnectTimer !== null) {
+            window.clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+    }
+    function clearPrivateStatePollTimer() {
+        if (privateStatePollTimer !== null) {
+            window.clearInterval(privateStatePollTimer);
+            privateStatePollTimer = null;
+        }
+    }
+    function getRoomSocketReadyState(targetRoom) {
+        const connection = targetRoom
+            ?.connection;
+        if (typeof connection?.transport?.ws?.readyState === "number") {
+            return Number(connection.transport.ws.readyState);
+        }
+        if (typeof connection?.isOpen === "boolean") {
+            return connection.isOpen ? 1 : 0;
+        }
+        return null;
+    }
+    function canSendRoomMessage(targetRoom) {
+        if (!targetRoom) {
+            return false;
+        }
+        const readyState = getRoomSocketReadyState(targetRoom);
+        if (readyState === null) {
+            return Boolean(connected.value);
+        }
+        return readyState === 1;
+    }
+    function safeRoomSend(type, payload) {
+        if (!room.value || !canSendRoomMessage(room.value)) {
+            if (room.value && getRoomSocketReadyState(room.value) === 3) {
+                scheduleReconnect(`send:${type}`);
+            }
+            return false;
+        }
+        try {
+            if (payload === undefined) {
+                room.value.send(type);
+            }
+            else {
+                room.value.send(type, payload);
+            }
+            return true;
+        }
+        catch (error) {
+            void error;
+            scheduleReconnect(`send_failed:${type}`);
+            return false;
+        }
+    }
+    function scheduleReconnect(reason) {
+        if (suppressReconnect) {
+            return;
+        }
+        if (connectInFlight || reconnectTimer !== null) {
+            return;
+        }
+        const roomId = activeRoomId.value.trim();
+        const token = playerToken.value.trim();
+        const name = localPlayerName.value.trim();
+        if (!roomId || !token || !name) {
+            connected.value = false;
+            return;
+        }
+        connected.value = false;
+        joinError.value = "房间连接中断，正在尝试重连...";
+        const delay = Math.min(1200, 200 + reconnectAttempts * 200);
+        reconnectTimer = window.setTimeout(() => {
+            reconnectTimer = null;
+            reconnectAttempts += 1;
+            void connect({
+                nameOverride: name,
+                roomId,
+                playerToken: token,
+            }).then((ok) => {
+                if (ok) {
+                    reconnectAttempts = 0;
+                    joinError.value = "";
+                    return;
+                }
+                if (reconnectAttempts < 3) {
+                    scheduleReconnect(`${reason}:retry`);
+                }
+            });
+        }, delay);
+    }
+    function maybeRequestMissingPrivateHand(reason) {
+        const phase = state.value?.phase;
+        if (!room.value || !mySeatId.value || (phase !== "declaring" && phase !== "playing")) {
+            missingPrivateReconnectAttempts = 0;
+            clearMissingHandSyncTimer();
+            return;
+        }
+        if (privateHand.value.length > 0) {
+            missingPrivateReconnectAttempts = 0;
+            clearMissingHandSyncTimer();
+            return;
+        }
+        if (!connected.value || !canSendRoomMessage(room.value)) {
+            const roomId = activeRoomId.value.trim();
+            const token = playerToken.value.trim();
+            const name = localPlayerName.value.trim();
+            if (!connectInFlight && roomId && token && name) {
+                void connect({
+                    nameOverride: name,
+                    roomId,
+                    playerToken: token,
+                });
+            }
+            clearMissingHandSyncTimer();
+            return;
+        }
+        missingPrivateReconnectAttempts += 1;
+        if (missingPrivateReconnectAttempts >= 1 && !connectInFlight) {
+            const roomId = activeRoomId.value.trim();
+            const token = playerToken.value.trim();
+            const name = localPlayerName.value.trim();
+            if (roomId && token && name) {
+                joinError.value = "正在恢复手牌同步...";
+                missingPrivateReconnectAttempts = 0;
+                void connect({
+                    nameOverride: name,
+                    roomId,
+                    playerToken: token,
+                });
+                return;
+            }
+        }
+        requestSyncState(reason);
+    }
+    function startMissingHandSyncTimer() {
+        clearMissingHandSyncTimer();
+        missingHandSyncTimer = window.setInterval(() => {
+            maybeRequestMissingPrivateHand("missing_private_hand_retry");
+        }, 1000);
+    }
+    function requestSyncState(reason) {
+        if (!room.value) {
+            return;
+        }
+        if (!connected.value || !canSendRoomMessage(room.value)) {
+            clearMissingHandSyncTimer();
+            return;
+        }
+        const now = Date.now();
+        if (now - lastManualSyncAt < 300) {
+            return;
+        }
+        lastManualSyncAt = now;
+        if (!safeRoomSend("sync_state")) {
+            void reason;
+        }
+    }
+    async function fetchPrivateState(reason) {
+        const roomId = activeRoomId.value.trim();
+        const token = playerToken.value.trim();
+        if (!roomId || !token) {
+            return;
+        }
+        try {
+            const url = new URL(`${HTTP_URL}/private-state`);
+            url.searchParams.set("roomId", roomId);
+            url.searchParams.set("playerToken", token);
+            const response = await fetch(url.toString(), { method: "GET" });
+            if (!response.ok) {
+                return;
+            }
+            const payload = (await response.json());
+            if (!payload?.ok) {
+                return;
+            }
+            if (payload.seatId && !mySeatId.value) {
+                mySeatId.value = payload.seatId;
+            }
+            const nextHand = sortHandCards(asCardArray(payload.privateHand));
+            const nextActions = normalizeAvailableActions(payload.availableActions);
+            privateHand.value = nextHand;
+            availableActions.value = nextActions;
+            privateHandFingerprint = buildCardIdFingerprint(nextHand);
+            availableActionsFingerprint = buildAvailableActionsFingerprint(nextActions);
+            if (payload.roundResult && state.value?.phase === "ended") {
+                roundResult.value = normalizeRoundResultPayload(payload.roundResult);
+                if (roundResult.value.winnerId) {
+                    huResult.value = {
+                        winnerId: roundResult.value.winnerId,
+                        groups: roundResult.value.groups ?? [],
+                    };
+                }
+            }
+            if (nextHand.length > 0) {
+                missingPrivateReconnectAttempts = 0;
+                clearMissingHandSyncTimer();
+                joinError.value = "";
+            }
+        }
+        catch {
+            void reason;
+        }
+    }
+    function startPrivateStatePolling() {
+        clearPrivateStatePollTimer();
+        privateStatePollTimer = window.setInterval(() => {
+            const phase = state.value?.phase;
+            if (!connected.value || !activeRoomId.value || !playerToken.value) {
+                return;
+            }
+            if (phase !== "waiting" && phase !== "declaring" && phase !== "playing" && phase !== "ended") {
+                return;
+            }
+            void fetchPrivateState("poll");
+        }, 350);
+    }
+    function resetClientRoomState(options) {
+        const keepLogs = Boolean(options?.keepLogs);
+        const keepJoinError = Boolean(options?.keepJoinError);
+        clearMissingHandSyncTimer();
+        clearPrivateStatePollTimer();
+        state.value = null;
+        privateHand.value = [];
+        availableActions.value = [];
+        huResult.value = null;
+        roundResult.value = null;
+        debugApplied.value = null;
+        declareError.value = "";
+        myId.value = "";
+        mySeatId.value = "";
+        stateSyncFingerprint = "";
+        privateHandFingerprint = "";
+        availableActionsFingerprint = "";
+        lastFingerprint = "";
+        lastPhase = "";
+        if (!keepLogs) {
+            clearActionLogs();
+        }
+        if (!keepJoinError) {
+            joinError.value = "";
         }
     }
     function buildStateSyncFingerprint(snapshot) {
@@ -314,6 +645,7 @@ export function useRoom(playerName = "Player") {
         ].join(":"))
             .join("|");
         return [
+            snapshot.roomId ?? activeRoomId.value,
             snapshot.phase,
             snapshot.responsePhase,
             snapshot.hostPlayerId,
@@ -335,18 +667,97 @@ export function useRoom(playerName = "Player") {
             playerMarks,
         ].join("::");
     }
+    function buildCardIdFingerprint(cards) {
+        return cards.map((card) => card.id).join("|");
+    }
+    function buildAvailableActionsFingerprint(actions) {
+        return actions
+            .map((action) => [
+            action.action,
+            action.enabled ? "1" : "0",
+            (action.candidates ?? [])
+                .map((candidate) => `${candidate.id}:${candidate.cardIds.join(",")}:${candidate.source}:${candidate.kind ?? ""}`)
+                .join("|"),
+        ].join(":"))
+            .join(";");
+    }
     function applySnapshot(next) {
+        // Access Proxy properties directly without calling toJSON() to avoid circular reference
+        const rawSnapshot = next;
         const normalized = normalizeSnapshot(next);
+        const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
+        const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
+        if (!normalized.roomId && activeRoomId.value) {
+            normalized.roomId = activeRoomId.value;
+        }
+        if (normalized.roomId && normalized.roomId !== activeRoomId.value) {
+            activeRoomId.value = normalized.roomId;
+            stateSyncFingerprint = "";
+            privateHandFingerprint = "";
+            availableActionsFingerprint = "";
+            lastFingerprint = "";
+            lastPhase = "";
+            privateHand.value = [];
+            availableActions.value = [];
+            huResult.value = null;
+            roundResult.value = null;
+            debugApplied.value = null;
+        }
         const nextFingerprint = buildStateSyncFingerprint(normalized);
+        const nextPrivateHandFingerprint = buildCardIdFingerprint(snapshotPrivateHand);
+        const nextAvailableActionsFingerprint = buildAvailableActionsFingerprint(snapshotAvailableActions);
+        if ((snapshotPrivateHand.length > 0 || rawSnapshot?.privateHand) &&
+            nextPrivateHandFingerprint !== privateHandFingerprint) {
+            privateHand.value = snapshotPrivateHand;
+            privateHandFingerprint = nextPrivateHandFingerprint;
+            if (privateHand.value.length > 0) {
+                missingPrivateReconnectAttempts = 0;
+                clearMissingHandSyncTimer();
+            }
+        }
+        if ((Array.isArray(rawSnapshot?.availableActions) || rawSnapshot?.availableActions) &&
+            nextAvailableActionsFingerprint !== availableActionsFingerprint) {
+            availableActions.value = snapshotAvailableActions;
+            availableActionsFingerprint = nextAvailableActionsFingerprint;
+        }
+        if (rawSnapshot?.roundResult && normalized.phase === "ended") {
+            roundResult.value = normalizeRoundResultPayload(rawSnapshot.roundResult);
+            if (roundResult.value.winnerId) {
+                huResult.value = {
+                    winnerId: roundResult.value.winnerId,
+                    groups: roundResult.value.groups ?? [],
+                };
+            }
+        }
         if (nextFingerprint === stateSyncFingerprint) {
             return;
         }
         stateSyncFingerprint = nextFingerprint;
         state.value = normalized;
+        if (!mySeatId.value) {
+            const inferredSeatId = inferSeatId(normalized);
+            if (inferredSeatId) {
+                mySeatId.value = inferredSeatId;
+            }
+        }
+        if (mySeatId.value &&
+            (normalized.phase === "declaring" || normalized.phase === "playing") &&
+            privateHand.value.length === 0) {
+            requestSyncState("missing_private_hand");
+            startMissingHandSyncTimer();
+        }
+        else {
+            clearMissingHandSyncTimer();
+        }
         const currentPhase = String(state.value?.phase ?? "");
-        if ((lastPhase === "ended" || lastPhase === "waiting") &&
+        const previousPhase = lastPhase;
+        if ((previousPhase === "ended" || previousPhase === "waiting") &&
             (currentPhase === "declaring" || currentPhase === "playing")) {
             clearActionLogs();
+        }
+        if (previousPhase === "ended" && currentPhase !== "ended") {
+            huResult.value = null;
+            roundResult.value = null;
         }
         if (currentPhase === "waiting" || currentPhase === "declaring" || currentPhase === "playing") {
             joinError.value = "";
@@ -358,15 +769,11 @@ export function useRoom(playerName = "Player") {
             pushLog(lastAction);
             lastFingerprint = fingerprint;
         }
-        if (lastPhase === "ended" && state.value?.phase !== "ended") {
-            huResult.value = null;
-            roundResult.value = null;
-        }
     }
     function startRoomStateSync() {
         clearRoomStateSyncTimer();
         roomStateSyncTimer = window.setInterval(() => {
-            if (!room.value?.state) {
+            if (!connected.value || !room.value?.state || !canSendRoomMessage(room.value)) {
                 return;
             }
             applySnapshot(room.value.state);
@@ -432,24 +839,61 @@ export function useRoom(playerName = "Player") {
         logSeq = 0;
         lastFingerprint = "";
     }
-    async function connect() {
+    async function connect(options) {
+        if (connectInFlight) {
+            return false;
+        }
+        connectInFlight = true;
+        clearReconnectTimer();
+        const connectionSeq = ++activeConnectionSeq;
+        const isActiveConnection = () => activeConnectionSeq === connectionSeq;
         const client = new Client(WS_URL);
         try {
+            clearRoomStateSyncTimer();
+            const previousRoom = room.value;
+            room.value = null;
+            connected.value = false;
+            activeRoomId.value = "";
+            resetClientRoomState({ keepJoinError: true });
+            if (previousRoom) {
+                try {
+                    suppressReconnect = true;
+                    await previousRoom.leave();
+                }
+                catch {
+                    // ignore stale leave errors when switching rooms
+                }
+                finally {
+                    suppressReconnect = false;
+                }
+            }
             const query = new URLSearchParams(window.location.search);
-            const forceNew = query.get("new") === "1";
+            const resolvedOptions = typeof options === "string"
+                ? { nameOverride: options }
+                : {
+                    nameOverride: options?.nameOverride,
+                    roomId: options?.roomId,
+                    playerToken: options?.playerToken,
+                    forceNew: Boolean(options?.forceNew),
+                };
+            const forceNew = resolvedOptions.forceNew || query.get("new") === "1";
             if (forceNew) {
                 clearStored(TOKEN_KEY);
                 clearStored(NAME_KEY);
                 clearStored(ROOM_KEY);
             }
-            const queryRoomId = query.get("roomId")?.trim() ?? "";
-            const queryToken = query.get("playerToken")?.trim() ?? "";
+            const queryRoomId = resolvedOptions.roomId?.trim() || query.get("roomId")?.trim() || "";
+            const queryToken = resolvedOptions.playerToken?.trim() || query.get("playerToken")?.trim() || "";
             const queryName = query.get("playerName")?.trim() ?? "";
             const cachedRoomId = readStored(ROOM_KEY);
             const cachedToken = readStored(TOKEN_KEY);
             const cachedName = readStored(NAME_KEY);
-            const desiredName = queryName || cachedName || playerName;
-            const desiredToken = queryToken || cachedToken;
+            const desiredName = String(resolvedOptions.nameOverride ?? "").trim() || queryName || cachedName || playerName;
+            localPlayerName.value = desiredName;
+            const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
+            playerToken.value = desiredToken;
+            writeStored(TOKEN_KEY, desiredToken);
+            writeStored(NAME_KEY, desiredName);
             const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
             let joined;
             try {
@@ -472,96 +916,162 @@ export function useRoom(playerName = "Player") {
             room.value = joined;
             myId.value = joined.sessionId;
             connected.value = true;
+            reconnectAttempts = 0;
+            activeRoomId.value = joined.roomId || initialRoomId;
             if (joined.roomId) {
                 writeStored(ROOM_KEY, joined.roomId);
                 updateInviteUrl(joined.roomId);
             }
+            const isCurrentJoinedRoom = () => isActiveConnection() && room.value === joined && activeRoomId.value === (joined.roomId || initialRoomId);
             joined.onStateChange((next) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 applySnapshot(next);
             });
             startRoomStateSync();
+            startPrivateStatePolling();
             joined.onMessage("room_snapshot", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 applySnapshot(payload);
             });
             joined.onMessage("private_hand", (payload) => {
-                privateHand.value = sortHandCards(payload ?? []);
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                privateHand.value = sortHandCards(asCardArray(payload));
+                privateHandFingerprint = buildCardIdFingerprint(privateHand.value);
+                if (privateHand.value.length > 0) {
+                    missingPrivateReconnectAttempts = 0;
+                    clearMissingHandSyncTimer();
+                }
             });
             joined.onMessage("available_actions", (payload) => {
-                availableActions.value = (payload ?? []).map((item) => ({
-                    action: normalizeAction(item.action) ?? "pass",
-                    enabled: Boolean(item.enabled),
-                    candidates: Array.isArray(item?.candidates)
-                        ? item.candidates
-                            .map((raw) => normalizeCandidate(raw))
-                            .filter((candidate) => Boolean(candidate))
-                        : undefined,
-                }));
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                availableActions.value = normalizeAvailableActions(payload);
+                availableActionsFingerprint = buildAvailableActionsFingerprint(availableActions.value);
             });
             joined.onMessage("action_rejected", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 const reason = String(payload?.reason ?? "unknown");
                 pushLog(`ACTION_REJECTED ${reason}`);
             });
             joined.onMessage("hu_result", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 huResult.value = payload;
                 pushLog(`HU_RESULT ${payload.winnerId}`);
             });
             joined.onMessage("round_result", (payload) => {
-                roundResult.value = {
-                    ...payload,
-                    players: (payload.players ?? []).map((p) => ({
-                        ...p,
-                        hand: sortHandCards(p.hand ?? []),
-                        huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
-                        winningGroups: (p.winningGroups ?? []).map((group) => ({
-                            key: String(group?.key ?? ""),
-                            cards: sortHandCards(group?.cards ?? []),
-                        })),
-                        resolvedHandGroups: (p.resolvedHandGroups ?? []).map((group) => ({
-                            key: String(group?.key ?? ""),
-                            cards: sortHandCards(group?.cards ?? []),
-                        })),
-                        exposedArea: p.exposedArea ?? [],
-                        exposedGroupSizes: asNumberArray(p.exposedGroupSizes),
-                        exposedGroupKinds: asStringArray(p.exposedGroupKinds),
-                        generalArea: sortHandCards(p.generalArea ?? []),
-                        fishArea: sortHandCards(p.fishArea ?? []),
-                        discardCount: Number(p.discardCount ?? 0),
-                        scoreBreakdown: p.scoreBreakdown ?? [],
-                        totalScore: Number(p.totalScore ?? 0),
-                    })),
-                    remainingDeck: asCardArray(payload.remainingDeck),
-                };
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                roundResult.value = normalizeRoundResultPayload(payload);
                 pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
             });
             joined.onMessage("debug_applied", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 debugApplied.value = payload;
             });
             joined.onMessage("session_token", (payload) => {
+                if (!isActiveConnection() || room.value !== joined) {
+                    return;
+                }
                 playerToken.value = payload.playerToken;
                 mySeatId.value = payload.seatId;
                 writeStored(TOKEN_KEY, payload.playerToken);
                 writeStored(NAME_KEY, desiredName);
                 if (payload.roomId) {
+                    if (payload.roomId !== activeRoomId.value) {
+                        activeRoomId.value = payload.roomId;
+                        stateSyncFingerprint = "";
+                        lastFingerprint = "";
+                    }
                     writeStored(ROOM_KEY, payload.roomId);
                     updateInviteUrl(payload.roomId);
                 }
                 pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
             });
             joined.onMessage("join_error", (payload) => {
-                joinError.value = payload?.message ?? "鍔犲叆澶辫触";
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                joinError.value = payload?.message ?? "加入失败";
                 pushLog(`ERROR ${joinError.value}`);
             });
             joined.onMessage("declare_rejected", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
                 declareError.value = payload?.reason ?? "声明提交失败";
                 pushLog(`DECLARE_REJECTED ${declareError.value}`);
             });
+            joined.onLeave(() => {
+                if (!isActiveConnection() || room.value !== joined) {
+                    return;
+                }
+                clearRoomStateSyncTimer();
+                clearMissingHandSyncTimer();
+                connected.value = false;
+                scheduleReconnect("room_leave");
+            });
+            joined.onError((_code, message) => {
+                if (!isActiveConnection() || room.value !== joined) {
+                    return;
+                }
+                clearRoomStateSyncTimer();
+                clearMissingHandSyncTimer();
+                joinError.value = message || "房间连接异常";
+                connected.value = false;
+                scheduleReconnect("room_error");
+            });
+            const rawSocket = joined.connection?.transport?.ws;
+            if (rawSocket && typeof rawSocket.addEventListener === "function") {
+                rawSocket.addEventListener("close", (event) => {
+                    if (!isCurrentJoinedRoom()) {
+                        return;
+                    }
+                    void event;
+                    connected.value = false;
+                    scheduleReconnect("socket_close");
+                });
+            }
+            if (joined.state) {
+                applySnapshot(joined.state);
+            }
+            void fetchPrivateState("after_join");
+            return true;
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "加入房间失败";
             joinError.value = message;
             pushLog(`ERROR ${message}`);
             connected.value = false;
+            room.value = null;
+            activeRoomId.value = "";
+            resetClientRoomState({ keepJoinError: true, keepLogs: true });
         }
+        finally {
+            if (isActiveConnection()) {
+                connectInFlight = false;
+            }
+            else if (activeConnectionSeq === connectionSeq) {
+                connectInFlight = false;
+            }
+            else {
+                connectInFlight = false;
+            }
+        }
+        return false;
     }
     function sendAction(input) {
         if (!room.value) {
@@ -572,7 +1082,7 @@ export function useRoom(playerName = "Player") {
             if (!action) {
                 return;
             }
-            room.value.send("action", action);
+            safeRoomSend("action", action);
             return;
         }
         const action = normalizeAction(input.action);
@@ -581,45 +1091,46 @@ export function useRoom(playerName = "Player") {
         }
         const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
         if (candidateId) {
-            room.value.send("action", { action, candidateId });
+            safeRoomSend("action", { action, candidateId });
             return;
         }
-        room.value.send("action", action);
+        safeRoomSend("action", action);
     }
     function sendDiscardCard(cardId) {
         if (!room.value || !cardId) {
             return;
         }
-        room.value.send("discard_card", { cardId });
+        safeRoomSend("discard_card", { cardId });
     }
     function declareKongs(count) {
-        room.value?.send("declare_kongs", count);
+        safeRoomSend("declare_kongs", count);
     }
     function declareSetup(payload) {
         declareError.value = "";
-        room.value?.send("declare_setup", payload);
+        safeRoomSend("declare_setup", payload);
     }
     function debugSetup(scenario) {
-        room.value?.send("debug_setup", scenario);
+        safeRoomSend("debug_setup", scenario);
     }
     function startGame() {
         clearActionLogs();
         joinError.value = "";
-        room.value?.send("start_game");
+        safeRoomSend("start_game");
     }
     function nextRound() {
         clearActionLogs();
-        room.value?.send("next_round");
+        safeRoomSend("next_round");
     }
     function returnLobby() {
         clearActionLogs();
-        room.value?.send("return_lobby");
+        safeRoomSend("return_lobby");
     }
-    onMounted(() => {
-        void connect();
-    });
     onUnmounted(() => {
         clearRoomStateSyncTimer();
+        clearMissingHandSyncTimer();
+        clearReconnectTimer();
+        clearPrivateStatePollTimer();
+        suppressReconnect = true;
         room.value?.leave();
     });
     const players = computed(() => {
@@ -640,6 +1151,7 @@ export function useRoom(playerName = "Player") {
         joinError,
         declareError,
         actionLogs,
+        connect,
         clearActionLogs,
         sendAction,
         sendDiscardCard,

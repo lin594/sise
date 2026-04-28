@@ -14,6 +14,12 @@ type ResolvedCandidate = {
   remove: string[];
 };
 
+type ResolvedSolution = {
+  items: ResolvedCandidate[];
+  score: number;
+  groupedCount: number;
+};
+
 export interface HuExplainOptions {
   wildcardCount?: number;
   wildcardPool?: Card[];
@@ -145,6 +151,7 @@ function listCandidatesForPivot(counter: Counter, pivot: string): Candidate[] {
     pushCandidate(candidates, "FrameJSX", [`${color}:jiang`, `${color}:shi`, `${color}:xiang`], 30, pivot);
     pushCandidate(candidates, "SingleJiang", [pivot], 10, pivot);
   } else {
+    pushCandidate(candidates, "Quad", [pivot, pivot, pivot, pivot], 100, pivot);
     pushCandidate(candidates, "Triplet", [pivot, pivot, pivot], 90, pivot);
     pushCandidate(candidates, "Pair", [pivot, pivot], 20, pivot);
 
@@ -281,9 +288,26 @@ function analyzeGroupingDfs(counter: Counter, memo: Map<string, GroupingCandidat
   return resolved;
 }
 
-function dfs(counter: Counter, memo: Map<string, ResolvedCandidate[] | null>): ResolvedCandidate[] | null {
+function pickBetterResolved(current: ResolvedSolution | null, next: ResolvedSolution): ResolvedSolution {
+  if (!current) {
+    return next;
+  }
+  if (next.score !== current.score) {
+    return next.score > current.score ? next : current;
+  }
+  if (next.groupedCount !== current.groupedCount) {
+    return next.groupedCount > current.groupedCount ? next : current;
+  }
+  return current;
+}
+
+function dfs(counter: Counter, memo: Map<string, ResolvedSolution | null>): ResolvedSolution | null {
   if (counter.size === 0) {
-    return [];
+    return {
+      items: [],
+      score: 0,
+      groupedCount: 0,
+    };
   }
 
   const key = serialize(counter);
@@ -297,6 +321,7 @@ function dfs(counter: Counter, memo: Map<string, ResolvedCandidate[] | null>): R
     return null;
   }
 
+  let best: ResolvedSolution | null = null;
   for (const candidate of listCandidatesForPivot(counter, pivot)) {
     const next = take(counter, candidate.remove);
     if (!next) {
@@ -304,14 +329,16 @@ function dfs(counter: Counter, memo: Map<string, ResolvedCandidate[] | null>): R
     }
     const child = dfs(next, memo);
     if (child) {
-      const solved = [{ key: candidate.key, remove: candidate.remove }, ...child];
-      memo.set(key, solved);
-      return solved;
+      best = pickBetterResolved(best, {
+        items: [{ key: candidate.key, remove: candidate.remove }, ...child.items],
+        score: groupingScore(candidate.key) + child.score,
+        groupedCount: candidate.remove.length + child.groupedCount,
+      });
     }
   }
 
-  memo.set(key, null);
-  return null;
+  memo.set(key, best);
+  return best;
 }
 
 function resolveOptions(arg?: number | HuExplainOptions): Required<HuExplainOptions> {
@@ -343,7 +370,7 @@ export function explainHu(hand: Card[], responseCard: Card, options?: number | H
     cardBuckets.set(key, list);
   }
   const details =
-    resolved?.map(({ key, remove }) => {
+    resolved?.items.map(({ key, remove }) => {
       const cards: Card[] = [];
       for (const removeKey of remove) {
         const bucket = cardBuckets.get(removeKey) ?? [];
@@ -356,7 +383,7 @@ export function explainHu(hand: Card[], responseCard: Card, options?: number | H
     }) ?? [];
   return {
     valid: Boolean(resolved),
-    groups: resolved?.map((item) => item.key) ?? [],
+    groups: resolved?.items.map((item) => item.key) ?? [],
     details,
   };
 }

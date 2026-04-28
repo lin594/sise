@@ -49,6 +49,9 @@ export interface RoomStateSnapshot {
   publicGeneralPool?: Card[];
   declareEndsAt: number;
   players: PlayerState[];
+  privateHand?: Card[];
+  availableActions?: AvailableAction[];
+  roundResult?: RoundResultPayload | null;
 }
 
 export interface ParsedActionLog {

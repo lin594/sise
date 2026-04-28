@@ -2,9 +2,12 @@
   <OrientationGuard />
   <main class="layout" :class="{ playing: isPlaying, 'compact-landscape': isCompactLandscape && isPlaying }">
     <header class="top">
-      <h1>四色牌 v4.0</h1>
-      <div class="meta">
-        <span>{{ connected ? "已连接" : "连接中..." }}</span>
+      <div class="top-brand">
+        <h1>四色牌</h1>
+        <p class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
+      </div>
+      <div class="meta" v-if="hasLobbySession">
+        <span>{{ connected ? "已连接" : "同步中..." }}</span>
         <span>座位ID: {{ mySeatId || "-" }}</span>
         <span>房主: {{ state?.hostPlayerId || "-" }}</span>
         <span>庄家: {{ dealerName }}</span>
@@ -12,32 +15,51 @@
           <button class="ghost mini" :class="{ active: tableCardMode === 'simple' }" @click="tableCardMode = 'simple'">简化大字</button>
           <button class="ghost mini" :class="{ active: tableCardMode === 'full' }" @click="tableCardMode = 'full'">长条色牌</button>
         </div>
-        <button class="ghost reset-btn" :disabled="resettingLobby" @click="rebuildLobby">
-          {{ resettingLobby ? "重建中..." : "重建大厅" }}
-        </button>
+        <button v-if="canReturnToLobby" class="ghost reset-btn" @click="returnLobby">返回大厅</button>
+        <button v-else class="ghost reset-btn" @click="showRules = true">查看规则</button>
+      </div>
+      <div class="meta" v-else>
+        <span>首页</span>
+        <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
     </header>
     <p v-if="globalError" class="error global-error">{{ globalError }}</p>
 
-    <section v-if="isWaiting" class="lobby">
-      <p class="lobby-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
-      <h2>等待大厅</h2>
-      <p>房主手动开始。人数不足 4 人时，开始后自动补机器人。</p>
-      <div class="lobby-actions">
-        <button class="primary" :disabled="!canPressStartGame" @click="startGame">
-          {{ isHost ? "开始游戏" : "等待房主开始" }}
-        </button>
-        <button class="ghost" @click="showRules = true">查看规则</button>
-      </div>
-      <p class="lobby-rule-tip">第一次玩可以先看规则速查，开局后再慢慢熟悉吃、碰、开、抓的节奏。</p>
-      <p v-if="joinError" class="error">{{ joinError }}</p>
+    <LoginPage
+      v-if="showEntry"
+      :nickname="entryName"
+      :entering="enteringLobby"
+      :primary-label="entryPrimaryLabel"
+      :history-names="nicknameHistory"
+      @update:nickname="entryName = $event"
+      @submit="enterLobby"
+      @open-rules="showRules = true"
+      @randomize="randomizeNickname"
+      @select-history="entryName = $event"
+    />
 
-      <div class="player-grid">
-        <div v-for="p in players" :key="p.clientId" class="player-item">
-          <strong>{{ p.name }}</strong>
-          <small>{{ p.clientId === state?.hostPlayerId ? "房主" : "玩家" }}</small>
-          <small>{{ p.isBot ? "BOT托管" : p.connected ? "在线" : "离线" }}</small>
-        </div>
+    <LobbyPage
+      v-else-if="showModeLobby"
+      :kicker="isWaiting ? '房间页' : '大厅页'"
+      :title="lobbyTitle"
+      :subtitle="lobbySubtitle"
+      :modes="lobbyModes"
+      :selected-mode="selectedLobbyMode"
+      :can-start="canStartSelectedMode"
+      :start-label="lobbyStartLabel"
+      :join-error="joinError"
+      :host-player-id="state?.hostPlayerId || ''"
+      :players="players"
+      @open-rules="showRules = true"
+      @start="startSelectedMode"
+      @select-mode="selectedLobbyMode = $event as LobbyModeId"
+    />
+
+    <section v-else-if="showSyncingScreen" class="sync-shell">
+      <div class="sync-card">
+        <p class="entry-kicker">同步中</p>
+        <h2>正在进入大厅</h2>
+        <p class="entry-desc">房间连接已经建立，正在同步当前牌局状态。</p>
       </div>
     </section>
 
@@ -123,8 +145,8 @@
       <div class="declare-panel">
         <div class="declare-header">
           <div>
-            <h2>声明暗坎与亮鱼</h2>
-            <p class="declare-desc">发牌结束后，请先确认暗坎数量，再点选要亮出的鱼牌。</p>
+            <h2>声明鱼和暗坎</h2>
+            <p class="declare-desc">先看手牌，鱼按可成组的选项点选，暗坎只声明数量；倒计时结束或四家确认后统一亮出。</p>
           </div>
           <div class="declare-timer-card">
             <strong>{{ declareSecondsLeft }}</strong>
@@ -137,6 +159,29 @@
         </div>
 
         <div class="declare-grid">
+          <section class="declare-card-section">
+            <p class="zone-title">鱼</p>
+            <div class="fish-option-list" v-if="fishOptions.length">
+              <button
+                v-for="option in fishOptions"
+                :key="option.id"
+                class="fish-option"
+                :class="{ selected: selectedFishOptionIds.has(option.id) }"
+                :disabled="isDeclareSubmitted"
+                @click="toggleFishOption(option.id)"
+              >
+                <span class="fish-option-title">{{ option.title }}</span>
+                <span class="declare-mini-cards">
+                  <CardComp v-for="card in option.cards" :key="`fish-option-${option.id}-${card.id}`" :card="card" size="sm" />
+                </span>
+              </button>
+            </div>
+            <p v-else class="settlement-empty">（没有可声明的鱼）</p>
+            <p v-if="selectedFishCards.length" class="declare-tip">已选 {{ selectedFishCards.length }} 张，提交后会等四家都声明完再公开。</p>
+            <p v-if="!fishSelectionValid" class="error">亮鱼组合不合法：普通鱼需4张同牌；金条鱼需4或5张金条。</p>
+            <p v-if="declareError" class="error">{{ declareError }}</p>
+          </section>
+
           <section class="declare-card-section declare-summary-card">
             <p class="zone-title">暗坎数量</p>
             <div class="declare-stepper">
@@ -151,26 +196,16 @@
               <span class="declare-chip accent">系统建议 {{ suggestedDeclaredKongs }} 个</span>
               <button class="ghost mini" :disabled="isDeclareSubmitted" @click="useSuggestedDeclaredKongs">采用建议</button>
             </div>
-            <p class="declare-tip">如果你已经选择了鱼，系统不会再把这些牌重复建议为暗坎。</p>
-          </section>
-
-          <section class="declare-card-section">
-            <p class="zone-title">已选亮鱼</p>
-            <div class="declare-mini-cards" v-if="selectedFishCards.length">
-              <CardComp v-for="card in selectedFishCards" :key="`declare-fish-${card.id}`" :card="card" size="sm" />
-            </div>
-            <p v-else class="settlement-empty">（未选择）</p>
-            <div class="declare-chip-row">
-              <span v-if="suggestedFishCardIds.size" class="declare-chip">青框表示可成鱼</span>
-              <span v-if="suggestedKongCardIds.size" class="declare-chip">橙框表示建议暗坎</span>
-            </div>
-            <p v-if="!fishSelectionValid" class="error">亮鱼组合不合法：普通鱼需4张同牌；金条鱼需4或5张金条。</p>
-            <p v-if="declareError" class="error">{{ declareError }}</p>
+            <p class="declare-tip">已选为鱼的牌不会再计入暗坎建议；实际过程里仍要保留声明数量的暗坎。</p>
           </section>
         </div>
 
         <section class="declare-zone">
-          <p class="zone-title">点击手牌切换亮鱼</p>
+          <p class="zone-title">手牌</p>
+          <div class="declare-chip-row">
+            <span v-if="suggestedFishCardIds.size" class="declare-chip">青框可成鱼</span>
+            <span v-if="suggestedKongCardIds.size" class="declare-chip">橙框建议暗坎</span>
+          </div>
           <div class="declare-cards" v-if="privateHand.length">
             <button
               v-for="card in privateHand"
@@ -178,7 +213,7 @@
               class="declare-card-btn"
               :class="{ selected: selectedFishCardIds.has(card.id), suggested: suggestedKongCardIds.has(card.id), fish: suggestedFishCardIds.has(card.id) }"
               :disabled="isDeclareSubmitted"
-              @click="toggleFish(card.id)"
+              @click="toggleFishCard(card.id)"
             >
               <CardComp :card="card" size="sm" />
             </button>
@@ -205,6 +240,18 @@
           <p>最后动作: {{ state?.lastAction || "-" }}</p>
         </template>
         <p v-if="roundDealerCard" class="end-global-info">本局定庄牌: {{ cardLabel(roundDealerCard) }}</p>
+        <section v-if="winnerSettlementPlayer && huCalculationLines.length" class="settlement scoring-explain">
+          <h3>胡牌计分</h3>
+          <div class="score-formula">
+            <p>{{ winnerSettlementPlayer.name }} {{ winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡" }}：赢一家 {{ signedScore(winnerPerOpponentScore) }}分</p>
+            <ul>
+              <li v-for="line in huCalculationLines" :key="`hu-calc-${line.key}`">
+                {{ line.label }}：{{ signedScore(line.unit) }}分
+              </li>
+            </ul>
+          </div>
+        </section>
+
         <section v-if="remainingDeckPreview.length" class="settlement remaining-deck">
           <h3>留底牌堆前{{ remainingDeckPreview.length }}张</h3>
           <div class="settlement-cards">
@@ -245,7 +292,7 @@
                     class="settlement-group"
                     :class="group.tone"
                   >
-                    <span class="settlement-group-badge">{{ group.badge }}</span>
+                    <span v-if="group.badge" class="settlement-group-badge">{{ group.badge }}</span>
                     <div class="settlement-cards compact">
                       <CardComp
                         v-for="card in group.cards"
@@ -379,6 +426,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
+import LobbyPage from "@/components/LobbyPage.vue";
+import LoginPage from "@/components/LoginPage.vue";
 import OrientationGuard from "@/components/OrientationGuard.vue";
 import { useRoom } from "@/composables/useRoom";
 import { BACKEND_HTTP_URL } from "@/config/backend";
@@ -389,12 +438,52 @@ type SettlementGroupBlock = {
   id: string;
   cards: Card[];
   badge?: string;
+  label?: string;
   tone: "meld" | "fish" | "public" | "strong";
 };
-
+type FishOption = {
+  id: string;
+  title: string;
+  cards: Card[];
+};
+type LobbyModeId = "practice_bots" | "ranked_reserved" | "friends_reserved";
+type LobbyMode = {
+  id: LobbyModeId;
+  name: string;
+  description: string;
+  enabled: boolean;
+};
 const HTTP_URL = BACKEND_HTTP_URL;
 
+function randomFrom(list: string[]): string {
+  return list[Math.floor(Math.random() * list.length)] ?? list[0] ?? "玩家";
+}
+
+function generateRandomNickname(): string {
+  const prefix = ["青", "白", "赤", "黄", "东", "南", "西", "北", "云", "风", "星", "月"];
+  const suffix = ["雀客", "牌友", "棋童", "将军", "行者", "小侠", "掌柜", "阿福", "阿宁", "子衿"];
+  return `${randomFrom(prefix)}${randomFrom(suffix)}`;
+}
+
+function readNicknameHistory(): string[] {
+  try {
+    const raw = window.localStorage.getItem("sise_entry_name_history") ?? "[]";
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((item) => String(item ?? "").trim()).filter(Boolean).slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+function writeNicknameHistory(names: string[]) {
+  window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
+}
+
 const {
+  connect,
   connected,
   mySeatId,
   state,
@@ -414,15 +503,85 @@ const {
   returnLobby,
 } = useRoom("玩家");
 
+const ENTRY_NAME_KEY = "sise_entry_name";
+const ENTRY_HISTORY_KEY = "sise_entry_name_history";
+const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
+const nicknameHistory = ref<string[]>(readNicknameHistory());
+const enteringLobby = ref(false);
+const enteredFrontLobby = ref(false);
+const pendingPracticeAutoStart = ref(false);
+const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
+const lobbyModes: LobbyMode[] = [
+  {
+    id: "practice_bots" as const,
+    name: "单人练习",
+    description: "当前模式：你进入大厅后，由系统自动补 3 个机器人，适合单机练习和规则体验。",
+    enabled: true,
+  },
+  {
+    id: "friends_reserved" as const,
+    name: "好友同桌",
+    description: "预留入口：未来会扩展成 4 名真人通过邀请码或房间模式一起对局。",
+    enabled: false,
+  },
+  {
+    id: "ranked_reserved" as const,
+    name: "联机匹配",
+    description: "预留入口：未来会接账号、匹配和更多大厅信息，但这次先把结构留好。",
+    enabled: false,
+  },
+];
+
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
+const hasLobbySession = computed(() => Boolean(connected.value || state.value || mySeatId.value));
+const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
+const showSyncingScreen = computed(() => hasLobbySession.value && !state.value);
+const showModeLobby = computed(() => {
+  if (showSyncingScreen.value) {
+    return false;
+  }
+  // Once game state exists (room joined), never show mode lobby again
+  // The mode lobby is only for mode selection BEFORE joining a room
+  if (state.value) {
+    return false;
+  }
+  // Before game state, show mode lobby if entered front
+  return enteredFrontLobby.value;
+});
+const canReturnToLobby = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
 const canPressStartGame = computed(
   () =>
     Boolean(connected.value) && Boolean(state.value) && Boolean(mySeatId.value) && isWaiting.value && isHost.value,
 );
+const canStartSelectedMode = computed(
+  () => selectedLobbyMode.value === "practice_bots" && (!hasLobbySession.value || canPressStartGame.value),
+);
+const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
+const lobbySubtitle = computed(() =>
+  isWaiting.value
+    ? "你已经进入房间页，正在同步开局状态。"
+    : "先选择一种玩法；当前开放单人练习，其余模式先保留入口。",
+);
+const lobbyStartLabel = computed(() => {
+  if (selectedLobbyMode.value !== "practice_bots") {
+    return "该模式尚未开放";
+  }
+  if (!hasLobbySession.value) {
+    return "进入单人练习";
+  }
+  if (pendingPracticeAutoStart.value) {
+    return "正在自动开始...";
+  }
+  return isHost.value ? "开始单人练习" : "等待房主开始";
+});
+const entryPrimaryLabel = computed(() => {
+  const query = new URLSearchParams(window.location.search);
+  return query.get("roomId") ? "加入大厅" : "进入大厅";
+});
 const nowMs = ref(Date.now());
 const displayTurnPlayerId = computed(() => {
   if (state.value?.responsePhase === "collective") {
@@ -483,7 +642,6 @@ const isCompactLandscape = ref(false);
 const tableCardMode = ref<"simple" | "full">(
   (window.localStorage.getItem("sise_table_card_mode") as "simple" | "full" | null) ?? "simple",
 );
-const resettingLobby = ref(false);
 const globalError = ref("");
 const showRules = ref(false);
 const updateCompactLandscape = () => {
@@ -507,8 +665,10 @@ const declareDealIntroActive = computed(
 const declareKongsInput = ref(0);
 let declareTick: number | null = null;
 const selectedFishCardIds = ref<Set<string>>(new Set());
+const selectedFishOptionIds = ref<Set<string>>(new Set());
 const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
-const suggestedFishCardIds = computed<Set<string>>(() => {
+const fishOptions = computed<FishOption[]>(() => {
+  const options: FishOption[] = [];
   const grouped = new Map<string, Card[]>();
   const goldCards: Card[] = [];
   for (const card of privateHand.value) {
@@ -521,29 +681,43 @@ const suggestedFishCardIds = computed<Set<string>>(() => {
     list.push(card);
     grouped.set(key, list);
   }
-
-  const picked = new Set<string>();
-  for (const cards of grouped.values()) {
+  for (const [key, cards] of grouped.entries()) {
     if (cards.length === 4) {
-      cards.forEach((card) => picked.add(card.id));
+      options.push({
+        id: `fish:${key}`,
+        title: `${cardLabel(cards[0])}鱼`,
+        cards,
+      });
     }
   }
   if (goldCards.length >= 4) {
-    goldCards.forEach((card) => picked.add(card.id));
+    options.push({
+      id: "fish:gold:4",
+      title: "金条鱼（4张）",
+      cards: goldCards.slice(0, 4),
+    });
+  }
+  if (goldCards.length >= 5) {
+    options.push({
+      id: "fish:gold:5",
+      title: "金条鱼（5张）",
+      cards: goldCards.slice(0, 5),
+    });
+  }
+  return options;
+});
+const suggestedFishCardIds = computed<Set<string>>(() => {
+  const picked = new Set<string>();
+  for (const option of fishOptions.value) {
+    option.cards.forEach((card) => picked.add(card.id));
   }
   return picked;
 });
-const hasFishRecommendation = computed(
-  () => suggestedFishCardIds.value.size > 0 || selectedFishCardIds.value.size > 0,
-);
 const suggestedKongCardIds = computed<Set<string>>(() => {
-  if (hasFishRecommendation.value) {
-    return new Set();
-  }
   const byFace = new Map<string, Card[]>();
   const goldCards: Card[] = [];
   for (const card of privateHand.value) {
-    if (suggestedFishCardIds.value.has(card.id) || selectedFishCardIds.value.has(card.id)) {
+    if (selectedFishCardIds.value.has(card.id)) {
       continue;
     }
     if (card.color === "gold") {
@@ -568,7 +742,7 @@ const suggestedKongCardIds = computed<Set<string>>(() => {
   }
   return picked;
 });
-const suggestedDeclaredKongs = computed(() => (hasFishRecommendation.value ? 0 : Math.floor(suggestedKongCardIds.value.size / 3)));
+const suggestedDeclaredKongs = computed(() => Math.floor(suggestedKongCardIds.value.size / 3));
 const maxDeclaredKongs = computed(() => Math.max(suggestedDeclaredKongs.value, Number(mePlayer.value?.declaredKongs ?? 0), 0));
 const declareSecondsLeft = computed(() => {
   if (declareDealIntroActive.value) {
@@ -620,7 +794,48 @@ const fishSelectionValid = computed(() => {
   return goldCount === 0 || goldCount === 4 || goldCount === 5;
 });
 
-function toggleFish(cardId: string) {
+function syncSelectedFishOptionsFromCards() {
+  const cardIds = selectedFishCardIds.value;
+  const next = new Set<string>();
+  for (const option of fishOptions.value) {
+    if (option.cards.every((card) => cardIds.has(card.id))) {
+      next.add(option.id);
+    }
+  }
+  selectedFishOptionIds.value = next;
+}
+
+function toggleFishOption(optionId: string) {
+  if (isDeclareSubmitted.value) {
+    return;
+  }
+  const option = fishOptions.value.find((item) => item.id === optionId);
+  if (!option) {
+    return;
+  }
+  const nextCards = new Set(selectedFishCardIds.value);
+  const nextOptions = new Set(selectedFishOptionIds.value);
+  const selected = nextOptions.has(optionId);
+  if (selected) {
+    option.cards.forEach((card) => nextCards.delete(card.id));
+    nextOptions.delete(optionId);
+  } else {
+    option.cards.forEach((card) => nextCards.add(card.id));
+    if (optionId === "fish:gold:4") {
+      nextOptions.delete("fish:gold:5");
+      fishOptions.value.find((item) => item.id === "fish:gold:5")?.cards.forEach((card) => nextCards.delete(card.id));
+      option.cards.forEach((card) => nextCards.add(card.id));
+    }
+    if (optionId === "fish:gold:5") {
+      nextOptions.delete("fish:gold:4");
+    }
+    nextOptions.add(optionId);
+  }
+  selectedFishCardIds.value = nextCards;
+  selectedFishOptionIds.value = nextOptions;
+}
+
+function toggleFishCard(cardId: string) {
   if (isDeclareSubmitted.value) {
     return;
   }
@@ -631,6 +846,7 @@ function toggleFish(cardId: string) {
     next.add(cardId);
   }
   selectedFishCardIds.value = next;
+  syncSelectedFishOptionsFromCards();
 }
 
 function clearSelection() {
@@ -714,6 +930,7 @@ function useSuggestedDeclaredKongs() {
 watch(shouldShowDeclarePanel, (show) => {
   if (show) {
     selectedFishCardIds.value = new Set();
+    selectedFishOptionIds.value = new Set();
     declareKongsInput.value = Math.max(
       Number(mePlayer.value?.declaredKongs ?? 0),
       Number(suggestedDeclaredKongs.value ?? 0),
@@ -750,6 +967,9 @@ watch(
 );
 
 onMounted(() => {
+  if (!entryName.value) {
+    entryName.value = nicknameHistory.value[0] || generateRandomNickname();
+  }
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -771,6 +991,46 @@ onUnmounted(() => {
 watch(tableCardMode, (mode) => {
   window.localStorage.setItem("sise_table_card_mode", mode);
 });
+
+function maybeAutoStartPractice() {
+  if (!pendingPracticeAutoStart.value || !canPressStartGame.value) {
+    return;
+  }
+  // 单人练习应该在房间准备就绪后立刻发 start_game，
+  // 不能只依赖“ready 从 false 变 true”的 watcher，
+  // 否则当 ready 先成立、pending 后置为 true 时会永远卡住。
+  startGame();
+  pendingPracticeAutoStart.value = false;
+}
+
+watch(
+  () => [canPressStartGame.value, pendingPracticeAutoStart.value] as const,
+  () => {
+    maybeAutoStartPractice();
+  },
+  { immediate: true },
+);
+
+// 一旦房间离开 waiting 阶段（即已成功开局），清除自动开局标记以阻止后续重试。
+watch(
+  () => state.value?.phase,
+  (phase) => {
+    if (phase && phase !== "waiting" && pendingPracticeAutoStart.value) {
+      pendingPracticeAutoStart.value = false;
+    }
+  },
+);
+
+// 更直接的兜底：一旦收到手牌，说明游戏已实际开始，立即清除 pending。
+watch(
+  () => privateHand.value.length,
+  (length) => {
+    if (length > 0 && pendingPracticeAutoStart.value) {
+      pendingPracticeAutoStart.value = false;
+    }
+  },
+);
+
 const endPanelTitle = computed(() => {
   if (derivedWinnerId.value) {
     return "胡牌结算";
@@ -863,6 +1123,9 @@ function settlementBadge(cards: Card[], kind = ""): string | undefined {
   if (head.color === "gold" && cards.length >= 3) {
     return cards.length >= 4 ? "开" : "坎";
   }
+  if (cards.length === 2 && isSameSettlementFace(cards)) {
+    return "对";
+  }
   if (isSameSettlementFace(cards)) {
     if (cards.length >= 4) {
       return "开";
@@ -878,6 +1141,60 @@ function settlementBadge(cards: Card[], kind = ""): string | undefined {
     return "鱼";
   }
   return undefined;
+}
+
+function settlementGroupLabel(cards: Card[], kind = ""): string | undefined {
+  if (!cards.length) {
+    return undefined;
+  }
+  const head = cards[0];
+  if (head.color === "gold") {
+    if (cards.length >= 4 || kind === "kai") {
+      return "金条开";
+    }
+    if (cards.length === 3) {
+      return "金条坎";
+    }
+    if (cards.length === 1) {
+      return "金条单张";
+    }
+  }
+  if (kind === "peng") {
+    return `${cardLabel(head)}碰`;
+  }
+  if (kind === "kai") {
+    return `${cardLabel(head)}开`;
+  }
+  if (isSameSettlementFace(cards)) {
+    if (cards.length >= 4) {
+      return `${cardLabel(head)}开`;
+    }
+    if (cards.length === 3) {
+      return `${cardLabel(head)}坎`;
+    }
+    if (cards.length === 2) {
+      return `${cardLabel(head)}对子`;
+    }
+    if (cards.length === 1 && head.type === "jiang") {
+      return `${cardLabel(head)}单张`;
+    }
+  }
+  const sameColor = cards.every((card) => card.color === head.color);
+  const types = new Set(cards.map((card) => card.type));
+  const colorPrefix = cardLabel(head).slice(0, 1);
+  if (sameColor && cards.length === 3 && types.has("ju") && types.has("ma") && types.has("pao")) {
+    return `${colorPrefix}车马炮架`;
+  }
+  if (sameColor && cards.length === 3 && types.has("jiang") && types.has("shi") && types.has("xiang")) {
+    const faces = ["jiang", "shi", "xiang"]
+      .map((type) => getCardLabelText({ color: head.color, type }).slice(1))
+      .join("");
+    return `${colorPrefix}${faces}架`;
+  }
+  if (cards.length === 4) {
+    return `${cardLabel(head)}鱼`;
+  }
+  return settlementBadge(cards, kind);
 }
 
 function settlementTone(cards: Card[]): SettlementGroupBlock["tone"] {
@@ -904,6 +1221,7 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
       id: `winning-${index}-${group.cards.map((card) => card.id).join("-")}`,
       cards: group.cards,
       badge: settlementBadge(group.cards),
+      label: settlementGroupLabel(group.cards),
       tone: settlementTone(group.cards),
     });
   });
@@ -912,6 +1230,7 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
       id: `meld-${index}-${cards.map((card) => card.id).join("-")}`,
       cards,
       badge: settlementBadge(cards, kind),
+      label: settlementGroupLabel(cards, kind),
       tone: settlementTone(cards),
     });
   });
@@ -920,6 +1239,7 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
       id: `public-${index}-${card.id}`,
       cards: [card],
       badge: settlementBadge([card]),
+      label: settlementGroupLabel([card]),
       tone: settlementTone([card]),
     });
   });
@@ -928,6 +1248,7 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
       id: `fish-${index}-${cards.map((card) => card.id).join("-")}`,
       cards,
       badge: settlementBadge(cards),
+      label: settlementGroupLabel(cards),
       tone: settlementTone(cards),
     });
   });
@@ -935,12 +1256,57 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
 }
 
 function settlementHandBlocks(player: RoundResultPlayer): SettlementGroupBlock[] {
-  return (player.resolvedHandGroups ?? []).map((group, index) => ({
-    id: `hand-${index}-${group.cards.map((card) => card.id).join("-")}`,
-    cards: group.cards,
-    badge: settlementBadge(group.cards),
-    tone: settlementTone(group.cards),
-  }));
+  if (isSettlementWinner(player)) {
+    return (player.resolvedHandGroups ?? []).map((group, index) => ({
+      id: `hand-${index}-${group.cards.map((card) => card.id).join("-")}`,
+      cards: group.cards,
+      badge: settlementBadge(group.cards),
+      label: settlementGroupLabel(group.cards),
+      tone: settlementTone(group.cards),
+    }));
+  }
+
+  return groupHandWithHiddenKans(player.hand ?? []);
+}
+
+function groupHandWithHiddenKans(cards: Card[]): SettlementGroupBlock[] {
+  const used = new Set<string>();
+  const byFace = new Map<string, Card[]>();
+  for (const card of cards) {
+    const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
+    const list = byFace.get(key) ?? [];
+    list.push(card);
+    byFace.set(key, list);
+  }
+
+  const blocks: SettlementGroupBlock[] = [];
+  for (const [key, sameFaceCards] of byFace.entries()) {
+    const kanCount = Math.floor(sameFaceCards.length / 3);
+    for (let index = 0; index < kanCount; index += 1) {
+      const chunk = sameFaceCards.slice(index * 3, index * 3 + 3);
+      if (chunk.length !== 3) {
+        continue;
+      }
+      chunk.forEach((card) => used.add(card.id));
+      blocks.push({
+        id: `hidden-kan-${key}-${index}-${chunk.map((card) => card.id).join("-")}`,
+        cards: chunk,
+        badge: "坎",
+        label: settlementGroupLabel(chunk),
+        tone: settlementTone(chunk),
+      });
+    }
+  }
+
+  const looseCards = cards.filter((card) => !used.has(card.id));
+  if (looseCards.length) {
+    blocks.push({
+      id: `loose-${looseCards.map((card) => card.id).join("-")}`,
+      cards: looseCards,
+      tone: "meld",
+    });
+  }
+  return blocks;
 }
 
 function signedScore(value: number): string {
@@ -963,6 +1329,43 @@ function scoreToneClass(value: number): string {
 function isSettlementWinner(player: RoundResultPlayer): boolean {
   return Boolean(roundResult.value?.winnerId) && roundResult.value?.winnerId === player.clientId;
 }
+
+function huFormulaLineOrder(key: string): number {
+  if (key === "HuBase") {
+    return 0;
+  }
+  if (String(key).startsWith("HuBigMultiplier")) {
+    return 2;
+  }
+  return 1;
+}
+
+const winnerSettlementPlayer = computed<RoundResultPlayer | null>(() => {
+  const winnerId = roundResult.value?.winnerId;
+  if (!winnerId) {
+    return null;
+  }
+  return settlementPlayers.value.find((player) => player.clientId === winnerId) ?? null;
+});
+
+const huCalculationLines = computed(() =>
+  (winnerSettlementPlayer.value?.scoreBreakdown ?? [])
+    .filter((line) => /^Hu(Base|Win|BigMultiplier)/.test(String(line.key ?? "")))
+    .map((line) => ({
+      ...line,
+      label: String(line.key ?? "").startsWith("HuBigMultiplier") ? "大胡整体 ×2" : line.label,
+    }))
+    .sort((a, b) => huFormulaLineOrder(a.key) - huFormulaLineOrder(b.key)),
+);
+
+const winnerPerOpponentScore = computed(() => {
+  const winner = winnerSettlementPlayer.value;
+  if (!winner) {
+    return 0;
+  }
+  const payerCount = Math.max(1, settlementPlayers.value.filter((player) => player.clientId !== winner.clientId).length);
+  return Math.round(winner.totalScore / payerCount);
+});
 
 function settlementScoreLines(player: RoundResultPlayer): Array<{ key: string; label: string; total: number }> {
   const winnerId = roundResult.value?.winnerId;
@@ -1063,32 +1466,79 @@ const roundDealerCard = computed<Card | null>(() => {
   return card?.id ? card : null;
 });
 
-async function rebuildLobby() {
-  if (resettingLobby.value) {
+async function enterLobby() {
+  const nickname = entryName.value.trim() || generateRandomNickname();
+  entryName.value = nickname;
+  globalError.value = "";
+  window.localStorage.setItem(ENTRY_NAME_KEY, nickname);
+  const mergedHistory = [nickname, ...nicknameHistory.value.filter((item) => item !== nickname)].slice(0, 8);
+  nicknameHistory.value = mergedHistory;
+  writeNicknameHistory(mergedHistory);
+  enteredFrontLobby.value = true;
+}
+
+function randomizeNickname() {
+  entryName.value = generateRandomNickname();
+}
+
+function startSelectedMode() {
+  if (selectedLobbyMode.value !== "practice_bots") {
+    globalError.value = "该模式暂未开放，当前只支持单人练习。";
     return;
   }
-  resettingLobby.value = true;
   globalError.value = "";
-  clearActionLogs();
+  if (!hasLobbySession.value) {
+    void startPracticeLobby();
+    return;
+  }
+  requestPracticeAutoStart();
+}
+
+function requestPracticeAutoStart() {
+  pendingPracticeAutoStart.value = true;
+  maybeAutoStartPractice();
+}
+
+async function startPracticeLobby() {
+  if (enteringLobby.value) {
+    return;
+  }
+  const nickname = entryName.value.trim() || generateRandomNickname();
+  entryName.value = nickname;
+  enteringLobby.value = true;
   try {
     const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
     if (!response.ok) {
-      throw new Error("重建大厅失败");
+      throw new Error("创建单人练习房间失败");
     }
     const payload = (await response.json()) as { ok?: boolean; roomId?: string; message?: string };
     if (!payload?.ok || !payload.roomId) {
-      throw new Error(payload?.message || "重建大厅失败");
+      throw new Error(payload?.message || "创建单人练习房间失败");
     }
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set("new", "1");
-    nextUrl.searchParams.set("roomId", payload.roomId);
-    nextUrl.searchParams.delete("playerToken");
-    window.location.href = nextUrl.toString();
+    const ok = await connect({
+      nameOverride: nickname,
+      roomId: payload.roomId,
+      forceNew: true,
+    });
+    if (!ok) {
+      throw new Error(joinError.value || "进入大厅失败");
+    }
+    requestPracticeAutoStart();
   } catch (error) {
-    globalError.value = error instanceof Error ? error.message : "重建大厅失败";
-    resettingLobby.value = false;
+    globalError.value = error instanceof Error ? error.message : "进入大厅失败";
+  } finally {
+    enteringLobby.value = false;
   }
 }
+
+watch(
+  () => state.value?.phase,
+  (phase) => {
+    if (phase && phase !== "waiting") {
+      pendingPracticeAutoStart.value = false;
+    }
+  },
+);
 
 </script>
 
@@ -1158,10 +1608,21 @@ async function rebuildLobby() {
   min-height: 0;
 }
 
+.top-brand {
+  display: grid;
+  gap: 0.18rem;
+}
+
 .top h1 {
   margin: 0;
   font-size: clamp(0.95rem, 2.2vh, 1.25rem);
   line-height: 1;
+}
+
+.top-slogan {
+  margin: 0;
+  color: #fde68a;
+  font-size: clamp(0.6rem, 1.3vh, 0.8rem);
 }
 
 .meta {
@@ -1182,6 +1643,156 @@ async function rebuildLobby() {
   border-radius: 12px;
   padding: 12px;
   color: #e2e8f0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.entry-shell {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  padding: clamp(0.9rem, 2vh, 1.3rem);
+  color: #e2e8f0;
+  display: grid;
+  gap: 1rem;
+}
+
+.sync-shell {
+  display: grid;
+}
+
+.sync-card {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  padding: clamp(1rem, 2vh, 1.4rem);
+  color: #e2e8f0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.entry-hero {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.entry-kicker,
+.lobby-kicker {
+  margin: 0;
+  color: #fbbf24;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.entry-hero h2,
+.lobby-head h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.8vh, 1.6rem);
+}
+
+.entry-desc {
+  margin: 0;
+  color: #cbd5e1;
+  max-width: 70ch;
+  line-height: 1.65;
+}
+
+.entry-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid #334155;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.92));
+}
+
+.entry-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.entry-field span {
+  color: #bfdbfe;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.entry-input {
+  width: min(26rem, 100%);
+  min-height: 2.8rem;
+  border-radius: 12px;
+  border: 1px solid #475569;
+  background: #020617;
+  color: #f8fafc;
+  padding: 0.7rem 0.85rem;
+  font-size: 1rem;
+}
+
+.entry-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.lobby-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.mode-card {
+  border: 1px solid #334155;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
+  color: #e2e8f0;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-card.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+}
+
+.mode-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.mode-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.mode-head strong {
+  font-size: 0.98rem;
+}
+
+.mode-head span {
+  font-size: 0.72rem;
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
+.mode-card p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.55;
+  font-size: 0.84rem;
 }
 
 .lobby-slogan {
@@ -1193,7 +1804,7 @@ async function rebuildLobby() {
 }
 
 .lobby-rule-tip {
-  margin: 0 0 0.8rem;
+  margin: 0;
   color: #93c5fd;
   font-size: clamp(0.72rem, 1.5vh, 0.88rem);
 }
@@ -1243,6 +1854,10 @@ async function rebuildLobby() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.lobby-mode-grid {
+  margin-top: -0.1rem;
 }
 
 .error {
@@ -1605,6 +2220,36 @@ async function rebuildLobby() {
   background: #ffedd5;
 }
 
+.fish-option-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.fish-option {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.95);
+  color: #0f172a;
+  padding: 0.55rem;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fish-option.selected {
+  border-color: #0f766e;
+  background: rgba(240, 253, 250, 0.98);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.16);
+}
+
+.fish-option-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .declare-tip {
   margin: 0;
   color: #475569;
@@ -1839,6 +2484,27 @@ async function rebuildLobby() {
   border-top: 1px dashed #e2e8f0;
 }
 
+.score-formula {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.score-formula p {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.score-formula ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.score-formula li {
+  color: #0f172a;
+  font-size: clamp(0.72rem, 1.25vh, 0.84rem);
+}
+
 .score-breakdown ul {
   margin: 0;
   padding-left: 18px;
@@ -1907,6 +2573,10 @@ async function rebuildLobby() {
 
   .declare-header {
     align-items: stretch;
+  }
+
+  .fish-option {
+    grid-template-columns: 1fr;
   }
 }
 

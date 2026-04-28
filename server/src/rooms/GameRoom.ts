@@ -71,6 +71,7 @@ import {
   advanceCollectiveFlow,
 } from "./flow/playing-flow.js";
 import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
+import { registerRoom, unregisterRoom, type PrivateStateSnapshot } from "./room-registry.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -174,12 +175,19 @@ export class FourColorGameRoom extends Room<GameState> {
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
+  private readonly pendingFishDeclarations = new Map<string, Card[]>();
   private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
   private debugSeq = 0;
   private roundDealerId: string | null = null;
+  private lastRoundResult: {
+    winnerId: string | null;
+    groups: string[];
+    players: RoundResultPlayer[];
+    remainingDeck: Card[];
+  } | null = null;
   private stateOps: RoomStateOps | null = null;
 
   private get ops(): RoomStateOps {
@@ -197,6 +205,8 @@ export class FourColorGameRoom extends Room<GameState> {
   onCreate(): void {
     this.setState(new GameState());
     this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
+    this.syncRoomMetadata();
+    registerRoom(this.roomId, this);
 
     this.onMessage("start_game", (client) => {
       this.handleStartGame(client);
@@ -232,6 +242,10 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.onMessage("discard_card", (client, payload: { cardId?: string } | string) => {
       this.handleDiscardCard(client, payload);
+    });
+
+    this.onMessage("sync_state", (client) => {
+      this.syncClientState(client);
     });
 
     this.onMessage("debug_setup", (client, scenario: string) => {
@@ -287,10 +301,13 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.seatBySession.delete(client.sessionId);
 
-    // Single-room mode: when no human session remains, reset room to fresh lobby.
+    // 等待大厅无人在线时可以直接重置；已开局阶段则保留房间，
+    // 让 token 重连有机会把真人座位重新接回，而不是整局被清空。
     if (this.seatBySession.size === 0) {
-      this.resetToFreshLobby();
-      return;
+      if (this.state.phase === "waiting") {
+        this.resetToFreshLobby();
+        return;
+      }
     }
 
     const player = this.state.players.get(seatId);
@@ -318,6 +335,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   onDispose(): void {
+    unregisterRoom(this.roomId);
     this.clearBotTimer();
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
@@ -356,6 +374,8 @@ export class FourColorGameRoom extends Room<GameState> {
         this.dealerCard = null;
         this.dealerPickerId = null;
         this.nextRoundSetup = null;
+        this.lastRoundResult = null;
+        this.pendingFishDeclarations.clear();
       },
       clearPlayerHands: () => this.playerHands.clear(),
       setPlayerOrder: (order) => {
@@ -375,7 +395,22 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：可能补齐机器人并启动新局。
    */
   private handleStartGame(client: Client): void {
-    const seatId = this.seatBySession.get(client.sessionId);
+    let seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId && this.state.phase === "waiting") {
+      const onlineHumanSeats = this.playerOrder.filter((id) => {
+        const player = this.state.players.get(id);
+        return Boolean(player && !player.isBot && player.connected);
+      });
+      if (onlineHumanSeats.length === 1) {
+        seatId = onlineHumanSeats[0];
+        this.seatBySession.set(client.sessionId, seatId);
+      }
+    }
+    if (seatId && this.state.phase === "waiting") {
+      if (!this.state.hostPlayerId || !this.state.players.has(this.state.hostPlayerId)) {
+        this.state.hostPlayerId = seatId;
+      }
+    }
     const decision = decideStartGame(
       seatId,
       this.state.phase,
@@ -508,6 +543,15 @@ export class FourColorGameRoom extends Room<GameState> {
     });
   }
 
+  private findTokenBySeatId(seatId: string): string {
+    for (const [token, mappedSeatId] of this.seatByToken.entries()) {
+      if (mappedSeatId === seatId) {
+        return token;
+      }
+    }
+    return "";
+  }
+
   /**
    * 作用：确保开局前座位数补齐到目标人数。
    * 关键输入/输出：无入参；输出无返回值。
@@ -601,7 +645,9 @@ export class FourColorGameRoom extends Room<GameState> {
     this.dealerCard = null;
     this.dealerPickerId = null;
     this.pendingResponse = null;
+    this.pendingFishDeclarations.clear();
     this.awaitingDiscardOwnerId = null;
+    this.lastRoundResult = null;
     this.huLogDedup.clear();
     this.huChecksTotal = 0;
     this.huChecksValid = 0;
@@ -737,6 +783,19 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private finishDeclaringPhase(): void {
     this.clearDeclareTimer();
+    for (const [seatId, selectedCards] of this.pendingFishDeclarations.entries()) {
+      const player = this.state.players.get(seatId);
+      if (!player || selectedCards.length === 0) {
+        continue;
+      }
+      const hand = this.playerHands.get(seatId) ?? [];
+      const removeIds = new Set(selectedCards.map((card) => card.id));
+      this.playerHands.set(seatId, hand.filter((card) => !removeIds.has(card.id)));
+      for (const card of selectedCards) {
+        player.fishArea.push(this.ops.toSchemaCard(card, true, card.source ?? "upper"));
+      }
+    }
+    this.pendingFishDeclarations.clear();
     const dealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
       ? this.roundDealerId
       : this.playerOrder[0];
@@ -772,12 +831,7 @@ export class FourColorGameRoom extends Room<GameState> {
     player.declaredReady = true;
 
     if (idMatch && fishValid && selectedCards.length > 0) {
-      const removeIds = new Set(selectedCards.map((card) => card.id));
-      const nextHand = hand.filter((card) => !removeIds.has(card.id));
-      this.playerHands.set(seatId, nextHand);
-      for (const card of selectedCards) {
-        player.fishArea.push(this.ops.toSchemaCard(card, true, card.source ?? "upper"));
-      }
+      this.pendingFishDeclarations.set(seatId, selectedCards.map((card) => ({ ...card })));
     }
 
     this.syncAllPrivateHands();
@@ -1523,6 +1577,7 @@ export class FourColorGameRoom extends Room<GameState> {
         this.resetCollectivePolling();
         this.deck = [];
         this.pendingResponse = null;
+        this.pendingFishDeclarations.clear();
         this.publicGeneralPool = [];
         this.dealerCard = null;
         this.dealerPickerId = null;
@@ -1559,7 +1614,17 @@ export class FourColorGameRoom extends Room<GameState> {
         setAwaitingDiscardOwnerNull: () => {
           this.awaitingDiscardOwnerId = null;
         },
-        broadcast: (event, payload) => this.broadcast(event, payload),
+        broadcast: (event, payload) => {
+          if (event === "round_result") {
+            this.lastRoundResult = payload as {
+              winnerId: string | null;
+              groups: string[];
+              players: RoundResultPlayer[];
+              remainingDeck: Card[];
+            };
+          }
+          this.broadcast(event, payload);
+        },
         buildRoundResultPlayers: (winnerIdArg, groupArgs) => this.buildRoundResultPlayers(winnerIdArg, groupArgs),
         buildRemainingDeckPreview: () => this.buildRemainingDeckPreview(),
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
@@ -1615,15 +1680,19 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：发送 `available_actions`，并可触发状态快照日志。
    */
   private broadcastAvailableActions(): void {
+    this.syncRoomMetadata();
     this.logStateSnapshot("STATE");
-    const snapshot = this.buildRoomSnapshot();
     for (const client of this.clients) {
       const seatId = this.seatBySession.get(client.sessionId);
       if (!seatId) {
         continue;
       }
-      client.send("room_snapshot", snapshot);
-      client.send("available_actions", this.getAvailableActions(seatId));
+      // 每个客户端都需要拿到自己的私有快照，否则一旦 `private_hand`
+      // 消息因时序错过，前端就只能看到公共桌面状态而看不到自己的手牌。
+      client.send("room_snapshot", this.buildClientRoomSnapshot(seatId));
+      client.send("available_actions", {
+        items: this.getAvailableActions(seatId),
+      });
     }
   }
 
@@ -1724,7 +1793,47 @@ export class FourColorGameRoom extends Room<GameState> {
           wildcardPool: this.buildCardListSnapshot(player.wildcardPool),
           fishArea: this.buildCardListSnapshot(player.fishArea),
         })),
+      roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
     };
+  }
+
+  private buildClientRoomSnapshot(seatId: string) {
+    return {
+      ...this.buildRoomSnapshot(),
+      privateHand: (this.playerHands.get(seatId) ?? []).map((card) => ({
+        ...card,
+        isHidden: false,
+      })),
+      availableActions: this.getAvailableActions(seatId),
+      roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
+    };
+  }
+
+  getPrivateStateByToken(token: string): PrivateStateSnapshot | null {
+    const seatId = this.seatByToken.get(token);
+    if (!seatId) {
+      return null;
+    }
+    return {
+      seatId,
+      roomId: this.roomId,
+      privateHand: (this.playerHands.get(seatId) ?? []).map((card) => ({
+        ...card,
+        isHidden: false,
+      })),
+      availableActions: this.getAvailableActions(seatId),
+      roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
+    };
+  }
+
+  private syncRoomMetadata(): void {
+    if (!(this as { listing?: unknown }).listing) {
+      return;
+    }
+    this.setMetadata({
+      phase: this.state.phase,
+      hostPlayerId: this.state.hostPlayerId,
+    });
   }
 
   private declareNoDiscardWin(ownerId: string, tag: string): void {
@@ -1873,6 +1982,33 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private syncAllPrivateHands(): void {
     syncAllPrivateHandsFlow(this.clients, this.seatBySession, this.playerHands);
+  }
+
+  private syncClientState(client: Client): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId) {
+      return;
+    }
+    const token = this.findTokenBySeatId(seatId);
+    if (token) {
+      this.sendSessionToken(client, seatId, token, true);
+    }
+    client.send("room_snapshot", this.buildClientRoomSnapshot(seatId));
+    client.send("available_actions", {
+      items: this.getAvailableActions(seatId),
+    });
+    const hand = this.playerHands.get(seatId) ?? [];
+    if (this.logEnabled) {
+      console.log(
+        `[sync_state] room=${this.roomId} session=${client.sessionId} seat=${seatId} phase=${this.state.phase} hand=${hand.length} actions=${this.getAvailableActions(seatId).length}`,
+      );
+    }
+    client.send("private_hand", {
+      cards: hand.map((card) => ({
+        ...card,
+        isHidden: false,
+      })),
+    });
   }
 
   private getNextPlayerId(playerId: string): string {

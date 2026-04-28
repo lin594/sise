@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="board">
+  <div class="board" data-testid="game-board">
     <div class="table" ref="tableRef">
       <section v-if="leftPlayer" class="flow-card flow-top-left">
         <p>{{ flowTitle(leftPlayer.clientId) }}</p>
@@ -169,7 +169,12 @@
             </div>
             <div class="center-core-cell response-cell">
               <span class="center-core-label">待响牌</span>
-              <div v-if="responseCard" class="pending-inline" ref="responseLandingRef">
+              <div
+                v-if="responseCard"
+                class="pending-inline"
+                :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
+                ref="responseLandingRef"
+              >
                 <Transition name="resp-move" mode="out-in">
                   <CardComp
                     v-if="props.tableCardMode === 'full'"
@@ -387,11 +392,14 @@
 
     <section v-if="selfPlayer" class="self-hand-card">
       <div class="self-hand-panel">
-        <p class="discard-tip">手牌（{{ displayPrivateHand.length }}张）<span v-if="canDiscard"> · 点击弃一张（将牌/金条不可弃）</span></p>
+        <p class="discard-tip">
+          手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 点击弃一张（将牌/金条不可弃）</span>
+        </p>
         <div class="cards hand" ref="selfHandRef">
           <button
             v-for="card in displayPrivateHand"
             :key="`me-${card.id}`"
+            :data-testid="`hand-card-${card.id}`"
             class="hand-card"
             :class="{
               playable: canDiscardCard(card),
@@ -496,6 +504,18 @@ const emit = defineEmits<{
 const isCompactLandscape = ref(false);
 const nowMs = ref(Date.now());
 
+function isOpeningDealIntroState(): boolean {
+  return (
+    props.state?.phase === "declaring" &&
+    /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
+    Number(props.state?.responseEndsAt ?? 0) > nowMs.value
+  );
+}
+
+function shouldConcealOpeningHand(): boolean {
+  return props.state?.phase === "waiting" || isOpeningDealIntroState();
+}
+
 const orderedPlayers = computed<PlayerState[]>(() => {
   const list = props.players ?? [];
   if (!list.length) {
@@ -516,10 +536,11 @@ const discardingCardId = ref<string | null>(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
-const visibleHandCount = ref(0);
+const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
 const dealerReveal = ref<{ id: number; label: string; name: string; card?: Card | null } | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
 const flashActorId = ref("");
+const drawHiddenCardId = ref("");
 
 const tableRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
@@ -540,6 +561,7 @@ let dealerTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
 let dealAnimatingUntil = 0;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
+let drawHideTimer: ReturnType<typeof setTimeout> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 const OP_COUNTDOWN_MS = 20000;
 
@@ -835,11 +857,18 @@ const isMyTurn = computed(
 );
 
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed<Card[]>(() => {
-  const limit = Math.max(0, visibleHandCount.value || 0);
+  if (props.state?.phase === "waiting") {
+    return [];
+  }
+  const shouldLimit = showDealAnimation.value || openingDealIntroActive.value;
+  const limit = shouldLimit ? Math.max(0, visibleHandCount.value || 0) : props.privateHand.length;
   return props.privateHand.slice(0, limit);
 });
-
+const isResponseCardDrawHidden = computed(
+  () => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value,
+);
 const activeCandidates = computed<ActionCandidate[]>(() => props.activeCandidates ?? []);
 const selectedCandidate = computed<ActionCandidate | null>(() => {
   const id = props.selectedCandidateId ?? "";
@@ -1298,6 +1327,39 @@ function triggerMeldAnimation(actorId: string, keyword: string): void {
   });
 }
 
+function triggerDrawAnimation(actorId: string): void {
+  const source = dealStartPoint();
+  const target = responseLandingPoint();
+  const card = responseCard.value ?? undefined;
+  if (!source || !target || !card) {
+    return;
+  }
+  if (drawHideTimer) {
+    clearTimeout(drawHideTimer);
+    drawHideTimer = null;
+  }
+  drawHiddenCardId.value = card.id;
+  spawnFlight({
+    mode: "discard",
+    card,
+    sx: source.x - 12,
+    sy: source.y - 34,
+    ex: target.x - 14,
+    ey: target.y - 38,
+    width: 28,
+    height: 76,
+    duration: 340,
+    delay: 0,
+  });
+  drawHideTimer = setTimeout(() => {
+    if (drawHiddenCardId.value === card.id) {
+      drawHiddenCardId.value = "";
+    }
+    drawHideTimer = null;
+  }, 330);
+  triggerActorFlash(actorId);
+}
+
 function buildDealPlan(): string[] {
   const players = orderedPlayers.value.map((p) => p.clientId);
   if (players.length !== 4) {
@@ -1454,6 +1516,14 @@ onMounted(() => {
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
+  if (openingDealIntroActive.value) {
+    visibleHandCount.value = 0;
+    window.setTimeout(() => {
+      if (openingDealIntroActive.value) {
+        triggerDealAnimation();
+      }
+    }, 0);
+  }
 });
 
 onUnmounted(() => {
@@ -1467,7 +1537,12 @@ onUnmounted(() => {
     clearTimeout(flashTimer);
     flashTimer = null;
   }
+  if (drawHideTimer) {
+    clearTimeout(drawHideTimer);
+    drawHideTimer = null;
+  }
   flashActorId.value = "";
+  drawHiddenCardId.value = "";
   dealerFlight.value = null;
   window.removeEventListener("resize", updateCompactLandscape);
   window.removeEventListener("orientationchange", updateCompactLandscape);
@@ -1511,6 +1586,10 @@ watch(
     }
     if ((keyword === "PENG" || keyword === "KAI" || keyword === "CHI") && actor) {
       triggerMeldAnimation(actor, keyword);
+      return;
+    }
+    if ((keyword === "ZHUA" || keyword === "TURN_DRAW" || keyword === "KONG_DRAW") && actor) {
+      triggerDrawAnimation(actor);
     }
   },
 );
@@ -1518,7 +1597,7 @@ watch(
 watch(
   () => props.privateHand.map((x) => x.id).join("|"),
   () => {
-    if (!showDealAnimation.value) {
+    if (!showDealAnimation.value && !openingDealIntroActive.value && props.state?.phase !== "waiting") {
       visibleHandCount.value = props.privateHand.length;
     }
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
@@ -2150,6 +2229,10 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.pending-inline.draw-pending-hidden > * {
+  opacity: 0;
 }
 
 .center-core-label {

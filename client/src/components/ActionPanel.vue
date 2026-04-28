@@ -5,6 +5,7 @@
       <button
         v-for="item in normalized"
         :key="item.action"
+        :data-testid="`action-${item.action}`"
         class="btn"
         :class="{
           enabled: item.enabled && canAct,

@@ -6,6 +6,14 @@ const props = defineProps();
 const emit = defineEmits();
 const isCompactLandscape = ref(false);
 const nowMs = ref(Date.now());
+function isOpeningDealIntroState() {
+    return (props.state?.phase === "declaring" &&
+        /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
+        Number(props.state?.responseEndsAt ?? 0) > nowMs.value);
+}
+function shouldConcealOpeningHand() {
+    return props.state?.phase === "waiting" || isOpeningDealIntroState();
+}
 const orderedPlayers = computed(() => {
     const list = props.players ?? [];
     if (!list.length) {
@@ -25,10 +33,11 @@ const discardingCardId = ref(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref([]);
 const showDealAnimation = ref(false);
-const visibleHandCount = ref(0);
+const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
 const dealerReveal = ref(null);
 const dealerFlight = ref(null);
 const flashActorId = ref("");
+const drawHiddenCardId = ref("");
 const tableRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
@@ -47,6 +56,7 @@ let dealerTimer = null;
 let dealerIntroTimer = null;
 let dealAnimatingUntil = 0;
 let flashTimer = null;
+let drawHideTimer = null;
 let countdownTimer = null;
 const OP_COUNTDOWN_MS = 20000;
 function splitExposedGroups(cards, sizes, prefix) {
@@ -302,10 +312,16 @@ const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "co
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed(() => {
-    const limit = Math.max(0, visibleHandCount.value || 0);
+    if (props.state?.phase === "waiting") {
+        return [];
+    }
+    const shouldLimit = showDealAnimation.value || openingDealIntroActive.value;
+    const limit = shouldLimit ? Math.max(0, visibleHandCount.value || 0) : props.privateHand.length;
     return props.privateHand.slice(0, limit);
 });
+const isResponseCardDrawHidden = computed(() => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value);
 const activeCandidates = computed(() => props.activeCandidates ?? []);
 const selectedCandidate = computed(() => {
     const id = props.selectedCandidateId ?? "";
@@ -715,6 +731,38 @@ function triggerMeldAnimation(actorId, keyword) {
         });
     });
 }
+function triggerDrawAnimation(actorId) {
+    const source = dealStartPoint();
+    const target = responseLandingPoint();
+    const card = responseCard.value ?? undefined;
+    if (!source || !target || !card) {
+        return;
+    }
+    if (drawHideTimer) {
+        clearTimeout(drawHideTimer);
+        drawHideTimer = null;
+    }
+    drawHiddenCardId.value = card.id;
+    spawnFlight({
+        mode: "discard",
+        card,
+        sx: source.x - 12,
+        sy: source.y - 34,
+        ex: target.x - 14,
+        ey: target.y - 38,
+        width: 28,
+        height: 76,
+        duration: 340,
+        delay: 0,
+    });
+    drawHideTimer = setTimeout(() => {
+        if (drawHiddenCardId.value === card.id) {
+            drawHiddenCardId.value = "";
+        }
+        drawHideTimer = null;
+    }, 330);
+    triggerActorFlash(actorId);
+}
 function buildDealPlan() {
     const players = orderedPlayers.value.map((p) => p.clientId);
     if (players.length !== 4) {
@@ -862,6 +910,14 @@ onMounted(() => {
     countdownTimer = setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
+    if (openingDealIntroActive.value) {
+        visibleHandCount.value = 0;
+        window.setTimeout(() => {
+            if (openingDealIntroActive.value) {
+                triggerDealAnimation();
+            }
+        }, 0);
+    }
 });
 onUnmounted(() => {
     clearDealAnimationRuntime();
@@ -874,7 +930,12 @@ onUnmounted(() => {
         clearTimeout(flashTimer);
         flashTimer = null;
     }
+    if (drawHideTimer) {
+        clearTimeout(drawHideTimer);
+        drawHideTimer = null;
+    }
     flashActorId.value = "";
+    drawHiddenCardId.value = "";
     dealerFlight.value = null;
     window.removeEventListener("resize", updateCompactLandscape);
     window.removeEventListener("orientationchange", updateCompactLandscape);
@@ -915,10 +976,14 @@ watch(() => props.state?.lastAction, (action) => {
     }
     if ((keyword === "PENG" || keyword === "KAI" || keyword === "CHI") && actor) {
         triggerMeldAnimation(actor, keyword);
+        return;
+    }
+    if ((keyword === "ZHUA" || keyword === "TURN_DRAW" || keyword === "KONG_DRAW") && actor) {
+        triggerDrawAnimation(actor);
     }
 });
 watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
-    if (!showDealAnimation.value) {
+    if (!showDealAnimation.value && !openingDealIntroActive.value && props.state?.phase !== "waiting") {
         visibleHandCount.value = props.privateHand.length;
     }
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
@@ -970,6 +1035,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
@@ -1082,6 +1148,7 @@ let __VLS_directives;
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "board" },
+    'data-testid': "game-board",
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "table" },
@@ -1395,6 +1462,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "pending-inline" },
+        ...{ class: ({ 'draw-pending-hidden': __VLS_ctx.isResponseCardDrawHidden }) },
         ref: "responseLandingRef",
     });
     /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
@@ -1833,6 +1901,9 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "discard-tip" },
     });
     (__VLS_ctx.displayPrivateHand.length);
+    if (__VLS_ctx.showDealAnimation) {
+        (props.privateHand.length);
+    }
     if (__VLS_ctx.canDiscard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
@@ -1849,6 +1920,7 @@ if (__VLS_ctx.selfPlayer) {
                     __VLS_ctx.onDiscard(card.id, $event);
                 } },
             key: (`me-${card.id}`),
+            'data-testid': (`hand-card-${card.id}`),
             ...{ class: "hand-card" },
             ...{ class: ({
                     playable: __VLS_ctx.canDiscardCard(card),
@@ -2092,6 +2164,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
             displayPrivateHand: displayPrivateHand,
+            isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
             compactCenterHint: compactCenterHint,

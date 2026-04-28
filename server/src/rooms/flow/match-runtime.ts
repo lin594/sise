@@ -34,7 +34,9 @@ export function decideStartGame(
   if (seatId !== hostPlayerId) {
     return { ok: false, reason: "not_host" };
   }
-  if (humanCount < minPlayersToStart) {
+  const requiredHumans = Math.max(1, Number(minPlayersToStart) || 1);
+  // 当前已开放模式只有单人练习：即使部署时 MIN_PLAYERS 被误设为 >1，也允许 1 名真人开局并补齐 BOT。
+  if (humanCount < requiredHumans && humanCount !== 1) {
     return { ok: false, reason: "not_enough_players" };
   }
   return { ok: true };
@@ -693,8 +695,40 @@ const FACE_LABELS: Record<string, string> = {
   nan: "男",
 };
 
+function faceLabelForColorType(color: string, type: string): string {
+  if (color === "red" || color === "yellow") {
+    const south: Record<string, string> = {
+      jiang: "将",
+      shi: "仕",
+      xiang: "相",
+      ju: "车",
+      ma: "马",
+      pao: "炮",
+      zu: "兵",
+    };
+    return south[type] ?? FACE_LABELS[type] ?? type;
+  }
+  if (color === "green" || color === "white") {
+    const north: Record<string, string> = {
+      jiang: "将",
+      shi: "士",
+      xiang: "象",
+      ju: "车",
+      ma: "马",
+      pao: "包",
+      zu: "卒",
+    };
+    return north[type] ?? FACE_LABELS[type] ?? type;
+  }
+  return FACE_LABELS[type] ?? type;
+}
+
+function faceLabelForCard(card: Card): string {
+  return faceLabelForColorType(card.color, card.type);
+}
+
 function cardShortLabel(card: Card): string {
-  const face = FACE_LABELS[card.type] ?? card.type;
+  const face = faceLabelForCard(card);
   if (card.color === "gold") {
     return face;
   }
@@ -787,28 +821,34 @@ function describeGroupLabel(key: string, cards: Card[]): string {
     return key;
   }
   switch (key) {
+    case "GoldTriplet":
+      return "金条坎";
+    case "GoldQuad":
+      return "金条开";
     case "Triplet":
     case "JiangTriplet":
-    case "GoldTriplet":
       return `${cardShortLabel(head)}坎`;
     case "Quad":
     case "JiangQuad":
-    case "GoldQuad":
       return `${cardShortLabel(head)}开`;
     case "FrameJMP":
       return `${COLOR_LABELS[head.color] ?? head.color}车马炮架`;
     case "FrameJSX":
-      return `${COLOR_LABELS[head.color] ?? head.color}将士相架`;
+      return `${COLOR_LABELS[head.color] ?? head.color}${["jiang", "shi", "xiang"]
+        .map((type) => faceLabelForColorType(head.color, type))
+        .join("")}架`;
     case "TripleZu":
       return "三卒组";
     case "QuadZu":
       return "四卒组";
     case "Fish":
-    case "GoldFish":
       return `${cardShortLabel(head)}鱼`;
+    case "GoldFish":
+      return "金条鱼";
     case "SingleJiang":
-    case "SingleGold":
       return `${cardShortLabel(head)}单张`;
+    case "SingleGold":
+      return `金条单张（${faceLabelForCard(head)}）`;
     case "Pair":
       return `${cardShortLabel(head)}对子`;
     default:
@@ -855,6 +895,21 @@ function detailFromKey(key: string, cards: Card[]): SettlementGroupDetail {
     unit: scoreUnitForKey(key),
     cards,
   };
+}
+
+function fallbackGroupLabelForKey(key: string): string {
+  switch (key) {
+    case "GoldTriplet":
+      return "金条坎";
+    case "GoldQuad":
+      return "金条开";
+    case "GoldFish":
+      return "金条鱼";
+    case "SingleGold":
+      return "金条单张";
+    default:
+      return getScoreRules()[key]?.label ?? key;
+  }
 }
 
 function classifyChiLikeGroup(cards: Card[]): SettlementGroupDetail[] {
@@ -930,7 +985,7 @@ function buildFishGroupDetails(fishArea: Card[]): SettlementGroupDetail[] {
     return [
       {
         key: "GoldFish",
-        label: `${cardShortLabel(fishArea[0])}鱼`,
+        label: "金条鱼",
         unit: scoreUnitForKey("GoldFish"),
         cards: [...fishArea],
       },
@@ -1088,13 +1143,15 @@ function sortSettlementBreakdown(items: ScoreBreakdownItem[]): ScoreBreakdownIte
 }
 
 function buildWinnerHuBreakdown(view: RoundResultView, payerCount: number): WinnerHuBreakdown {
+  const winningCardIds = new Set(view.winningGroupDetails.flatMap((detail) => detail.cards.map((card) => card.id)));
+  const handCardsForHiddenKan = view.hand.filter((card) => !winningCardIds.has(card.id));
   const lineDetails = [
     ...view.exposedGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || PENG_DETAIL_KEYS.has(detail.key) || KAI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
     ...view.generalGroupDetails.filter((detail) => SINGLE_DETAIL_KEYS.has(detail.key)),
     ...view.fishGroupDetails.filter((detail) => FISH_DETAIL_KEYS.has(detail.key)),
     ...view.winningGroupDetails.filter((detail) => detail.unit > 0),
     ...view.resolvedHandGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
-    ...buildHiddenKanDetailsFromHand(view.hand).filter((detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key)),
+    ...buildHiddenKanDetailsFromHand(handCardsForHiddenKan).filter((detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key)),
   ].filter((detail) => detail.unit > 0);
 
   const subtotal = 3 + lineDetails.reduce((sum, detail) => sum + detail.unit, 0);
@@ -1165,7 +1222,7 @@ function buildWinnerHuBreakdownFromKeys(groups: string[], payerCount: number): W
   const lineDetails = groups
     .map((key) => ({
       key,
-      label: key,
+      label: fallbackGroupLabelForKey(key),
       unit: scoreUnitForKey(key),
       cards: [] as Card[],
     }))

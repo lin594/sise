@@ -225,6 +225,15 @@ t("hu: multiple single jiang groups are allowed", () => {
   assert.equal(result.groups.filter((x) => x === "SingleJiang").length, 2);
 });
 
+t("hu: chooses highest scoring decomposition when several hu strategies exist", () => {
+  const result = explainHu(
+    [c("rp1", "red", "pao"), c("rp2", "red", "pao"), c("rp3", "red", "pao")],
+    c("rp4", "red", "pao"),
+  );
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.groups, ["Quad"]);
+});
+
 t("dealer: public card determines dealer seat and enters dealer hand", () => {
   const order = ["A", "B", "C", "D"];
   assert.equal(resolveDealerFromAnchorAndCard(order, "A", c("dy", "yellow", "ju")), "A");
@@ -284,6 +293,8 @@ t("round_result: hu winner collects from all three opponents", () => {
   assert.equal(seatC!.totalScore, -12);
   assert.equal(seatD!.totalScore, -12);
   assert.equal(seatA!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:GoldTriplet") && item.total === 27), true);
+  assert.equal(seatA!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:GoldTriplet") && item.label === "金条坎"), true);
+  assert.equal(seatB!.scoreBreakdown.some((item) => item.key.startsWith("HuLose:GoldTriplet") && item.label === "A 金条坎"), true);
 });
 
 t("round_result: exposed peng no longer counts as kan in mutual settlement", () => {
@@ -392,6 +403,38 @@ t("round_result: winner response gold is shown as winning group and hand leftove
   assert.equal(winner!.resolvedHandGroups.some((group) => group.cards.some((card) => card.type === "zi")), false);
   assert.equal(winner!.totalScore, 48);
   assert.equal(loser!.totalScore, -16);
+});
+
+t("round_result: winner response quad scores as kai without double-counting hidden kan", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([
+    ["A", [c("rp1", "red", "pao"), c("rp2", "red", "pao"), c("rp3", "red", "pao")]],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const players = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    "A",
+    [],
+    c("rp4", "red", "pao"),
+  );
+  const winner = players.find((item) => item.clientId === "A");
+  assert.ok(winner);
+  assert.equal(winner!.winningGroups.some((group) => group.key === "Quad"), true);
+  assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Quad") && item.label === "红炮开"), true);
+  assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Triplet")), false);
+  assert.equal(winner!.totalScore, 54);
 });
 
 function mkRoom(seats: string[]) {

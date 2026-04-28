@@ -148,6 +148,7 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.normalized))) {
                 __VLS_ctx.onClick(item.action);
             } },
         key: (item.action),
+        'data-testid': (`action-${item.action}`),
         ...{ class: "btn" },
         ...{ class: ({
                 enabled: item.enabled && __VLS_ctx.canAct,
