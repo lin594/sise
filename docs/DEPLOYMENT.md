@@ -1,5 +1,7 @@
 ﻿# 部署与运行指南
 
+> 当前版本只开放单人练习模式。Docker/Traefik 配置能把前后端服务部署起来，但不代表已实现好友同桌、联机匹配或账号体系。
+
 ## 一、运行环境
 
 - Node.js 20+
@@ -95,10 +97,17 @@ docker compose -f docker-compose.dev.yml up --build
 
 - `MIN_PLAYERS`：开始游戏所需最少真人人数（默认 `1`）
 - `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：BOT 思考延时范围（默认 `1800` / `3200`）
+- `OP_TIMEOUT_MS`：默认操作超时（默认 `20000`）
+- `COLLECTIVE_TIMEOUT_MS`：集体响应超时；未设置时跟随 `OP_TIMEOUT_MS`
+- `LOCAL_TIMEOUT_MS`：本地吃/抓/过超时；未设置时跟随 `OP_TIMEOUT_MS`
+- `DECLARE_TIMEOUT_MS`：声明鱼和暗坎的超时（默认 `30000`）
 - `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时（默认 `5000`）
+- `DEALER_PICK_INTRO_MS` / `DEALER_REVEAL_INTRO_MS` / `OPENING_DEAL_DELAY_MS`：开局定庄与发牌动画延时
 - `ROOM_LOG`：房间日志开关（`1/0`）
 - `HU_LOG`：胡牌检测日志开关（`1/0`）
+- `ROOM_TRACE` / `ROOM_TRACE_CARDS`：步骤级 trace 开关
 - `ROOM_STATE_LOG_MODE`：状态日志级别（`compact/all/off`）
+- `REDIS_URL`：当前 compose 会传入该变量并启动 redis 服务，但应用代码暂未用 Redis 做状态持久化；它是部署结构预留。
 
 ### 前端
 
