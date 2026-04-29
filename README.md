@@ -64,6 +64,14 @@ docker compose up --build
 - 前端：`http://localhost:3000`
 - 后端（WebSocket）：`ws://localhost:2567`
 
+Traefik 部署使用独立文件：
+
+```bash
+docker compose -f docker-compose.traefik.yml up --build -d
+```
+
+先在 `.env` 设置 `VITE_SERVER_URL`、`VITE_SERVER_HTTP_URL`、`TRAEFIK_WEB_RULE`、`TRAEFIK_SERVER_RULE`。完整说明见 `docs/DEPLOYMENT.md`。
+
 ## 业务结构（简版）
 
 ### 核心流程

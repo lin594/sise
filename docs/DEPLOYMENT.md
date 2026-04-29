@@ -55,17 +55,62 @@ docker compose up --build
 - 前端：`3000`
 - 后端：`2567`
 
-## 五、环境变量
+这个文件用于普通单机 Docker 部署，会把前端发布到本机 `3000`，后端发布到本机 `2567`。
+
+## 五、Traefik 方式
+
+Traefik 部署使用单独的 compose 文件，避免把公网反向代理配置混入普通单机 Docker 部署：
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.traefik.yml up --build -d
+```
+
+需要在 `.env` 中设置：
+
+```dotenv
+VITE_SERVER_URL=wss://sise-api.example.com
+VITE_SERVER_HTTP_URL=https://sise-api.example.com
+TRAEFIK_WEB_RULE=Host(`sise.example.com`)
+TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
+```
+
+默认使用外部网络 `traefik-global-proxy`。如果你的 Traefik 网络名不同，设置 `TRAEFIK_NETWORK`。
+
+## 六、容器化开发方式
+
+如果希望前后端都在容器内运行、但保留源码挂载和热更新：
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+默认端口：
+- 前端：`3000`
+- 后端：`2567`
+
+## 七、环境变量
 
 ### 服务端
 
 - `MIN_PLAYERS`：开始游戏所需最少真人人数（默认 `1`）
-- `BOT_THINK_MS`：BOT 思考延时（默认 `200`）
+- `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：BOT 思考延时范围（默认 `1800` / `3200`）
+- `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时（默认 `5000`）
 - `ROOM_LOG`：房间日志开关（`1/0`）
 - `HU_LOG`：胡牌检测日志开关（`1/0`）
 - `ROOM_STATE_LOG_MODE`：状态日志级别（`compact/all/off`）
 
-## 六、常见问题
+### 前端
+
+- `VITE_SERVER_URL`：浏览器连接后端 WebSocket 的地址。生产 Docker 构建时生效。
+- `VITE_SERVER_HTTP_URL`：浏览器访问后端 HTTP API 的地址。生产 Docker 构建时生效。
+
+### 构建镜像与 npm 源
+
+- `NODE_IMAGE` / `NGINX_IMAGE` / `REDIS_IMAGE`：Docker 镜像地址，默认使用国内镜像。
+- `NPM_CONFIG_REGISTRY`：容器构建时的 npm registry，默认 `https://registry.npmmirror.com`。
+
+## 八、常见问题
 
 ### 1) 根目录 `npm run dev` 报错
 

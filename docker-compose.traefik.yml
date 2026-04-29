@@ -1,0 +1,74 @@
+services:
+  redis:
+    image: "${REDIS_IMAGE:-docker.m.daocloud.io/library/redis:7-alpine}"
+    restart: unless-stopped
+    networks:
+      - app
+
+  server:
+    build:
+      context: ./server
+      target: production
+      args:
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+    restart: unless-stopped
+    environment:
+      PORT: "2567"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
+      MIN_PLAYERS: "${MIN_PLAYERS:-1}"
+      BOT_THINK_MIN_MS: "${BOT_THINK_MIN_MS:-1800}"
+      BOT_THINK_MAX_MS: "${BOT_THINK_MAX_MS:-3200}"
+      LOCAL_TRANSITION_DELAY_MS: "${LOCAL_TRANSITION_DELAY_MS:-5000}"
+      ROOM_LOG: "${ROOM_LOG:-1}"
+      HU_LOG: "${HU_LOG:-1}"
+      ROOM_STATE_LOG_MODE: "${ROOM_STATE_LOG_MODE:-compact}"
+    depends_on:
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-global-proxy}"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.rule=${TRAEFIK_SERVER_RULE:?Set TRAEFIK_SERVER_RULE, for example Host(`sise-api.example.com`)}"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.tls=true"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-tencentcloud}"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.service=${TRAEFIK_SERVER_ROUTER:-sise-server}"
+      - "traefik.http.routers.${TRAEFIK_SERVER_ROUTER:-sise-server}.middlewares=${TRAEFIK_SERVER_ROUTER:-sise-server}-compress"
+      - "traefik.http.middlewares.${TRAEFIK_SERVER_ROUTER:-sise-server}-compress.compress=true"
+      - "traefik.http.services.${TRAEFIK_SERVER_ROUTER:-sise-server}.loadbalancer.server.port=2567"
+    networks:
+      - app
+      - traefik
+
+  web:
+    build:
+      context: ./client
+      target: production
+      args:
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.27-alpine}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+        VITE_SERVER_URL: "${VITE_SERVER_URL:?Set VITE_SERVER_URL, for example wss://sise-api.example.com}"
+        VITE_SERVER_HTTP_URL: "${VITE_SERVER_HTTP_URL:?Set VITE_SERVER_HTTP_URL, for example https://sise-api.example.com}"
+    restart: unless-stopped
+    depends_on:
+      - server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-global-proxy}"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.rule=${TRAEFIK_WEB_RULE:?Set TRAEFIK_WEB_RULE, for example Host(`sise.example.com`)}"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.tls=true"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-tencentcloud}"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.service=${TRAEFIK_WEB_ROUTER:-sise-web}"
+      - "traefik.http.routers.${TRAEFIK_WEB_ROUTER:-sise-web}.middlewares=${TRAEFIK_WEB_ROUTER:-sise-web}-compress"
+      - "traefik.http.middlewares.${TRAEFIK_WEB_ROUTER:-sise-web}-compress.compress=true"
+      - "traefik.http.services.${TRAEFIK_WEB_ROUTER:-sise-web}.loadbalancer.server.port=80"
+    networks:
+      - traefik
+
+networks:
+  app:
+  traefik:
+    name: "${TRAEFIK_NETWORK:-traefik-global-proxy}"
+    external: true

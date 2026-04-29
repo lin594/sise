@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis:7-alpine
+    image: "${REDIS_IMAGE:-docker.m.daocloud.io/library/redis:7-alpine}"
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -9,13 +9,20 @@ services:
     build:
       context: ./server
       target: production
+      args:
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
     restart: unless-stopped
     environment:
       PORT: "2567"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
+      MIN_PLAYERS: "${MIN_PLAYERS:-1}"
       BOT_THINK_MIN_MS: "${BOT_THINK_MIN_MS:-1800}"
       BOT_THINK_MAX_MS: "${BOT_THINK_MAX_MS:-3200}"
       LOCAL_TRANSITION_DELAY_MS: "${LOCAL_TRANSITION_DELAY_MS:-5000}"
+      ROOM_LOG: "${ROOM_LOG:-1}"
+      HU_LOG: "${HU_LOG:-1}"
+      ROOM_STATE_LOG_MODE: "${ROOM_STATE_LOG_MODE:-compact}"
     ports:
       - "2567:2567"
     depends_on:
@@ -26,6 +33,9 @@ services:
       context: ./client
       target: production
       args:
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.27-alpine}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
         VITE_SERVER_URL: "${VITE_SERVER_URL:-}"
         VITE_SERVER_HTTP_URL: "${VITE_SERVER_HTTP_URL:-}"
     restart: unless-stopped
