@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/actions.js";
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
-import { buildRoundResultPlayers, dealInitialHands } from "../rooms/flow/match-runtime.js";
+import {
+  buildDeclarationSelection,
+  buildDefaultDeclarationPayload,
+  buildRoundResultPlayers,
+  dealInitialHands,
+} from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
@@ -257,6 +262,39 @@ t("dealer: public card determines dealer seat and enters dealer hand", () => {
   assert.equal(hands.get("D")?.length ?? 0, 21);
 });
 
+t("declaration: default declares fish and only non-overlapping hidden kans", () => {
+  const hand = [
+    c("wp1", "white", "pao"),
+    c("wp2", "white", "pao"),
+    c("wp3", "white", "pao"),
+    c("wp4", "white", "pao"),
+    c("rj1", "red", "ju"),
+    c("rj2", "red", "ju"),
+    c("rj3", "red", "ju"),
+    c("gs1", "green", "shi"),
+    c("gs2", "green", "shi"),
+    c("gs3", "green", "shi"),
+  ];
+  const payload = buildDefaultDeclarationPayload(hand);
+  assert.deepEqual(payload.fishCardIds.sort(), ["wp1", "wp2", "wp3", "wp4"]);
+  assert.equal(payload.declaredKongs, 2);
+});
+
+t("declaration: four identical cards cannot count as both fish and hidden kan", () => {
+  const hand = [
+    c("wp1", "white", "pao"),
+    c("wp2", "white", "pao"),
+    c("wp3", "white", "pao"),
+    c("wp4", "white", "pao"),
+  ];
+  const result = buildDeclarationSelection(hand, {
+    declaredKongs: 1,
+    fishCardIds: ["wp1", "wp2", "wp3", "wp4"],
+  });
+  assert.equal(result.fishValid, true);
+  assert.equal(result.declaredKongs, 0);
+});
+
 t("round_result: hu winner collects from all three opponents", () => {
   const state = new GameState();
   for (const seat of ["A", "B", "C", "D"]) {
@@ -341,6 +379,53 @@ t("round_result: exposed peng no longer counts as kan in mutual settlement", () 
   assert.equal(seatD!.totalScore, -4);
   assert.equal(seatB!.scoreBreakdown.filter((item) => item.key.startsWith("MutualGain:")).reduce((sum, item) => sum + item.total, 0), 0);
   assert.equal(seatB!.scoreBreakdown.some((item) => item.key.startsWith("HuLose:SingleJiang") && item.total === -1), true);
+});
+
+t("round_result: undeclared identical triplets settle as peng after declared hidden kans", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const owner = state.players.get("A");
+  assert.ok(owner);
+  owner!.declaredKongs = 2;
+  const hands = new Map<string, Card[]>([
+    [
+      "A",
+      [
+        c("rj1", "red", "ju"),
+        c("rj2", "red", "ju"),
+        c("rj3", "red", "ju"),
+        c("rj4", "red", "ju"),
+        c("rj5", "red", "ju"),
+        c("rj6", "red", "ju"),
+        c("rj7", "red", "ju"),
+        c("rj8", "red", "ju"),
+        c("rj9", "red", "ju"),
+      ],
+    ],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const players = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    null,
+    [],
+  );
+  const seatA = players.find((item) => item.clientId === "A");
+  assert.ok(seatA);
+  const gains = seatA!.scoreBreakdown.filter((item) => item.key.startsWith("MutualGain:A:"));
+  assert.equal(gains.filter((item) => item.label.includes("坎") && item.unit === 3).length, 6);
+  assert.equal(gains.filter((item) => item.label.includes("碰") && item.unit === 1).length, 3);
+  assert.equal(seatA!.totalScore, 21);
 });
 
 t("round_result: winner response gold is shown as winning group and hand leftovers do not inflate hu score", () => {

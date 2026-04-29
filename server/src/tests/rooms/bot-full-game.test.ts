@@ -10,6 +10,7 @@
 
 import assert from "node:assert/strict";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
+import { buildDefaultDeclarationPayload } from "../../rooms/flow/match-runtime.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 
 interface FakeClient {
@@ -136,6 +137,20 @@ function runOneGame(): { phase: string; lastAction: string; deckRemaining: numbe
       }
     }
 
+    // If the opening declaration intro is still animating, finish it.
+    if (room.declareIntroTimer && room.state.phase === "declaring") {
+      const timer = room.declareIntroTimer;
+      room.declareIntroTimer = null;
+      clearTimeout(timer);
+      for (const stageTimer of room.declareIntroStageTimers ?? []) {
+        clearTimeout(stageTimer);
+      }
+      room.declareIntroStageTimers = [];
+      room.state.responseEndsAt = 0;
+      room.state.lastAction = `DECLARING ${room.declareTimeoutMs}ms`;
+      room.startDeclaringPhase();
+    }
+
     // If there's a declare timer, fire it
     if (room.declareTimer && room.state.phase === "declaring") {
       const timer = room.declareTimer;
@@ -145,7 +160,7 @@ function runOneGame(): { phase: string; lastAction: string; deckRemaining: numbe
       for (const seatId of room.playerOrder) {
         const player = room.state.players.get(seatId);
         if (player && !player.declaredReady) {
-          room.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
+          room.submitDeclaration(seatId, buildDefaultDeclarationPayload(room.playerHands.get(seatId) ?? []), true);
         }
       }
       if (room.areAllDeclarationsReady()) {
@@ -154,7 +169,7 @@ function runOneGame(): { phase: string; lastAction: string; deckRemaining: numbe
     }
 
     // If nothing is pending and game isn't ended, something is stuck
-    if (!room.botTimer && !room.collectiveTimer && !room.declareTimer && room.state.phase !== "ended") {
+    if (!room.botTimer && !room.collectiveTimer && !room.declareTimer && !room.declareIntroTimer && room.state.phase !== "ended") {
       // Try tickBots once more to unstick
       if (room.state.phase === "playing" && room.pendingResponse) {
         room.tickBots();

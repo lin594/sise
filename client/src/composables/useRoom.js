@@ -266,6 +266,7 @@ function normalizeRoundResultPayload(payload) {
         players: (payload.players ?? []).map((p) => ({
             ...p,
             hand: sortHandCards(p.hand ?? []),
+            declaredKongs: Number(p.declaredKongs ?? 0),
             huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
             winningGroups: (p.winningGroups ?? []).map((group) => ({
                 key: String(group?.key ?? ""),
@@ -636,6 +637,7 @@ export function useRoom(playerName = "Player") {
             .map((player) => [
             player.clientId,
             player.handCount ?? 0,
+            player.declaredKongs ?? 0,
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
             player.discardPile.map((card) => card.id).join(","),

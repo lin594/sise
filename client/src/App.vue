@@ -1357,10 +1357,10 @@ function settlementHandBlocks(player: RoundResultPlayer): SettlementGroupBlock[]
     }));
   }
 
-  return groupHandWithHiddenKans(player.hand ?? []);
+  return groupHandWithHiddenKans(player.hand ?? [], Number(player.declaredKongs ?? 0));
 }
 
-function groupHandWithHiddenKans(cards: Card[]): SettlementGroupBlock[] {
+function groupHandWithHiddenKans(cards: Card[], declaredKongs: number): SettlementGroupBlock[] {
   const used = new Set<string>();
   const byFace = new Map<string, Card[]>();
   for (const card of cards) {
@@ -1371,6 +1371,7 @@ function groupHandWithHiddenKans(cards: Card[]): SettlementGroupBlock[] {
   }
 
   const blocks: SettlementGroupBlock[] = [];
+  let remainingDeclaredKongs = Math.max(0, Math.floor(Number(declaredKongs) || 0));
   for (const [key, sameFaceCards] of byFace.entries()) {
     const kanCount = Math.floor(sameFaceCards.length / 3);
     for (let index = 0; index < kanCount; index += 1) {
@@ -1379,10 +1380,14 @@ function groupHandWithHiddenKans(cards: Card[]): SettlementGroupBlock[] {
         continue;
       }
       chunk.forEach((card) => used.add(card.id));
+      const isDeclaredKan = remainingDeclaredKongs > 0;
+      if (isDeclaredKan) {
+        remainingDeclaredKongs -= 1;
+      }
       blocks.push({
-        id: `hidden-kan-${key}-${index}-${chunk.map((card) => card.id).join("-")}`,
+        id: `${isDeclaredKan ? "hidden-kan" : "peng"}-${key}-${index}-${chunk.map((card) => card.id).join("-")}`,
         cards: chunk,
-        badge: "坎",
+        badge: isDeclaredKan ? "坎" : "碰",
         label: settlementGroupLabel(chunk),
         tone: settlementTone(chunk),
       });

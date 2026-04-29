@@ -135,6 +135,7 @@ export declare function useRoom(playerName?: string): {
                     source?: "upper" | "draw" | undefined;
                     isResponseCard?: boolean | undefined;
                 }[];
+                declaredKongs: number;
                 huType?: "small" | "big" | null | undefined;
                 winningGroups: {
                     key: string;
@@ -328,6 +329,7 @@ export declare function useRoom(playerName?: string): {
                     source?: "upper" | "draw" | undefined;
                     isResponseCard?: boolean | undefined;
                 }[];
+                declaredKongs: number;
                 huType?: "small" | "big" | null | undefined;
                 winningGroups: {
                     key: string;
@@ -453,6 +455,7 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            declaredKongs: number;
             huType?: "small" | "big" | null | undefined;
             winningGroups: {
                 key: string;
@@ -527,6 +530,7 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[];
+            declaredKongs: number;
             huType?: "small" | "big" | null | undefined;
             winningGroups: {
                 key: string;

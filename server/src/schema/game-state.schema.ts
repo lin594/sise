@@ -11,6 +11,7 @@ export class CardSchema extends Schema {
 export class PlayerState extends Schema {
   @type("string") clientId: string = "";
   @type("string") name: string = "";
+  @type("number") handCount: number = 0;
   @type("number") declaredKongs: number = 0;
   @type("boolean") declaredReady: boolean = false;
   @type("boolean") isBot: boolean = false;

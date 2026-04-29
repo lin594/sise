@@ -10,6 +10,7 @@ import { executeResponseWinner } from "./flow/response-winner.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
 import {
   areAllDeclarationsReady as areAllDeclarationsReadyUtil,
+  buildDefaultDeclarationPayload,
   buildDeclarationSelection,
   buildRoundResultPlayers as buildRoundResultPlayersFlow,
   canReturnLobby,
@@ -324,7 +325,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.state.lastAction = `TAKEOVER ${seatId}`;
 
     if (this.state.phase === "declaring" && !player.declaredReady) {
-      this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, true);
+      this.submitDefaultDeclaration(seatId, true);
     }
 
     if (this.state.phase === "playing" || this.state.phase === "declaring") {
@@ -711,7 +712,7 @@ export class FourColorGameRoom extends Room<GameState> {
     startDeclaringFlow({
       playerOrder: this.playerOrder,
       getPlayer: (seatId) => this.state.players.get(seatId),
-      submitDeclaration: (seatId, force) => this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, force),
+      submitDeclaration: (seatId, force) => this.submitDefaultDeclaration(seatId, force),
       syncAllPrivateHands: () => this.syncAllPrivateHands(),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       allReady: () => this.areAllDeclarationsReady(),
@@ -735,7 +736,7 @@ export class FourColorGameRoom extends Room<GameState> {
       runDeclaringTimeoutFlow({
         playerOrder: this.playerOrder,
         getPlayer: (seatId) => this.state.players.get(seatId),
-        submitDeclaration: (seatId, force) => this.submitDeclaration(seatId, { declaredKongs: 0, fishCardIds: [] }, force),
+        submitDeclaration: (seatId, force) => this.submitDefaultDeclaration(seatId, force),
         allReady: () => this.areAllDeclarationsReady(),
         finishDeclaringPhase: () => this.finishDeclaringPhase(),
       });
@@ -840,6 +841,11 @@ export class FourColorGameRoom extends Room<GameState> {
     if (this.areAllDeclarationsReady()) {
       this.finishDeclaringPhase();
     }
+  }
+
+  private submitDefaultDeclaration(seatId: string, force = true): void {
+    const hand = this.playerHands.get(seatId) ?? [];
+    this.submitDeclaration(seatId, buildDefaultDeclarationPayload(hand), force);
   }
 
   // ===== 回合主循环 =====
@@ -1745,6 +1751,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private buildRoomSnapshot() {
+    this.updatePublicHandCounts();
     return {
       roomId: this.roomId,
       phase: this.state.phase,
@@ -1785,7 +1792,7 @@ export class FourColorGameRoom extends Room<GameState> {
         .map((player) => ({
           clientId: player.clientId,
           name: player.name,
-          handCount: this.playerHands.get(player.clientId)?.length ?? 0,
+          handCount: player.handCount,
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
           isBot: player.isBot,
@@ -1839,6 +1846,12 @@ export class FourColorGameRoom extends Room<GameState> {
       phase: this.state.phase,
       hostPlayerId: this.state.hostPlayerId,
     });
+  }
+
+  private updatePublicHandCounts(): void {
+    for (const [seatId, player] of this.state.players.entries()) {
+      player.handCount = this.playerHands.get(seatId)?.length ?? 0;
+    }
   }
 
   private declareNoDiscardWin(ownerId: string, tag: string): void {
@@ -1986,6 +1999,7 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private syncAllPrivateHands(): void {
+    this.updatePublicHandCounts();
     syncAllPrivateHandsFlow(this.clients, this.seatBySession, this.playerHands);
   }
 

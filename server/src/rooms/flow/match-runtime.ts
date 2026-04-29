@@ -335,6 +335,15 @@ function validateFishSelection(cards: Card[]): boolean {
   return goldCount === 0 || goldCount === 4 || goldCount === 5;
 }
 
+function countHiddenKansFromCards(cards: Card[]): number {
+  const counter = new Map<string, number>();
+  for (const card of cards) {
+    const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
+    counter.set(key, (counter.get(key) ?? 0) + 1);
+  }
+  return [...counter.values()].reduce((sum, count) => sum + Math.floor(count / 3), 0);
+}
+
 function pickCardsByIdsFromHand(hand: Card[], ids: string[]): Card[] {
   const wanted = new Set(ids);
   const selected: Card[] = [];
@@ -342,6 +351,34 @@ function pickCardsByIdsFromHand(hand: Card[], ids: string[]): Card[] {
     if (wanted.has(card.id)) {
       selected.push(card);
     }
+  }
+  return selected;
+}
+
+function buildDefaultFishCards(hand: Card[]): Card[] {
+  const byFace = new Map<string, Card[]>();
+  const goldCards: Card[] = [];
+  for (const card of hand) {
+    if (card.color === "gold") {
+      goldCards.push(card);
+      continue;
+    }
+    const key = `${card.color}:${card.type}`;
+    const list = byFace.get(key) ?? [];
+    list.push(card);
+    byFace.set(key, list);
+  }
+
+  const selected: Card[] = [];
+  for (const cards of byFace.values()) {
+    if (cards.length >= 4) {
+      selected.push(...cards.slice(0, 4));
+    }
+  }
+  if (goldCards.length >= 5) {
+    selected.push(...goldCards.slice(0, 5));
+  } else if (goldCards.length >= 4) {
+    selected.push(...goldCards.slice(0, 4));
   }
   return selected;
 }
@@ -359,17 +396,30 @@ export interface DeclarationSelection {
  * 副作用：无。
  */
 export function buildDeclarationSelection(hand: Card[], payload: { declaredKongs?: number; fishCardIds?: string[] }): DeclarationSelection {
-  const declaredKongs = Math.max(0, Number(payload?.declaredKongs) || 0);
   const fishIds = Array.isArray(payload?.fishCardIds) ? payload.fishCardIds.map(String).filter(Boolean) : [];
   const uniqueFishIds = [...new Set(fishIds)];
   const selectedCards = pickCardsByIdsFromHand(hand, uniqueFishIds);
   const idMatch = uniqueFishIds.length === selectedCards.length;
   const fishValid = validateFishSelection(selectedCards);
+  const selectedIds = new Set(selectedCards.map((card) => card.id));
+  const remainingAfterFish = hand.filter((card) => !selectedIds.has(card.id));
+  const maxKongs = countHiddenKansFromCards(remainingAfterFish);
+  const declaredKongs = Math.min(Math.max(0, Number(payload?.declaredKongs) || 0), maxKongs);
   return {
     declaredKongs,
     selectedCards,
     idMatch,
     fishValid,
+  };
+}
+
+export function buildDefaultDeclarationPayload(hand: Card[]): { declaredKongs: number; fishCardIds: string[] } {
+  const selectedCards = buildDefaultFishCards(hand);
+  const selectedIds = new Set(selectedCards.map((card) => card.id));
+  const declaredKongs = countHiddenKansFromCards(hand.filter((card) => !selectedIds.has(card.id)));
+  return {
+    declaredKongs,
+    fishCardIds: selectedCards.map((card) => card.id),
   };
 }
 
@@ -584,6 +634,7 @@ export interface RoundResultPlayer {
   clientId: string;
   name: string;
   hand: Card[];
+  declaredKongs: number;
   huType?: "small" | "big" | null;
   winningGroups: Array<{
     key: string;
@@ -607,6 +658,7 @@ interface RoundResultView {
   clientId: string;
   name: string;
   hand: Card[];
+  declaredKongs: number;
   huType: "small" | "big" | null;
   winningGroups: Array<{
     key: string;
@@ -1085,7 +1137,7 @@ function normalizeWinningResponseGroups(
   });
 }
 
-function buildHiddenKanDetailsFromHand(hand: Card[]): SettlementGroupDetail[] {
+function buildPrivateTripletDetailsFromHand(hand: Card[], declaredKongs: number): SettlementGroupDetail[] {
   const counter = new Map<string, Card[]>();
   for (const card of hand) {
     const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
@@ -1094,6 +1146,7 @@ function buildHiddenKanDetailsFromHand(hand: Card[]): SettlementGroupDetail[] {
     counter.set(key, list);
   }
   const details: SettlementGroupDetail[] = [];
+  let remainingDeclaredKongs = Math.max(0, Math.floor(Number(declaredKongs) || 0));
   for (const cards of counter.values()) {
     const fullTriplets = Math.floor(cards.length / 3);
     for (let index = 0; index < fullTriplets; index += 1) {
@@ -1101,6 +1154,11 @@ function buildHiddenKanDetailsFromHand(hand: Card[]): SettlementGroupDetail[] {
       if (chunk.length < 3) {
         continue;
       }
+      if (remainingDeclaredKongs <= 0) {
+        details.push(detailFromKey("Peng", chunk));
+        continue;
+      }
+      remainingDeclaredKongs -= 1;
       if (chunk.every((card) => card.color === "gold")) {
         details.push(detailFromKey("GoldTriplet", chunk));
         continue;
@@ -1181,7 +1239,9 @@ function buildWinnerHuBreakdown(view: RoundResultView, payerCount: number): Winn
     ...view.fishGroupDetails.filter((detail) => FISH_DETAIL_KEYS.has(detail.key)),
     ...view.winningGroupDetails.filter((detail) => detail.unit > 0),
     ...view.resolvedHandGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
-    ...buildHiddenKanDetailsFromHand(handCardsForHiddenKan).filter((detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key)),
+    ...buildPrivateTripletDetailsFromHand(handCardsForHiddenKan, view.declaredKongs).filter(
+      (detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key) || PENG_DETAIL_KEYS.has(detail.key),
+    ),
   ].filter((detail) => detail.unit > 0);
 
   const subtotal = 3 + lineDetails.reduce((sum, detail) => sum + detail.unit, 0);
@@ -1319,7 +1379,7 @@ function buildWinnerHuBreakdownFromKeys(groups: string[], payerCount: number): W
 
 function buildMutualSettlementDetails(view: RoundResultView): SettlementGroupDetail[] {
   return [
-    ...buildHiddenKanDetailsFromHand(view.hand),
+    ...buildPrivateTripletDetailsFromHand(view.hand, view.declaredKongs),
     ...view.exposedGroupDetails.filter((detail) => KAI_DETAIL_KEYS.has(detail.key)),
   ];
 }
@@ -1407,6 +1467,7 @@ export function buildRoundResultPlayers(
     const exposedGroupKinds = [...(player?.exposedGroupKinds ?? [])];
     const generalArea = [...(player?.generalArea ?? [])].map((card) => toPlainCard(card));
     const fishArea = [...(player?.fishArea ?? [])].map((card) => toPlainCard(card));
+    const declaredKongs = Math.max(0, Math.floor(Number(player?.declaredKongs ?? 0) || 0));
     const discardCount = player?.discardPile.length ?? 0;
     const resolvedGroups =
       winnerId && seatId === winnerId && winnerResponseCard
@@ -1431,6 +1492,7 @@ export function buildRoundResultPlayers(
       clientId: seatId,
       name: player?.name ?? seatId,
       hand: hand.map((card) => toPlainCard(card)),
+      declaredKongs,
       huType: null,
       winningGroups,
       resolvedHandGroups,
@@ -1469,6 +1531,7 @@ export function buildRoundResultPlayers(
       clientId: view.clientId,
       name: view.name,
       hand: view.hand,
+      declaredKongs: view.declaredKongs,
       huType: view.huType,
       winningGroups: view.winningGroups,
       resolvedHandGroups: view.resolvedHandGroups,

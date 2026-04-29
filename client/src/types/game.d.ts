@@ -89,6 +89,7 @@ export interface RoundResultPlayer {
     clientId: string;
     name: string;
     hand: Card[];
+    declaredKongs: number;
     huType?: "small" | "big" | null;
     winningGroups: Array<{
         key: string;
