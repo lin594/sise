@@ -825,6 +825,8 @@ function describeGroupLabel(key: string, cards: Card[]): string {
       return "金条坎";
     case "GoldQuad":
       return "金条开";
+    case "Peng":
+      return `${cardShortLabel(head)}碰`;
     case "Triplet":
     case "JiangTriplet":
       return `${cardShortLabel(head)}坎`;
@@ -1053,6 +1055,34 @@ function splitWinnerResponseGroups(
     remainingGroups.push(group);
   });
   return { winningGroups, remainingGroups };
+}
+
+function normalizeWinningResponseGroups(
+  groups: Array<{
+    key: string;
+    cards: Card[];
+  }>,
+  winnerResponseCard: Card | null,
+): Array<{
+  key: string;
+  cards: Card[];
+}> {
+  if (!winnerResponseCard?.id) {
+    return groups;
+  }
+  return groups.map((group) => {
+    if (
+      group.key === "Triplet" &&
+      group.cards.length === 3 &&
+      group.cards.some((card) => card.id === winnerResponseCard.id) &&
+      isSameFaceGroup(group.cards) &&
+      group.cards[0]?.color !== "gold" &&
+      group.cards[0]?.type !== "jiang"
+    ) {
+      return { ...group, key: "Peng" };
+    }
+    return group;
+  });
 }
 
 function buildHiddenKanDetailsFromHand(hand: Card[]): SettlementGroupDetail[] {
@@ -1385,8 +1415,13 @@ export function buildRoundResultPlayers(
             cards: detail.cards,
           }))
         : [];
-    const { winningGroups, remainingGroups: resolvedHandGroups } =
+    const splitGroups =
       winnerId && seatId === winnerId ? splitWinnerResponseGroups(resolvedGroups, winnerResponseCard) : { winningGroups: [], remainingGroups: resolvedGroups };
+    const winningGroups =
+      winnerId && seatId === winnerId
+        ? normalizeWinningResponseGroups(splitGroups.winningGroups, winnerResponseCard)
+        : splitGroups.winningGroups;
+    const resolvedHandGroups = splitGroups.remainingGroups;
     const exposedGroupDetails = buildExposedVisibleGroupDetails(exposedArea, exposedGroupSizes, exposedGroupKinds);
     const generalGroupDetails = buildGeneralGroupDetails(generalArea);
     const fishGroupDetails = buildFishGroupDetails(fishArea);

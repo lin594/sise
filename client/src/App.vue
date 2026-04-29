@@ -1133,9 +1133,7 @@ function settlementBadge(cards: Card[], kind = ""): string | undefined {
     if (cards.length === 3) {
       return "坎";
     }
-    if (cards.length === 1 && (head.type === "jiang" || head.color === "gold")) {
-      return "标";
-    }
+    return undefined;
   }
   if (cards.length === 4) {
     return "鱼";

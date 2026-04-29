@@ -437,6 +437,41 @@ t("round_result: winner response quad scores as kai without double-counting hidd
   assert.equal(winner!.totalScore, 54);
 });
 
+t("round_result: winner response triplet from two hand cards scores as peng not hidden kan", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([
+    ["A", [c("wx1", "white", "xiang"), c("wx2", "white", "xiang")]],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const players = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    "A",
+    [],
+    c("wx3", "white", "xiang"),
+  );
+  const winner = players.find((item) => item.clientId === "A");
+  const loser = players.find((item) => item.clientId === "B");
+  assert.ok(winner);
+  assert.ok(loser);
+  assert.equal(winner!.winningGroups.some((group) => group.key === "Peng"), true);
+  assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Peng") && item.label === "白象碰" && item.unit === 1), true);
+  assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Triplet")), false);
+  assert.equal(winner!.totalScore, 12);
+  assert.equal(loser!.totalScore, -4);
+});
+
 function mkRoom(seats: string[]) {
   const room = new FourColorGameRoom() as any;
   const state = new GameState();
