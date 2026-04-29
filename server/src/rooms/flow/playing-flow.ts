@@ -70,6 +70,7 @@ export function decideActionDispatch(input: ActionDispatchInput): ActionDecision
 export interface PendingActionContext {
   ownerId: SeatId;
   card: Card;
+  responsePhaseAfterNoResponse?: "local_upper" | "local_draw";
 }
 
 export interface ActionPanelInput {
@@ -85,12 +86,14 @@ export interface ActionPanelInput {
   explainHuForSeat: (seatId: SeatId, hand: Card[], responseCard: Card) => { valid: boolean };
   logHuCheck: (stage: string, seatId: SeatId, hand: Card[], response: Card, valid: boolean) => void;
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
+  getNextPlayerId: (seatId: SeatId) => SeatId;
 }
 
 export interface AvailableActionEntry {
   action: ActionType;
   enabled: boolean;
   candidates?: ActionCandidate[];
+  deferred?: boolean;
 }
 
 /**
@@ -124,12 +127,27 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     const pengCandidates = buildPengCandidates(input.hand, input.pending.card).map(
       (item) => item.candidate,
     );
+    const localOwnerId =
+      input.pending.card.source === "draw" ? input.pending.ownerId : input.getNextPlayerId(input.pending.ownerId);
+    const localResponsePhase =
+      input.pending.responsePhaseAfterNoResponse ?? (input.pending.card.source === "draw" ? "local_draw" : "local_upper");
+    const previewChiCandidates =
+      input.seatId === localOwnerId
+        ? buildChiCandidates(input.getHandWithoutPending(input.seatId, input.pending.card), input.pending.card, []).map(
+            (item) => item.candidate,
+          )
+        : [];
     return [
       { action: "hu", enabled: huProbe.valid },
       { action: "kai", enabled: kaiCandidates.length > 0, candidates: kaiCandidates },
       { action: "peng", enabled: pengCandidates.length > 0, candidates: pengCandidates },
-      { action: "chi", enabled: false },
-      { action: "pass", enabled: true },
+      {
+        action: "chi",
+        enabled: false,
+        candidates: previewChiCandidates,
+        deferred: previewChiCandidates.length > 0,
+      },
+      { action: "pass", enabled: true, deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId },
     ];
   }
 

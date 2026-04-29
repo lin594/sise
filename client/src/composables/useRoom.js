@@ -251,6 +251,7 @@ function normalizeAvailableActions(input) {
         return {
             action: normalizeAction(String(rawItem?.action ?? "")) ?? "pass",
             enabled: Boolean(rawItem?.enabled),
+            deferred: Boolean(rawItem?.deferred),
             candidates: Array.isArray(rawItem?.candidates)
                 ? rawItem.candidates
                     .map((raw) => normalizeCandidate(raw))
@@ -675,6 +676,7 @@ export function useRoom(playerName = "Player") {
             .map((action) => [
             action.action,
             action.enabled ? "1" : "0",
+            action.deferred ? "1" : "0",
             (action.candidates ?? [])
                 .map((candidate) => `${candidate.id}:${candidate.cardIds.join(",")}:${candidate.source}:${candidate.kind ?? ""}`)
                 .join("|"),

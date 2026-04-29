@@ -63,6 +63,7 @@ export interface AvailableAction {
     action: ActionType;
     enabled: boolean;
     candidates?: ActionCandidate[];
+    deferred?: boolean;
 }
 export interface ActionCandidate {
     id: string;
@@ -75,6 +76,7 @@ export interface ActionCandidate {
 export type ActionRequest = ActionType | {
     action: ActionType;
     candidateId?: string;
+    deferred?: boolean;
 };
 export interface SessionTokenPayload {
     playerToken: string;

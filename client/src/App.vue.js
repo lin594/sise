@@ -134,7 +134,7 @@ const openingDealSecondsLeft = computed(() => {
     }
     return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
-const canAct = computed(() => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled));
+const canAct = computed(() => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled || x.deferred));
 const canDiscard = computed(() => !openingDealActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
@@ -142,15 +142,23 @@ const canDiscard = computed(() => !openingDealActive.value &&
     availableActions.value.length === 0);
 const selectionMode = ref(null);
 const selectedCandidateId = ref(null);
+const pendingDeferredChiCandidateId = ref(null);
+const pendingDeferredGrab = ref(false);
 const activeCandidates = computed(() => {
     if (!selectionMode.value) {
         return [];
     }
-    const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
+    const item = availableActions.value.find((action) => action.action === selectionMode.value && (action.enabled || action.deferred));
     return item?.candidates ?? [];
 });
 const candidateTargetCard = computed(() => {
     return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null);
+});
+const candidatePromptText = computed(() => {
+    if (state.value?.responsePhase === "collective" && selectionMode.value === "chi") {
+        return "请先选吃的牌组；系统会先过待响，待无人胡/开/碰后自动吃";
+    }
+    return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
 const isCompactLandscape = ref(false);
 const tableCardMode = ref(window.localStorage.getItem("sise_table_card_mode") ?? "simple");
@@ -359,7 +367,32 @@ function onPanelSelectionChange(payload) {
     selectionMode.value = payload.mode;
     selectedCandidateId.value = payload.selectedCandidateId;
 }
+function actionFromRequest(request) {
+    return typeof request === "string" ? request : request.action;
+}
+function candidateIdFromRequest(request) {
+    return typeof request === "string" ? "" : String(request.candidateId ?? "").trim();
+}
 function onPanelSubmit(request) {
+    const action = actionFromRequest(request);
+    const isDeferred = typeof request !== "string" && Boolean(request.deferred);
+    if (state.value?.responsePhase === "collective" && action === "pass" && isDeferred) {
+        pendingDeferredGrab.value = true;
+        sendAction("pass");
+        clearSelection();
+        return;
+    }
+    if (state.value?.responsePhase === "collective" && action === "chi") {
+        const candidateId = candidateIdFromRequest(request);
+        if (candidateId) {
+            pendingDeferredChiCandidateId.value = candidateId;
+            sendAction("pass");
+        }
+        clearSelection();
+        return;
+    }
+    pendingDeferredChiCandidateId.value = null;
+    pendingDeferredGrab.value = false;
     sendAction(request);
     clearSelection();
 }
@@ -402,6 +435,50 @@ function parseCardIdToCard(cardId) {
 function candidateGroupCards(candidate) {
     return candidate.cardIds.map((id) => parseCardIdToCard(id)).filter((card) => Boolean(card));
 }
+function submitDeferredChiIfReady() {
+    const candidateId = pendingDeferredChiCandidateId.value;
+    if (!candidateId) {
+        return;
+    }
+    const phase = String(state.value?.responsePhase ?? "");
+    if (phase === "collective") {
+        return;
+    }
+    const isLocalChiPhase = (phase === "local_upper" || phase === "local_draw") && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+    if (!isLocalChiPhase) {
+        pendingDeferredChiCandidateId.value = null;
+        return;
+    }
+    const chiEntry = availableActions.value.find((item) => item.action === "chi" && item.enabled);
+    if (!chiEntry) {
+        return;
+    }
+    if (!chiEntry.candidates?.some((candidate) => candidate.id === candidateId)) {
+        pendingDeferredChiCandidateId.value = null;
+        return;
+    }
+    pendingDeferredChiCandidateId.value = null;
+    sendAction({ action: "chi", candidateId });
+}
+function submitDeferredGrabIfReady() {
+    if (!pendingDeferredGrab.value) {
+        return;
+    }
+    const isLocalUpper = String(state.value?.responsePhase ?? "") === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+    if (String(state.value?.responsePhase ?? "") === "collective") {
+        return;
+    }
+    if (!isLocalUpper) {
+        pendingDeferredGrab.value = false;
+        return;
+    }
+    const passEntry = availableActions.value.find((item) => item.action === "pass" && item.enabled);
+    if (!passEntry) {
+        return;
+    }
+    pendingDeferredGrab.value = false;
+    sendAction("pass");
+}
 function submitDeclaration() {
     if (!fishSelectionValid.value || isDeclareSubmitted.value) {
         return;
@@ -426,12 +503,16 @@ watch(shouldShowDeclarePanel, (show) => {
 });
 watch(() => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`, () => {
     clearSelection();
+    submitDeferredGrabIfReady();
+    submitDeferredChiIfReady();
 });
 watch(() => availableActions.value, () => {
+    submitDeferredGrabIfReady();
+    submitDeferredChiIfReady();
     if (!selectionMode.value) {
         return;
     }
-    const current = availableActions.value.find((item) => item.action === selectionMode.value && item.enabled);
+    const current = availableActions.value.find((item) => item.action === selectionMode.value && (item.enabled || item.deferred));
     if (!current) {
         clearSelection();
         return;
@@ -1379,7 +1460,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "candidate-desc" },
     });
-    (__VLS_ctx.actionText(__VLS_ctx.selectionMode));
+    (__VLS_ctx.candidatePromptText);
     if (__VLS_ctx.activeCandidates.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "candidate-list" },
@@ -2216,6 +2297,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedCandidateId: selectedCandidateId,
             activeCandidates: activeCandidates,
             candidateTargetCard: candidateTargetCard,
+            candidatePromptText: candidatePromptText,
             isCompactLandscape: isCompactLandscape,
             tableCardMode: tableCardMode,
             globalError: globalError,

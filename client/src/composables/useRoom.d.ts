@@ -120,6 +120,7 @@ export declare function useRoom(playerName?: string): {
                 source: "hand" | "hand+pool";
                 title: string;
             }[] | undefined;
+            deferred?: boolean | undefined;
         }[] | undefined;
         roundResult?: {
             winnerId: string | null;
@@ -312,6 +313,7 @@ export declare function useRoom(playerName?: string): {
                 source: "hand" | "hand+pool";
                 title: string;
             }[] | undefined;
+            deferred?: boolean | undefined;
         }[] | undefined;
         roundResult?: {
             winnerId: string | null;
@@ -414,6 +416,7 @@ export declare function useRoom(playerName?: string): {
             source: "hand" | "hand+pool";
             title: string;
         }[] | undefined;
+        deferred?: boolean | undefined;
     }[], AvailableAction[] | {
         action: ActionType;
         enabled: boolean;
@@ -425,6 +428,7 @@ export declare function useRoom(playerName?: string): {
             source: "hand" | "hand+pool";
             title: string;
         }[] | undefined;
+        deferred?: boolean | undefined;
     }[]>;
     huResult: import("vue").Ref<{
         winnerId: string;

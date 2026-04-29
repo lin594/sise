@@ -13,18 +13,33 @@ const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x]));
     const isCollective = props.responsePhase === "collective";
+    const pass = map.get("pass");
+    const isPendingForMe = isCollective && Boolean(pass?.enabled && pass.deferred);
     const ordered = defaultOrder
-        .filter((action) => !(action === "chi" && isCollective))
         .map((action) => {
         const item = map.get(action);
         return {
+            key: action,
             action,
             enabled: Boolean(item?.enabled),
+            deferred: Boolean(item?.deferred),
             candidates: item?.candidates ?? [],
         };
-    });
+    })
+        .filter((item) => !(item.action === "chi" && isCollective && !item.deferred))
+        .filter((item) => !(item.action === "pass" && isPendingForMe));
+    if (isPendingForMe) {
+        ordered.push({
+            key: "deferred-pass",
+            action: "pass",
+            enabled: false,
+            deferred: true,
+            deferredKind: "pass",
+            candidates: [],
+        });
+    }
     if (props.canAct) {
-        const enabledOnly = ordered.filter((item) => item.enabled);
+        const enabledOnly = ordered.filter((item) => isClickable(item));
         if (enabledOnly.length > 0) {
             return enabledOnly;
         }
@@ -37,9 +52,15 @@ const panelHint = computed(() => {
         return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
     }
     if (selectionMode.value) {
-        return `已选择${text(selectionMode.value)}，请在中间弹窗选择牌组确认`;
+        return `已选择${actionText(selectionMode.value)}，请在中间弹窗选择牌组确认`;
     }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
+        if (normalized.value.some((item) => item.key === "deferred-pass")) {
+            return "这张待响牌给你：可胡/开/碰，或先选吃/抓";
+        }
+        if (normalized.value.some((item) => item.action === "chi" && item.deferred)) {
+            return "他人待响阶段：可先选吃，系统会先过待响，稍后自动吃";
+        }
         return "他人待响阶段：你可以选择胡/开/碰/过";
     }
     if (props.responsePhase === "local_upper") {
@@ -48,7 +69,7 @@ const panelHint = computed(() => {
     if (props.responsePhase === "local_draw") {
         return "当前待响牌需要你决定吃或过";
     }
-    if (!normalized.value.some((x) => x.enabled)) {
+    if (!normalized.value.some((x) => isClickable(x))) {
         return "当前阶段没有可执行动作";
     }
     return "请选择一个动作";
@@ -56,7 +77,10 @@ const panelHint = computed(() => {
 function isMeldAction(action) {
     return action === "kai" || action === "peng" || action === "chi";
 }
-function text(action) {
+function isClickable(item) {
+    return item.enabled || Boolean(item.deferred);
+}
+function actionText(action) {
     if (action === "pass" && props.responsePhase === "local_upper") {
         return "抓";
     }
@@ -69,15 +93,31 @@ function text(action) {
     };
     return map[action];
 }
-function onClick(action) {
+function text(item) {
+    if (item.deferredKind === "pass") {
+        return "抓";
+    }
+    return actionText(item.action);
+}
+function onClick(item) {
     if (busy.value) {
         return;
     }
+    const action = item.action;
+    if (item.deferredKind === "pass") {
+        busy.value = true;
+        emit("selectionChange", { mode: null, selectedCandidateId: null });
+        emit("submit", { action: "pass", deferred: true });
+        window.setTimeout(() => {
+            busy.value = false;
+        }, 220);
+        return;
+    }
     if (isMeldAction(action)) {
-        const item = normalized.value.find((entry) => entry.action === action);
-        if ((item?.candidates?.length ?? 0) === 1) {
+        const entry = normalized.value.find((candidateEntry) => candidateEntry.key === item.key);
+        if ((entry?.candidates?.length ?? 0) === 1) {
             busy.value = true;
-            const candidateId = item?.candidates?.[0]?.id ?? "";
+            const candidateId = entry?.candidates?.[0]?.id ?? "";
             emit("selectionChange", { mode: null, selectedCandidateId: candidateId || null });
             emit("submit", { action, candidateId });
             window.setTimeout(() => {
@@ -145,18 +185,18 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 for (const [item] of __VLS_getVForSourceType((__VLS_ctx.normalized))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                __VLS_ctx.onClick(item.action);
+                __VLS_ctx.onClick(item);
             } },
-        key: (item.action),
-        'data-testid': (`action-${item.action}`),
+        key: (item.key),
+        'data-testid': (`action-${item.key}`),
         ...{ class: "btn" },
         ...{ class: ({
-                enabled: item.enabled && __VLS_ctx.canAct,
+                enabled: __VLS_ctx.isClickable(item) && __VLS_ctx.canAct,
                 selected: __VLS_ctx.selectionMode === item.action,
             }) },
-        disabled: (!__VLS_ctx.canAct || !item.enabled || __VLS_ctx.busy),
+        disabled: (!__VLS_ctx.canAct || !__VLS_ctx.isClickable(item) || __VLS_ctx.busy),
     });
-    (__VLS_ctx.text(item.action));
+    (__VLS_ctx.text(item));
 }
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -170,6 +210,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             normalized: normalized,
             selectionMode: selectionMode,
             panelHint: panelHint,
+            isClickable: isClickable,
             text: text,
             onClick: onClick,
         };

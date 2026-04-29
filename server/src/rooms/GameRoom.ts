@@ -1163,7 +1163,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
     const acts = this.getAvailableActions(seatId, true);
-    return acts.some((item) => item.enabled && item.action !== "pass");
+    return acts.some((item) => Boolean(item.deferred) || (item.enabled && item.action !== "pass"));
   }
 
   private isEatResponder(ownerId: string, responderId: string): boolean {
@@ -1651,12 +1651,16 @@ export class FourColorGameRoom extends Room<GameState> {
         this.ops.explainHuForSeat(seatIdArg, handArg, responseCard, this.getHuWildcardCount()),
       logHuCheck: (stage, seatIdArg, handArg, response, valid) => this.logHuCheck(stage, seatIdArg, handArg, response, valid),
       getHandWithoutPending: (seatIdArg, pendingCard) => this.ops.getHandWithoutPending(seatIdArg, pendingCard),
+      getNextPlayerId: (seatIdArg) => this.getNextPlayerId(seatIdArg),
     });
     const pendingCard = this.pendingResponse?.card;
     if (!pendingCard) {
       return entries;
     }
     return entries.map((entry) => {
+      if (entry.action === "pass") {
+        return entry;
+      }
       if ((entry.action !== "kai" && entry.action !== "peng" && entry.action !== "chi") || !entry.candidates?.length) {
         return entry;
       }
@@ -1666,8 +1670,9 @@ export class FourColorGameRoom extends Room<GameState> {
       );
       return {
         ...entry,
-        enabled: filtered.length > 0,
+        enabled: entry.deferred ? false : filtered.length > 0,
         candidates: filtered,
+        deferred: entry.deferred && filtered.length > 0,
       };
     });
   }

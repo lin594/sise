@@ -106,7 +106,7 @@
           <h3>{{ actionText(selectionMode) }}候选牌组</h3>
           <button class="ghost" @click="clearSelection">取消</button>
         </div>
-        <p class="candidate-desc">请点击一个牌组确认{{ actionText(selectionMode) }}</p>
+        <p class="candidate-desc">{{ candidatePromptText }}</p>
         <div v-if="activeCandidates.length" class="candidate-list">
           <button
             v-for="(candidate, index) in activeCandidates"
@@ -617,7 +617,9 @@ const openingDealSecondsLeft = computed(() => {
   }
   return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
-const canAct = computed(() => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled));
+const canAct = computed(
+  () => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled || x.deferred),
+);
 const canDiscard = computed(
   () =>
     !openingDealActive.value &&
@@ -628,15 +630,25 @@ const canDiscard = computed(
 );
 const selectionMode = ref<"kai" | "peng" | "chi" | null>(null);
 const selectedCandidateId = ref<string | null>(null);
+const pendingDeferredChiCandidateId = ref<string | null>(null);
+const pendingDeferredGrab = ref(false);
 const activeCandidates = computed<ActionCandidate[]>(() => {
   if (!selectionMode.value) {
     return [];
   }
-  const item = availableActions.value.find((action) => action.action === selectionMode.value && action.enabled);
+  const item = availableActions.value.find(
+    (action) => action.action === selectionMode.value && (action.enabled || action.deferred),
+  );
   return item?.candidates ?? [];
 });
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
+});
+const candidatePromptText = computed(() => {
+  if (state.value?.responsePhase === "collective" && selectionMode.value === "chi") {
+    return "请先选吃的牌组；系统会先过待响，待无人胡/开/碰后自动吃";
+  }
+  return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
 const isCompactLandscape = ref(false);
 const tableCardMode = ref<"simple" | "full">(
@@ -859,7 +871,34 @@ function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; 
   selectedCandidateId.value = payload.selectedCandidateId;
 }
 
+function actionFromRequest(request: ActionRequest): string {
+  return typeof request === "string" ? request : request.action;
+}
+
+function candidateIdFromRequest(request: ActionRequest): string {
+  return typeof request === "string" ? "" : String(request.candidateId ?? "").trim();
+}
+
 function onPanelSubmit(request: ActionRequest) {
+  const action = actionFromRequest(request);
+  const isDeferred = typeof request !== "string" && Boolean(request.deferred);
+  if (state.value?.responsePhase === "collective" && action === "pass" && isDeferred) {
+    pendingDeferredGrab.value = true;
+    sendAction("pass");
+    clearSelection();
+    return;
+  }
+  if (state.value?.responsePhase === "collective" && action === "chi") {
+    const candidateId = candidateIdFromRequest(request);
+    if (candidateId) {
+      pendingDeferredChiCandidateId.value = candidateId;
+      sendAction("pass");
+    }
+    clearSelection();
+    return;
+  }
+  pendingDeferredChiCandidateId.value = null;
+  pendingDeferredGrab.value = false;
   sendAction(request);
   clearSelection();
 }
@@ -909,6 +948,54 @@ function candidateGroupCards(candidate: ActionCandidate): Card[] {
   return candidate.cardIds.map((id) => parseCardIdToCard(id)).filter((card): card is Card => Boolean(card));
 }
 
+function submitDeferredChiIfReady() {
+  const candidateId = pendingDeferredChiCandidateId.value;
+  if (!candidateId) {
+    return;
+  }
+  const phase = String(state.value?.responsePhase ?? "");
+  if (phase === "collective") {
+    return;
+  }
+  const isLocalChiPhase =
+    (phase === "local_upper" || phase === "local_draw") && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+  if (!isLocalChiPhase) {
+    pendingDeferredChiCandidateId.value = null;
+    return;
+  }
+  const chiEntry = availableActions.value.find((item) => item.action === "chi" && item.enabled);
+  if (!chiEntry) {
+    return;
+  }
+  if (!chiEntry.candidates?.some((candidate) => candidate.id === candidateId)) {
+    pendingDeferredChiCandidateId.value = null;
+    return;
+  }
+  pendingDeferredChiCandidateId.value = null;
+  sendAction({ action: "chi", candidateId });
+}
+
+function submitDeferredGrabIfReady() {
+  if (!pendingDeferredGrab.value) {
+    return;
+  }
+  const isLocalUpper =
+    String(state.value?.responsePhase ?? "") === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+  if (String(state.value?.responsePhase ?? "") === "collective") {
+    return;
+  }
+  if (!isLocalUpper) {
+    pendingDeferredGrab.value = false;
+    return;
+  }
+  const passEntry = availableActions.value.find((item) => item.action === "pass" && item.enabled);
+  if (!passEntry) {
+    return;
+  }
+  pendingDeferredGrab.value = false;
+  sendAction("pass");
+}
+
 function submitDeclaration() {
   if (!fishSelectionValid.value || isDeclareSubmitted.value) {
     return;
@@ -942,16 +1029,22 @@ watch(
   () => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`,
   () => {
     clearSelection();
+    submitDeferredGrabIfReady();
+    submitDeferredChiIfReady();
   },
 );
 
 watch(
   () => availableActions.value,
   () => {
+    submitDeferredGrabIfReady();
+    submitDeferredChiIfReady();
     if (!selectionMode.value) {
       return;
     }
-    const current = availableActions.value.find((item) => item.action === selectionMode.value && item.enabled);
+    const current = availableActions.value.find(
+      (item) => item.action === selectionMode.value && (item.enabled || item.deferred),
+    );
     if (!current) {
       clearSelection();
       return;

@@ -4,17 +4,17 @@
     <div class="actions">
       <button
         v-for="item in normalized"
-        :key="item.action"
-        :data-testid="`action-${item.action}`"
+        :key="item.key"
+        :data-testid="`action-${item.key}`"
         class="btn"
         :class="{
-          enabled: item.enabled && canAct,
+          enabled: isClickable(item) && canAct,
           selected: selectionMode === item.action,
         }"
-        :disabled="!canAct || !item.enabled || busy"
-        @click="onClick(item.action)"
+        :disabled="!canAct || !isClickable(item) || busy"
+        @click="onClick(item)"
       >
-        {{ text(item.action) }}
+        {{ text(item) }}
       </button>
     </div>
   </div>
@@ -54,21 +54,44 @@ const emit = defineEmits<{
 const busy = ref(false);
 
 const defaultOrder: ActionType[] = ["hu", "kai", "peng", "chi", "pass"];
+type PanelAction = {
+  key: string;
+  action: ActionType;
+  enabled: boolean;
+  deferred?: boolean;
+  deferredKind?: "pass";
+  candidates: AvailableAction["candidates"];
+};
 const normalized = computed(() => {
   const map = new Map(props.actions.map((x) => [x.action, x]));
   const isCollective = props.responsePhase === "collective";
-  const ordered = defaultOrder
-    .filter((action) => !(action === "chi" && isCollective))
+  const pass = map.get("pass");
+  const isPendingForMe = isCollective && Boolean(pass?.enabled && pass.deferred);
+  const ordered: PanelAction[] = defaultOrder
     .map((action) => {
       const item = map.get(action);
       return {
+        key: action,
         action,
         enabled: Boolean(item?.enabled),
+        deferred: Boolean(item?.deferred),
         candidates: item?.candidates ?? [],
       };
+    })
+    .filter((item) => !(item.action === "chi" && isCollective && !item.deferred))
+    .filter((item) => !(item.action === "pass" && isPendingForMe));
+  if (isPendingForMe) {
+    ordered.push({
+      key: "deferred-pass",
+      action: "pass",
+      enabled: false,
+      deferred: true,
+      deferredKind: "pass",
+      candidates: [],
     });
+  }
   if (props.canAct) {
-    const enabledOnly = ordered.filter((item) => item.enabled);
+    const enabledOnly = ordered.filter((item) => isClickable(item));
     if (enabledOnly.length > 0) {
       return enabledOnly;
     }
@@ -83,9 +106,15 @@ const panelHint = computed(() => {
     return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
   }
   if (selectionMode.value) {
-    return `已选择${text(selectionMode.value)}，请在中间弹窗选择牌组确认`;
+    return `已选择${actionText(selectionMode.value)}，请在中间弹窗选择牌组确认`;
   }
   if (props.responsePhase === "collective" && !props.isCurrentTurn) {
+    if (normalized.value.some((item) => item.key === "deferred-pass")) {
+      return "这张待响牌给你：可胡/开/碰，或先选吃/抓";
+    }
+    if (normalized.value.some((item) => item.action === "chi" && item.deferred)) {
+      return "他人待响阶段：可先选吃，系统会先过待响，稍后自动吃";
+    }
     return "他人待响阶段：你可以选择胡/开/碰/过";
   }
   if (props.responsePhase === "local_upper") {
@@ -94,7 +123,7 @@ const panelHint = computed(() => {
   if (props.responsePhase === "local_draw") {
     return "当前待响牌需要你决定吃或过";
   }
-  if (!normalized.value.some((x) => x.enabled)) {
+  if (!normalized.value.some((x) => isClickable(x))) {
     return "当前阶段没有可执行动作";
   }
   return "请选择一个动作";
@@ -104,7 +133,11 @@ function isMeldAction(action: ActionType): action is Exclude<SelectionMode, null
   return action === "kai" || action === "peng" || action === "chi";
 }
 
-function text(action: ActionType): string {
+function isClickable(item: { enabled: boolean; deferred?: boolean }): boolean {
+  return item.enabled || Boolean(item.deferred);
+}
+
+function actionText(action: ActionType): string {
   if (action === "pass" && props.responsePhase === "local_upper") {
     return "抓";
   }
@@ -118,15 +151,32 @@ function text(action: ActionType): string {
   return map[action];
 }
 
-function onClick(action: ActionType): void {
+function text(item: PanelAction): string {
+  if (item.deferredKind === "pass") {
+    return "抓";
+  }
+  return actionText(item.action);
+}
+
+function onClick(item: PanelAction): void {
   if (busy.value) {
     return;
   }
+  const action = item.action;
+  if (item.deferredKind === "pass") {
+    busy.value = true;
+    emit("selectionChange", { mode: null, selectedCandidateId: null });
+    emit("submit", { action: "pass", deferred: true });
+    window.setTimeout(() => {
+      busy.value = false;
+    }, 220);
+    return;
+  }
   if (isMeldAction(action)) {
-    const item = normalized.value.find((entry) => entry.action === action);
-    if ((item?.candidates?.length ?? 0) === 1) {
+    const entry = normalized.value.find((candidateEntry) => candidateEntry.key === item.key);
+    if ((entry?.candidates?.length ?? 0) === 1) {
       busy.value = true;
-      const candidateId = item?.candidates?.[0]?.id ?? "";
+      const candidateId = entry?.candidates?.[0]?.id ?? "";
       emit("selectionChange", { mode: null, selectedCandidateId: candidateId || null });
       emit("submit", { action, candidateId });
       window.setTimeout(() => {

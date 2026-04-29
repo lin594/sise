@@ -132,6 +132,41 @@ test("local_upper action panel does not enable chi via wildcard pool", () => {
     explainHuForSeat: () => ({ valid: false }),
     logHuCheck: () => undefined,
     getHandWithoutPending: (_seat, _pending) => [mkCard("h1", "red", "ma", "upper")],
+    getNextPlayerId: () => "A",
   });
   assert.equal(actions.find((x) => x.action === "chi")?.enabled, false);
+});
+
+test("collective action panel previews next-player chi without enabling it", () => {
+  const actions = getAvailableActionsFlow({
+    phase: "playing",
+    seatId: "B",
+    pending: { ownerId: "A", card: mkCard("p1", "yellow", "pao", "upper") },
+    responsePhase: "collective",
+    collectiveResponderId: "B",
+    awaitingDiscardOwnerId: null,
+    hand: [
+      mkCard("h1", "yellow", "ju", "upper"),
+      mkCard("h2", "yellow", "ma", "upper"),
+      mkCard("h3", "yellow", "pao", "upper"),
+      mkCard("h4", "yellow", "pao", "upper"),
+    ],
+    wildcardPool: [],
+    explainHuForSeat: () => ({ valid: false }),
+    logHuCheck: () => undefined,
+    getHandWithoutPending: (_seat, _pending) => [
+      mkCard("h1", "yellow", "ju", "upper"),
+      mkCard("h2", "yellow", "ma", "upper"),
+      mkCard("h3", "yellow", "pao", "upper"),
+      mkCard("h4", "yellow", "pao", "upper"),
+    ],
+    getNextPlayerId: () => "B",
+  });
+  const chi = actions.find((x) => x.action === "chi");
+  assert.equal(chi?.enabled, false);
+  assert.equal(chi?.deferred, true);
+  assert.equal(chi?.candidates?.some((candidate) => candidate.kind === "jmp"), true);
+  const pass = actions.find((x) => x.action === "pass");
+  assert.equal(pass?.enabled, true);
+  assert.equal(pass?.deferred, true);
 });

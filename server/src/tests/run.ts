@@ -708,6 +708,14 @@ t("room: local draw pass_to_next keeps recipient as next local upper owner", () 
 
   room.executePassToNext("B");
 
+  assert.equal(room.pendingResponse?.ownerId, "B");
+  assert.equal(room.state.responsePhase, "collective");
+  assert.equal(room.state.currentPlayerId, "C");
+  assert.equal(room.getAvailableActions("C").find((item: any) => item.action === "pass")?.deferred, true);
+
+  room.seatBySession.set("sessC", "C");
+  room.handleAction({ sessionId: "sessC", send: () => {} }, "pass");
+
   assert.equal(room.pendingResponse?.ownerId, "C");
   assert.equal(room.state.responsePhase, "local_upper");
   assert.equal(room.state.currentPlayerId, "C");

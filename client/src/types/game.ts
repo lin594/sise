@@ -68,6 +68,7 @@ export interface AvailableAction {
   action: ActionType;
   enabled: boolean;
   candidates?: ActionCandidate[];
+  deferred?: boolean;
 }
 
 export interface ActionCandidate {
@@ -84,6 +85,7 @@ export type ActionRequest =
   | {
       action: ActionType;
       candidateId?: string;
+      deferred?: boolean;
     };
 
 export interface SessionTokenPayload {
