@@ -44,6 +44,8 @@
 
 私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。
 
+生产服务只接受 `CORS_ALLOWED_ORIGINS` 明确列出的浏览器来源。Express 辅助接口、Colyseus 匹配接口和 WebSocket 握手共用同一来源策略；没有浏览器 `Origin` 的健康检查与服务间调用仍可访问。开发环境默认放开来源，便于局域网手机联调。Colyseus 管理监控页在生产环境默认关闭，只能通过显式配置临时启用。
+
 ## 3. 座位、身份与房主
 
 - `sessionId` 属于一次连接，断线后会改变。
@@ -141,6 +143,7 @@ server/src/schema/                    公开同步 Schema
 
 - token 是房间级重连凭证，不是生产级账号体系。
 - token 具备原座和私有手牌访问能力，必须视为秘密；公网部署必须使用 HTTPS/WSS，邀请链接和日志均不得携带 token。
+- 来源限制是浏览器边界保护，不代替正式账号鉴权、请求限流或抗拒绝服务能力。
 - 房间状态无法在服务端进程重启后恢复。
 - 匹配、公开大厅和账号级邀请码尚未实现。
 - 未最终确定的规则不得由旧 SRS 推断，统一记录在 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)。

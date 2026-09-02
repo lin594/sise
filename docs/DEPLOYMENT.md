@@ -45,7 +45,13 @@ docker compose up --build -d
 
 - Web：`http://localhost:3000`
 - HTTP / WebSocket 服务：`http://localhost:2567`
-- Redis：`localhost:6379`，当前应用尚未读写
+- Redis：只在 Compose 内部网络可达，不映射宿主机端口；当前应用尚未读写
+
+普通 Compose 默认只允许 `http://localhost:3000` 和 `http://127.0.0.1:3000` 作为浏览器来源。使用局域网主机名或 IP 访问时，必须在 `.env` 写入实际前端来源，例如：
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://192.168.1.20:3000
+```
 
 查看状态与日志：
 
@@ -74,6 +80,7 @@ docker compose -f docker-compose.traefik.yml up --build -d
 ```dotenv
 VITE_SERVER_URL=wss://sise-api.example.com
 VITE_SERVER_HTTP_URL=https://sise-api.example.com
+CORS_ALLOWED_ORIGINS=https://sise.example.com
 TRAEFIK_WEB_RULE=Host(`sise.example.com`)
 TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 ```
@@ -108,6 +115,13 @@ curl --fail http://localhost:2567/health
 
 iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如果 `npm ci` 连续出现 `ECONNRESET`，先检查该值是否仍指向不可用的镜像站；切换下载源不应改动依赖版本或 lockfile integrity。
 
+iMac 通过带端口的试玩地址访问时，还必须设置：
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://imac.tajuren.cn:3000
+ENABLE_MONITOR=0
+```
+
 普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让凭证明文经过网络。
 
 随后用浏览器访问 `http://imac.tajuren.cn:3000`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
@@ -120,6 +134,8 @@ iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如
 - `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人思考延时。
 - `LOBBY_SEAT_HOLD_MS`：等待大厅断线座位保留时间。
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
+- `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。
+- `ENABLE_MONITOR`：是否开放 Colyseus 管理监控页；生产环境默认 `0`，仅可信诊断环境临时设为 `1`。
 - `OP_TIMEOUT_MS`、`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS`、`DECLARE_TIMEOUT_MS`：操作和声明超时。
 - `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时。
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。
