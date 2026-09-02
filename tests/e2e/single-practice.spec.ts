@@ -16,7 +16,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
   const deadline = Date.now() + 3400;
   while (Date.now() < deadline) {
-    const hasDeclarePanel = await page.getByText("声明暗坎与亮鱼").isVisible().catch(() => false);
+    const hasDeclarePanel = await page.getByText("声明鱼和暗坎").isVisible().catch(() => false);
     if (hasDeclarePanel) {
       break;
     }
@@ -118,7 +118,7 @@ test("single practice flow reaches settlement", async ({ page }) => {
   await expect(
     page
       .getByTestId("game-board")
-      .or(page.getByText("声明暗坎与亮鱼"))
+      .or(page.getByText("声明鱼和暗坎"))
       .or(page.getByText("房间准备中")),
   ).toBeVisible();
 

@@ -33,7 +33,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, mySeatId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, } = useRoom("玩家");
+const { connect, connected, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
@@ -50,10 +50,10 @@ const lobbyModes = [
         enabled: true,
     },
     {
-        id: "friends_reserved",
+        id: "friends",
         name: "好友同桌",
-        description: "预留入口：未来会扩展成 4 名真人通过邀请码或房间模式一起对局。",
-        enabled: false,
+        description: "创建私密好友房，通过链接邀请玩家自由选座，也可按座位添加不同强度的机器人。",
+        enabled: true,
     },
     {
         id: "ranked_reserved",
@@ -74,32 +74,48 @@ const showModeLobby = computed(() => {
     if (showSyncingScreen.value) {
         return false;
     }
-    // Once game state exists (room joined), never show mode lobby again
-    // The mode lobby is only for mode selection BEFORE joining a room
-    if (state.value) {
-        return false;
-    }
-    // Before game state, show mode lobby if entered front
-    return enteredFrontLobby.value;
+    return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
 const canReturnToLobby = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
-const canPressStartGame = computed(() => Boolean(connected.value) && Boolean(state.value) && Boolean(mySeatId.value) && isWaiting.value && isHost.value);
-const canStartSelectedMode = computed(() => selectedLobbyMode.value === "practice_bots" && (!hasLobbySession.value || canPressStartGame.value));
+const canPressStartGame = computed(() => Boolean(connected.value) &&
+    Boolean(state.value) &&
+    Boolean(mySeatId.value) &&
+    isWaiting.value &&
+    isHost.value &&
+    (state.value?.roomMode !== "friends" ||
+        (players.value.length === 4 && players.value.every((player) => player.isConfiguredBot || player.connected))));
+const canStartSelectedMode = computed(() => (!hasLobbySession.value && (selectedLobbyMode.value === "practice_bots" || selectedLobbyMode.value === "friends")) ||
+    canPressStartGame.value);
 const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
 const lobbySubtitle = computed(() => isWaiting.value
     ? "你已经进入房间页，正在同步开局状态。"
-    : "先选择一种玩法；当前开放单人练习，其余模式先保留入口。");
+    : "选择一键单人练习，或创建一个可以邀请朋友和配置机器人的好友房。");
 const lobbyStartLabel = computed(() => {
-    if (selectedLobbyMode.value !== "practice_bots") {
+    if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
         return "该模式尚未开放";
     }
     if (!hasLobbySession.value) {
-        return "进入单人练习";
+        return selectedLobbyMode.value === "friends" ? "创建好友房" : "进入单人练习";
     }
     if (pendingPracticeAutoStart.value) {
         return "正在自动开始...";
     }
-    return isHost.value ? "开始单人练习" : "等待房主开始";
+    return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
+});
+const lobbyStartHint = computed(() => {
+    if (!hasLobbySession.value || !isWaiting.value)
+        return "";
+    if (!mySeatId.value)
+        return "请先选择一个空座位";
+    if (!isHost.value)
+        return "座位配置完成后由房主开始";
+    if (state.value?.roomMode !== "friends")
+        return "";
+    if (players.value.length < 4)
+        return `还差 ${4 - players.value.length} 个座位`;
+    if (players.value.some((player) => !player.isConfiguredBot && !player.connected))
+        return "仍有真人玩家离线";
+    return "四席已就绪";
 });
 const entryPrimaryLabel = computed(() => {
     const query = new URLSearchParams(window.location.search);
@@ -985,21 +1001,48 @@ async function enterLobby() {
     nicknameHistory.value = mergedHistory;
     writeNicknameHistory(mergedHistory);
     enteredFrontLobby.value = true;
+    const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
+    if (!invitedRoomId) {
+        return;
+    }
+    enteringLobby.value = true;
+    try {
+        const ok = await connect({ nameOverride: nickname, roomId: invitedRoomId });
+        if (!ok) {
+            throw new Error(joinError.value || "加入好友房失败");
+        }
+    }
+    catch (error) {
+        globalError.value = error instanceof Error ? error.message : "加入好友房失败";
+    }
+    finally {
+        enteringLobby.value = false;
+    }
 }
 function randomizeNickname() {
     entryName.value = generateRandomNickname();
 }
 function startSelectedMode() {
-    if (selectedLobbyMode.value !== "practice_bots") {
+    if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
         globalError.value = "该模式暂未开放，当前只支持单人练习。";
         return;
     }
     globalError.value = "";
     if (!hasLobbySession.value) {
-        void startPracticeLobby();
+        if (selectedLobbyMode.value === "friends") {
+            void startFriendLobby();
+        }
+        else {
+            void startPracticeLobby();
+        }
         return;
     }
-    requestPracticeAutoStart();
+    if (state.value?.roomMode === "friends") {
+        startGame();
+    }
+    else {
+        requestPracticeAutoStart();
+    }
 }
 function requestPracticeAutoStart() {
     pendingPracticeAutoStart.value = true;
@@ -1013,7 +1056,11 @@ async function startPracticeLobby() {
     entryName.value = nickname;
     enteringLobby.value = true;
     try {
-        const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
+        const response = await fetch(`${HTTP_URL}/rooms`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "practice" }),
+        });
         if (!response.ok) {
             throw new Error("创建单人练习房间失败");
         }
@@ -1024,6 +1071,7 @@ async function startPracticeLobby() {
         const ok = await connect({
             nameOverride: nickname,
             roomId: payload.roomId,
+            hostKey: payload.hostKey,
             forceNew: true,
         });
         if (!ok) {
@@ -1036,6 +1084,56 @@ async function startPracticeLobby() {
     }
     finally {
         enteringLobby.value = false;
+    }
+}
+async function startFriendLobby() {
+    if (enteringLobby.value) {
+        return;
+    }
+    const nickname = entryName.value.trim() || generateRandomNickname();
+    enteringLobby.value = true;
+    try {
+        const response = await fetch(`${HTTP_URL}/rooms`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "friends" }),
+        });
+        if (!response.ok) {
+            throw new Error("创建好友房失败");
+        }
+        const payload = (await response.json());
+        if (!payload.ok || !payload.roomId || !payload.hostKey) {
+            throw new Error(payload.message || "创建好友房失败");
+        }
+        const ok = await connect({
+            nameOverride: nickname,
+            roomId: payload.roomId,
+            hostKey: payload.hostKey,
+            forceNew: true,
+        });
+        if (!ok) {
+            throw new Error(joinError.value || "进入好友房失败");
+        }
+    }
+    catch (error) {
+        globalError.value = error instanceof Error ? error.message : "创建好友房失败";
+    }
+    finally {
+        enteringLobby.value = false;
+    }
+}
+async function copyInviteLink() {
+    if (!activeRoomId.value) {
+        return;
+    }
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set("roomId", activeRoomId.value);
+    try {
+        await navigator.clipboard.writeText(url.toString());
+        globalError.value = "邀请链接已复制";
+    }
+    catch {
+        window.prompt("请复制邀请链接", url.toString());
     }
 }
 watch(() => state.value?.phase, (phase) => {
@@ -1284,30 +1382,50 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
+        ...{ 'onCopyInvite': {} },
+        ...{ 'onClaimSeat': {} },
+        ...{ 'onAddBot': {} },
+        ...{ 'onUpdateBot': {} },
+        ...{ 'onRemoveSeat': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
-        modes: (__VLS_ctx.lobbyModes),
+        modes: (__VLS_ctx.state ? [] : __VLS_ctx.lobbyModes),
         selectedMode: (__VLS_ctx.selectedLobbyMode),
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
+        startHint: (__VLS_ctx.lobbyStartHint),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
+        mySeatId: (__VLS_ctx.mySeatId),
+        isHost: (__VLS_ctx.isHost),
+        roomId: (__VLS_ctx.activeRoomId),
+        roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
     }));
     const __VLS_15 = __VLS_14({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
+        ...{ 'onCopyInvite': {} },
+        ...{ 'onClaimSeat': {} },
+        ...{ 'onAddBot': {} },
+        ...{ 'onUpdateBot': {} },
+        ...{ 'onRemoveSeat': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
-        modes: (__VLS_ctx.lobbyModes),
+        modes: (__VLS_ctx.state ? [] : __VLS_ctx.lobbyModes),
         selectedMode: (__VLS_ctx.selectedLobbyMode),
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
+        startHint: (__VLS_ctx.lobbyStartHint),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
+        mySeatId: (__VLS_ctx.mySeatId),
+        isHost: (__VLS_ctx.isHost),
+        roomId: (__VLS_ctx.activeRoomId),
+        roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
     }, ...__VLS_functionalComponentArgsRest(__VLS_14));
     let __VLS_17;
@@ -1334,6 +1452,27 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.selectedLobbyMode = $event;
         }
     };
+    const __VLS_23 = {
+        onCopyInvite: (__VLS_ctx.copyInviteLink)
+    };
+    const __VLS_24 = {
+        onClaimSeat: (__VLS_ctx.claimSeat)
+    };
+    const __VLS_25 = {
+        onAddBot: (...[$event]) => {
+            if (!!(__VLS_ctx.showEntry))
+                return;
+            if (!(__VLS_ctx.showModeLobby))
+                return;
+            __VLS_ctx.addBot($event, 50);
+        }
+    };
+    const __VLS_26 = {
+        onUpdateBot: (__VLS_ctx.updateBot)
+    };
+    const __VLS_27 = {
+        onRemoveSeat: (__VLS_ctx.removeSeat)
+    };
     var __VLS_16;
 }
 else if (__VLS_ctx.showSyncingScreen) {
@@ -1354,7 +1493,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_23 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_28 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1375,7 +1514,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_24 = __VLS_23({
+    const __VLS_29 = __VLS_28({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1395,25 +1534,25 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_23));
-    let __VLS_26;
-    let __VLS_27;
-    let __VLS_28;
-    const __VLS_29 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
+    let __VLS_31;
+    let __VLS_32;
+    let __VLS_33;
+    const __VLS_34 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_30 = {
+    const __VLS_35 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_31 = {
+    const __VLS_36 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_25;
+    var __VLS_30;
 }
 if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_32 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_37 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
@@ -1424,7 +1563,7 @@ if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
     }));
-    const __VLS_33 = __VLS_32({
+    const __VLS_38 = __VLS_37({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
@@ -1434,17 +1573,17 @@ if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_32));
-    let __VLS_35;
-    let __VLS_36;
-    let __VLS_37;
-    const __VLS_38 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_37));
+    let __VLS_40;
+    let __VLS_41;
+    let __VLS_42;
+    const __VLS_43 = {
         onSubmit: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_39 = {
+    const __VLS_44 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_34;
+    var __VLS_39;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1498,14 +1637,14 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_40 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                 }));
-                const __VLS_41 = __VLS_40({
+                const __VLS_46 = __VLS_45({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_45));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -1518,16 +1657,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_43 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_44 = __VLS_43({
+                    const __VLS_49 = __VLS_48({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_43));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
                 }
             }
             else {
@@ -1616,16 +1755,16 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             for (const [card] of __VLS_getVForSourceType((option.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_46 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`fish-option-${option.id}-${card.id}`),
                     card: (card),
                     size: "sm",
                 }));
-                const __VLS_47 = __VLS_46({
+                const __VLS_52 = __VLS_51({
                     key: (`fish-option-${option.id}-${card.id}`),
                     card: (card),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_46));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_51));
             }
         }
     }
@@ -1738,14 +1877,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_49 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_50 = __VLS_49({
+            const __VLS_55 = __VLS_54({
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_49));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_54));
         }
     }
     else {
@@ -1821,16 +1960,16 @@ if (__VLS_ctx.showEndPanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_52 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_53 = __VLS_52({
+            const __VLS_58 = __VLS_57({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_57));
         }
     }
     if (__VLS_ctx.settlementPlayers.length) {
@@ -1894,16 +2033,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_56 = __VLS_55({
+                        const __VLS_61 = __VLS_60({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
                     }
                 }
             }
@@ -1940,16 +2079,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_59 = __VLS_58({
+                        const __VLS_64 = __VLS_63({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_63));
                     }
                 }
             }
@@ -1960,16 +2099,16 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_62 = __VLS_61({
+                    const __VLS_67 = __VLS_66({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_66));
                 }
             }
             else {
@@ -2267,6 +2406,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             OrientationGuard: OrientationGuard,
             connected: connected,
             mySeatId: mySeatId,
+            activeRoomId: activeRoomId,
             state: state,
             players: players,
             privateHand: privateHand,
@@ -2276,6 +2416,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendDiscardCard: sendDiscardCard,
             nextRound: nextRound,
             returnLobby: returnLobby,
+            claimSeat: claimSeat,
+            addBot: addBot,
+            updateBot: updateBot,
+            removeSeat: removeSeat,
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,
@@ -2294,6 +2438,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             lobbyTitle: lobbyTitle,
             lobbySubtitle: lobbySubtitle,
             lobbyStartLabel: lobbyStartLabel,
+            lobbyStartHint: lobbyStartHint,
             entryPrimaryLabel: entryPrimaryLabel,
             isMyTurn: isMyTurn,
             canAct: canAct,
@@ -2357,6 +2502,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             enterLobby: enterLobby,
             randomizeNickname: randomizeNickname,
             startSelectedMode: startSelectedMode,
+            copyInviteLink: copyInviteLink,
         };
     },
 });

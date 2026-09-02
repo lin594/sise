@@ -4,8 +4,10 @@ export declare function useRoom(playerName?: string): {
     myId: import("vue").Ref<string, string>;
     mySeatId: import("vue").Ref<string, string>;
     playerToken: import("vue").Ref<string, string>;
+    activeRoomId: import("vue").Ref<string, string>;
     state: import("vue").Ref<{
         roomId?: string | undefined;
+        roomMode: "practice" | "friends";
         phase: string;
         hostPlayerId: string;
         dealerId: string;
@@ -58,11 +60,14 @@ export declare function useRoom(playerName?: string): {
         declareEndsAt: number;
         players: {
             clientId: string;
+            seatIndex: number;
             name: string;
             handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
             isBot: boolean;
+            isConfiguredBot: boolean;
+            botStrength: number;
             connected: boolean;
             discardPile: {
                 id: string;
@@ -200,6 +205,7 @@ export declare function useRoom(playerName?: string): {
         } | null | undefined;
     } | null, RoomStateSnapshot | {
         roomId?: string | undefined;
+        roomMode: "practice" | "friends";
         phase: string;
         hostPlayerId: string;
         dealerId: string;
@@ -252,11 +258,14 @@ export declare function useRoom(playerName?: string): {
         declareEndsAt: number;
         players: {
             clientId: string;
+            seatIndex: number;
             name: string;
             handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
             isBot: boolean;
+            isConfiguredBot: boolean;
+            botStrength: number;
             connected: boolean;
             discardPile: {
                 id: string;
@@ -629,6 +638,7 @@ export declare function useRoom(playerName?: string): {
         nameOverride?: string;
         roomId?: string;
         playerToken?: string;
+        hostKey?: string;
         forceNew?: boolean;
     }) => Promise<boolean>;
     clearActionLogs: () => void;
@@ -643,4 +653,8 @@ export declare function useRoom(playerName?: string): {
     startGame: () => void;
     nextRound: () => void;
     returnLobby: () => void;
+    claimSeat: (seatIndex: number) => void;
+    addBot: (seatIndex: number, strength?: number) => void;
+    updateBot: (seatIndex: number, strength: number) => void;
+    removeSeat: (seatIndex: number) => void;
 };

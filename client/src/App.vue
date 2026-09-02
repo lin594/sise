@@ -43,16 +43,26 @@
       :kicker="isWaiting ? '房间页' : '大厅页'"
       :title="lobbyTitle"
       :subtitle="lobbySubtitle"
-      :modes="lobbyModes"
+      :modes="state ? [] : lobbyModes"
       :selected-mode="selectedLobbyMode"
       :can-start="canStartSelectedMode"
       :start-label="lobbyStartLabel"
+      :start-hint="lobbyStartHint"
       :join-error="joinError"
       :host-player-id="state?.hostPlayerId || ''"
+      :my-seat-id="mySeatId"
+      :is-host="isHost"
+      :room-id="activeRoomId"
+      :room-mode="state?.roomMode || ''"
       :players="players"
       @open-rules="showRules = true"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
+      @copy-invite="copyInviteLink"
+      @claim-seat="claimSeat"
+      @add-bot="addBot($event, 50)"
+      @update-bot="updateBot"
+      @remove-seat="removeSeat"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -446,7 +456,7 @@ type FishOption = {
   title: string;
   cards: Card[];
 };
-type LobbyModeId = "practice_bots" | "ranked_reserved" | "friends_reserved";
+type LobbyModeId = "practice_bots" | "friends" | "ranked_reserved";
 type LobbyMode = {
   id: LobbyModeId;
   name: string;
@@ -486,6 +496,7 @@ const {
   connect,
   connected,
   mySeatId,
+  activeRoomId,
   state,
   players,
   privateHand,
@@ -501,6 +512,10 @@ const {
   startGame,
   nextRound,
   returnLobby,
+  claimSeat,
+  addBot,
+  updateBot,
+  removeSeat,
 } = useRoom("玩家");
 
 const ENTRY_NAME_KEY = "sise_entry_name";
@@ -519,10 +534,10 @@ const lobbyModes: LobbyMode[] = [
     enabled: true,
   },
   {
-    id: "friends_reserved" as const,
+    id: "friends" as const,
     name: "好友同桌",
-    description: "预留入口：未来会扩展成 4 名真人通过邀请码或房间模式一起对局。",
-    enabled: false,
+    description: "创建私密好友房，通过链接邀请玩家自由选座，也可按座位添加不同强度的机器人。",
+    enabled: true,
   },
   {
     id: "ranked_reserved" as const,
@@ -544,39 +559,50 @@ const showModeLobby = computed(() => {
   if (showSyncingScreen.value) {
     return false;
   }
-  // Once game state exists (room joined), never show mode lobby again
-  // The mode lobby is only for mode selection BEFORE joining a room
-  if (state.value) {
-    return false;
-  }
-  // Before game state, show mode lobby if entered front
-  return enteredFrontLobby.value;
+  return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
 const canReturnToLobby = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
 const canPressStartGame = computed(
   () =>
-    Boolean(connected.value) && Boolean(state.value) && Boolean(mySeatId.value) && isWaiting.value && isHost.value,
+    Boolean(connected.value) &&
+    Boolean(state.value) &&
+    Boolean(mySeatId.value) &&
+    isWaiting.value &&
+    isHost.value &&
+    (state.value?.roomMode !== "friends" ||
+      (players.value.length === 4 && players.value.every((player) => player.isConfiguredBot || player.connected))),
 );
 const canStartSelectedMode = computed(
-  () => selectedLobbyMode.value === "practice_bots" && (!hasLobbySession.value || canPressStartGame.value),
+  () =>
+    (!hasLobbySession.value && (selectedLobbyMode.value === "practice_bots" || selectedLobbyMode.value === "friends")) ||
+    canPressStartGame.value,
 );
 const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
 const lobbySubtitle = computed(() =>
   isWaiting.value
     ? "你已经进入房间页，正在同步开局状态。"
-    : "先选择一种玩法；当前开放单人练习，其余模式先保留入口。",
+    : "选择一键单人练习，或创建一个可以邀请朋友和配置机器人的好友房。",
 );
 const lobbyStartLabel = computed(() => {
-  if (selectedLobbyMode.value !== "practice_bots") {
+  if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
     return "该模式尚未开放";
   }
   if (!hasLobbySession.value) {
-    return "进入单人练习";
+    return selectedLobbyMode.value === "friends" ? "创建好友房" : "进入单人练习";
   }
   if (pendingPracticeAutoStart.value) {
     return "正在自动开始...";
   }
-  return isHost.value ? "开始单人练习" : "等待房主开始";
+  return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
+});
+const lobbyStartHint = computed(() => {
+  if (!hasLobbySession.value || !isWaiting.value) return "";
+  if (!mySeatId.value) return "请先选择一个空座位";
+  if (!isHost.value) return "座位配置完成后由房主开始";
+  if (state.value?.roomMode !== "friends") return "";
+  if (players.value.length < 4) return `还差 ${4 - players.value.length} 个座位`;
+  if (players.value.some((player) => !player.isConfiguredBot && !player.connected)) return "仍有真人玩家离线";
+  return "四席已就绪";
 });
 const entryPrimaryLabel = computed(() => {
   const query = new URLSearchParams(window.location.search);
@@ -1571,6 +1597,21 @@ async function enterLobby() {
   nicknameHistory.value = mergedHistory;
   writeNicknameHistory(mergedHistory);
   enteredFrontLobby.value = true;
+  const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
+  if (!invitedRoomId) {
+    return;
+  }
+  enteringLobby.value = true;
+  try {
+    const ok = await connect({ nameOverride: nickname, roomId: invitedRoomId });
+    if (!ok) {
+      throw new Error(joinError.value || "加入好友房失败");
+    }
+  } catch (error) {
+    globalError.value = error instanceof Error ? error.message : "加入好友房失败";
+  } finally {
+    enteringLobby.value = false;
+  }
 }
 
 function randomizeNickname() {
@@ -1578,16 +1619,24 @@ function randomizeNickname() {
 }
 
 function startSelectedMode() {
-  if (selectedLobbyMode.value !== "practice_bots") {
+  if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
     globalError.value = "该模式暂未开放，当前只支持单人练习。";
     return;
   }
   globalError.value = "";
   if (!hasLobbySession.value) {
-    void startPracticeLobby();
+    if (selectedLobbyMode.value === "friends") {
+      void startFriendLobby();
+    } else {
+      void startPracticeLobby();
+    }
     return;
   }
-  requestPracticeAutoStart();
+  if (state.value?.roomMode === "friends") {
+    startGame();
+  } else {
+    requestPracticeAutoStart();
+  }
 }
 
 function requestPracticeAutoStart() {
@@ -1603,17 +1652,22 @@ async function startPracticeLobby() {
   entryName.value = nickname;
   enteringLobby.value = true;
   try {
-    const response = await fetch(`${HTTP_URL}/reset-room`, { method: "POST" });
+    const response = await fetch(`${HTTP_URL}/rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "practice" }),
+    });
     if (!response.ok) {
       throw new Error("创建单人练习房间失败");
     }
-    const payload = (await response.json()) as { ok?: boolean; roomId?: string; message?: string };
+    const payload = (await response.json()) as { ok?: boolean; roomId?: string; hostKey?: string; message?: string };
     if (!payload?.ok || !payload.roomId) {
       throw new Error(payload?.message || "创建单人练习房间失败");
     }
     const ok = await connect({
       nameOverride: nickname,
       roomId: payload.roomId,
+      hostKey: payload.hostKey,
       forceNew: true,
     });
     if (!ok) {
@@ -1624,6 +1678,55 @@ async function startPracticeLobby() {
     globalError.value = error instanceof Error ? error.message : "进入大厅失败";
   } finally {
     enteringLobby.value = false;
+  }
+}
+
+async function startFriendLobby() {
+  if (enteringLobby.value) {
+    return;
+  }
+  const nickname = entryName.value.trim() || generateRandomNickname();
+  enteringLobby.value = true;
+  try {
+    const response = await fetch(`${HTTP_URL}/rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "friends" }),
+    });
+    if (!response.ok) {
+      throw new Error("创建好友房失败");
+    }
+    const payload = (await response.json()) as { ok?: boolean; roomId?: string; hostKey?: string; message?: string };
+    if (!payload.ok || !payload.roomId || !payload.hostKey) {
+      throw new Error(payload.message || "创建好友房失败");
+    }
+    const ok = await connect({
+      nameOverride: nickname,
+      roomId: payload.roomId,
+      hostKey: payload.hostKey,
+      forceNew: true,
+    });
+    if (!ok) {
+      throw new Error(joinError.value || "进入好友房失败");
+    }
+  } catch (error) {
+    globalError.value = error instanceof Error ? error.message : "创建好友房失败";
+  } finally {
+    enteringLobby.value = false;
+  }
+}
+
+async function copyInviteLink() {
+  if (!activeRoomId.value) {
+    return;
+  }
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set("roomId", activeRoomId.value);
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    globalError.value = "邀请链接已复制";
+  } catch {
+    window.prompt("请复制邀请链接", url.toString());
   }
 }
 

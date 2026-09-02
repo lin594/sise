@@ -6,12 +6,14 @@ import {
   buildDeclarationSelection,
   buildDefaultDeclarationPayload,
   buildRoundResultPlayers,
+  canReturnLobby,
   dealInitialHands,
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
+import { chooseBotAction, chooseBotDiscard, createSeededRandom } from "../rooms/bot-strategy.js";
 
 type TestFn = () => void;
 
@@ -85,6 +87,128 @@ t("room-state-ops: auto discard prefers preserving complete groups over first av
 
   assert.ok(discard);
   assert.equal(discard!.id, "ym1");
+});
+
+t("bot-strategy: hu is mandatory at every strength", () => {
+  for (const strength of [0, 25, 50, 75, 100]) {
+    const decision = chooseBotAction({
+      hand: [],
+      pendingCard: c("rj", "red", "jiang", "upper"),
+      visibleCards: [],
+      strength,
+      random: createSeededRandom(strength + 1),
+      actions: [
+        { action: "hu", enabled: true },
+        { action: "pass", enabled: true },
+      ],
+    });
+    assert.equal(decision.action, "hu");
+  }
+});
+
+t("bot-strategy: seeded discard decisions are reproducible", () => {
+  const hand = [
+    c("rj1", "red", "ju"),
+    c("rj2", "red", "ju"),
+    c("rj3", "red", "ju"),
+    c("ym1", "yellow", "ma"),
+  ];
+  const first = chooseBotDiscard({ hand, visibleCards: [], strength: 45, random: createSeededRandom(2026) });
+  const second = chooseBotDiscard({ hand, visibleCards: [], strength: 45, random: createSeededRandom(2026) });
+  assert.equal(first?.id, second?.id);
+});
+
+t("bot-strategy: high strength preserves a completed group more often", () => {
+  const hand = [
+    c("rj1", "red", "ju"),
+    c("rj2", "red", "ju"),
+    c("rj3", "red", "ju"),
+    c("ym1", "yellow", "ma"),
+  ];
+  let lowBest = 0;
+  let highBest = 0;
+  for (let seed = 1; seed <= 300; seed += 1) {
+    if (chooseBotDiscard({ hand, visibleCards: [], strength: 0, random: createSeededRandom(seed) })?.id === "ym1") {
+      lowBest += 1;
+    }
+    if (chooseBotDiscard({ hand, visibleCards: [], strength: 100, random: createSeededRandom(seed) })?.id === "ym1") {
+      highBest += 1;
+    }
+  }
+  assert.equal(highBest > lowBest + 100, true, `low=${lowBest}, high=${highBest}`);
+});
+
+t("lobby: fixed seats support host bots and atomic occupancy", () => {
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.state.roomMode = "friends";
+  room.stateOps = null;
+  room.playerOrder = [];
+  room.playerHands = new Map();
+  room.botIds = new Set();
+  room.configuredBotIds = new Set();
+  room.seatBySession = new Map();
+  room.seatByToken = new Map();
+  room.baseNameBySeat = new Map();
+  room.pendingNameBySession = new Map();
+  room.pendingTokenBySession = new Map();
+  room.clients = [];
+  room.broadcastAvailableActions = () => {};
+  const sent: Array<{ event: string; payload: any }> = [];
+  const host = { sessionId: "host", send: (event: string, payload: any) => sent.push({ event, payload }) };
+  const guest = { sessionId: "guest", send: (event: string, payload: any) => sent.push({ event, payload }) };
+  room.pendingNameBySession.set("host", "房主");
+  room.pendingNameBySession.set("guest", "朋友");
+
+  assert.equal(room.claimSeatForClient(host, 0, "token-host"), true);
+  assert.equal(room.claimSeatForClient(guest, 0, "token-guest"), false);
+  assert.equal(room.state.hostPlayerId, "seat_0");
+  room.pendingTokenBySession.set("guest", "token-guest");
+  room.handleClaimSeat(guest, { seatIndex: 1 });
+  assert.equal(room.seatByToken.get("token-guest"), "seat_1");
+  room.handleAddBot(host, { seatIndex: 2, strength: 83 });
+  const bot = room.state.players.get("seat_2");
+  assert.equal(bot?.isConfiguredBot, true);
+  assert.equal(bot?.botStrength, 83);
+  assert.deepEqual(room.playerOrder, ["seat_0", "seat_1", "seat_2"]);
+  assert.equal(room.claimSeatForClient(host, 3, "token-host"), true);
+  assert.equal(room.state.hostPlayerId, "seat_3");
+  assert.equal(room.state.players.get("seat_3")?.name, "房主");
+  assert.equal(room.state.players.has("seat_0"), false);
+  assert.deepEqual(room.playerOrder, ["seat_1", "seat_2", "seat_3"]);
+  assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "seat_occupied"), true);
+});
+
+t("lobby: a seated player may return the table from any active phase", () => {
+  assert.equal(canReturnLobby("seat_0", "declaring"), true);
+  assert.equal(canReturnLobby("seat_0", "playing"), true);
+  assert.equal(canReturnLobby("seat_0", "ended"), true);
+  assert.equal(canReturnLobby("seat_0", "waiting"), false);
+  assert.equal(canReturnLobby(undefined, "playing"), false);
+});
+
+t("privacy: public lobby snapshots never include any private hand", () => {
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.state.roomMode = "friends";
+  room.stateOps = null;
+  room.playerOrder = ["seat_0", "seat_1"];
+  room.playerHands = new Map([
+    ["seat_0", [c("host-card", "red", "ju")]],
+    ["seat_1", [c("guest-card", "yellow", "ma")]],
+  ]);
+  for (const [seatIndex, name] of ["房主", "朋友"].entries()) {
+    const player = new PlayerState();
+    player.clientId = `seat_${seatIndex}`;
+    player.seatIndex = seatIndex;
+    player.name = name;
+    room.state.players.set(player.clientId, player);
+  }
+
+  const publicSnapshot = room.buildRoomSnapshot();
+  assert.equal("privateHand" in publicSnapshot, false);
+  assert.deepEqual(room.buildClientRoomSnapshot("seat_0").privateHand.map((card: Card) => card.id), ["host-card"]);
+  assert.deepEqual(room.buildClientRoomSnapshot("seat_1").privateHand.map((card: Card) => card.id), ["guest-card"]);
 });
 
 t("room-state-ops: upgrade targets matching pair when multiple groups exist", () => {
@@ -1042,7 +1166,7 @@ t("room: human collective peng with invalid candidateId is rejected", () => {
   assert.equal(sent.some((x) => x.event === "action_rejected" && x.payload?.reason === "invalid_candidate"), true);
 });
 
-t("room: bot collective auto-selects first candidate", () => {
+t("room: bot collective returns the candidate id for a sampled meld", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "A",
@@ -1061,7 +1185,13 @@ t("room: bot collective auto-selects first candidate", () => {
     { action: "pass", enabled: true },
   ];
 
-  room.runBotStepNow();
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    room.runBotStepNow();
+  } finally {
+    Math.random = originalRandom;
+  }
 
   const choice = room.pendingResponse.collectives.get("B");
   assert.equal(choice?.action, "peng");

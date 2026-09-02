@@ -10,11 +10,14 @@ export class CardSchema extends Schema {
 
 export class PlayerState extends Schema {
   @type("string") clientId: string = "";
+  @type("number") seatIndex: number = -1;
   @type("string") name: string = "";
   @type("number") handCount: number = 0;
   @type("number") declaredKongs: number = 0;
   @type("boolean") declaredReady: boolean = false;
   @type("boolean") isBot: boolean = false;
+  @type("boolean") isConfiguredBot: boolean = false;
+  @type("number") botStrength: number = 50;
   @type("boolean") connected: boolean = true;
   @type([CardSchema]) discardPile = new ArraySchema<CardSchema>();
   @type([CardSchema]) exposedArea = new ArraySchema<CardSchema>();
@@ -27,6 +30,7 @@ export class PlayerState extends Schema {
 }
 
 export class GameState extends Schema {
+  @type("string") roomMode: "practice" | "friends" = "practice";
   @type("string") phase: "waiting" | "declaring" | "playing" | "ended" = "waiting";
   @type("string") hostPlayerId: string = "";
   @type("string") dealerId: string = "";

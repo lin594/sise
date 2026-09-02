@@ -142,11 +142,14 @@ function asStringArray(input) {
 function normalizePlayer(raw) {
     return {
         clientId: String(raw?.clientId ?? ""),
+        seatIndex: Number(raw?.seatIndex ?? -1),
         name: String(raw?.name ?? ""),
         handCount: Number(raw?.handCount ?? 0),
         declaredKongs: Number(raw?.declaredKongs ?? 0),
         declaredReady: Boolean(raw?.declaredReady),
         isBot: Boolean(raw?.isBot),
+        isConfiguredBot: Boolean(raw?.isConfiguredBot),
+        botStrength: Math.max(0, Math.min(100, Number(raw?.botStrength ?? 50))),
         connected: Boolean(raw?.connected),
         discardPile: asCardArray(raw?.discardPile),
         exposedArea: asCardArray(raw?.exposedArea),
@@ -175,6 +178,7 @@ function normalizeSnapshot(next) {
     }
     return {
         roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
+        roomMode: rawState?.roomMode === "friends" ? "friends" : "practice",
         phase: String(rawState?.phase ?? ""),
         hostPlayerId: String(rawState?.hostPlayerId ?? ""),
         dealerId: String(rawState?.dealerId ?? ""),
@@ -325,7 +329,7 @@ function toDisplayAction(actionKey) {
 }
 export function useRoom(playerName = "Player") {
     const ROOM_KEY = "four_room_id";
-    const TOKEN_KEY = "four_player_token";
+    const LEGACY_TOKEN_KEY = "four_player_token";
     const NAME_KEY = "four_player_name";
     const MAX_LOGS = 120;
     const connected = ref(false);
@@ -362,6 +366,11 @@ export function useRoom(playerName = "Player") {
     let missingPrivateReconnectAttempts = 0;
     function inferSeatId(snapshot) {
         if (!snapshot) {
+            return "";
+        }
+        // Friend rooms can contain equal display names and unseated guests. Their
+        // identity must come from the room-scoped token, never from a name match.
+        if (snapshot.roomMode === "friends") {
             return "";
         }
         const connectedHumans = snapshot.players.filter((player) => !player.isBot && player.connected);
@@ -562,7 +571,7 @@ export function useRoom(playerName = "Player") {
             if (!payload?.ok) {
                 return;
             }
-            if (payload.seatId && !mySeatId.value) {
+            if (payload.seatId) {
                 mySeatId.value = payload.seatId;
             }
             const nextHand = sortHandCards(asCardArray(payload.privateHand));
@@ -794,6 +803,9 @@ export function useRoom(playerName = "Player") {
         window.localStorage.removeItem(key);
         window.sessionStorage.removeItem(key);
     }
+    function tokenKey(roomId) {
+        return `four_player_token:${roomId}`;
+    }
     function updateInviteUrl(roomId) {
         if (!roomId) {
             return;
@@ -847,6 +859,7 @@ export function useRoom(playerName = "Player") {
         if (connectInFlight) {
             return false;
         }
+        suppressReconnect = false;
         connectInFlight = true;
         clearReconnectTimer();
         const connectionSeq = ++activeConnectionSeq;
@@ -878,11 +891,12 @@ export function useRoom(playerName = "Player") {
                     nameOverride: options?.nameOverride,
                     roomId: options?.roomId,
                     playerToken: options?.playerToken,
+                    hostKey: options?.hostKey,
                     forceNew: Boolean(options?.forceNew),
                 };
             const forceNew = resolvedOptions.forceNew || query.get("new") === "1";
             if (forceNew) {
-                clearStored(TOKEN_KEY);
+                clearStored(LEGACY_TOKEN_KEY);
                 clearStored(NAME_KEY);
                 clearStored(ROOM_KEY);
             }
@@ -890,20 +904,22 @@ export function useRoom(playerName = "Player") {
             const queryToken = resolvedOptions.playerToken?.trim() || query.get("playerToken")?.trim() || "";
             const queryName = query.get("playerName")?.trim() ?? "";
             const cachedRoomId = readStored(ROOM_KEY);
-            const cachedToken = readStored(TOKEN_KEY);
             const cachedName = readStored(NAME_KEY);
             const desiredName = String(resolvedOptions.nameOverride ?? "").trim() || queryName || cachedName || playerName;
             localPlayerName.value = desiredName;
+            const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
+            const cachedToken = readStored(tokenKey(initialRoomId)) ||
+                (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
             const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
             playerToken.value = desiredToken;
-            writeStored(TOKEN_KEY, desiredToken);
+            writeStored(tokenKey(initialRoomId), desiredToken);
             writeStored(NAME_KEY, desiredName);
-            const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
             let joined;
             try {
                 joined = await client.joinById(initialRoomId, {
                     name: desiredName,
                     playerToken: desiredToken,
+                    hostKey: resolvedOptions.hostKey,
                 });
             }
             catch {
@@ -915,6 +931,7 @@ export function useRoom(playerName = "Player") {
                 joined = await client.joinById(fallbackRoomId, {
                     name: desiredName,
                     playerToken: desiredToken,
+                    hostKey: resolvedOptions.hostKey,
                 });
             }
             room.value = joined;
@@ -992,7 +1009,6 @@ export function useRoom(playerName = "Player") {
                 }
                 playerToken.value = payload.playerToken;
                 mySeatId.value = payload.seatId;
-                writeStored(TOKEN_KEY, payload.playerToken);
                 writeStored(NAME_KEY, desiredName);
                 if (payload.roomId) {
                     if (payload.roomId !== activeRoomId.value) {
@@ -1001,6 +1017,7 @@ export function useRoom(playerName = "Player") {
                         lastFingerprint = "";
                     }
                     writeStored(ROOM_KEY, payload.roomId);
+                    writeStored(tokenKey(payload.roomId), payload.playerToken);
                     updateInviteUrl(payload.roomId);
                 }
                 pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
@@ -1011,6 +1028,31 @@ export function useRoom(playerName = "Player") {
                 }
                 joinError.value = payload?.message ?? "加入失败";
                 pushLog(`ERROR ${joinError.value}`);
+            });
+            joined.onMessage("lobby_error", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                joinError.value = payload?.message || "大厅操作失败";
+            });
+            joined.onMessage("removed_from_room", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                suppressReconnect = true;
+                clearStored(tokenKey(activeRoomId.value));
+                clearStored(ROOM_KEY);
+                playerToken.value = "";
+                mySeatId.value = "";
+                const reason = payload?.reason || "你已离开房间";
+                connected.value = false;
+                room.value = null;
+                activeRoomId.value = "";
+                resetClientRoomState({ keepJoinError: true });
+                joinError.value = reason;
+                const url = new URL(window.location.href);
+                url.searchParams.delete("roomId");
+                window.history.replaceState(null, "", url.toString());
             });
             joined.onMessage("declare_rejected", (payload) => {
                 if (!isCurrentJoinedRoom()) {
@@ -1129,6 +1171,21 @@ export function useRoom(playerName = "Player") {
         clearActionLogs();
         safeRoomSend("return_lobby");
     }
+    function claimSeat(seatIndex) {
+        joinError.value = "";
+        safeRoomSend("claim_seat", { seatIndex });
+    }
+    function addBot(seatIndex, strength = 50) {
+        joinError.value = "";
+        safeRoomSend("add_bot", { seatIndex, strength });
+    }
+    function updateBot(seatIndex, strength) {
+        safeRoomSend("update_bot", { seatIndex, strength });
+    }
+    function removeSeat(seatIndex) {
+        joinError.value = "";
+        safeRoomSend("remove_seat", { seatIndex });
+    }
     onUnmounted(() => {
         clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
@@ -1145,6 +1202,7 @@ export function useRoom(playerName = "Player") {
         myId,
         mySeatId,
         playerToken,
+        activeRoomId,
         state,
         players,
         privateHand,
@@ -1165,5 +1223,9 @@ export function useRoom(playerName = "Player") {
         startGame,
         nextRound,
         returnLobby,
+        claimSeat,
+        addBot,
+        updateBot,
+        removeSeat,
     };
 }

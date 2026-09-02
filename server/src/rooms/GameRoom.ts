@@ -15,14 +15,11 @@ import {
   buildRoundResultPlayers as buildRoundResultPlayersFlow,
   canReturnLobby,
   canStartNextRound,
-  createHumanSeatFlow,
   dealInitialHands as dealInitialHandsFlow,
   decideStartGame,
   endRoundFlow,
-  ensureBotSeatsForStart as ensureBotSeatsForStartFlow,
   reclaimSeatStateFlow,
   resetRoundPlayers as resetRoundPlayersFlow,
-  resetToFreshLobbyFlow,
   resetToLobby,
   runDeclaringTimeoutFlow,
   startDeclaringFlow,
@@ -73,6 +70,7 @@ import {
 } from "./flow/playing-flow.js";
 import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
 import { registerRoom, unregisterRoom, type PrivateStateSnapshot } from "./room-registry.js";
+import { chooseBotAction, chooseBotDiscard } from "./bot-strategy.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -91,6 +89,17 @@ type ActionRequest =
 interface DeclareSetupPayload {
   declaredKongs?: number;
   fishCardIds?: string[];
+}
+
+interface RoomCreateOptions {
+  roomMode?: "practice" | "friends";
+  hostKey?: string;
+}
+
+interface RoomJoinOptions {
+  name?: string;
+  playerToken?: string;
+  hostKey?: string;
 }
 
 type RoundBootstrapSetup =
@@ -120,7 +129,7 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
 ]);
 
 export class FourColorGameRoom extends Room<GameState> {
-  maxClients = 4;
+  maxClients = 8;
 
   private readonly minPlayersToStart = Math.max(1, Number(process.env.MIN_PLAYERS ?? 1));
   private readonly targetSeats = 4;
@@ -129,9 +138,16 @@ export class FourColorGameRoom extends Room<GameState> {
   private playerHands = new Map<string, Card[]>(); // seatId -> cards
   private playerOrder: string[] = []; // seatIds in round order
   private botIds = new Set<string>(); // currently bot-controlled seatIds
+  private configuredBotIds = new Set<string>(); // seats intentionally occupied by lobby bots
   private seatBySession = new Map<string, string>(); // sessionId -> seatId
   private seatByToken = new Map<string, string>(); // token -> seatId
   private baseNameBySeat = new Map<string, string>(); // seatId -> human display name
+  private pendingNameBySession = new Map<string, string>(); // connected lobby guests that have not claimed a seat
+  private pendingTokenBySession = new Map<string, string>(); // preserves a guest's room-scoped token until seat claim
+  private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  private hostKey = "";
+  private hostKeyConsumed = false;
   private pendingResponse: PendingResponse | null = null;
   private publicGeneralPool: Card[] = [];
   private dealerCard: Card | null = null;
@@ -157,6 +173,9 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 1200));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
   private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
+  private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
+  private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
+  private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
   private readonly traceCards = (process.env.ROOM_TRACE_CARDS ?? "0") === "1";
@@ -203,8 +222,11 @@ export class FourColorGameRoom extends Room<GameState> {
    * 关键输入/输出：无入参；输出为事件监听完成的房间实例。
    * 副作用：创建 `GameState`、初始化 `stateOps`、绑定所有消息处理器。
    */
-  onCreate(): void {
+  onCreate(options: RoomCreateOptions = {}): void {
+    this.autoDispose = false;
     this.setState(new GameState());
+    this.state.roomMode = options.roomMode === "friends" ? "friends" : "practice";
+    this.hostKey = String(options.hostKey ?? "").trim();
     this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
     this.syncRoomMetadata();
     registerRoom(this.roomId, this);
@@ -219,6 +241,22 @@ export class FourColorGameRoom extends Room<GameState> {
 
     this.onMessage("return_lobby", (client) => {
       this.handleReturnLobby(client);
+    });
+
+    this.onMessage("claim_seat", (client, payload: { seatIndex?: number }) => {
+      this.handleClaimSeat(client, payload);
+    });
+
+    this.onMessage("add_bot", (client, payload: { seatIndex?: number; strength?: number }) => {
+      this.handleAddBot(client, payload);
+    });
+
+    this.onMessage("update_bot", (client, payload: { seatIndex?: number; strength?: number }) => {
+      this.handleUpdateBot(client, payload);
+    });
+
+    this.onMessage("remove_seat", (client, payload: { seatIndex?: number }) => {
+      this.handleRemoveSeat(client, payload);
     });
 
     this.onMessage("declare_kongs", (client, value: number) => {
@@ -261,7 +299,8 @@ export class FourColorGameRoom extends Room<GameState> {
    * 关键输入/输出：输入客户端和 join 参数；输出为座位分配或拒绝结果。
    * 副作用：更新 seat 映射、玩家信息、大厅动作面板。
    */
-  onJoin(client: Client, options: { name?: string; playerToken?: string }): void {
+  onJoin(client: Client, options: RoomJoinOptions): void {
+    this.clearRoomIdleTimer();
     const inputName = normalizeNameUtil(options?.name);
     const inputToken = normalizeTokenUtil(options?.playerToken);
 
@@ -277,16 +316,34 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    if (this.seatByToken.size >= this.targetSeats) {
-      client.send("join_error", { message: "房间已满（最多4名真人玩家）。" });
-      client.leave(4101);
+    const inputHostKey = String(options?.hostKey ?? "").trim();
+    const mayClaimHostSeat = Boolean(
+      !this.hostKeyConsumed && this.hostKey && inputHostKey && inputHostKey === this.hostKey,
+    );
+    if (mayClaimHostSeat) {
+      this.hostKeyConsumed = true;
+      this.pendingNameBySession.set(client.sessionId, inputName);
+      this.claimSeatForClient(client, 0, inputToken || generateTokenUtil());
       return;
     }
 
-    const token = inputToken || generateTokenUtil();
-    const seatId = this.createHumanSeat(client, token, inputName);
-    this.sendSessionToken(client, seatId, token, false);
-    this.state.lastAction = `LOBBY ${this.seatByToken.size}/${this.targetSeats}`;
+    // Legacy/practice rooms keep their one-click behavior. Friend-room invitees
+    // deliberately remain unseated until they choose one of the four positions.
+    if (this.state.roomMode === "practice") {
+      const firstEmpty = this.findFirstEmptySeatIndex();
+      if (firstEmpty < 0) {
+        client.send("join_error", { message: "房间已满。" });
+        client.leave(4101);
+        return;
+      }
+      this.pendingNameBySession.set(client.sessionId, inputName);
+      this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil());
+      return;
+    }
+
+    this.pendingNameBySession.set(client.sessionId, inputName || "玩家");
+    this.pendingTokenBySession.set(client.sessionId, inputToken || generateTokenUtil());
+    client.send("lobby_presence", { roomId: this.roomId, seated: false });
     this.broadcastAvailableActions();
   }
 
@@ -297,32 +354,38 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   onLeave(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
+    this.pendingNameBySession.delete(client.sessionId);
+    this.pendingTokenBySession.delete(client.sessionId);
     if (!seatId) {
+      this.scheduleRoomIdleIfEmpty();
       return;
     }
     this.seatBySession.delete(client.sessionId);
-
-    // 等待大厅无人在线时可以直接重置；已开局阶段则保留房间，
-    // 让 token 重连有机会把真人座位重新接回，而不是整局被清空。
-    if (this.seatBySession.size === 0) {
-      if (this.state.phase === "waiting") {
-        this.resetToFreshLobby();
-        return;
-      }
-    }
 
     const player = this.state.players.get(seatId);
     if (!player) {
       return;
     }
 
-    // Disconnect => immediate bot takeover; seat is always reclaimable by token.
     player.connected = false;
-    player.isBot = true;
     const baseName = this.baseNameBySeat.get(seatId) ?? player.name;
-    player.name = `${baseName} [BOT]`;
-    this.botIds.add(seatId);
-    this.state.lastAction = `TAKEOVER ${seatId}`;
+    if (this.state.phase === "waiting") {
+      player.isBot = false;
+      player.name = baseName;
+      this.botIds.delete(seatId);
+      this.state.lastAction = `OFFLINE ${seatId}`;
+      this.scheduleSeatRelease(seatId);
+    } else {
+      player.isBot = true;
+      player.botStrength = 50;
+      player.name = `${baseName} [BOT]`;
+      this.botIds.add(seatId);
+      this.state.lastAction = `TAKEOVER ${seatId}`;
+    }
+
+    if (this.state.hostPlayerId === seatId) {
+      this.transferHostToLowestOnlineHuman();
+    }
 
     if (this.state.phase === "declaring" && !player.declaredReady) {
       this.submitDefaultDeclaration(seatId, true);
@@ -333,6 +396,7 @@ export class FourColorGameRoom extends Room<GameState> {
     } else {
       this.broadcastAvailableActions();
     }
+    this.scheduleRoomIdleIfEmpty();
   }
 
   onDispose(): void {
@@ -341,54 +405,14 @@ export class FourColorGameRoom extends Room<GameState> {
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
     this.clearCollectiveTimer();
+    this.clearRoomIdleTimer();
+    for (const timer of this.seatDisconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.seatDisconnectTimers.clear();
   }
 
   // ===== 房间生命周期与消息入口 =====
-
-  /**
-   * 作用：将房间恢复到“无人占座”的全新大厅。
-   * 关键输入/输出：无入参；输出无返回值。
-   * 副作用：清空牌局运行态、座位映射、玩家容器和计时器。
-   */
-  private resetToFreshLobby(): void {
-    this.clearDeclareIntroTimer();
-    resetToFreshLobbyFlow({
-      state: this.state,
-      targetSeats: this.targetSeats,
-      clearBotTimer: () => this.clearBotTimer(),
-      clearDeclareTimer: () => this.clearDeclareTimer(),
-      resetCollectivePolling: () => this.resetCollectivePolling(),
-      setDeck: (deck) => {
-        this.deck = deck;
-      },
-      setPendingResponseNull: () => {
-        this.pendingResponse = null;
-      },
-      setPublicGeneralPool: (cards) => {
-        this.publicGeneralPool = cards;
-      },
-      setAwaitingDiscardOwnerNull: () => {
-        this.awaitingDiscardOwnerId = null;
-      },
-      setRoundDealerNull: () => {
-        this.roundDealerId = null;
-        this.dealerCard = null;
-        this.dealerPickerId = null;
-        this.nextRoundSetup = null;
-        this.lastRoundResult = null;
-        this.pendingFishDeclarations.clear();
-      },
-      clearPlayerHands: () => this.playerHands.clear(),
-      setPlayerOrder: (order) => {
-        this.playerOrder = order;
-      },
-      clearBotIds: () => this.botIds.clear(),
-      clearSeatBySession: () => this.seatBySession.clear(),
-      clearSeatByToken: () => this.seatByToken.clear(),
-      clearBaseNameBySeat: () => this.baseNameBySeat.clear(),
-      broadcastAvailableActions: () => this.broadcastAvailableActions(),
-    });
-  }
 
   /**
    * 作用：处理 start_game 消息并校验开局条件。
@@ -396,17 +420,7 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：可能补齐机器人并启动新局。
    */
   private handleStartGame(client: Client): void {
-    let seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId && this.state.phase === "waiting") {
-      const onlineHumanSeats = this.playerOrder.filter((id) => {
-        const player = this.state.players.get(id);
-        return Boolean(player && !player.isBot && player.connected);
-      });
-      if (onlineHumanSeats.length === 1) {
-        seatId = onlineHumanSeats[0];
-        this.seatBySession.set(client.sessionId, seatId);
-      }
-    }
+    const seatId = this.seatBySession.get(client.sessionId);
     if (seatId && this.state.phase === "waiting") {
       if (!this.state.hostPlayerId || !this.state.players.has(this.state.hostPlayerId)) {
         this.state.hostPlayerId = seatId;
@@ -435,7 +449,16 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
-    this.ensureBotSeatsForStart();
+    if (this.state.roomMode === "friends") {
+      const problem = this.friendRoomStartProblem();
+      if (problem) {
+        this.sendLobbyError(client, "cannot_start", problem);
+        return;
+      }
+    } else {
+      this.ensureBotSeatsForStart();
+    }
+    this.removeUnseatedClientsForGameStart();
     this.bootstrapRound();
   }
 
@@ -449,7 +472,15 @@ export class FourColorGameRoom extends Room<GameState> {
     if (!canStartNextRound(seatId, this.state.phase, this.state.hostPlayerId)) {
       return;
     }
-    this.ensureBotSeatsForStart();
+    if (this.state.roomMode === "friends") {
+      const problem = this.friendRoomStartProblem();
+      if (problem) {
+        this.sendLobbyError(client, "cannot_start", problem);
+        return;
+      }
+    } else {
+      this.ensureBotSeatsForStart();
+    }
     this.bootstrapRound();
   }
 
@@ -460,33 +491,313 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private handleReturnLobby(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!canReturnLobby(seatId, this.state.phase)) {
+    if (!canReturnLobby(seatId, this.state.phase) || seatId !== this.state.hostPlayerId) {
+      this.sendLobbyError(client, "not_host", "仅房主可让全桌返回大厅。");
       return;
     }
     this.backToLobby();
   }
 
-  /**
-   * 作用：创建真人座位并维护会话映射。
-   * 关键输入/输出：输入客户端、token、昵称；输出 seatId。
-   * 副作用：修改玩家容器、顺序和索引映射。
-   */
-  private createHumanSeat(client: Client, token: string, rawName: string): string {
-    return createHumanSeatFlow(
-      {
-        state: this.state,
-        seatByTokenSize: this.seatByToken.size,
-        playerOrder: this.playerOrder,
-        playerHands: this.playerHands,
-        baseNameBySeat: this.baseNameBySeat,
-        seatByToken: this.seatByToken,
-        seatBySession: this.seatBySession,
-        botIds: this.botIds,
-      },
-      client.sessionId,
-      token,
-      rawName,
+  private seatIdForIndex(seatIndex: number): string {
+    return `seat_${seatIndex}`;
+  }
+
+  private seatIndexFromId(seatId: string): number {
+    const match = /^seat_([0-3])$/.exec(seatId);
+    return match ? Number(match[1]) : -1;
+  }
+
+  private normalizeSeatIndex(value: unknown): number | null {
+    const seatIndex = Number(value);
+    return Number.isInteger(seatIndex) && seatIndex >= 0 && seatIndex < this.targetSeats ? seatIndex : null;
+  }
+
+  private normalizeBotStrength(value: unknown): number {
+    const strength = Number(value);
+    return Math.round(Math.max(0, Math.min(100, Number.isFinite(strength) ? strength : 50)));
+  }
+
+  private sortPlayerOrder(): void {
+    this.playerOrder.sort((a, b) => this.seatIndexFromId(a) - this.seatIndexFromId(b));
+  }
+
+  private findFirstEmptySeatIndex(): number {
+    for (let seatIndex = 0; seatIndex < this.targetSeats; seatIndex += 1) {
+      if (!this.state.players.has(this.seatIdForIndex(seatIndex))) {
+        return seatIndex;
+      }
+    }
+    return -1;
+  }
+
+  private sendLobbyError(client: Client, code: string, message: string): void {
+    client.send("lobby_error", { code, message });
+  }
+
+  private isHostClient(client: Client): boolean {
+    return this.seatBySession.get(client.sessionId) === this.state.hostPlayerId;
+  }
+
+  private handleClaimSeat(client: Client, payload: { seatIndex?: number }): void {
+    if (this.state.phase !== "waiting") {
+      this.sendLobbyError(client, "not_waiting", "游戏已经开始，无法再选择座位。");
+      return;
+    }
+    const seatIndex = this.normalizeSeatIndex(payload?.seatIndex);
+    if (seatIndex === null) {
+      this.sendLobbyError(client, "invalid_seat", "座位编号无效。");
+      return;
+    }
+    const currentSeatId = this.seatBySession.get(client.sessionId);
+    const token = currentSeatId
+      ? this.findTokenBySeatId(currentSeatId)
+      : this.pendingTokenBySession.get(client.sessionId) || generateTokenUtil();
+    this.claimSeatForClient(client, seatIndex, token);
+  }
+
+  private claimSeatForClient(client: Client, seatIndex: number, token: string): boolean {
+    const targetSeatId = this.seatIdForIndex(seatIndex);
+    const currentSeatId = this.seatBySession.get(client.sessionId);
+    const movingHost = Boolean(currentSeatId && currentSeatId === this.state.hostPlayerId);
+    if (this.state.players.has(targetSeatId) && currentSeatId !== targetSeatId) {
+      this.sendLobbyError(client, "seat_occupied", "该座位刚刚已被占用，请选择其他空位。");
+      return false;
+    }
+
+    const name = this.pendingNameBySession.get(client.sessionId) || "玩家";
+    let player = currentSeatId ? this.state.players.get(currentSeatId) : undefined;
+    if (currentSeatId && currentSeatId !== targetSeatId && player) {
+      const hand = this.playerHands.get(currentSeatId) ?? [];
+      const baseName = this.baseNameBySeat.get(currentSeatId) ?? player.name;
+      this.state.players.delete(currentSeatId);
+      this.playerHands.delete(currentSeatId);
+      this.baseNameBySeat.delete(currentSeatId);
+      this.playerOrder = this.playerOrder.filter((id) => id !== currentSeatId);
+      player.clientId = targetSeatId;
+      player.seatIndex = seatIndex;
+      this.state.players.set(targetSeatId, player);
+      this.playerHands.set(targetSeatId, hand);
+      this.baseNameBySeat.set(targetSeatId, baseName);
+      for (const [mappedToken, mappedSeatId] of this.seatByToken.entries()) {
+        if (mappedSeatId === currentSeatId) {
+          this.seatByToken.set(mappedToken, targetSeatId);
+        }
+      }
+    } else if (!player) {
+      player = new PlayerState();
+      player.clientId = targetSeatId;
+      player.seatIndex = seatIndex;
+      player.name = name;
+      player.isBot = false;
+      player.isConfiguredBot = false;
+      player.botStrength = 50;
+      player.connected = true;
+      this.state.players.set(targetSeatId, player);
+      this.playerHands.set(targetSeatId, []);
+      this.baseNameBySeat.set(targetSeatId, name);
+    }
+
+    player.name = this.baseNameBySeat.get(targetSeatId) || name;
+    player.connected = true;
+    player.isBot = false;
+    player.isConfiguredBot = false;
+    this.botIds.delete(targetSeatId);
+    this.configuredBotIds.delete(targetSeatId);
+    this.seatBySession.set(client.sessionId, targetSeatId);
+    this.seatByToken.set(token, targetSeatId);
+    if (!this.playerOrder.includes(targetSeatId)) {
+      this.playerOrder.push(targetSeatId);
+    }
+    this.sortPlayerOrder();
+    this.pendingNameBySession.delete(client.sessionId);
+    this.pendingTokenBySession.delete(client.sessionId);
+    this.clearSeatReleaseTimer(targetSeatId);
+    if (movingHost || !this.state.hostPlayerId) {
+      this.state.hostPlayerId = targetSeatId;
+    }
+    this.state.lastAction = `LOBBY ${this.playerOrder.length}/${this.targetSeats}`;
+    this.sendSessionToken(client, targetSeatId, token, false);
+    this.broadcastAvailableActions();
+    return true;
+  }
+
+  private handleAddBot(client: Client, payload: { seatIndex?: number; strength?: number }): void {
+    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+      this.sendLobbyError(client, "not_host", "仅房主可添加机器人。");
+      return;
+    }
+    const seatIndex = this.normalizeSeatIndex(payload?.seatIndex);
+    if (seatIndex === null) {
+      this.sendLobbyError(client, "invalid_seat", "座位编号无效。");
+      return;
+    }
+    const seatId = this.seatIdForIndex(seatIndex);
+    if (this.state.players.has(seatId)) {
+      this.sendLobbyError(client, "seat_occupied", "该座位已被占用。");
+      return;
+    }
+    const bot = new PlayerState();
+    bot.clientId = seatId;
+    bot.seatIndex = seatIndex;
+    bot.name = `机器人 ${seatIndex + 1}`;
+    bot.isBot = true;
+    bot.isConfiguredBot = true;
+    bot.botStrength = this.normalizeBotStrength(payload?.strength);
+    bot.connected = false;
+    this.state.players.set(seatId, bot);
+    this.playerHands.set(seatId, []);
+    this.playerOrder.push(seatId);
+    this.sortPlayerOrder();
+    this.botIds.add(seatId);
+    this.configuredBotIds.add(seatId);
+    this.state.lastAction = `BOT_ADD ${seatId}`;
+    this.broadcastAvailableActions();
+  }
+
+  private handleUpdateBot(client: Client, payload: { seatIndex?: number; strength?: number }): void {
+    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+      this.sendLobbyError(client, "not_host", "仅房主可调整机器人。");
+      return;
+    }
+    const seatIndex = this.normalizeSeatIndex(payload?.seatIndex);
+    const seatId = seatIndex === null ? "" : this.seatIdForIndex(seatIndex);
+    const player = seatId ? this.state.players.get(seatId) : undefined;
+    if (!player || !player.isConfiguredBot) {
+      this.sendLobbyError(client, "not_configured_bot", "该座位不是可配置机器人。");
+      return;
+    }
+    player.botStrength = this.normalizeBotStrength(payload?.strength);
+    this.state.lastAction = `BOT_LEVEL ${seatId}`;
+    this.broadcastAvailableActions();
+  }
+
+  private handleRemoveSeat(client: Client, payload: { seatIndex?: number }): void {
+    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+      this.sendLobbyError(client, "not_host", "仅房主可移除座位成员。");
+      return;
+    }
+    const seatIndex = this.normalizeSeatIndex(payload?.seatIndex);
+    const seatId = seatIndex === null ? "" : this.seatIdForIndex(seatIndex);
+    if (!seatId || !this.state.players.has(seatId)) {
+      this.sendLobbyError(client, "empty_seat", "该座位当前为空。");
+      return;
+    }
+    if (seatId === this.state.hostPlayerId) {
+      this.sendLobbyError(client, "cannot_remove_host", "不能移除当前房主。");
+      return;
+    }
+    this.removeSeat(seatId, true);
+    this.state.lastAction = `SEAT_REMOVE ${seatId}`;
+    this.broadcastAvailableActions();
+  }
+
+  private removeSeat(seatId: string, notifyClient: boolean): void {
+    this.clearSeatReleaseTimer(seatId);
+    const sessionIds = [...this.seatBySession.entries()]
+      .filter(([, mappedSeat]) => mappedSeat === seatId)
+      .map(([sessionId]) => sessionId);
+    for (const sessionId of sessionIds) {
+      this.seatBySession.delete(sessionId);
+      const target = this.clients.find((item) => item.sessionId === sessionId);
+      if (notifyClient && target) {
+        target.send("removed_from_room", { reason: "你已被房主移出房间。" });
+        target.leave(4104);
+      }
+    }
+    for (const [token, mappedSeat] of [...this.seatByToken.entries()]) {
+      if (mappedSeat === seatId) {
+        this.seatByToken.delete(token);
+      }
+    }
+    this.state.players.delete(seatId);
+    this.playerHands.delete(seatId);
+    this.baseNameBySeat.delete(seatId);
+    this.botIds.delete(seatId);
+    this.configuredBotIds.delete(seatId);
+    this.playerOrder = this.playerOrder.filter((id) => id !== seatId);
+  }
+
+  private clearSeatReleaseTimer(seatId: string): void {
+    const timer = this.seatDisconnectTimers.get(seatId);
+    if (timer) {
+      clearTimeout(timer);
+      this.seatDisconnectTimers.delete(seatId);
+    }
+  }
+
+  private scheduleSeatRelease(seatId: string): void {
+    this.clearSeatReleaseTimer(seatId);
+    const timer = setTimeout(() => {
+      this.seatDisconnectTimers.delete(seatId);
+      const player = this.state.players.get(seatId);
+      if (this.state.phase !== "waiting" || !player || player.connected || player.isConfiguredBot) {
+        return;
+      }
+      this.removeSeat(seatId, false);
+      if (this.state.hostPlayerId === seatId) {
+        this.transferHostToLowestOnlineHuman();
+      }
+      this.state.lastAction = `SEAT_EXPIRED ${seatId}`;
+      this.broadcastAvailableActions();
+    }, this.lobbySeatHoldMs);
+    this.seatDisconnectTimers.set(seatId, timer);
+  }
+
+  private transferHostToLowestOnlineHuman(): void {
+    const nextHost = this.playerOrder.find((seatId) => {
+      const player = this.state.players.get(seatId);
+      return Boolean(player && !player.isConfiguredBot && player.connected);
+    });
+    this.state.hostPlayerId = nextHost ?? "";
+  }
+
+  private friendRoomStartProblem(): string {
+    if (this.playerOrder.length !== this.targetSeats) {
+      return "四个座位尚未坐满。";
+    }
+    const hasEmpty = Array.from({ length: this.targetSeats }, (_, index) => this.seatIdForIndex(index)).some(
+      (seatId) => !this.state.players.has(seatId),
     );
+    if (hasEmpty) {
+      return "四个座位尚未坐满。";
+    }
+    const hasOfflineHuman = this.playerOrder.some((seatId) => {
+      const player = this.state.players.get(seatId);
+      return Boolean(player && !player.isConfiguredBot && !player.connected);
+    });
+    return hasOfflineHuman ? "仍有真人玩家离线，请等待其重连或由房主移除。" : "";
+  }
+
+  private removeUnseatedClientsForGameStart(): void {
+    for (const client of this.clients) {
+      if (this.seatBySession.has(client.sessionId)) {
+        continue;
+      }
+      this.pendingNameBySession.delete(client.sessionId);
+      this.pendingTokenBySession.delete(client.sessionId);
+      client.send("lobby_error", { code: "game_started", message: "牌局已经开始，本局不开放旁观。" });
+      client.leave(4105);
+    }
+  }
+
+  private clearRoomIdleTimer(): void {
+    if (this.roomIdleTimer) {
+      clearTimeout(this.roomIdleTimer);
+      this.roomIdleTimer = null;
+    }
+  }
+
+  private scheduleRoomIdleIfEmpty(): void {
+    if (this.seatBySession.size > 0 || this.pendingNameBySession.size > 0 || this.roomIdleTimer) {
+      return;
+    }
+    const timeoutMs = this.state.phase === "waiting" ? this.waitingRoomIdleMs : this.activeRoomIdleMs;
+    this.roomIdleTimer = setTimeout(() => {
+      this.roomIdleTimer = null;
+      if (this.seatBySession.size === 0 && this.pendingNameBySession.size === 0) {
+        void this.disconnect(4000);
+      }
+    }, timeoutMs);
   }
 
   /**
@@ -495,6 +806,7 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：更新在线态、会话映射并触发动作刷新。
    */
   private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
+    this.clearSeatReleaseTimer(seatId);
     for (const [sessionId, mappedSeat] of this.seatBySession.entries()) {
       if (mappedSeat !== seatId || sessionId === client.sessionId) {
         continue;
@@ -523,6 +835,17 @@ export class FourColorGameRoom extends Room<GameState> {
       return;
     }
 
+    const player = this.state.players.get(seatId);
+    if (player) {
+      player.seatIndex = this.seatIndexFromId(seatId);
+      player.isConfiguredBot = false;
+      player.botStrength = 50;
+    }
+    this.pendingNameBySession.delete(client.sessionId);
+    if (!this.state.hostPlayerId) {
+      this.state.hostPlayerId = seatId;
+    }
+
     this.sendSessionToken(client, seatId, token, true);
     this.syncAllPrivateHands();
     this.broadcastAvailableActions();
@@ -540,6 +863,7 @@ export class FourColorGameRoom extends Room<GameState> {
       seatId,
       hostPlayerId: this.state.hostPlayerId,
       roomId: this.roomId,
+      seatIndex: this.seatIndexFromId(seatId),
       reclaimed,
     });
   }
@@ -559,7 +883,26 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：可能新增 BOT 玩家并写入 botIds。
    */
   private ensureBotSeatsForStart(): void {
-    ensureBotSeatsForStartFlow(this.state, this.playerOrder, this.playerHands, this.botIds, this.targetSeats);
+    for (let seatIndex = 0; seatIndex < this.targetSeats; seatIndex += 1) {
+      const seatId = this.seatIdForIndex(seatIndex);
+      if (this.state.players.has(seatId)) {
+        continue;
+      }
+      const bot = new PlayerState();
+      bot.clientId = seatId;
+      bot.seatIndex = seatIndex;
+      bot.name = `机器人 ${seatIndex + 1}`;
+      bot.isBot = true;
+      bot.isConfiguredBot = true;
+      bot.botStrength = 50;
+      bot.connected = false;
+      this.state.players.set(seatId, bot);
+      this.playerHands.set(seatId, []);
+      this.playerOrder.push(seatId);
+      this.botIds.add(seatId);
+      this.configuredBotIds.add(seatId);
+    }
+    this.sortPlayerOrder();
   }
 
   private resolveBootstrapSetup(): RoundBootstrapSetup {
@@ -912,13 +1255,14 @@ export class FourColorGameRoom extends Room<GameState> {
    * 关键输入/输出：输入 owner；输出无返回值。
    * 副作用：清理 awaitingDiscardOwner、写入弃牌并进入 collective。
    */
-  private discardFromAndCollective(ownerId: string): void {
+  private discardFromAndCollective(ownerId: string, cardId?: string): void {
     if (this.state.phase !== "playing" || this.awaitingDiscardOwnerId !== ownerId) {
       return;
     }
     discardFromAndCollectiveFlow(
       {
-        pickDiscardCard: (ownerIdArg) => this.ops.pickDiscardCard(ownerIdArg),
+        pickDiscardCard: (ownerIdArg) =>
+          cardId ? this.ops.discardCardById(ownerIdArg, cardId) : this.ops.pickDiscardCard(ownerIdArg),
         pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         beginCollectiveFromDiscard: (ownerIdArg, discard) => this.beginCollectiveFromDiscard(ownerIdArg, discard),
         clearAwaitingDiscardOwner: () => {
@@ -1571,6 +1915,7 @@ export class FourColorGameRoom extends Room<GameState> {
       state: this.state,
       playerOrder: this.playerOrder,
       botIds: this.botIds,
+      configuredBotIds: this.configuredBotIds,
       playerHands: this.playerHands,
       baseNameBySeat: this.baseNameBySeat,
       seatBySession: this.seatBySession,
@@ -1599,6 +1944,21 @@ export class FourColorGameRoom extends Room<GameState> {
       syncAllPrivateHands: () => this.syncAllPrivateHands(),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
     });
+    if (this.state.roomMode === "practice") {
+      for (const seatId of [...this.configuredBotIds]) {
+        this.removeSeat(seatId, false);
+      }
+      this.broadcastAvailableActions();
+    }
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (player && !player.isConfiguredBot && !player.connected) {
+        this.scheduleSeatRelease(seatId);
+      }
+    }
+    if (!this.state.players.get(this.state.hostPlayerId)?.connected) {
+      this.transferHostToLowestOnlineHuman();
+    }
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
@@ -1696,6 +2056,7 @@ export class FourColorGameRoom extends Room<GameState> {
     for (const client of this.clients) {
       const seatId = this.seatBySession.get(client.sessionId);
       if (!seatId) {
+        client.send("room_snapshot", this.buildRoomSnapshot());
         continue;
       }
       // 每个客户端都需要拿到自己的私有快照，否则一旦 `private_hand`
@@ -1754,6 +2115,7 @@ export class FourColorGameRoom extends Room<GameState> {
     this.updatePublicHandCounts();
     return {
       roomId: this.roomId,
+      roomMode: this.state.roomMode,
       phase: this.state.phase,
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,
@@ -1791,11 +2153,14 @@ export class FourColorGameRoom extends Room<GameState> {
         .filter((player): player is PlayerState => Boolean(player))
         .map((player) => ({
           clientId: player.clientId,
+          seatIndex: player.seatIndex,
           name: player.name,
           handCount: player.handCount,
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
           isBot: player.isBot,
+          isConfiguredBot: player.isConfiguredBot,
+          botStrength: player.botStrength,
           connected: player.connected,
           discardPile: this.buildCardListSnapshot(player.discardPile),
           exposedArea: this.buildCardListSnapshot(player.exposedArea),
@@ -1844,7 +2209,9 @@ export class FourColorGameRoom extends Room<GameState> {
     }
     this.setMetadata({
       phase: this.state.phase,
+      roomMode: this.state.roomMode,
       hostPlayerId: this.state.hostPlayerId,
+      occupiedSeats: this.playerOrder.length,
     });
   }
 
@@ -2006,6 +2373,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private syncClientState(client: Client): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId) {
+      client.send("room_snapshot", this.buildRoomSnapshot());
       return;
     }
     const token = this.findTokenBySeatId(seatId);
@@ -2346,17 +2714,54 @@ export class FourColorGameRoom extends Room<GameState> {
       isBot: (seatId) => this.botIds.has(seatId),
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       getAvailableActions: (seatId) => this.getAvailableActions(seatId),
+      chooseAction: (seatId, actions) =>
+        chooseBotAction({
+          hand: this.playerHands.get(seatId) ?? [],
+          pendingCard: pending.card,
+          actions,
+          visibleCards: this.buildBotVisibleCards(),
+          strength: this.state.players.get(seatId)?.botStrength ?? 50,
+        }),
+      chooseDiscardCardId: (seatId) =>
+        chooseBotDiscard({
+          hand: this.playerHands.get(seatId) ?? [],
+          visibleCards: this.buildBotVisibleCards(),
+          strength: this.state.players.get(seatId)?.botStrength ?? 50,
+        })?.id ?? null,
       setCollectiveChoice: (seatId, choice) => {
         this.pendingResponse?.collectives.set(seatId, choice);
         this.collectiveCursor += 1;
       },
       advanceCollectivePolling: () => this.advanceCollectivePolling(),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
-      discardFromAndCollective: (ownerId) => this.discardFromAndCollective(ownerId),
+      discardFromAndCollective: (ownerId, cardId) => this.discardFromAndCollective(ownerId, cardId),
       executeEat: (ownerId, candidateId) => this.executeEat(ownerId, candidateId),
       executeGrab: (ownerId) => this.executeGrab(ownerId),
       executePassToNext: (ownerId) => this.executePassToNext(ownerId),
     });
+  }
+
+  private buildBotVisibleCards(): Card[] {
+    const visibleById = new Map<string, Card>();
+    const addVisible = (card: Card) => {
+      if (card.id) {
+        visibleById.set(card.id, { ...card });
+      }
+    };
+    for (const card of this.publicGeneralPool) {
+      addVisible(card);
+    }
+    for (const card of this.state.publicDiscardPile) {
+      addVisible(this.ops.toPlainCard(card));
+    }
+    for (const player of this.state.players.values()) {
+      for (const area of [player.discardPile, player.exposedArea, player.generalArea, player.fishArea]) {
+        for (const card of area) {
+          addVisible(this.ops.toPlainCard(card));
+        }
+      }
+    }
+    return [...visibleById.values()];
   }
 
   // ===== 调试场景 =====

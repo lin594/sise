@@ -55,12 +55,12 @@ export function canStartNextRound(seatId: string | undefined, phase: string, hos
 }
 
 /**
- * 作用：校验 ended 阶段是否允许返回大厅。
+ * 作用：校验开局后是否允许返回大厅。
  * 关键输入/输出：输入发起者与阶段，输出布尔值。
  * 副作用：无。
  */
 export function canReturnLobby(seatId: string | undefined, phase: string): boolean {
-  return Boolean(seatId && phase === "ended");
+  return Boolean(seatId && (phase === "declaring" || phase === "playing" || phase === "ended"));
 }
 
 export interface FreshLobbyContext {
@@ -490,6 +490,7 @@ export interface LobbyResetContext {
   state: GameState;
   playerOrder: string[];
   botIds: Set<string>;
+  configuredBotIds: Set<string>;
   playerHands: Map<string, Card[]>;
   baseNameBySeat: Map<string, string>;
   seatBySession: Map<string, string>;
@@ -507,21 +508,6 @@ export interface LobbyResetContext {
  */
 export function resetToLobby(context: LobbyResetContext): void {
   context.resetRuntime();
-
-  const humanSeats = context.playerOrder.filter((seatId) => !context.botIds.has(seatId));
-  const humanSet = new Set(humanSeats);
-
-  for (const seatId of context.playerOrder) {
-    if (humanSet.has(seatId)) {
-      continue;
-    }
-    context.state.players.delete(seatId);
-    context.playerHands.delete(seatId);
-    context.baseNameBySeat.delete(seatId);
-  }
-
-  context.playerOrder.length = 0;
-  context.playerOrder.push(...humanSeats);
   context.botIds.clear();
 
   const onlineSeatSet = new Set([...context.seatBySession.values()]);
@@ -540,9 +526,18 @@ export function resetToLobby(context: LobbyResetContext): void {
     player.wildcardPool.clear();
     player.fishArea.clear();
     context.playerHands.set(seatId, []);
-    player.connected = onlineSeatSet.has(seatId);
-    player.isBot = false;
-    player.name = context.baseNameBySeat.get(seatId) ?? player.name;
+    if (context.configuredBotIds.has(seatId)) {
+      player.connected = false;
+      player.isBot = true;
+      player.isConfiguredBot = true;
+      context.botIds.add(seatId);
+    } else {
+      player.connected = onlineSeatSet.has(seatId);
+      player.isBot = false;
+      player.isConfiguredBot = false;
+      player.botStrength = 50;
+      player.name = context.baseNameBySeat.get(seatId) ?? player.name.replace(/ \[BOT\]$/, "");
+    }
   }
 
   if (!context.state.players.has(context.state.hostPlayerId) && context.playerOrder.length > 0) {

@@ -9,11 +9,14 @@ export interface Card {
 }
 export interface PlayerState {
     clientId: string;
+    seatIndex: number;
     name: string;
     handCount?: number;
     declaredKongs: number;
     declaredReady: boolean;
     isBot: boolean;
+    isConfiguredBot: boolean;
+    botStrength: number;
     connected: boolean;
     discardPile: Card[];
     exposedArea: Card[];
@@ -25,6 +28,7 @@ export interface PlayerState {
 }
 export interface RoomStateSnapshot {
     roomId?: string;
+    roomMode: "practice" | "friends";
     phase: string;
     hostPlayerId: string;
     dealerId: string;
@@ -81,6 +85,7 @@ export type ActionRequest = ActionType | {
 export interface SessionTokenPayload {
     playerToken: string;
     seatId: string;
+    seatIndex?: number;
     hostPlayerId: string;
     roomId: string;
     reclaimed: boolean;

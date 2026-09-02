@@ -16,7 +16,8 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: "MIN_PLAYERS=1 BOT_ACTION_MIN_MS=30 BOT_ACTION_MAX_MS=60 npm --prefix server run start",
+          command:
+            "MIN_PLAYERS=1 BOT_THINK_MIN_MS=30 BOT_THINK_MAX_MS=60 LOCAL_TRANSITION_DELAY_MS=20 DEALER_PICK_INTRO_MS=20 DEALER_REVEAL_INTRO_MS=20 OPENING_DEAL_DELAY_MS=80 npm --prefix server run start",
           url: "http://127.0.0.1:2567/health",
           reuseExistingServer: true,
           timeout: 60_000,

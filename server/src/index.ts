@@ -1,5 +1,6 @@
 import express from "express";
 import http from "http";
+import { randomBytes } from "node:crypto";
 import { Server, matchMaker } from "colyseus";
 import { monitor } from "@colyseus/monitor";
 import { FourColorGameRoom } from "./rooms/GameRoom.js";
@@ -9,6 +10,8 @@ const port = Number(process.env.PORT ?? 2567);
 const app = express();
 const server = http.createServer(app);
 const gameServer = new Server({ server });
+
+app.use(express.json());
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -65,7 +68,7 @@ async function getOrCreateSingletonRoomId(): Promise<string> {
       singletonRoomId = reusableWaitingRoom.roomId;
       return singletonRoomId;
     }
-    const created = await matchMaker.createRoom("four-color", {});
+    const created = await matchMaker.createRoom("four-color", { roomMode: "practice" });
     singletonRoomId = created.roomId;
     return singletonRoomId;
   })();
@@ -75,6 +78,16 @@ async function getOrCreateSingletonRoomId(): Promise<string> {
   } finally {
     creatingSingletonRoom = null;
   }
+}
+
+function createHostKey(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+async function createGameRoom(mode: "friends" | "practice") {
+  const hostKey = createHostKey();
+  const created = await matchMaker.createRoom("four-color", { roomMode: mode, hostKey });
+  return { roomId: created.roomId, hostKey };
 }
 
 app.get("/health", (_req, res) => {
@@ -91,11 +104,26 @@ app.get("/room-id", async (_req, res) => {
   }
 });
 
+app.post("/rooms", async (req, res) => {
+  try {
+    const mode = req.body?.mode === "friends" ? "friends" : req.body?.mode === "practice" ? "practice" : null;
+    if (!mode) {
+      res.status(400).json({ ok: false, message: "mode must be friends or practice" });
+      return;
+    }
+    const created = await createGameRoom(mode);
+    res.json({ ok: true, ...created });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "failed to create room";
+    res.status(500).json({ ok: false, message });
+  }
+});
+
 app.post("/reset-room", async (_req, res) => {
   try {
-    const created = await matchMaker.createRoom("four-color", {});
+    const created = await createGameRoom("practice");
     singletonRoomId = created.roomId;
-    res.json({ ok: true, roomId: singletonRoomId });
+    res.json({ ok: true, ...created });
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to reset room";
     res.status(500).json({ ok: false, message });

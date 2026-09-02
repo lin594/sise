@@ -6,8 +6,6 @@ import {
   pickCollectiveWinner,
   resolveNextCollectiveResponder,
   planLocalPhaseAfterNoResponse,
-  pickCollectiveBotAction,
-  pickLocalBotAction,
 } from "./support.js";
 
 type SeatId = string;
@@ -624,10 +622,12 @@ export interface BotRunnerDeps {
   isBot: (seatId: string) => boolean;
   awaitingDiscardOwnerId: string | null;
   getAvailableActions: (seatId: string) => AvailableActionEntry[];
+  chooseAction: (seatId: string, actions: AvailableActionEntry[]) => { action: ActionType; candidateId?: string };
+  chooseDiscardCardId: (seatId: string) => string | null;
   setCollectiveChoice: (seatId: string, choice: { action: ActionType; candidateId?: string }) => void;
   advanceCollectivePolling: () => void;
   broadcastAvailableActions: () => void;
-  discardFromAndCollective: (ownerId: string) => void;
+  discardFromAndCollective: (ownerId: string, cardId?: string) => void;
   executeEat: (ownerId: string, candidateId?: string) => boolean;
   executeGrab: (ownerId: string) => void;
   executePassToNext: (ownerId: string) => void;
@@ -651,9 +651,8 @@ export function runBotStep(deps: BotRunnerDeps): void {
       return;
     }
     const actions = deps.getAvailableActions(responderId);
-    const choose = pickCollectiveBotAction(actions);
-    const candidateId = actions.find((item) => item.action === choose)?.candidates?.[0]?.id;
-    deps.setCollectiveChoice(responderId, { action: choose, candidateId });
+    const choice = deps.chooseAction(responderId, actions);
+    deps.setCollectiveChoice(responderId, choice);
     deps.advanceCollectivePolling();
     return;
   }
@@ -665,16 +664,16 @@ export function runBotStep(deps: BotRunnerDeps): void {
   }
 
   if (deps.awaitingDiscardOwnerId === ownerId) {
-    deps.discardFromAndCollective(ownerId);
+    const cardId = deps.chooseDiscardCardId(ownerId);
+    deps.discardFromAndCollective(ownerId, cardId ?? undefined);
     return;
   }
 
   if (deps.responsePhase === "local_upper") {
     const actions = deps.getAvailableActions(ownerId);
-    const chiEntry = actions.find((item) => item.action === "chi");
-    const action = pickLocalBotAction("local_upper", Boolean(chiEntry?.enabled));
-    if (action === "chi") {
-      if (!deps.executeEat(ownerId, chiEntry?.candidates?.[0]?.id)) {
+    const choice = deps.chooseAction(ownerId, actions);
+    if (choice.action === "chi") {
+      if (!deps.executeEat(ownerId, choice.candidateId)) {
         deps.executeGrab(ownerId);
       }
     } else {
@@ -685,10 +684,9 @@ export function runBotStep(deps: BotRunnerDeps): void {
 
   if (deps.responsePhase === "local_draw") {
     const actions = deps.getAvailableActions(ownerId);
-    const chiEntry = actions.find((item) => item.action === "chi");
-    const action = pickLocalBotAction("local_draw", Boolean(chiEntry?.enabled));
-    if (action === "chi") {
-      if (!deps.executeEat(ownerId, chiEntry?.candidates?.[0]?.id)) {
+    const choice = deps.chooseAction(ownerId, actions);
+    if (choice.action === "chi") {
+      if (!deps.executeEat(ownerId, choice.candidateId)) {
         deps.executePassToNext(ownerId);
       }
     } else {
