@@ -41,7 +41,7 @@
         <button class="primary" data-testid="login-submit" :disabled="entering" @click="$emit('submit')">
           <span data-testid="login-submit-label">{{ entering ? "进入中..." : primaryLabel }}</span>
         </button>
-        <button class="ghost" data-testid="random-nickname" @click="$emit('randomize')">随机昵称</button>
+        <button class="ghost quick-name" data-testid="random-nickname" @click="$emit('randomize')">随机昵称</button>
         <button class="ghost" data-testid="open-rules" @click="$emit('open-rules')">查看规则</button>
       </div>
     </div>
@@ -79,6 +79,9 @@ function onInput(event: Event) {
   color: #e2e8f0;
   display: grid;
   gap: 1rem;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .entry-hero {
@@ -157,6 +160,7 @@ function onInput(event: Event) {
   border-radius: 999px;
   padding: 0.35rem 0.75rem;
   cursor: pointer;
+  min-height: 48px;
 }
 
 .entry-actions {
@@ -171,6 +175,7 @@ function onInput(event: Event) {
   border-radius: 8px;
   padding: 10px 14px;
   cursor: pointer;
+  min-height: 48px;
 }
 
 .primary {
@@ -187,5 +192,69 @@ function onInput(event: Event) {
   background: #1f2937;
   color: #e2e8f0;
   border: 1px solid #334155;
+}
+
+.quick-name {
+  border-color: #0ea5e9;
+  background: rgba(3, 105, 161, 0.28);
+  color: #e0f2fe;
+}
+
+@media (max-width: 960px), (max-height: 500px) {
+  .entry-shell {
+    grid-template-columns: minmax(11rem, 0.72fr) minmax(0, 1.7fr);
+    align-items: stretch;
+    gap: 0.65rem;
+    padding: 0.65rem;
+  }
+
+  .entry-hero {
+    align-content: center;
+  }
+
+  .entry-desc {
+    line-height: 1.45;
+  }
+
+  .entry-card {
+    align-content: center;
+    gap: 0.55rem;
+    padding: 0.7rem;
+  }
+
+  .entry-input {
+    min-height: 48px;
+    scroll-margin: 4rem;
+  }
+
+  .entry-actions {
+    flex-wrap: nowrap;
+  }
+
+  .entry-actions > button {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 720px), (max-height: 380px) {
+  .entry-shell {
+    grid-template-columns: minmax(9.5rem, 0.62fr) minmax(0, 1.7fr);
+    gap: 0.45rem;
+    padding: 0.5rem;
+  }
+
+  .entry-desc {
+    font-size: 0.82rem;
+  }
+
+  .entry-card {
+    padding: 0.55rem;
+  }
+
+  .history-chips {
+    max-height: 48px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
 }
 </style>

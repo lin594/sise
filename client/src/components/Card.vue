@@ -64,8 +64,10 @@ const sizeClass = computed(() => props.size ?? "md");
   font-size: clamp(0.82rem, 1vw, 1.02rem);
 }
 
-.card:hover {
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .text {

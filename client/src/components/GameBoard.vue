@@ -375,19 +375,6 @@
         <span :style="{ width: `${seatCountdownPercent}%` }"></span>
       </div>
       <p class="self-info-hint">{{ compactCenterHint }}</p>
-      <ActionPanel
-        v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
-        class="embedded-actions embedded-actions-side"
-        :actions="props.actions ?? []"
-        :can-act="Boolean(props.canAct)"
-        :is-current-turn="Boolean(props.isCurrentTurn)"
-        :response-phase="props.responsePhase ?? ''"
-        :current-player-name="props.currentPlayerName ?? '-'"
-        :selection-mode="props.selectionMode ?? null"
-        :selected-candidate-id="props.selectedCandidateId ?? null"
-        @submit="onSubmitAction"
-        @selection-change="onSelectionChange"
-      />
     </section>
 
     <section v-if="selfPlayer" class="self-hand-card">
@@ -417,6 +404,20 @@
         </div>
       </div>
     </section>
+
+    <ActionPanel
+      v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
+      class="embedded-actions action-dock"
+      :actions="props.actions ?? []"
+      :can-act="Boolean(props.canAct)"
+      :is-current-turn="Boolean(props.isCurrentTurn)"
+      :response-phase="props.responsePhase ?? ''"
+      :current-player-name="props.currentPlayerName ?? '-'"
+      :selection-mode="props.selectionMode ?? null"
+      :selected-candidate-id="props.selectedCandidateId ?? null"
+      @submit="onSubmitAction"
+      @selection-change="onSelectionChange"
+    />
 
     <div class="fx-layer">
       <div
@@ -489,6 +490,7 @@ const props = defineProps<{
   currentPlayerName?: string;
   turnHint?: string;
   embeddedActionPanel?: boolean;
+  ultraCompact?: boolean;
   tableCardMode?: "simple" | "full";
   selectionMode?: "kai" | "peng" | "chi" | null;
   selectedCandidateId?: string | null;
@@ -501,7 +503,6 @@ const emit = defineEmits<{
   selectionChange: [payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }];
 }>();
 
-const isCompactLandscape = ref(false);
 const nowMs = ref(Date.now());
 
 function isOpeningDealIntroState(): boolean {
@@ -795,7 +796,7 @@ function flowCardCount(playerId: string): number {
 
 function visibleFlowCards(playerId: string): Card[] {
   const cards = flowCards(playerId);
-  const limit = isCompactLandscape.value ? 10 : 14;
+  const limit = props.ultraCompact ? 8 : props.embeddedActionPanel ? 10 : 14;
   return cards.slice(Math.max(0, cards.length - limit));
 }
 
@@ -1064,9 +1065,7 @@ function onDiscard(cardId: string, event?: MouseEvent): void {
     lastLocalDiscardAt.value = Date.now();
   }
   discardingCardId.value = cardId;
-  window.setTimeout(() => {
-    emit("discardCard", cardId);
-  }, 220);
+  emit("discardCard", cardId);
   window.setTimeout(() => {
     if (discardingCardId.value === cardId) {
       discardingCardId.value = null;
@@ -1502,17 +1501,7 @@ function triggerDealerReveal(label: string, name: string, card?: Card | null, de
   }
 }
 
-function updateCompactLandscape() {
-  const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
-  if (compact !== isCompactLandscape.value) {
-    isCompactLandscape.value = compact;
-  }
-}
-
 onMounted(() => {
-  updateCompactLandscape();
-  window.addEventListener("resize", updateCompactLandscape);
-  window.addEventListener("orientationchange", updateCompactLandscape);
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -1544,8 +1533,6 @@ onUnmounted(() => {
   flashActorId.value = "";
   drawHiddenCardId.value = "";
   dealerFlight.value = null;
-  window.removeEventListener("resize", updateCompactLandscape);
-  window.removeEventListener("orientationchange", updateCompactLandscape);
   if (countdownTimer) {
     clearInterval(countdownTimer);
     countdownTimer = null;
@@ -2527,8 +2514,14 @@ watch(
   transition: transform 0.2s ease, filter 0.2s ease;
 }
 
-.hand-card.playable:hover {
-  transform: translateY(-4px);
+@media (hover: hover) and (pointer: fine) {
+  .hand-card.playable:hover {
+    transform: translateY(-4px);
+  }
+}
+
+.hand-card.playable:active {
+  transform: translateY(-2px) scale(0.97);
 }
 
 .hand-card.blocked {
@@ -2902,10 +2895,10 @@ watch(
   }
 }
 
-@media (orientation: landscape) and (max-width: 960px) {
+@media (max-width: 960px), (max-height: 500px) {
   .board {
-    grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) clamp(8.8rem, 27vh, 11.2rem);
+    grid-template-columns: clamp(7rem, 18vw, 9.5rem) minmax(0, 1fr) clamp(9.75rem, 24vw, 12rem);
+    grid-template-rows: minmax(0, 1fr) clamp(6.75rem, 31dvh, 7.5rem);
     gap: 0.55vh;
   }
 
@@ -3051,16 +3044,21 @@ watch(
   }
 
   .self-info-card {
+    grid-column: 1;
     border-radius: 1.4vh;
     padding: 0.55vh 0.8vh;
     display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .self-groups-card,
   .self-hand-card {
     border-radius: 1.1vh;
     padding: 0.35vh 0.55vh;
+  }
+
+  .self-hand-card {
+    grid-column: 2;
   }
 
   .self-info-hint {
@@ -3078,20 +3076,27 @@ watch(
   }
 
   .hand {
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.45vh 0.18vh;
+    flex-wrap: nowrap;
+    gap: 0.3rem;
     min-height: 0;
-    align-content: start;
-    padding-bottom: 0.2vh;
+    align-items: center;
+    align-content: center;
+    padding: 0.1rem 0.2rem 0.35rem;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    touch-action: pan-x;
+    scrollbar-width: thin;
   }
 
   .hand-card {
     border-radius: 0.7vh;
-    flex: 0 0 clamp(1.7rem, 4.6vw, 2.4rem);
-    width: auto;
+    flex: 0 0 clamp(48px, 6vw, 56px);
+    width: clamp(48px, 6vw, 56px);
     min-height: 48px;
+    scroll-snap-align: start;
   }
 
   .hand :deep(.size-xl) {
@@ -3101,18 +3106,22 @@ watch(
   }
 
   .embedded-actions {
-    margin-top: 0;
-    border-top: 1px solid rgba(51, 65, 85, 0.8);
+    margin: 0;
     background: #0b1220;
     position: relative;
     z-index: 2;
-    padding-top: 0.35vh;
+    border: 1px solid #1e293b;
+    border-radius: 1.1vh;
+    padding: 0.35vh;
+    overflow: hidden;
   }
 
-  .embedded-actions :deep(.panel) {
-    background: #0b1220;
-    border-top: none;
-    gap: 0.35vh;
+  .action-dock {
+    grid-column: 3;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    align-content: center;
   }
 
   .embedded-actions :deep(.actions) {
@@ -3138,89 +3147,47 @@ watch(
     opacity: 0.58;
   }
 
-  .embedded-actions-side {
-    border-top: 1px solid rgba(51, 65, 85, 0.8);
-    padding-top: 0.35vh;
-    margin-top: auto;
+}
+
+@media (max-width: 720px), (max-height: 380px) {
+  .seat-meta,
+  .self-info-hint,
+  .tag.status {
+    display: none;
   }
 
-  .embedded-actions-side :deep(.actions) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35vh;
+  .seat-tags {
+    gap: 0.2rem;
   }
 
-  .embedded-actions-side :deep(.btn) {
-    min-width: 0;
-    min-height: 42px;
-    padding: 0;
+  .self-info-card {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .self-head p {
+    line-height: 1.15;
+  }
+
+  .discard-tip span {
+    display: none;
+  }
+
+  .center-core {
+    padding: 0.18rem;
+    gap: 0.18rem;
+  }
+
+  .center-core-subtle,
+  .pending-placeholder {
+    font-size: 0.56rem;
   }
 }
 
 @supports (-webkit-touch-callout: none) {
-  @media (orientation: landscape) and (max-width: 960px) {
+  @media (max-width: 960px), (max-height: 500px) {
     .hand {
       -webkit-overflow-scrolling: touch;
     }
-  }
-}
-
-@media (max-width: 900px) and (orientation: portrait) {
-  .board {
-    grid-template-rows: auto auto;
-  }
-
-  .table {
-    position: static;
-    height: auto;
-    min-height: 0;
-    display: grid;
-    gap: 10px;
-    padding: 10px;
-    border-radius: 14px;
-  }
-
-  .seat,
-  .center {
-    position: static;
-    width: auto;
-    min-width: 0;
-    height: auto;
-    min-height: 0;
-  }
-
-  .center {
-    order: 4;
-    grid-template-rows: auto auto auto;
-  }
-
-  .seat.top {
-    order: 1;
-  }
-
-  .seat.left {
-    order: 2;
-  }
-
-  .seat.right {
-    order: 3;
-  }
-
-  .seat-zone .cards,
-  .self-area .cards {
-    max-height: 110px;
-  }
-
-  .self-zone {
-    min-height: 0;
-    max-height: none;
-  }
-
-  .self-areas {
-    grid-template-columns: 1fr;
-  }
-
-  .self-main {
-    grid-template-columns: 1fr;
   }
 }
 </style>

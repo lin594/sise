@@ -265,7 +265,7 @@ function onClick(item: PanelAction): void {
   transform: scale(0.96);
 }
 
-@media (orientation: landscape) and (max-height: 520px) {
+@media (max-height: 520px) {
   .panel {
     padding: 0.25rem 0.45rem;
   }
@@ -282,7 +282,7 @@ function onClick(item: PanelAction): void {
   }
 }
 
-@media (orientation: landscape) and (max-width: 960px) {
+@media (max-width: 960px), (max-height: 500px) {
   .actions {
     gap: 0.28rem;
   }
@@ -296,10 +296,10 @@ function onClick(item: PanelAction): void {
   }
 }
 
-@media (orientation: landscape) and (max-width: 960px) {
+@media (max-width: 960px), (max-height: 500px) {
   .panel {
     gap: 0.5vh;
-    padding: 0.55vh 1.2vw;
+    padding: 0.35vh;
   }
 
   .hint {
@@ -308,7 +308,7 @@ function onClick(item: PanelAction): void {
   }
 
   .actions {
-    gap: 0.75vh;
+    gap: 0.45vh;
     flex-wrap: nowrap;
     align-items: center;
   }

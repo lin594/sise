@@ -4,7 +4,6 @@ import CardComp from "./Card.vue";
 import { getCardFaceText, getCardLabelText } from "@/utils/cardText";
 const props = defineProps();
 const emit = defineEmits();
-const isCompactLandscape = ref(false);
 const nowMs = ref(Date.now());
 function isOpeningDealIntroState() {
     return (props.state?.phase === "declaring" &&
@@ -261,7 +260,7 @@ function flowCardCount(playerId) {
 }
 function visibleFlowCards(playerId) {
     const cards = flowCards(playerId);
-    const limit = isCompactLandscape.value ? 10 : 14;
+    const limit = props.ultraCompact ? 8 : props.embeddedActionPanel ? 10 : 14;
     return cards.slice(Math.max(0, cards.length - limit));
 }
 function isActiveDiscardCard(playerId, card, index) {
@@ -493,9 +492,7 @@ function onDiscard(cardId, event) {
         lastLocalDiscardAt.value = Date.now();
     }
     discardingCardId.value = cardId;
-    window.setTimeout(() => {
-        emit("discardCard", cardId);
-    }, 220);
+    emit("discardCard", cardId);
     window.setTimeout(() => {
         if (discardingCardId.value === cardId) {
             discardingCardId.value = null;
@@ -897,16 +894,7 @@ function triggerDealerReveal(label, name, card, dealerId) {
         triggerDealerFlight(dealerId);
     }
 }
-function updateCompactLandscape() {
-    const compact = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
-    if (compact !== isCompactLandscape.value) {
-        isCompactLandscape.value = compact;
-    }
-}
 onMounted(() => {
-    updateCompactLandscape();
-    window.addEventListener("resize", updateCompactLandscape);
-    window.addEventListener("orientationchange", updateCompactLandscape);
     countdownTimer = setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
@@ -937,8 +925,6 @@ onUnmounted(() => {
     flashActorId.value = "";
     drawHiddenCardId.value = "";
     dealerFlight.value = null;
-    window.removeEventListener("resize", updateCompactLandscape);
-    window.removeEventListener("orientationchange", updateCompactLandscape);
     if (countdownTimer) {
         clearInterval(countdownTimer);
         countdownTimer = null;
@@ -1055,6 +1041,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['playable']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -1110,6 +1098,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
@@ -1119,31 +1108,21 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions-side']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions-side']} */ ;
-/** @type {__VLS_StyleScopedClasses['actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions-side']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['status']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-core']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-core-subtle']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-placeholder']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
-/** @type {__VLS_StyleScopedClasses['board']} */ ;
-/** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['center']} */ ;
-/** @type {__VLS_StyleScopedClasses['center']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
-/** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-area']} */ ;
-/** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-areas']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-main']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1851,44 +1830,6 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "self-info-hint" },
     });
     (__VLS_ctx.compactCenterHint);
-    if (props.embeddedActionPanel && props.state?.phase === 'playing') {
-        /** @type {[typeof ActionPanel, ]} */ ;
-        // @ts-ignore
-        const __VLS_25 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
-            ...{ 'onSubmit': {} },
-            ...{ 'onSelectionChange': {} },
-            ...{ class: "embedded-actions embedded-actions-side" },
-            actions: (props.actions ?? []),
-            canAct: (Boolean(props.canAct)),
-            isCurrentTurn: (Boolean(props.isCurrentTurn)),
-            responsePhase: (props.responsePhase ?? ''),
-            currentPlayerName: (props.currentPlayerName ?? '-'),
-            selectionMode: (props.selectionMode ?? null),
-            selectedCandidateId: (props.selectedCandidateId ?? null),
-        }));
-        const __VLS_26 = __VLS_25({
-            ...{ 'onSubmit': {} },
-            ...{ 'onSelectionChange': {} },
-            ...{ class: "embedded-actions embedded-actions-side" },
-            actions: (props.actions ?? []),
-            canAct: (Boolean(props.canAct)),
-            isCurrentTurn: (Boolean(props.isCurrentTurn)),
-            responsePhase: (props.responsePhase ?? ''),
-            currentPlayerName: (props.currentPlayerName ?? '-'),
-            selectionMode: (props.selectionMode ?? null),
-            selectedCandidateId: (props.selectedCandidateId ?? null),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_25));
-        let __VLS_28;
-        let __VLS_29;
-        let __VLS_30;
-        const __VLS_31 = {
-            onSubmit: (__VLS_ctx.onSubmitAction)
-        };
-        const __VLS_32 = {
-            onSelectionChange: (__VLS_ctx.onSelectionChange)
-        };
-        var __VLS_27;
-    }
 }
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1939,15 +1880,53 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_25 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             size: "xl",
         }));
-        const __VLS_34 = __VLS_33({
+        const __VLS_26 = __VLS_25({
             card: (card),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_25));
     }
+}
+if (props.embeddedActionPanel && props.state?.phase === 'playing') {
+    /** @type {[typeof ActionPanel, ]} */ ;
+    // @ts-ignore
+    const __VLS_28 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
+        ...{ class: "embedded-actions action-dock" },
+        actions: (props.actions ?? []),
+        canAct: (Boolean(props.canAct)),
+        isCurrentTurn: (Boolean(props.isCurrentTurn)),
+        responsePhase: (props.responsePhase ?? ''),
+        currentPlayerName: (props.currentPlayerName ?? '-'),
+        selectionMode: (props.selectionMode ?? null),
+        selectedCandidateId: (props.selectedCandidateId ?? null),
+    }));
+    const __VLS_29 = __VLS_28({
+        ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
+        ...{ class: "embedded-actions action-dock" },
+        actions: (props.actions ?? []),
+        canAct: (Boolean(props.canAct)),
+        isCurrentTurn: (Boolean(props.isCurrentTurn)),
+        responsePhase: (props.responsePhase ?? ''),
+        currentPlayerName: (props.currentPlayerName ?? '-'),
+        selectionMode: (props.selectionMode ?? null),
+        selectedCandidateId: (props.selectedCandidateId ?? null),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
+    let __VLS_31;
+    let __VLS_32;
+    let __VLS_33;
+    const __VLS_34 = {
+        onSubmit: (__VLS_ctx.onSubmitAction)
+    };
+    const __VLS_35 = {
+        onSelectionChange: (__VLS_ctx.onSelectionChange)
+    };
+    var __VLS_30;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
@@ -2117,8 +2096,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
@@ -2126,6 +2103,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;

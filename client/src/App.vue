@@ -1,6 +1,16 @@
 ﻿<template>
-  <OrientationGuard />
-  <main class="layout" :class="{ playing: isPlaying, 'compact-landscape': isCompactLandscape && isPlaying }">
+  <main
+    class="layout"
+    :class="{
+      playing: isPlaying,
+      'compact-viewport': isCompactViewport,
+      'ultra-compact-viewport': isUltraCompactViewport,
+      'compact-landscape': isCompactViewport && isPlaying,
+      'rotated-phone-portrait': isRotatedPhonePortrait,
+    }"
+    :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
+    :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
+  >
     <header class="top">
       <div class="top-brand">
         <h1>四色牌</h1>
@@ -86,7 +96,8 @@
         :response-phase="state?.responsePhase || ''"
         :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
-        :embedded-action-panel="isCompactLandscape"
+        :embedded-action-panel="isCompactViewport"
+        :ultra-compact="isUltraCompactViewport"
         :table-card-mode="tableCardMode"
         :selection-mode="selectionMode"
         :selected-candidate-id="selectedCandidateId"
@@ -98,7 +109,7 @@
     </template>
 
     <ActionPanel
-      v-if="isPlaying && !isCompactLandscape"
+      v-if="isPlaying && !isCompactViewport"
       :actions="availableActions"
       :can-act="canAct"
       :is-current-turn="isMyTurn"
@@ -438,7 +449,7 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
-import OrientationGuard from "@/components/OrientationGuard.vue";
+import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import type { ActionCandidate, ActionRequest, Card, RoundResultPlayer } from "@/types/game";
@@ -676,16 +687,18 @@ const candidatePromptText = computed(() => {
   }
   return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
-const isCompactLandscape = ref(false);
+const {
+  effectiveHeight,
+  effectiveWidth,
+  isCompactViewport,
+  isRotatedPhonePortrait,
+  isUltraCompactViewport,
+} = useResponsiveViewport();
 const tableCardMode = ref<"simple" | "full">(
   (window.localStorage.getItem("sise_table_card_mode") as "simple" | "full" | null) ?? "simple",
 );
 const globalError = ref("");
 const showRules = ref(false);
-const updateCompactLandscape = () => {
-  isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
-};
-
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -1092,10 +1105,7 @@ onMounted(() => {
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
-  updateCompactLandscape();
   window.localStorage.setItem("sise_table_card_mode", tableCardMode.value);
-  window.addEventListener("resize", updateCompactLandscape);
-  window.addEventListener("orientationchange", updateCompactLandscape);
 });
 
 onUnmounted(() => {
@@ -1103,8 +1113,6 @@ onUnmounted(() => {
     window.clearInterval(declareTick);
     declareTick = null;
   }
-  window.removeEventListener("resize", updateCompactLandscape);
-  window.removeEventListener("orientationchange", updateCompactLandscape);
 });
 
 watch(tableCardMode, (mode) => {
@@ -1743,7 +1751,11 @@ watch(
 
 <style scoped>
 .layout {
-  width: 100vw;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  width: 100%;
   height: 100dvh;
   max-width: none;
   margin: 0 auto;
@@ -1753,6 +1765,20 @@ watch(
   padding: clamp(0.25rem, 0.8vh, 0.5rem);
   background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
   overflow: hidden;
+}
+
+.layout.rotated-phone-portrait {
+  --safe-top: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-right, 0px);
+  --safe-left: env(safe-area-inset-bottom, 0px);
+  position: fixed;
+  top: 0;
+  left: 100dvw;
+  width: 100dvh;
+  height: 100dvw;
+  transform: rotate(90deg);
+  transform-origin: top left;
 }
 
 .global-error {
@@ -1787,8 +1813,8 @@ watch(
 .layout.compact-landscape.playing {
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
-  padding: max(0.2rem, env(safe-area-inset-top)) max(0.2rem, env(safe-area-inset-right))
-    max(0.2rem, env(safe-area-inset-bottom)) max(0.2rem, env(safe-area-inset-left));
+  padding: max(0.2rem, var(--safe-top)) max(0.2rem, var(--safe-right))
+    max(0.2rem, var(--safe-bottom)) max(0.2rem, var(--safe-left));
 }
 
 .layout.compact-landscape .top {
@@ -2021,6 +2047,7 @@ watch(
   border-radius: 8px;
   padding: 10px 14px;
   cursor: pointer;
+  min-height: 48px;
 }
 
 .primary {
@@ -2071,6 +2098,8 @@ watch(
   justify-content: center;
   align-items: center;
   z-index: 80;
+  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
+    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
 }
 
 .declare-mask {
@@ -2081,6 +2110,8 @@ watch(
   justify-content: center;
   align-items: center;
   z-index: 90;
+  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
+    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
 }
 
 .rules-mask {
@@ -2091,7 +2122,8 @@ watch(
   justify-content: center;
   align-items: center;
   z-index: 92;
-  padding: 12px;
+  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
+    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
 }
 
 .candidate-mask {
@@ -2102,7 +2134,8 @@ watch(
   justify-content: center;
   align-items: center;
   z-index: 95;
-  padding: 12px;
+  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
+    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
 }
 
 .candidate-panel {
@@ -2123,6 +2156,11 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  position: sticky;
+  top: -12px;
+  z-index: 3;
+  padding: 12px 0 8px;
+  background: linear-gradient(180deg, #0b1220 78%, rgba(11, 18, 32, 0));
 }
 
 .candidate-head h3 {
@@ -2151,6 +2189,7 @@ watch(
   display: grid;
   gap: 4px;
   cursor: pointer;
+  min-height: 48px;
 }
 
 .candidate-item.selected {
@@ -2214,6 +2253,11 @@ watch(
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.8rem;
+  position: sticky;
+  top: calc(-1 * clamp(1rem, 2.4vh, 1.35rem));
+  z-index: 3;
+  padding: clamp(1rem, 2.4vh, 1.35rem) 0 0.7rem;
+  background: linear-gradient(180deg, #fffdf7 82%, rgba(255, 253, 247, 0));
 }
 
 .rules-kicker {
@@ -2289,8 +2333,10 @@ watch(
   width: min(96vw, 1100px);
   max-height: 90vh;
   overflow: auto;
+  overflow-x: hidden;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.8rem;
 }
 
@@ -2299,6 +2345,16 @@ watch(
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.8rem;
+  position: sticky;
+  top: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
+  z-index: 4;
+  padding: clamp(0.9rem, 2vh, 1.2rem) 0 0.55rem;
+  background: linear-gradient(180deg, #fffdf7 84%, rgba(255, 253, 247, 0));
+  min-width: 0;
+}
+
+.declare-header > div:first-child {
+  min-width: 0;
 }
 
 .declare-header h2 {
@@ -2354,6 +2410,7 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
+  min-width: 0;
 }
 
 .declare-card-section {
@@ -2363,6 +2420,7 @@ watch(
   padding: 0.85rem;
   display: grid;
   gap: 0.7rem;
+  min-width: 0;
 }
 
 .declare-summary-card {
@@ -2374,6 +2432,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .declare-stepper-value {
@@ -2384,6 +2443,7 @@ watch(
   border: 1px solid #dbe4f0;
   display: grid;
   place-items: center;
+  min-width: 0;
 }
 
 .declare-stepper-value strong {
@@ -2457,6 +2517,8 @@ watch(
 
 .declare-zone {
   padding-top: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .declare-cards {
@@ -2524,7 +2586,7 @@ watch(
   font-size: 15px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px) and (pointer: fine) {
   .rules-head {
     flex-direction: column;
   }
@@ -2738,6 +2800,16 @@ watch(
   margin-top: 14px;
 }
 
+.declare-panel > .end-actions,
+.hu-panel > .end-actions {
+  position: sticky;
+  bottom: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
+  z-index: 5;
+  margin-inline: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
+  padding: 0.65rem clamp(0.9rem, 2vh, 1.2rem) clamp(0.9rem, 2vh, 1.2rem);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0), #f8fafc 30%);
+}
+
 @keyframes settlement-winner-glow {
   0% {
     filter: hue-rotate(0deg);
@@ -2747,7 +2819,7 @@ watch(
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px) and (pointer: fine) {
   .player-grid {
     grid-template-columns: 1fr;
   }
@@ -2779,7 +2851,7 @@ watch(
   }
 }
 
-@media (orientation: landscape) and (max-height: 600px) {
+@media (max-height: 600px) {
   .layout {
     gap: 0.3rem;
     padding: 0.25rem;
@@ -2800,10 +2872,11 @@ watch(
 
 }
 
-@media (orientation: landscape) and (max-width: 960px) {
+@media (max-width: 960px), (max-height: 500px) {
   .layout {
     gap: 0.7vh;
-    padding: 0.7vh;
+    padding: max(0.25rem, var(--safe-top)) max(0.25rem, var(--safe-right))
+      max(0.25rem, var(--safe-bottom)) max(0.25rem, var(--safe-left));
   }
 
   .layout.playing {
@@ -2830,8 +2903,121 @@ watch(
   .layout.compact-landscape.playing {
     grid-template-rows: minmax(0, 1fr);
     gap: 0;
-    padding: max(0.15rem, env(safe-area-inset-top)) max(0.15rem, env(safe-area-inset-right))
-      max(0.15rem, env(safe-area-inset-bottom)) max(0.15rem, env(safe-area-inset-left));
+    padding: max(0.15rem, var(--safe-top)) max(0.15rem, var(--safe-right))
+      max(0.15rem, var(--safe-bottom)) max(0.15rem, var(--safe-left));
   }
+}
+
+.layout.compact-viewport .hu-mask,
+.layout.compact-viewport .declare-mask,
+.layout.compact-viewport .rules-mask,
+.layout.compact-viewport .candidate-mask {
+  align-items: stretch;
+}
+
+.layout.compact-viewport .candidate-panel,
+.layout.compact-viewport .rules-panel,
+.layout.compact-viewport .declare-panel,
+.layout.compact-viewport .hu-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  max-height: none;
+  border-radius: 12px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.layout.compact-viewport .rules-panel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.55rem;
+  padding: 0.65rem;
+}
+
+.layout.compact-viewport .rules-head {
+  grid-column: 1 / -1;
+  top: -0.65rem;
+  padding: 0.65rem 0 0.45rem;
+}
+
+.layout.compact-viewport .rules-section {
+  padding: 0.65rem;
+  border-radius: 12px;
+}
+
+.layout.compact-viewport .declare-panel,
+.layout.compact-viewport .hu-panel {
+  padding: 0.65rem;
+}
+
+.layout.compact-viewport .declare-header {
+  top: -0.65rem;
+  padding: 0.65rem 0 0.45rem;
+}
+
+.layout.compact-viewport .declare-grid,
+.layout.compact-viewport .settlement-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.layout.compact-viewport .declare-card-section {
+  padding: 0.6rem;
+  gap: 0.45rem;
+}
+
+.layout.compact-viewport .declare-cards {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  touch-action: pan-x;
+  padding-bottom: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.layout.compact-viewport .declare-card-btn {
+  flex: 0 0 48px;
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.layout.compact-viewport .candidate-panel {
+  padding: 0.65rem;
+}
+
+.layout.compact-viewport .candidate-head {
+  top: -0.65rem;
+  padding: 0.65rem 0 0.45rem;
+}
+
+.layout.compact-viewport .declare-panel > .end-actions,
+.layout.compact-viewport .hu-panel > .end-actions {
+  bottom: -0.65rem;
+  margin-inline: -0.65rem;
+  padding: 0.55rem 0.65rem 0.65rem;
+}
+
+.layout.compact-viewport .ghost.mini,
+.layout.compact-viewport .primary,
+.layout.compact-viewport .ghost {
+  min-height: 48px;
+}
+
+.layout.ultra-compact-viewport .top-slogan,
+.layout.ultra-compact-viewport .meta > span:not(:first-child) {
+  display: none;
+}
+
+.layout.ultra-compact-viewport .rules-slogan,
+.layout.ultra-compact-viewport .declare-desc {
+  display: none;
+}
+
+.layout.ultra-compact-viewport .rules-list {
+  line-height: 1.35;
 }
 </style>

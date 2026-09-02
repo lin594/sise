@@ -4,7 +4,7 @@ import CardComp from "@/components/Card.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
-import OrientationGuard from "@/components/OrientationGuard.vue";
+import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { getCardLabelText } from "@/utils/cardText";
@@ -176,13 +176,10 @@ const candidatePromptText = computed(() => {
     }
     return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
-const isCompactLandscape = ref(false);
+const { effectiveHeight, effectiveWidth, isCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, } = useResponsiveViewport();
 const tableCardMode = ref(window.localStorage.getItem("sise_table_card_mode") ?? "simple");
 const globalError = ref("");
 const showRules = ref(false);
-const updateCompactLandscape = () => {
-    isCompactLandscape.value = window.matchMedia("(orientation: landscape) and (max-width: 960px)").matches;
-};
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -545,18 +542,13 @@ onMounted(() => {
     declareTick = window.setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
-    updateCompactLandscape();
     window.localStorage.setItem("sise_table_card_mode", tableCardMode.value);
-    window.addEventListener("resize", updateCompactLandscape);
-    window.addEventListener("orientationchange", updateCompactLandscape);
 });
 onUnmounted(() => {
     if (declareTick !== null) {
         window.clearInterval(declareTick);
         declareTick = null;
     }
-    window.removeEventListener("resize", updateCompactLandscape);
-    window.removeEventListener("orientationchange", updateCompactLandscape);
 });
 watch(tableCardMode, (mode) => {
     window.localStorage.setItem("sise_table_card_mode", mode);
@@ -1145,6 +1137,7 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
@@ -1174,6 +1167,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
@@ -1206,6 +1200,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
@@ -1226,15 +1224,113 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-card-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['top-slogan']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-slogan']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
-/** @type {[typeof OrientationGuard, ]} */ ;
-// @ts-ignore
-const __VLS_0 = __VLS_asFunctionalComponent(OrientationGuard, new OrientationGuard({}));
-const __VLS_1 = __VLS_0({}, ...__VLS_functionalComponentArgsRest(__VLS_0));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
     ...{ class: "layout" },
-    ...{ class: ({ playing: __VLS_ctx.isPlaying, 'compact-landscape': __VLS_ctx.isCompactLandscape && __VLS_ctx.isPlaying }) },
+    ...{ class: ({
+            playing: __VLS_ctx.isPlaying,
+            'compact-viewport': __VLS_ctx.isCompactViewport,
+            'ultra-compact-viewport': __VLS_ctx.isUltraCompactViewport,
+            'compact-landscape': __VLS_ctx.isCompactViewport && __VLS_ctx.isPlaying,
+            'rotated-phone-portrait': __VLS_ctx.isRotatedPhonePortrait,
+        }) },
+    'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
+    'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
@@ -1321,7 +1417,7 @@ if (__VLS_ctx.globalError) {
 if (__VLS_ctx.showEntry) {
     /** @type {[typeof LoginPage, ]} */ ;
     // @ts-ignore
-    const __VLS_3 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
+    const __VLS_0 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1332,7 +1428,7 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
     }));
-    const __VLS_4 = __VLS_3({
+    const __VLS_1 = __VLS_0({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1342,43 +1438,43 @@ if (__VLS_ctx.showEntry) {
         entering: (__VLS_ctx.enteringLobby),
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_3));
-    let __VLS_6;
-    let __VLS_7;
-    let __VLS_8;
-    const __VLS_9 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+    let __VLS_3;
+    let __VLS_4;
+    let __VLS_5;
+    const __VLS_6 = {
         'onUpdate:nickname': (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    const __VLS_10 = {
+    const __VLS_7 = {
         onSubmit: (__VLS_ctx.enterLobby)
     };
-    const __VLS_11 = {
+    const __VLS_8 = {
         onOpenRules: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_12 = {
+    const __VLS_9 = {
         onRandomize: (__VLS_ctx.randomizeNickname)
     };
-    const __VLS_13 = {
+    const __VLS_10 = {
         onSelectHistory: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    var __VLS_5;
+    var __VLS_2;
 }
 else if (__VLS_ctx.showModeLobby) {
     /** @type {[typeof LobbyPage, ]} */ ;
     // @ts-ignore
-    const __VLS_14 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
+    const __VLS_11 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1403,7 +1499,7 @@ else if (__VLS_ctx.showModeLobby) {
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
     }));
-    const __VLS_15 = __VLS_14({
+    const __VLS_12 = __VLS_11({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1427,11 +1523,11 @@ else if (__VLS_ctx.showModeLobby) {
         roomId: (__VLS_ctx.activeRoomId),
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_14));
-    let __VLS_17;
-    let __VLS_18;
-    let __VLS_19;
-    const __VLS_20 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_11));
+    let __VLS_14;
+    let __VLS_15;
+    let __VLS_16;
+    const __VLS_17 = {
         onOpenRules: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1440,10 +1536,10 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_21 = {
+    const __VLS_18 = {
         onStart: (__VLS_ctx.startSelectedMode)
     };
-    const __VLS_22 = {
+    const __VLS_19 = {
         onSelectMode: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1452,13 +1548,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.selectedLobbyMode = $event;
         }
     };
-    const __VLS_23 = {
+    const __VLS_20 = {
         onCopyInvite: (__VLS_ctx.copyInviteLink)
     };
-    const __VLS_24 = {
+    const __VLS_21 = {
         onClaimSeat: (__VLS_ctx.claimSeat)
     };
-    const __VLS_25 = {
+    const __VLS_22 = {
         onAddBot: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1467,13 +1563,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.addBot($event, 50);
         }
     };
-    const __VLS_26 = {
+    const __VLS_23 = {
         onUpdateBot: (__VLS_ctx.updateBot)
     };
-    const __VLS_27 = {
+    const __VLS_24 = {
         onRemoveSeat: (__VLS_ctx.removeSeat)
     };
-    var __VLS_16;
+    var __VLS_13;
 }
 else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1493,7 +1589,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_28 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_25 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1508,13 +1604,14 @@ else {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
-        embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
+        embeddedActionPanel: (__VLS_ctx.isCompactViewport),
+        ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         tableCardMode: (__VLS_ctx.tableCardMode),
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_29 = __VLS_28({
+    const __VLS_26 = __VLS_25({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1529,30 +1626,31 @@ else {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
-        embeddedActionPanel: (__VLS_ctx.isCompactLandscape),
+        embeddedActionPanel: (__VLS_ctx.isCompactViewport),
+        ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         tableCardMode: (__VLS_ctx.tableCardMode),
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
-    let __VLS_31;
-    let __VLS_32;
-    let __VLS_33;
-    const __VLS_34 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_25));
+    let __VLS_28;
+    let __VLS_29;
+    let __VLS_30;
+    const __VLS_31 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_35 = {
+    const __VLS_32 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_36 = {
+    const __VLS_33 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_30;
+    var __VLS_27;
 }
-if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
+if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactViewport) {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_37 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_34 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
@@ -1563,7 +1661,7 @@ if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
     }));
-    const __VLS_38 = __VLS_37({
+    const __VLS_35 = __VLS_34({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         actions: (__VLS_ctx.availableActions),
@@ -1573,17 +1671,17 @@ if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactLandscape) {
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_37));
-    let __VLS_40;
-    let __VLS_41;
-    let __VLS_42;
-    const __VLS_43 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_34));
+    let __VLS_37;
+    let __VLS_38;
+    let __VLS_39;
+    const __VLS_40 = {
         onSubmit: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_44 = {
+    const __VLS_41 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_39;
+    var __VLS_36;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1637,14 +1735,14 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                 }));
-                const __VLS_46 = __VLS_45({
+                const __VLS_43 = __VLS_42({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_45));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_42));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -1657,16 +1755,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_49 = __VLS_48({
+                    const __VLS_46 = __VLS_45({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_45));
                 }
             }
             else {
@@ -1755,16 +1853,16 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             for (const [card] of __VLS_getVForSourceType((option.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`fish-option-${option.id}-${card.id}`),
                     card: (card),
                     size: "sm",
                 }));
-                const __VLS_52 = __VLS_51({
+                const __VLS_49 = __VLS_48({
                     key: (`fish-option-${option.id}-${card.id}`),
                     card: (card),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_51));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_48));
             }
         }
     }
@@ -1877,14 +1975,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_55 = __VLS_54({
+            const __VLS_52 = __VLS_51({
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_54));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_51));
         }
     }
     else {
@@ -1960,16 +2058,16 @@ if (__VLS_ctx.showEndPanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_58 = __VLS_57({
+            const __VLS_55 = __VLS_54({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_54));
         }
     }
     if (__VLS_ctx.settlementPlayers.length) {
@@ -2033,16 +2131,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_61 = __VLS_60({
+                        const __VLS_58 = __VLS_57({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_57));
                     }
                 }
             }
@@ -2079,16 +2177,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_64 = __VLS_63({
+                        const __VLS_61 = __VLS_60({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
                     }
                 }
             }
@@ -2099,16 +2197,16 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_67 = __VLS_66({
+                    const __VLS_64 = __VLS_63({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_66));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_63));
                 }
             }
             else {
@@ -2403,7 +2501,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             GameBoard: GameBoard,
             LobbyPage: LobbyPage,
             LoginPage: LoginPage,
-            OrientationGuard: OrientationGuard,
             connected: connected,
             mySeatId: mySeatId,
             activeRoomId: activeRoomId,
@@ -2448,7 +2545,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             activeCandidates: activeCandidates,
             candidateTargetCard: candidateTargetCard,
             candidatePromptText: candidatePromptText,
-            isCompactLandscape: isCompactLandscape,
+            effectiveHeight: effectiveHeight,
+            effectiveWidth: effectiveWidth,
+            isCompactViewport: isCompactViewport,
+            isRotatedPhonePortrait: isRotatedPhonePortrait,
+            isUltraCompactViewport: isUltraCompactViewport,
             tableCardMode: tableCardMode,
             globalError: globalError,
             showRules: showRules,

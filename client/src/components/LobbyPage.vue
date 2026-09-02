@@ -174,7 +174,7 @@ defineEmits<{
 </script>
 
 <style scoped>
-.lobby { background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:14px; color:#e2e8f0; display:grid; gap:1rem; }
+.lobby { background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:14px; color:#e2e8f0; display:grid; gap:1rem; min-height:0; overflow:auto; overscroll-behavior:contain; }
 .lobby-head,.invite-card,.seat-head,.lobby-actions,.seat-actions,.strength-row { display:flex; align-items:center; gap:.75rem; }
 .lobby-head,.invite-card,.seat-head { justify-content:space-between; }
 .lobby-kicker { margin:0; color:#fbbf24; font-size:.78rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
@@ -193,13 +193,30 @@ defineEmits<{
 .seat-actions { margin-top:auto; flex-wrap:wrap; }
 .strength-row { font-size:.7rem; }
 .strength-row input { flex:1; min-width:100px; }
-.primary,.ghost,.danger { border:none; border-radius:8px; padding:10px 14px; cursor:pointer; }
+.primary,.ghost,.danger { border:none; border-radius:8px; padding:10px 14px; cursor:pointer; min-height:48px; }
 .primary { background:#2563eb; color:#fff; }
 .primary:disabled { opacity:.4; cursor:not-allowed; }
 .ghost { background:#1f2937; color:#e2e8f0; border:1px solid #334155; }
 .danger { background:#7f1d1d; color:#fee2e2; }
-.mini { padding:7px 10px; font-size:.78rem; }
+.mini { padding:7px 10px; font-size:.78rem; min-height:48px; }
 .start-hint { color:#94a3b8; font-size:.82rem; }
 .error { color:#fca5a5; }
-@media (max-width:700px) { .mode-grid,.seat-grid { grid-template-columns:1fr; } .invite-card { align-items:flex-start; flex-direction:column; } }
+.lobby-actions { position:sticky; bottom:-14px; z-index:4; padding:.65rem 0 max(.65rem, env(safe-area-inset-bottom)); background:linear-gradient(180deg,rgba(11,18,32,0),#0b1220 28%); }
+@media (max-width:700px) and (pointer:fine) { .mode-grid,.seat-grid { grid-template-columns:1fr; } .invite-card { align-items:flex-start; flex-direction:column; } }
+@media (max-width:960px), (max-height:500px) {
+  .lobby { gap:.55rem; padding:.65rem; }
+  .lobby-head h2 { font-size:1.15rem; }
+  .lobby-rule-tip,.invite-card p { margin-top:.2rem; font-size:.76rem; }
+  .mode-grid,.seat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; }
+  .mode-card,.seat-card,.invite-card { padding:.62rem; border-radius:11px; }
+  .mode-card { gap:.25rem; }
+  .seat-card { min-height:108px; gap:.25rem; }
+  .lobby-actions { bottom:-.65rem; padding:.5rem 0; }
+}
+@media (max-width:720px), (max-height:380px) {
+  .lobby { gap:.4rem; padding:.5rem; }
+  .mode-card p { font-size:.75rem; line-height:1.3; }
+  .lobby-rule-tip { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seat-card { min-height:96px; }
+}
 </style>
