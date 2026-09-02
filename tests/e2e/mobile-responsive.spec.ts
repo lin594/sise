@@ -278,6 +278,8 @@ test.describe("compact landscape gameplay", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
+    await expect(page.getByText("暂无牌组")).toHaveCount(0);
+    await expect(page.locator(".self-groups-card")).toHaveClass(/empty/);
     await expectDedicatedGameHeader(page);
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();

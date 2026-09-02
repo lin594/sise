@@ -324,30 +324,36 @@
         </div>
       </section>
 
-      <section v-if="selfPlayer" class="self-groups-card" ref="selfOpenRef">
-        <p>牌组（{{ selfGroupBlocks.length }}组）</p>
-        <div v-if="selfGroupBlocks.length" class="group-block-list">
-          <div
-            v-for="group in selfGroupBlocks"
-            :key="`self-exp-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip">
-              <CardComp
-                v-for="card in group.cards"
-                :key="`self-exp-card-${card.id}`"
-                :card="card"
-                :mode="props.tableCardMode"
-                size="xs"
-                class="mini-card"
-                :title="cardLabel(card)"
-              />
+      <section
+        v-if="selfPlayer"
+        class="self-groups-card"
+        :class="{ empty: !selfGroupBlocks.length }"
+        ref="selfOpenRef"
+      >
+        <template v-if="selfGroupBlocks.length">
+          <p>牌组（{{ selfGroupBlocks.length }}组）</p>
+          <div class="group-block-list">
+            <div
+              v-for="group in selfGroupBlocks"
+              :key="`self-exp-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip">
+                <CardComp
+                  v-for="card in group.cards"
+                  :key="`self-exp-card-${card.id}`"
+                  :card="card"
+                  :mode="props.tableCardMode"
+                  size="xs"
+                  class="mini-card"
+                  :title="cardLabel(card)"
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <div v-else class="discard-empty">暂无牌组</div>
+        </template>
       </section>
 
       <section
@@ -1953,6 +1959,13 @@ watch(canDiscard, (enabled) => {
   flex-direction: column;
   gap: 0.35rem;
   overflow: auto;
+}
+
+.self-groups-card.empty {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  overflow: hidden;
 }
 
 .self-info-card {

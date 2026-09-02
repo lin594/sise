@@ -1079,6 +1079,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
@@ -1126,6 +1127,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
+/** @type {__VLS_StyleScopedClasses['empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
@@ -1884,12 +1886,13 @@ if (__VLS_ctx.selfPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientI
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-groups-card" },
+        ...{ class: ({ empty: !__VLS_ctx.selfGroupBlocks.length }) },
         ref: "selfOpenRef",
     });
     /** @type {typeof __VLS_ctx.selfOpenRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-    (__VLS_ctx.selfGroupBlocks.length);
     if (__VLS_ctx.selfGroupBlocks.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+        (__VLS_ctx.selfGroupBlocks.length);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list" },
         });
@@ -1929,11 +1932,6 @@ if (__VLS_ctx.selfPlayer) {
                 }, ...__VLS_functionalComponentArgsRest(__VLS_34));
             }
         }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-empty" },
-        });
     }
 }
 if (__VLS_ctx.rightPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clientId)) {
@@ -2449,7 +2447,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
