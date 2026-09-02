@@ -119,6 +119,38 @@ test("local_draw timeout auto-discards when awaiting discard", async () => {
   assert.equal(called, true);
 });
 
+test("local_draw timeout exposes a special card instead of passing it", async () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "B",
+    card: mkCard("green_jiang_01", "green", "jiang", "upper"),
+    collectives: new Map(),
+    responsePhaseAfterNoResponse: "local_draw",
+  };
+  room.state.responsePhase = "local_draw";
+  room.localTimeoutMs = 1;
+  let enteredDiscard = false;
+  let passedToNext = false;
+  room.enterDiscardStage = (ownerId: string, tag: string) => {
+    enteredDiscard = ownerId === "B" && tag === "FORCE_TAKE";
+  };
+  room.executePassToNext = () => {
+    passedToNext = true;
+  };
+
+  room.scheduleCollectiveTimeout();
+  await new Promise((resolve) => setTimeout(resolve, 8));
+
+  const player = room.state.players.get("B");
+  assert.ok(player);
+  assert.equal(enteredDiscard, true);
+  assert.equal(passedToNext, false);
+  assert.deepEqual([...player.exposedArea].map((card: Card) => card.id), ["green_jiang_01"]);
+  assert.deepEqual([...player.exposedGroupSizes], [1]);
+  assert.equal(player.generalArea.length, 0);
+  assert.equal(player.wildcardPool.length, 0);
+});
+
 test("local_upper action panel does not enable chi via wildcard pool", () => {
   const actions = getAvailableActionsFlow({
     phase: "playing",

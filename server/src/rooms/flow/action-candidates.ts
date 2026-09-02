@@ -87,7 +87,7 @@ function chiKindLabel(kind: ChiPlan["kind"], response: Card): string {
     return "吃（四色卒）";
   }
   if (kind === "single") {
-    return response.color === "gold" ? "吃（单金条）" : "吃（单将）";
+    return response.color === "gold" ? "收下金条" : "收下将";
   }
   return "吃（对子）";
 }

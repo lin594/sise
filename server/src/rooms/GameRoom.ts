@@ -1,6 +1,6 @@
 ﻿import { Room, Client } from "colyseus";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { createDeck, shuffle } from "../rules/deck.js";
+import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi } from "./flow/actions/chi.js";
 import { tryExecuteKai } from "./flow/actions/kai.js";
@@ -64,6 +64,7 @@ import {
   drawForOwnerFlow,
   enterDiscardStageFlow,
   resolveCollectivePhaseFlow,
+  resolveLocalDrawIdleAction,
   planTickBots,
   runBotStep,
   startCollectiveFlow,
@@ -1564,16 +1565,7 @@ export class FourColorGameRoom extends Room<GameState> {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "peng", pendingCard, candidateId)) {
             return false;
           }
-          return tryExecutePeng(
-            {
-              getHandWithoutPending: (seatIdArg, pendingCardArg) => this.ops.getHandWithoutPending(seatIdArg, pendingCardArg),
-              takeMatchingCards: (seatIdArg, target, count) => this.ops.takeMatchingCards(seatIdArg, target, count),
-              pushExposedGroup: (seatIdArg, cards, highlight, kind) => this.ops.pushExposedGroup(seatIdArg, cards, highlight, kind),
-            },
-            seatId,
-            pendingCard,
-            candidateId,
-          );
+          return tryExecutePeng(operationDeps, seatId, pendingCard, candidateId);
         },
         executeChiOperation: (seatId, pendingCard, candidateId) => {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "chi", pendingCard, candidateId)) {
@@ -1678,11 +1670,6 @@ export class FourColorGameRoom extends Room<GameState> {
       clearResponseEndsAt: () => {
         this.state.responseEndsAt = 0;
       },
-      addWildcardCardToPlayer: (nextOwnerId, card, source) => this.ops.addWildcardCardToPlayer(nextOwnerId, card, source),
-      setLastAction: (action) => {
-        this.state.lastAction = action;
-      },
-      enterDiscardStage: (nextOwnerId, tag) => this.enterDiscardStage(nextOwnerId, tag),
       syncAllPrivateHands: () => this.syncAllPrivateHands(),
       tickBots: () => this.tickBots(),
     });
@@ -1700,10 +1687,10 @@ export class FourColorGameRoom extends Room<GameState> {
         pending: this.pendingResponse,
         executeChiOperation: (ownerIdArg, pendingCard) => {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(ownerIdArg, "chi", pendingCard, candidateId)) {
-            return false;
+            return { ok: false };
           }
-          const result = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId).ok;
-          if (result && pendingCard.source === "upper" && this.pendingResponse) {
+          const result = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId);
+          if (result.ok && pendingCard.source === "upper" && this.pendingResponse) {
             const sourceOwnerId = String(this.state.pollOriginPlayerId || this.pendingResponse.ownerId || "");
             this.ops.consumePendingDiscard(sourceOwnerId, pendingCard);
           }
@@ -1718,6 +1705,28 @@ export class FourColorGameRoom extends Room<GameState> {
     );
     this.traceStep("execute_eat", `owner=${ownerId} ok=${ok}`);
     return ok;
+  }
+
+  /**
+   * 作用：把 local_draw 中不能过出的将牌或金条作为单张牌组放入明示区。
+   * 关键输入/输出：输入牌主，输出是否完成收牌。
+   * 副作用：写入 exposedArea，并进入弃牌阶段。
+   */
+  private retainPendingSpecial(ownerId: string): boolean {
+    const pending = this.pendingResponse;
+    if (
+      !pending ||
+      pending.ownerId !== ownerId ||
+      this.state.responsePhase !== "local_draw" ||
+      !isDiscardRestricted(pending.card)
+    ) {
+      return false;
+    }
+    this.ops.pushExposedGroup(ownerId, [pending.card], true, "chi");
+    this.state.lastAction = `${ownerId} FORCE_TAKE`;
+    this.enterDiscardStage(ownerId, "FORCE_TAKE");
+    this.traceStep("retain_pending_special", `owner=${ownerId} card=${this.formatTraceCard(pending.card)}`);
+    return true;
   }
 
   /**
@@ -2596,10 +2605,16 @@ export class FourColorGameRoom extends Room<GameState> {
       }
 
       if (this.state.responsePhase === "local_draw") {
-        if (this.awaitingDiscardOwnerId === ownerId) {
+        const idleAction = resolveLocalDrawIdleAction(this.awaitingDiscardOwnerId === ownerId, pending.card);
+        if (idleAction === "discard") {
           this.traceStep("local_timeout_discard", `owner=${ownerId}`);
           this.discardFromAndCollective(ownerId);
           this.state.lastAction = `${ownerId} TIMEOUT_DISCARD`;
+          return;
+        }
+        if (idleAction === "retain_special") {
+          this.traceStep("local_timeout_retain_special", `owner=${ownerId}`);
+          this.retainPendingSpecial(ownerId);
           return;
         }
         this.traceStep("local_timeout_pass_draw", `owner=${ownerId}`);
@@ -2737,6 +2752,7 @@ export class FourColorGameRoom extends Room<GameState> {
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       discardFromAndCollective: (ownerId, cardId) => this.discardFromAndCollective(ownerId, cardId),
       executeEat: (ownerId, candidateId) => this.executeEat(ownerId, candidateId),
+      retainPendingSpecial: (ownerId) => this.retainPendingSpecial(ownerId),
       executeGrab: (ownerId) => this.executeGrab(ownerId),
       executePassToNext: (ownerId) => this.executePassToNext(ownerId),
     });

@@ -64,10 +64,11 @@ test("multiple single jiang groups are allowed", () => {
   assert.equal(result.groups.filter((x) => x === "SingleJiang").length, 2);
 });
 
-test("jiang cannot be used in jsx frame", () => {
+test("jiang forms a valid same-color jsx frame", () => {
   const result = explainHu(
     [c("rj1", "red", "jiang"), c("rs1", "red", "shi")],
     c("rx1", "red", "xiang"),
   );
-  assert.equal(result.valid, false);
+  assert.equal(result.valid, true);
+  assert.equal(result.groups.includes("FrameJSX"), true);
 });

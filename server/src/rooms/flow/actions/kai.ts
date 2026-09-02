@@ -6,7 +6,7 @@ type SeatId = string;
 interface OperationDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   getWildcardPoolCards: (seatId: SeatId) => Card[];
-  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[];
+  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[] | null;
   pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
@@ -34,6 +34,9 @@ export function tryExecuteKai(
   }
   const plan = picked.plan;
   const taken = deps.consumePlanCards(seatId, plan.handCards, plan.poolCards);
+  if (!taken || taken.length !== plan.handCards.length + plan.poolCards.length) {
+    return false;
+  }
   deps.pushExposedGroup(seatId, [pendingCard, ...taken], true, "kai");
   return true;
 }

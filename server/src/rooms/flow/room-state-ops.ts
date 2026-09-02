@@ -8,9 +8,7 @@ type SeatId = string;
 export interface OperationExecutorDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   getWildcardPoolCards: (seatId: SeatId) => Card[];
-  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[];
-  removeFromHand: (seatId: SeatId, card: Card) => void;
-  takeMatchingCards: (seatId: SeatId, target: Card, count: number) => Card[];
+  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[] | null;
   pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
@@ -108,13 +106,18 @@ export class RoomStateOps {
    */
   takeMatchingCards(playerId: SeatId, target: Card, count: number): Card[] {
     const hand = this.playerHands.get(playerId) ?? [];
-    let rest = count;
-    const removed: Card[] = [];
-    for (let i = hand.length - 1; i >= 0 && rest > 0; i -= 1) {
+    const indexes: number[] = [];
+    for (let i = hand.length - 1; i >= 0 && indexes.length < count; i -= 1) {
       if (isSameFace(hand[i], target)) {
-        removed.push(...hand.splice(i, 1));
-        rest -= 1;
+        indexes.push(i);
       }
+    }
+    if (indexes.length !== count) {
+      return [];
+    }
+    const removed = indexes.map((index) => hand[index]);
+    for (const index of indexes) {
+      hand.splice(index, 1);
     }
     this.playerHands.set(playerId, hand);
     return removed;
@@ -176,14 +179,41 @@ export class RoomStateOps {
    * 关键输入/输出：输入手牌消耗与池牌消耗，输出合并后的实际消耗牌。
    * 副作用：修改 `playerHands/wildcardPool/generalArea`。
    */
-  consumePlanCards(playerId: SeatId, handCards: Card[], poolCards: Card[]): Card[] {
-    for (const card of handCards) {
-      this.removeFromHand(playerId, card);
+  consumePlanCards(playerId: SeatId, handCards: Card[], poolCards: Card[]): Card[] | null {
+    const hand = this.playerHands.get(playerId) ?? [];
+    const player = this.state.players.get(playerId);
+    const handIds = handCards.map((card) => card.id);
+    const poolIds = poolCards.map((card) => card.id);
+    if (new Set(handIds).size !== handIds.length || new Set(poolIds).size !== poolIds.length) {
+      return null;
     }
-    for (const card of poolCards) {
-      this.removeFromWildcardPool(playerId, card);
+
+    const handIndexes = handIds.map((id) => hand.findIndex((card) => card.id === id));
+    if (handIndexes.some((index) => index < 0)) {
+      return null;
     }
-    return [...handCards, ...poolCards];
+    if (poolIds.length > 0 && !player) {
+      return null;
+    }
+    const poolIndexes = poolIds.map((id) => player?.wildcardPool.findIndex((card) => card.id === id) ?? -1);
+    const generalIndexes = poolIds.map((id) => player?.generalArea.findIndex((card) => card.id === id) ?? -1);
+    if (poolIndexes.some((index) => index < 0) || generalIndexes.some((index) => index < 0)) {
+      return null;
+    }
+
+    const consumedHand = handIndexes.map((index) => hand[index]);
+    const consumedPool = poolIndexes.map((index) => this.toPlainCard(player!.wildcardPool[index]));
+    for (const index of [...handIndexes].sort((a, b) => b - a)) {
+      hand.splice(index, 1);
+    }
+    for (const index of [...poolIndexes].sort((a, b) => b - a)) {
+      player!.wildcardPool.splice(index, 1);
+    }
+    for (const index of [...generalIndexes].sort((a, b) => b - a)) {
+      player!.generalArea.splice(index, 1);
+    }
+    this.playerHands.set(playerId, hand);
+    return [...consumedHand, ...consumedPool];
   }
 
   /**
@@ -376,8 +406,6 @@ export class RoomStateOps {
       getHandWithoutPending: (id, card) => this.getHandWithoutPending(id, card),
       getWildcardPoolCards: (id) => this.getWildcardPoolCards(id),
       consumePlanCards: (id, handCards, poolCards) => this.consumePlanCards(id, handCards, poolCards),
-      removeFromHand: (id, card) => this.removeFromHand(id, card),
-      takeMatchingCards: (id, card, count) => this.takeMatchingCards(id, card, count),
       pushExposedGroup: (id, cards, highlight, kind) => this.pushExposedGroup(id, cards, highlight, kind),
     };
   }

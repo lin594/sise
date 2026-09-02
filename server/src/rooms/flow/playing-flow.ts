@@ -162,12 +162,14 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     const chiCandidates = buildChiCandidates(handNoPending, input.pending.card, []).map(
       (item) => item.candidate,
     );
+    const mustRetainSpecial =
+      input.responsePhase === "local_draw" && isDiscardRestricted(input.pending.card);
     return [
       { action: "hu", enabled: false },
       { action: "kai", enabled: false },
       { action: "peng", enabled: false },
       { action: "chi", enabled: chiCandidates.length > 0, candidates: chiCandidates },
-      { action: "pass", enabled: true },
+      { action: "pass", enabled: !mustRetainSpecial },
     ];
   }
 
@@ -191,9 +193,6 @@ export interface EnterOwnerLocalDeps {
   setLoopStageLocal: () => void;
   clearActiveResponder: () => void;
   clearResponseEndsAt: () => void;
-  addWildcardCardToPlayer: (ownerId: SeatId, card: Card, source: "draw") => void;
-  setLastAction: (action: string) => void;
-  enterDiscardStage: (ownerId: SeatId, tag: string) => void;
   syncAllPrivateHands: () => void;
   tickBots: () => void;
 }
@@ -201,7 +200,7 @@ export interface EnterOwnerLocalDeps {
 /**
  * 作用：collective 无人响应后，进入牌主本地阶段（吃/过）。
  * 关键输入/输出：输入 pending 与状态写入依赖，输出无返回值。
- * 副作用：切换 `responsePhase/currentPlayer/loopStage`，必要时触发强制收牌并进入弃牌。
+ * 副作用：切换 `responsePhase/currentPlayer/loopStage` 并启动本家操作。
  */
 export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDeps): void {
   const pending = deps.pending;
@@ -226,17 +225,6 @@ export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDep
   deps.clearActiveResponder();
   deps.clearResponseEndsAt();
 
-  // “抓”到的新牌沿用 upper 来源并通过 responsePhaseAfterNoResponse 标记为
-  // local_draw，因此不能只看 card.source，否则将牌/金条仍可能进入过牌分支。
-  const isSelfDrawResolution =
-    pending.card.source === "draw" || pending.responsePhaseAfterNoResponse === "local_draw";
-  if (isSelfDrawResolution && plan.responsePhase === "local_draw" && isDiscardRestricted(pending.card)) {
-    deps.addWildcardCardToPlayer(plan.localOwnerId, pending.card, "draw");
-    deps.setLastAction(`${plan.localOwnerId} FORCE_TAKE`);
-    deps.enterDiscardStage(plan.localOwnerId, "FORCE_TAKE");
-    return;
-  }
-
   deps.syncAllPrivateHands();
   deps.tickBots();
 }
@@ -248,7 +236,7 @@ interface PendingLike {
 
 export interface ExecuteEatDeps {
   pending: PendingLike | null;
-  executeChiOperation: (ownerId: SeatId, pendingCard: Card) => boolean;
+  executeChiOperation: (ownerId: SeatId, pendingCard: Card) => { ok: boolean; kind?: string };
   setLastAction: (action: string) => void;
   enterDiscardStage: (ownerId: SeatId, tag: string) => void;
 }
@@ -263,12 +251,31 @@ export function executeEatFlow(deps: ExecuteEatDeps, ownerId: SeatId): boolean {
   if (!pending) {
     return false;
   }
-  if (!deps.executeChiOperation(ownerId, pending.card)) {
+  const result = deps.executeChiOperation(ownerId, pending.card);
+  if (!result.ok) {
     return false;
   }
-  deps.setLastAction(`${ownerId} CHI`);
-  deps.enterDiscardStage(ownerId, "CHI");
+  const tag = result.kind === "single" ? "FORCE_TAKE" : "CHI";
+  deps.setLastAction(`${ownerId} ${tag}`);
+  deps.enterDiscardStage(ownerId, tag);
   return true;
+}
+
+export type LocalDrawIdleAction = "discard" | "retain_special" | "pass_to_next";
+
+/**
+ * 作用：决定 local_draw 超时或自动兜底时的安全动作。
+ * 关键输入/输出：输入是否已进入弃牌以及当前待响应牌，输出唯一推进动作。
+ * 副作用：无。
+ */
+export function resolveLocalDrawIdleAction(awaitingDiscard: boolean, pendingCard: Card): LocalDrawIdleAction {
+  if (awaitingDiscard) {
+    return "discard";
+  }
+  if (isDiscardRestricted(pendingCard)) {
+    return "retain_special";
+  }
+  return "pass_to_next";
 }
 
 export interface ExecuteGrabDeps {
@@ -633,6 +640,7 @@ export interface BotRunnerDeps {
   broadcastAvailableActions: () => void;
   discardFromAndCollective: (ownerId: string, cardId?: string) => void;
   executeEat: (ownerId: string, candidateId?: string) => boolean;
+  retainPendingSpecial: (ownerId: string) => boolean;
   executeGrab: (ownerId: string) => void;
   executePassToNext: (ownerId: string) => void;
 }
@@ -691,8 +699,14 @@ export function runBotStep(deps: BotRunnerDeps): void {
     const choice = deps.chooseAction(ownerId, actions);
     if (choice.action === "chi") {
       if (!deps.executeEat(ownerId, choice.candidateId)) {
-        deps.executePassToNext(ownerId);
+        if (isDiscardRestricted(deps.pendingCard)) {
+          deps.retainPendingSpecial(ownerId);
+        } else {
+          deps.executePassToNext(ownerId);
+        }
       }
+    } else if (isDiscardRestricted(deps.pendingCard)) {
+      deps.retainPendingSpecial(ownerId);
     } else {
       deps.executePassToNext(ownerId);
     }

@@ -64,10 +64,12 @@ test("canChi allows exact same-color frame", () => {
   assert.equal(canChi(hand, response, []), true);
 });
 
-test("canChi rejects gold response card", () => {
+test("canChi allows a gold response as a single exposed group", () => {
   const response = c("gold1", "gold", "gong");
   const hand = [c("rm", "red", "ma"), c("rp", "red", "pao")];
-  assert.equal(canChi(hand, response, []), false);
+  const plans = getChiPlans(hand, response, []);
+  assert.equal(canChi(hand, response, []), true);
+  assert.equal(plans.some((plan) => plan.kind === "single" && plan.handCards.length === 0), true);
 });
 
 test("canChi pair mode rejects jiang response", () => {

@@ -61,6 +61,17 @@ const panelHint = computed(() => {
     if (selectionMode.value) {
         return `已选择${actionText(selectionMode.value)}，请在中间弹窗选择牌组确认`;
     }
+    const specialChi = normalized.value.find((item) => item.action === "chi" && item.candidates?.some((candidate) => candidate.kind === "single"));
+    if (specialChi) {
+        if (props.responsePhase === "collective") {
+            return (specialChi.candidates?.length ?? 0) > 1
+                ? "可预选吃牌组合或单独收下，系统会先等待其他玩家响应"
+                : "可预选收下，系统会先等待其他玩家响应";
+        }
+        return (specialChi.candidates?.length ?? 0) > 1
+            ? "请选择吃牌组合，或单独收下这张将/金条"
+            : "将和金条不能过，请收下后再出牌";
+    }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
         if (normalized.value.some((item) => item.key === "deferred-pass")) {
             return "这张待响牌给你：可胡/开/碰，或先选吃/抓";
@@ -103,6 +114,11 @@ function actionText(action) {
 function text(item) {
     if (item.deferredKind === "pass") {
         return "抓";
+    }
+    if (item.action === "chi" &&
+        item.candidates?.length === 1 &&
+        item.candidates[0]?.kind === "single") {
+        return "收下";
     }
     return actionText(item.action);
 }

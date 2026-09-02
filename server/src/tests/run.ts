@@ -10,6 +10,7 @@ import {
   dealInitialHands,
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
+import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
 import { resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
@@ -87,6 +88,47 @@ t("room-state-ops: auto discard prefers preserving complete groups over first av
 
   assert.ok(discard);
   assert.equal(discard!.id, "ym1");
+});
+
+t("room-state-ops: meld consumption is atomic when a requested card is missing", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "B";
+  player.name = "B";
+  state.players.set("B", player);
+  const shi = c("green_shi_01", "green", "shi");
+  const ma = c("yellow_ma_01", "yellow", "ma");
+  const hands = new Map<string, Card[]>([["B", [shi, ma]]]);
+  const ops = createRoomStateOps(state, hands, () => null);
+
+  const consumed = ops.consumePlanCards("B", [shi, c("green_xiang_missing", "green", "xiang")], []);
+
+  assert.equal(consumed, null);
+  assert.deepEqual(hands.get("B")?.map((card) => card.id), [shi.id, ma.id]);
+});
+
+t("room-state-ops: peng matching removal does not partially mutate the hand", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "B";
+  player.name = "B";
+  state.players.set("B", player);
+  const ju = c("red_ju_01", "red", "ju");
+  const ma = c("yellow_ma_01", "yellow", "ma");
+  const hands = new Map<string, Card[]>([["B", [ju, ma]]]);
+  const ops = createRoomStateOps(state, hands, () => null);
+
+  const consumed = ops.takeMatchingCards("B", c("red_ju_target", "red", "ju"), 2);
+
+  assert.deepEqual(consumed, []);
+  assert.deepEqual(hands.get("B")?.map((card) => card.id), [ju.id, ma.id]);
+});
+
+t("playing-flow: local draw timeout retains special cards instead of passing", () => {
+  assert.equal(resolveLocalDrawIdleAction(false, c("green_jiang", "green", "jiang")), "retain_special");
+  assert.equal(resolveLocalDrawIdleAction(false, c("gold_hou", "gold", "hou")), "retain_special");
+  assert.equal(resolveLocalDrawIdleAction(false, c("red_ju", "red", "ju")), "pass_to_next");
+  assert.equal(resolveLocalDrawIdleAction(true, c("green_jiang", "green", "jiang")), "discard");
 });
 
 t("bot-strategy: hu is mandatory at every strength", () => {
@@ -933,6 +975,12 @@ t("room: force-take draw wildcard can directly win when no legal discard", () =>
     collectives: new Map(),
   };
   room.enterOwnerLocalPhaseAfterNoResponse("A");
+  const candidateId = room
+    .getAvailableActions("A")
+    .find((item: any) => item.action === "chi")
+    ?.candidates?.find((candidate: any) => candidate.kind === "single")?.id;
+  assert.ok(candidateId);
+  room.executeEat("A", candidateId);
   assert.equal(room.state.phase, "ended");
   assert.match(String(room.state.lastAction), /^A HU$/);
 });
@@ -1043,10 +1091,15 @@ t("room: bots force-take every grabbed general and gold card", () => {
       room.playerHands.set("B", [c(`discard-${strength}-${specialCard.id}`, "yellow", "ma")]);
 
       room.enterOwnerLocalPhaseAfterNoResponse("A");
+      const localActions = room.getAvailableActions("B");
+      assert.equal(localActions.find((item: any) => item.action === "pass")?.enabled, false);
+      assert.equal(localActions.find((item: any) => item.action === "chi")?.enabled, true);
+      room.runBotStepNow();
 
       const player = room.state.players.get("B");
-      assert.equal(player?.generalArea.some((card: Card) => card.id === specialCard.id), true);
-      assert.equal(player?.wildcardPool.some((card: Card) => card.id === specialCard.id), true);
+      assert.equal(player?.exposedArea.some((card: Card) => card.id === specialCard.id), true);
+      assert.equal(player?.generalArea.some((card: Card) => card.id === specialCard.id), false);
+      assert.equal(player?.wildcardPool.some((card: Card) => card.id === specialCard.id), false);
       assert.equal(player?.discardPile.some((card: Card) => card.id === specialCard.id), false);
       assert.equal(room.state.publicDiscardPile.some((card: Card) => card.id === specialCard.id), false);
       assert.equal(room.awaitingDiscardOwnerId, "B");
@@ -1057,26 +1110,53 @@ t("room: bots force-take every grabbed general and gold card", () => {
   }
 });
 
-t("room: grabbed general is force-taken even when a jsx group is available", () => {
+t("room: deferred grabbed general chi consumes shi-xiang before discard", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "A",
-    card: c("draw1", "red", "jiang", "upper"),
+    card: c("green_jiang_01", "green", "jiang", "upper"),
     collectives: new Map(),
     responsePhaseAfterNoResponse: "local_draw",
   };
   room.state.responsePhase = "collective";
   room.playerHands.set("B", [
-    c("rs1", "red", "shi"),
-    c("rx1", "red", "xiang"),
-    c("ym1", "yellow", "ma"),
+    c("green_shi_01", "green", "shi"),
+    c("green_xiang_01", "green", "xiang"),
+    c("yellow_ma_01", "yellow", "ma"),
   ]);
+  const deferredCandidateId = room
+    .getAvailableActions("B", true)
+    .find((item: any) => item.action === "chi")
+    ?.candidates?.find((candidate: any) => candidate.kind === "jsx")?.id;
+  assert.ok(deferredCandidateId);
 
   room.enterOwnerLocalPhaseAfterNoResponse("A");
+  const localActions = room.getAvailableActions("B");
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.pendingResponse?.ownerId, "B");
+  assert.equal(localActions.find((item: any) => item.action === "pass")?.enabled, false);
+  assert.equal(
+    localActions
+      .find((item: any) => item.action === "chi")
+      ?.candidates?.some((candidate: any) => candidate.id === deferredCandidateId),
+    true,
+  );
 
-  assert.equal(room.state.players.get("B")?.generalArea.some((card: Card) => card.id === "draw1"), true);
-  assert.equal(room.state.players.get("B")?.exposedArea.some((card: Card) => card.id === "draw1"), false);
+  room.seatBySession.set("sessB", "B");
+  room.handleAction({ sessionId: "sessB", send: () => {} }, { action: "chi", candidateId: deferredCandidateId });
+
+  assert.deepEqual(room.playerHands.get("B")?.map((card: Card) => card.id), ["yellow_ma_01"]);
+  assert.deepEqual(
+    [...(room.state.players.get("B")?.exposedArea ?? [])].map((card: Card) => card.id),
+    ["green_jiang_01", "green_shi_01", "green_xiang_01"],
+  );
+  assert.deepEqual([...(room.state.players.get("B")?.exposedGroupSizes ?? [])], [3]);
+  assert.deepEqual([...(room.state.players.get("B")?.exposedGroupKinds ?? [])], ["chi"]);
+  assert.equal(room.state.players.get("B")?.generalArea.length ?? 0, 0);
+  assert.equal(room.state.players.get("B")?.wildcardPool.length ?? 0, 0);
   assert.equal(room.awaitingDiscardOwnerId, "B");
+  assert.equal(room.state.lastAction, "B CHI");
+  room.onDispose();
 });
 
 t("room: local draw pass_to_next keeps recipient as next local upper owner", () => {
@@ -1176,7 +1256,7 @@ t("room: bot auto-discard skips gold cards", () => {
   assert.equal(top!.id, "m1");
 });
 
-t("room: bot local chi uses candidate id instead of falling back to pass", () => {
+t("room: bot local special candidate retains the card instead of passing", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "B",
@@ -1192,7 +1272,10 @@ t("room: bot local chi uses candidate id instead of falling back to pass", () =>
 
   room.runBotStepNow();
 
+  assert.equal(room.state.players.get("B")?.generalArea.length ?? 0, 0);
+  assert.equal(room.state.players.get("B")?.wildcardPool.length ?? 0, 0);
   assert.equal(room.state.players.get("B")?.exposedArea.length ?? 0, 1);
+  assert.deepEqual([...(room.state.players.get("B")?.exposedGroupSizes ?? [])], [1]);
   assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
   assert.equal(room.awaitingDiscardOwnerId, "B");
 });

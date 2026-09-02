@@ -6,7 +6,7 @@ type SeatId = string;
 interface OperationDeps {
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   getWildcardPoolCards: (seatId: SeatId) => Card[];
-  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[];
+  consumePlanCards: (seatId: SeatId, handCards: Card[], poolCards: Card[]) => Card[] | null;
   pushExposedGroup: (seatId: SeatId, cards: Card[], highlight: boolean, kind: string) => void;
 }
 
@@ -39,7 +39,14 @@ export function tryExecuteChi(
     return { ok: false };
   }
   const plan = picked.plan;
+  if (plan.kind === "single") {
+    deps.pushExposedGroup(seatId, [pendingCard], true, "chi");
+    return { ok: true, kind: plan.kind, groupCards: [pendingCard] };
+  }
   const taken = deps.consumePlanCards(seatId, plan.handCards, plan.poolCards);
+  if (!taken || taken.length !== plan.handCards.length + plan.poolCards.length) {
+    return { ok: false };
+  }
   const groupCards = [pendingCard, ...taken];
   deps.pushExposedGroup(seatId, groupCards, true, "chi");
   return { ok: true, kind: plan.kind, groupCards };
