@@ -1162,9 +1162,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -1244,6 +1242,12 @@ if (__VLS_ctx.topPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.topPlayer.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "hand-count-badge" },
+        'data-testid': "opponent-hand-count",
+        'data-player-id': (__VLS_ctx.topPlayer.clientId),
+    });
+    (__VLS_ctx.playerHandCount(__VLS_ctx.topPlayer));
     if (__VLS_ctx.isDealer(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-badge" },
@@ -1289,7 +1293,6 @@ if (__VLS_ctx.topPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "seat-meta" },
     });
-    (__VLS_ctx.playerHandCount(__VLS_ctx.topPlayer));
     (__VLS_ctx.topGroupBlocks.length);
     (__VLS_ctx.topPlayer.declaredKongs);
     if (__VLS_ctx.topGroupBlocks.length) {
@@ -1399,6 +1402,12 @@ if (__VLS_ctx.leftPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.leftPlayer.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "hand-count-badge" },
+        'data-testid': "opponent-hand-count",
+        'data-player-id': (__VLS_ctx.leftPlayer.clientId),
+    });
+    (__VLS_ctx.playerHandCount(__VLS_ctx.leftPlayer));
     if (__VLS_ctx.isDealer(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-badge" },
@@ -1444,7 +1453,6 @@ if (__VLS_ctx.leftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "seat-meta" },
     });
-    (__VLS_ctx.playerHandCount(__VLS_ctx.leftPlayer));
     (__VLS_ctx.leftGroupBlocks.length);
     (__VLS_ctx.leftPlayer.declaredKongs);
     if (__VLS_ctx.leftGroupBlocks.length) {
@@ -1524,9 +1532,17 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "center-stage" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "center-card-pair" },
+    'data-testid': "center-card-pair",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "deck-slot" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "deck-stack" },
     ref: "deckAnchorRef",
     'data-testid': "deck-stack",
+    'data-card-back': "red-four-color",
     role: "img",
     'aria-label': (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
     title: (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
@@ -1547,6 +1563,9 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
 (props.state?.deckCount ?? 0);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "response-slot" },
+});
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "pending-inline response-focus" },
@@ -1647,6 +1666,12 @@ if (__VLS_ctx.rightPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.rightPlayer.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "hand-count-badge" },
+        'data-testid': "opponent-hand-count",
+        'data-player-id': (__VLS_ctx.rightPlayer.clientId),
+    });
+    (__VLS_ctx.playerHandCount(__VLS_ctx.rightPlayer));
     if (__VLS_ctx.isDealer(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-badge" },
@@ -1692,7 +1717,6 @@ if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "seat-meta" },
     });
-    (__VLS_ctx.playerHandCount(__VLS_ctx.rightPlayer));
     (__VLS_ctx.rightGroupBlocks.length);
     (__VLS_ctx.rightPlayer.declaredKongs);
     if (__VLS_ctx.rightGroupBlocks.length) {
@@ -2190,6 +2214,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
@@ -2216,6 +2241,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
@@ -2240,9 +2266,12 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-seat-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-stage']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-card-pair']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-slot']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-slot']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-caption']} */ ;
@@ -2261,6 +2290,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;

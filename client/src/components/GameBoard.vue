@@ -34,6 +34,11 @@
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
+            <span
+              class="hand-count-badge"
+              data-testid="opponent-hand-count"
+              :data-player-id="topPlayer.clientId"
+            >{{ playerHandCount(topPlayer) }}张</span>
             <span v-if="isDealer(topPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(topPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
               <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
@@ -50,7 +55,7 @@
             <span class="tag status">{{ statusText(topPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">手牌 {{ playerHandCount(topPlayer) }} 张 · 牌组 {{ topGroupBlocks.length }} 组 · 暗坎 {{ topPlayer.declaredKongs }}</p>
+        <p class="seat-meta">牌组 {{ topGroupBlocks.length }} 组 · 暗坎 {{ topPlayer.declaredKongs }}</p>
         <div v-if="topGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in topGroupBlocks"
@@ -107,6 +112,11 @@
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
+            <span
+              class="hand-count-badge"
+              data-testid="opponent-hand-count"
+              :data-player-id="leftPlayer.clientId"
+            >{{ playerHandCount(leftPlayer) }}张</span>
             <span v-if="isDealer(leftPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(leftPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
               <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
@@ -123,7 +133,7 @@
             <span class="tag status">{{ statusText(leftPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">手牌 {{ playerHandCount(leftPlayer) }} 张 · 牌组 {{ leftGroupBlocks.length }} 组 · 暗坎 {{ leftPlayer.declaredKongs }}</p>
+        <p class="seat-meta">牌组 {{ leftGroupBlocks.length }} 组 · 暗坎 {{ leftPlayer.declaredKongs }}</p>
         <div v-if="leftGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in leftGroupBlocks"
@@ -164,36 +174,43 @@
             <div v-if="seatActionText(leftPlayer.clientId) || isCollectiveResponder(leftPlayer.clientId)" class="center-seat-action">{{ seatActionText(leftPlayer.clientId) || "待响" }}</div>
           </div>
           <div class="center-stage">
-            <div
-              class="deck-stack"
-              ref="deckAnchorRef"
-              data-testid="deck-stack"
-              role="img"
-              :aria-label="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
-              :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
-            >
-              <span v-for="layer in 8" :key="layer" class="deck-layer" aria-hidden="true"></span>
-              <span class="deck-number" data-testid="deck-count" aria-hidden="true">
-                <strong>{{ props.state?.deckCount ?? 0 }}</strong><small>张</small>
-              </span>
-            </div>
-            <div
-              v-if="responseCard"
-              class="pending-inline response-focus"
-              :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
-              ref="responseLandingRef"
-              data-testid="pending-card"
-            >
-              <span class="response-caption">待响</span>
-              <Transition name="resp-move" mode="out-in">
-                <CardComp
-                  :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
-                  :card="responseCard"
-                  :mode="props.tableCardMode"
-                  size="lg"
-                  class="response-card-face"
-                />
-              </Transition>
+            <div class="center-card-pair" data-testid="center-card-pair">
+              <div class="deck-slot">
+                <div
+                  class="deck-stack"
+                  ref="deckAnchorRef"
+                  data-testid="deck-stack"
+                  data-card-back="red-four-color"
+                  role="img"
+                  :aria-label="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
+                  :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
+                >
+                  <span v-for="layer in 8" :key="layer" class="deck-layer" aria-hidden="true"></span>
+                  <span class="deck-number" data-testid="deck-count" aria-hidden="true">
+                    <strong>{{ props.state?.deckCount ?? 0 }}</strong><small>张</small>
+                  </span>
+                </div>
+              </div>
+              <div class="response-slot">
+                <div
+                  v-if="responseCard"
+                  class="pending-inline response-focus"
+                  :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
+                  ref="responseLandingRef"
+                  data-testid="pending-card"
+                >
+                  <span class="response-caption">待响</span>
+                  <Transition name="resp-move" mode="out-in">
+                    <CardComp
+                      :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
+                      :card="responseCard"
+                      :mode="props.tableCardMode"
+                      size="lg"
+                      class="response-card-face"
+                    />
+                  </Transition>
+                </div>
+              </div>
             </div>
           </div>
           <div
@@ -232,6 +249,11 @@
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
+            <span
+              class="hand-count-badge"
+              data-testid="opponent-hand-count"
+              :data-player-id="rightPlayer.clientId"
+            >{{ playerHandCount(rightPlayer) }}张</span>
             <span v-if="isDealer(rightPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(rightPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
               <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
@@ -248,7 +270,7 @@
             <span class="tag status">{{ statusText(rightPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">手牌 {{ playerHandCount(rightPlayer) }} 张 · 牌组 {{ rightGroupBlocks.length }} 组 · 暗坎 {{ rightPlayer.declaredKongs }}</p>
+        <p class="seat-meta">牌组 {{ rightGroupBlocks.length }} 组 · 暗坎 {{ rightPlayer.declaredKongs }}</p>
         <div v-if="rightGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in rightGroupBlocks"
@@ -1841,6 +1863,27 @@ watch(canDiscard, (enabled) => {
 .seat-identity strong,
 .seat-identity h3 {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hand-count-badge {
+  flex: 0 0 auto;
+  min-width: clamp(1.8rem, 4.4vh, 2.35rem);
+  min-height: clamp(1.3rem, 3vh, 1.65rem);
+  padding: 0.06rem 0.22rem;
+  border: 1px solid rgba(125, 211, 252, 0.58);
+  border-radius: 999px;
+  background: rgba(3, 105, 161, 0.24);
+  color: #e0f2fe;
+  display: inline-grid;
+  place-items: center;
+  font-size: clamp(0.66rem, 1.4vh, 0.8rem);
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .dealer-badge {
@@ -2287,6 +2330,25 @@ watch(canDiscard, (enabled) => {
   min-width: 0;
   min-height: 0;
   pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+.center-card-pair {
+  display: grid;
+  grid-template-columns: clamp(2.65rem, 6vh, 3.2rem) clamp(2.8rem, 8vh, 4.5rem);
+  gap: clamp(0.45rem, 1.1vw, 0.85rem);
+  align-items: center;
+  justify-content: center;
+}
+
+.deck-slot,
+.response-slot {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  width: 100%;
+  height: clamp(3.25rem, 8vh, 4rem);
 }
 
 .pending-inline {
@@ -2296,13 +2358,12 @@ watch(canDiscard, (enabled) => {
 }
 
 .response-focus {
-  position: absolute;
-  left: 50%;
-  bottom: 1%;
-  transform: translateX(-50%);
+  position: relative;
   z-index: 5;
-  min-width: clamp(3rem, 7vh, 4.5rem);
-  min-height: clamp(4rem, 9vh, 6rem);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   filter: drop-shadow(0 9px 16px rgba(2, 6, 23, 0.32));
 }
 
@@ -2326,40 +2387,39 @@ watch(canDiscard, (enabled) => {
 }
 
 .deck-stack {
-  position: absolute;
-  left: 50%;
-  top: 4%;
-  width: clamp(2.7rem, 6.4vh, 3.6rem);
-  height: clamp(3.15rem, 7.5vh, 4.2rem);
-  transform: translateX(-50%);
+  position: relative;
+  width: 100%;
+  height: 100%;
   z-index: 5;
   filter: drop-shadow(0 7px 10px rgba(2, 6, 23, 0.3));
 }
 
 .deck-layer {
-  --deck-offset: 0px;
+  --deck-x: -7px;
+  --deck-y: 3px;
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(100% - 0.45rem);
-  height: calc(100% - 0.42rem);
-  transform: translate(calc(-50% + var(--deck-offset)), calc(-50% - var(--deck-offset)));
-  border: 1px solid rgba(219, 234, 254, 0.7);
-  border-radius: clamp(0.28rem, 0.8vh, 0.42rem);
+  width: clamp(0.72rem, 1.6vh, 0.9rem);
+  height: calc(100% - 0.2rem);
+  transform: translate(calc(-50% + var(--deck-x)), calc(-50% + var(--deck-y)));
+  border: 1px solid rgba(254, 202, 202, 0.82);
+  border-radius: 999px;
   background:
-    linear-gradient(135deg, transparent 44%, rgba(219, 234, 254, 0.3) 45% 48%, transparent 49%),
-    linear-gradient(45deg, transparent 44%, rgba(219, 234, 254, 0.2) 45% 48%, transparent 49%),
-    linear-gradient(145deg, #1d4ed8, #172554);
-  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.35);
+    linear-gradient(90deg, rgba(254, 226, 226, 0.22), transparent 30% 70%, rgba(69, 10, 10, 0.3)),
+    linear-gradient(180deg, #ef4444 0%, #b91c1c 46%, #7f1d1d 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(127, 29, 29, 0.42),
+    0 1px 2px rgba(2, 6, 23, 0.45);
 }
 
-.deck-layer:nth-child(2) { --deck-offset: 1px; }
-.deck-layer:nth-child(3) { --deck-offset: 2px; }
-.deck-layer:nth-child(4) { --deck-offset: 3px; }
-.deck-layer:nth-child(5) { --deck-offset: 4px; }
-.deck-layer:nth-child(6) { --deck-offset: 5px; }
-.deck-layer:nth-child(7) { --deck-offset: 6px; }
-.deck-layer:nth-child(8) { --deck-offset: 7px; }
+.deck-layer:nth-child(2) { --deck-x: -5px; --deck-y: 2px; }
+.deck-layer:nth-child(3) { --deck-x: -3px; --deck-y: 1px; }
+.deck-layer:nth-child(4) { --deck-x: -1px; --deck-y: 0px; }
+.deck-layer:nth-child(5) { --deck-x: 1px; --deck-y: -1px; }
+.deck-layer:nth-child(6) { --deck-x: 3px; --deck-y: -2px; }
+.deck-layer:nth-child(7) { --deck-x: 5px; --deck-y: -3px; }
+.deck-layer:nth-child(8) { --deck-x: 7px; --deck-y: -4px; }
 
 .deck-number {
   position: absolute;
@@ -2367,12 +2427,12 @@ watch(canDiscard, (enabled) => {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  min-width: 2rem;
-  min-height: 1.65rem;
-  padding: 0.1rem 0.28rem;
-  border: 1px solid rgba(254, 240, 138, 0.62);
+  min-width: 1.9rem;
+  min-height: 1.45rem;
+  padding: 0.08rem 0.22rem;
+  border: 1px solid rgba(253, 224, 71, 0.76);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(69, 10, 10, 0.92);
   color: #fefce8;
   display: flex;
   align-items: center;
@@ -2389,7 +2449,7 @@ watch(canDiscard, (enabled) => {
 
 .deck-number small {
   font-size: clamp(0.48rem, 1.08vh, 0.62rem);
-  color: #fde68a;
+  color: #fef08a;
 }
 
 .resp-move-enter-active {
@@ -3311,20 +3371,8 @@ watch(canDiscard, (enabled) => {
     display: none;
   }
 
-  .deck-stack {
-    top: 0;
-    width: 2.35rem;
-    height: 2.65rem;
-  }
-
   .deck-number strong {
     font-size: 0.95rem;
-  }
-
-  .response-focus {
-    bottom: 0;
-    min-width: 2.8rem;
-    min-height: 3.25rem;
   }
 
   .dealer-card-mark :deep(.card) {

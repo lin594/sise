@@ -10,7 +10,12 @@ async function enterLobby(page: Page): Promise<void> {
 async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByTestId("deck-count")).toBeVisible();
   await expect(page.getByTestId("deck-stack")).toHaveAttribute("aria-label", /牌堆剩余 \d+ 张/);
+  await expect(page.getByTestId("deck-stack")).toHaveAttribute("data-card-back", "red-four-color");
   await expect(page.getByTestId("deck-stack").locator(".deck-layer")).toHaveCount(8);
+  await expect(page.getByTestId("opponent-hand-count")).toHaveCount(3);
+  for (const countText of await page.getByTestId("opponent-hand-count").allTextContents()) {
+    expect(countText.trim()).toMatch(/^\d+张$/);
+  }
   await expect(page.getByTestId("dealer-badge")).toHaveCount(1);
   await expect(page.getByTestId("dealer-card")).toHaveCount(1);
   await expect(page.getByText(/抽牌者/)).toHaveCount(0);
@@ -20,25 +25,42 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
 
   const centerGeometry = await page.evaluate(() => {
     const stage = document.querySelector<HTMLElement>(".center-stage")?.getBoundingClientRect();
+    const pair = document.querySelector<HTMLElement>('[data-testid="center-card-pair"]')?.getBoundingClientRect();
     const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')?.getBoundingClientRect();
     const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')?.getBoundingClientRect();
-    if (!stage || !deck) {
+    const deckLayer = document.querySelector<HTMLElement>(".deck-layer");
+    if (!stage || !pair || !deck || !deckLayer) {
       throw new Error("Central card stack is missing");
     }
+    const layerRect = deckLayer.getBoundingClientRect();
     return {
       stageCenterX: stage.x + stage.width / 2,
       stageCenterY: stage.y + stage.height / 2,
+      pairCenterX: pair.x + pair.width / 2,
+      pairCenterY: pair.y + pair.height / 2,
       deckCenterX: deck.x + deck.width / 2,
       deckCenterY: deck.y + deck.height / 2,
       pendingCenterX: pending ? pending.x + pending.width / 2 : null,
       pendingCenterY: pending ? pending.y + pending.height / 2 : null,
+      deckRight: deck.right,
+      pendingLeft: pending?.left ?? null,
+      layerWidth: layerRect.width,
+      layerHeight: layerRect.height,
+      layerRadius: getComputedStyle(deckLayer).borderRadius,
+      layerBackground: getComputedStyle(deckLayer).backgroundImage,
     };
   });
-  expect(Math.abs(centerGeometry.deckCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
-  expect(centerGeometry.deckCenterY).toBeLessThan(centerGeometry.stageCenterY);
+  expect(Math.abs(centerGeometry.pairCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
+  expect(Math.abs(centerGeometry.pairCenterY - centerGeometry.stageCenterY)).toBeLessThanOrEqual(2);
+  expect(centerGeometry.deckCenterX).toBeLessThan(centerGeometry.stageCenterX);
+  expect(Math.abs(centerGeometry.deckCenterY - centerGeometry.stageCenterY)).toBeLessThanOrEqual(2);
+  expect(centerGeometry.layerHeight / centerGeometry.layerWidth).toBeGreaterThanOrEqual(3.5);
+  expect(centerGeometry.layerRadius).toBe("999px");
+  expect(centerGeometry.layerBackground).toContain("239, 68, 68");
   if (centerGeometry.pendingCenterX !== null && centerGeometry.pendingCenterY !== null) {
-    expect(Math.abs(centerGeometry.pendingCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
-    expect(centerGeometry.pendingCenterY).toBeGreaterThan(centerGeometry.stageCenterY);
+    expect(centerGeometry.pendingCenterX).toBeGreaterThan(centerGeometry.stageCenterX);
+    expect(Math.abs(centerGeometry.pendingCenterY - centerGeometry.deckCenterY)).toBeLessThanOrEqual(2);
+    expect(centerGeometry.deckRight).toBeLessThanOrEqual(centerGeometry.pendingLeft!);
   }
 }
 
@@ -217,6 +239,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
     await expectDedicatedGameHeader(page);
+    const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
+    expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
@@ -293,14 +317,21 @@ test.describe("compact landscape gameplay", () => {
       const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')!.getBoundingClientRect();
       const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')!.getBoundingClientRect();
       return {
-        deckBottom: deck.bottom,
-        pendingTop: pending.top,
+        deckLeft: deck.left,
+        deckTop: deck.top,
+        deckRight: deck.right,
+        pendingLeft: pending.left,
         deckCenterX: deck.x + deck.width / 2,
         pendingCenterX: pending.x + pending.width / 2,
+        deckCenterY: deck.y + deck.height / 2,
+        pendingCenterY: pending.y + pending.height / 2,
       };
     });
-    expect(pendingGeometry.deckBottom).toBeLessThanOrEqual(pendingGeometry.pendingTop);
-    expect(Math.abs(pendingGeometry.deckCenterX - pendingGeometry.pendingCenterX)).toBeLessThanOrEqual(2);
+    expect(Math.abs(pendingGeometry.deckLeft - fixedDeckPosition!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pendingGeometry.deckTop - fixedDeckPosition!.y)).toBeLessThanOrEqual(1);
+    expect(pendingGeometry.deckRight).toBeLessThanOrEqual(pendingGeometry.pendingLeft);
+    expect(pendingGeometry.deckCenterX).toBeLessThan(pendingGeometry.pendingCenterX);
+    expect(Math.abs(pendingGeometry.deckCenterY - pendingGeometry.pendingCenterY)).toBeLessThanOrEqual(2);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-pending-card.png") });
 
     const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
