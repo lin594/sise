@@ -327,6 +327,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         client.send("debug_applied", { scenario, ok, ts: Date.now() });
       });
     }
+
+    // HTTP room creation and the WebSocket join are separate requests. Keep the
+    // room available for the configured grace period, but do not leak a room
+    // forever when the browser closes before completing the join.
+    this.scheduleRoomIdleIfEmpty();
   }
 
   /**
