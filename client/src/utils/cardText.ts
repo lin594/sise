@@ -76,3 +76,11 @@ export function getCardLabelText(card: Pick<Card, "color" | "type">): string {
   const color = getCardColorText(card);
   return `${color}${labelFace}`;
 }
+
+export function getCardAccessibleText(
+  card: Pick<Card, "color" | "type"> & Partial<Pick<Card, "isResponseCard">>,
+): string {
+  const face = getCardFaceText(card);
+  const name = card.color === "gold" ? `金条${face}` : getCardLabelText(card);
+  return card.isResponseCard ? `${name}，待响应牌` : name;
+}

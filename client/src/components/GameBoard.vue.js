@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import { getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 const props = defineProps();
 const emit = defineEmits();
 const nowMs = ref(Date.now());
@@ -551,7 +551,7 @@ function handCardAccessibleLabel(card) {
         : canDiscardCard(card)
             ? "可选择"
             : "不可打出";
-    return `${cardLabel(card)}，${state}`;
+    return `${getCardAccessibleText(card)}，${state}`;
 }
 function parseActionDescriptor(action) {
     const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
@@ -1088,6 +1088,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['playable']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;

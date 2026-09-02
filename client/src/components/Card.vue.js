@@ -1,7 +1,8 @@
 import { computed } from "vue";
-import { getCardFaceText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
 const props = defineProps();
 const label = computed(() => getCardFaceText(props.card));
+const accessibleLabel = computed(() => getCardAccessibleText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
@@ -29,6 +30,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "card" },
     ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, `mode-${__VLS_ctx.modeClass}`]) },
     'data-card-mode': (__VLS_ctx.modeClass),
+    role: "img",
+    'aria-label': (__VLS_ctx.accessibleLabel),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text text-top" },
@@ -43,6 +46,7 @@ if (__VLS_ctx.modeClass === 'long') {
 if (__VLS_ctx.isResponseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "star" },
+        'aria-hidden': "true",
     });
 }
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -56,6 +60,7 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             label: label,
+            accessibleLabel: accessibleLabel,
             colorClass: colorClass,
             isResponseCard: isResponseCard,
             sizeClass: sizeClass,

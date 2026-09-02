@@ -516,7 +516,7 @@ import type {
   RenderedCardMode,
   SeatDirection,
 } from "@/types/game";
-import { getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 
 type ExposedGroup = {
   id: string;
@@ -1214,7 +1214,7 @@ function handCardAccessibleLabel(card: Card): string {
     : canDiscardCard(card)
       ? "可选择"
       : "不可打出";
-  return `${cardLabel(card)}，${state}`;
+  return `${getCardAccessibleText(card)}，${state}`;
 }
 
 function parseActionDescriptor(action: string): { actor: string; keyword: string } {
@@ -2747,6 +2747,12 @@ watch(canDiscard, (enabled) => {
 
 .hand-card.playable:active {
   transform: translateY(-2px) scale(0.97);
+}
+
+.hand-card:focus-visible {
+  outline: 3px solid #e0f2fe;
+  outline-offset: 2px;
+  z-index: 4;
 }
 
 .hand-card.discard-selected {

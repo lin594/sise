@@ -3,17 +3,19 @@
     class="card"
     :class="[colorClass, `size-${sizeClass}`, `mode-${modeClass}`]"
     :data-card-mode="modeClass"
+    role="img"
+    :aria-label="accessibleLabel"
   >
     <span class="text text-top">{{ label }}</span>
     <span v-if="modeClass === 'long'" class="text text-bottom">{{ label }}</span>
-    <span v-if="isResponseCard" class="star">*</span>
+    <span v-if="isResponseCard" class="star" aria-hidden="true">★</span>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Card, RenderedCardMode } from "@/types/game";
-import { getCardFaceText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
 
 const props = defineProps<{
   card: Card;
@@ -22,6 +24,7 @@ const props = defineProps<{
 }>();
 
 const label = computed(() => getCardFaceText(props.card));
+const accessibleLabel = computed(() => getCardAccessibleText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
@@ -38,7 +41,7 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   align-items: center;
   justify-items: center;
   font-weight: 700;
-  color: #111;
+  color: #09090b;
   background: #fff;
   transition: transform 0.2s ease;
   padding: 2px 0;

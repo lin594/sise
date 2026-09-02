@@ -335,6 +335,29 @@ test.describe("compact landscape gameplay", () => {
     expect(handMetrics.scrollHeight).toBeLessThanOrEqual(handMetrics.clientHeight);
     expect(handMetrics.overflowX).toBe("auto");
     expect(handMetrics.overflowY).toBe("hidden");
+    await expect(page.locator(".hand .card[role='img']").first()).toHaveAttribute("aria-label", /^(黄|红|绿|白|金条).+/);
+    const redCardContrast = await page.locator(".hand .card").first().evaluate((source) => {
+      const sample = source.cloneNode(true) as HTMLElement;
+      sample.classList.remove("color-yellow", "color-red", "color-green", "color-white", "color-gold");
+      sample.classList.add("color-red");
+      sample.style.position = "fixed";
+      sample.style.left = "-9999px";
+      document.body.appendChild(sample);
+      const parseRgb = (value: string): number[] => value.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [0, 0, 0];
+      const luminance = (rgb: number[]): number => {
+        const [red, green, blue] = rgb.map((channel) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      };
+      const style = getComputedStyle(sample);
+      const foreground = luminance(parseRgb(style.color));
+      const background = luminance(parseRgb(style.backgroundColor));
+      sample.remove();
+      return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    });
+    expect(redCardContrast).toBeGreaterThanOrEqual(4.5);
 
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");

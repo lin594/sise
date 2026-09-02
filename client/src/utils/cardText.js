@@ -66,3 +66,8 @@ export function getCardLabelText(card) {
     const color = getCardColorText(card);
     return `${color}${labelFace}`;
 }
+export function getCardAccessibleText(card) {
+    const face = getCardFaceText(card);
+    const name = card.color === "gold" ? `金条${face}` : getCardLabelText(card);
+    return card.isResponseCard ? `${name}，待响应牌` : name;
+}
