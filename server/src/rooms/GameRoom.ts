@@ -114,6 +114,7 @@ type StateLogMode = "off" | "all" | "compact";
 
 const COMPACT_STATE_ACTIONS = new Set<string>([
   "LOBBY",
+  "RECONNECT_WAIT",
   "TAKEOVER",
   "DEALER",
   "TURN_START",
@@ -133,6 +134,7 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
 
 export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
+export const DEFAULT_RECONNECT_GRACE_MS = 5_000;
 
 export class FourColorGameRoom extends Room<GameState> {
   maxClients = 8;
@@ -151,6 +153,7 @@ export class FourColorGameRoom extends Room<GameState> {
   private pendingNameBySession = new Map<string, string>(); // connected lobby guests that have not claimed a seat
   private pendingTokenBySession = new Map<string, string>(); // preserves a guest's room-scoped token until seat claim
   private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly takeoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private hostKey = "";
   private hostKeyConsumed = false;
@@ -188,6 +191,10 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
   private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
   private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));
+  private readonly reconnectGraceMs = Math.max(
+    0,
+    Number(process.env.RECONNECT_GRACE_MS ?? DEFAULT_RECONNECT_GRACE_MS),
+  );
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
   private readonly traceCards = (process.env.ROOM_TRACE_CARDS ?? "0") === "1";
@@ -388,19 +395,16 @@ export class FourColorGameRoom extends Room<GameState> {
       this.state.lastAction = `OFFLINE ${seatId}`;
       this.scheduleSeatRelease(seatId);
     } else {
-      player.isBot = true;
+      player.isBot = false;
       player.botStrength = 50;
       player.name = baseName;
-      this.botIds.add(seatId);
-      this.state.lastAction = `TAKEOVER ${seatId}`;
+      this.botIds.delete(seatId);
+      this.state.lastAction = `RECONNECT_WAIT ${seatId}`;
+      this.scheduleTemporaryTakeover(seatId);
     }
 
     if (this.state.hostPlayerId === seatId) {
       this.transferHostToLowestOnlineHuman();
-    }
-
-    if (this.state.phase === "declaring" && !player.declaredReady) {
-      this.submitDefaultDeclaration(seatId, true);
     }
 
     if (this.state.phase === "playing" || this.state.phase === "declaring") {
@@ -422,6 +426,7 @@ export class FourColorGameRoom extends Room<GameState> {
       clearTimeout(timer);
     }
     this.seatDisconnectTimers.clear();
+    this.clearAllTakeoverTimers();
   }
 
   // ===== 房间生命周期与消息入口 =====
@@ -712,6 +717,7 @@ export class FourColorGameRoom extends Room<GameState> {
 
   private removeSeat(seatId: string, notifyClient: boolean): void {
     this.clearSeatReleaseTimer(seatId);
+    this.clearTakeoverTimer(seatId);
     const sessionIds = [...this.seatBySession.entries()]
       .filter(([, mappedSeat]) => mappedSeat === seatId)
       .map(([sessionId]) => sessionId);
@@ -760,6 +766,57 @@ export class FourColorGameRoom extends Room<GameState> {
       this.broadcastAvailableActions();
     }, this.lobbySeatHoldMs);
     this.seatDisconnectTimers.set(seatId, timer);
+  }
+
+  private clearTakeoverTimer(seatId: string): void {
+    const timer = this.takeoverTimers.get(seatId);
+    if (timer) {
+      clearTimeout(timer);
+      this.takeoverTimers.delete(seatId);
+    }
+  }
+
+  private clearAllTakeoverTimers(): void {
+    for (const timer of this.takeoverTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.takeoverTimers.clear();
+  }
+
+  private scheduleTemporaryTakeover(seatId: string): void {
+    this.clearTakeoverTimer(seatId);
+    const activate = () => {
+      this.takeoverTimers.delete(seatId);
+      const player = this.state.players.get(seatId);
+      if (!player || player.connected || player.isConfiguredBot) {
+        return;
+      }
+      if (this.state.phase === "waiting") {
+        player.isBot = false;
+        this.botIds.delete(seatId);
+        this.scheduleSeatRelease(seatId);
+        this.broadcastAvailableActions();
+        return;
+      }
+      player.isBot = true;
+      player.botStrength = 50;
+      this.botIds.add(seatId);
+      this.state.lastAction = `TAKEOVER ${seatId}`;
+      if (this.state.phase === "declaring" && !player.declaredReady) {
+        this.submitDefaultDeclaration(seatId, true);
+        return;
+      }
+      if (this.state.phase === "playing" || this.state.phase === "declaring") {
+        this.tickBots();
+      } else {
+        this.broadcastAvailableActions();
+      }
+    };
+    if (this.reconnectGraceMs === 0) {
+      activate();
+      return;
+    }
+    this.takeoverTimers.set(seatId, setTimeout(activate, this.reconnectGraceMs));
   }
 
   private transferHostToLowestOnlineHuman(): void {
@@ -826,6 +883,7 @@ export class FourColorGameRoom extends Room<GameState> {
    */
   private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
     this.clearSeatReleaseTimer(seatId);
+    this.clearTakeoverTimer(seatId);
     for (const [sessionId, mappedSeat] of this.seatBySession.entries()) {
       if (mappedSeat !== seatId || sessionId === client.sessionId) {
         continue;
@@ -1949,6 +2007,7 @@ export class FourColorGameRoom extends Room<GameState> {
       seatByToken: this.seatByToken,
       targetSeats: this.targetSeats,
       resetRuntime: () => {
+        this.clearAllTakeoverTimers();
         this.clearBotTimer();
         this.clearDeclareTimer();
         this.clearDeclareIntroTimer();

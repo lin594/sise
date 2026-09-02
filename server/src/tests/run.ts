@@ -16,6 +16,7 @@ import { generateToken, normalizeName, normalizeToken, resolveDealerFromAnchorAn
 import {
   DEFAULT_DECLARE_TIMEOUT_MS,
   DEFAULT_OPERATION_TIMEOUT_MS,
+  DEFAULT_RECONNECT_GRACE_MS,
   FourColorGameRoom,
 } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
@@ -43,6 +44,7 @@ t("identity: generated room tokens use cryptographically random 192-bit values",
 t("accessibility: default human decisions allow extra reading and touch time", () => {
   assert.equal(DEFAULT_OPERATION_TIMEOUT_MS, 30_000);
   assert.equal(DEFAULT_DECLARE_TIMEOUT_MS, 45_000);
+  assert.equal(DEFAULT_RECONNECT_GRACE_MS, 5_000);
 });
 
 t("identity: legacy room tokens remain accepted during migration", () => {
@@ -401,6 +403,7 @@ t("lobby: active disconnect keeps the human name while enabling temporary bot co
   room.pendingTokenBySession = new Map();
   room.baseNameBySeat = new Map([["seat_0", "张阿姨"]]);
   room.botIds = new Set();
+  room.reconnectGraceMs = 0;
   room.tickBots = () => {};
   room.scheduleRoomIdleIfEmpty = () => {};
 
