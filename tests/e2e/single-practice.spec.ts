@@ -73,7 +73,10 @@ async function playUntilSettlement(page: Page): Promise<void> {
         continue;
       }
     }
-    const actionIds = ["action-hu", "action-kai", "action-peng", "action-chi", "action-pass"];
+    const responsePhase = await page.getByTestId("game-board").getAttribute("data-response-phase");
+    const actionIds = responsePhase === "collective"
+      ? ["action-hu", "action-pass", "action-deferred-pass", "action-kai", "action-peng", "action-chi"]
+      : ["action-hu", "action-pass", "action-chi", "action-kai", "action-peng"];
     let acted = false;
     for (const id of actionIds) {
       const action = page.getByTestId(id);
