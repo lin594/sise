@@ -33,6 +33,7 @@ test.describe("牌局断线恢复", () => {
       return {
         roomId,
         token: roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null,
+        seatId: document.querySelector<HTMLElement>("[data-testid='player-self']")?.dataset.playerId ?? null,
         handIds: Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='hand-card-']")).map(
           (card) => card.dataset.testid,
         ),
@@ -40,6 +41,7 @@ test.describe("牌局断线恢复", () => {
     });
     expect(beforeDisconnect.roomId).toBeTruthy();
     expect(beforeDisconnect.token).toMatch(/^pt_[0-9a-f]{48}$/);
+    expect(beforeDisconnect.seatId).toBeTruthy();
     expect(beforeDisconnect.handIds.length).toBeGreaterThan(0);
 
     await context.setOffline(true);
@@ -60,7 +62,20 @@ test.describe("牌局断线恢复", () => {
       timeout: 20_000,
     });
     await expect(page.getByTestId("game-board")).toBeVisible();
-    await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(beforeDisconnect.handIds.length);
+    await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
+    const restoredPrivateState = await page.evaluate(() => {
+      const handIds = Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='hand-card-']")).map(
+        (card) => card.dataset.testid,
+      );
+      return {
+        seatId: document.querySelector<HTMLElement>("[data-testid='player-self']")?.dataset.playerId ?? null,
+        handIds,
+      };
+    });
+    // 断线座位会由机器人临时托管，因此恢复后的权威手牌可能已合法变化；身份不能变化，也不能出现重复牌。
+    expect(restoredPrivateState.seatId).toBe(beforeDisconnect.seatId);
+    expect(restoredPrivateState.handIds.length).toBeGreaterThan(0);
+    expect(new Set(restoredPrivateState.handIds).size).toBe(restoredPrivateState.handIds.length);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-restored.png") });
 
     const afterRecovery = await page.evaluate(() => {
