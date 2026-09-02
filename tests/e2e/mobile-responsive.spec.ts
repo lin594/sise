@@ -9,12 +9,37 @@ async function enterLobby(page: Page): Promise<void> {
 
 async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByTestId("deck-count")).toBeVisible();
+  await expect(page.getByTestId("deck-stack")).toHaveAttribute("aria-label", /牌堆剩余 \d+ 张/);
+  await expect(page.getByTestId("deck-stack").locator(".deck-layer")).toHaveCount(8);
   await expect(page.getByTestId("dealer-badge")).toHaveCount(1);
   await expect(page.getByTestId("dealer-card")).toHaveCount(1);
   await expect(page.getByText(/抽牌者/)).toHaveCount(0);
   await expect(page.getByText(/^庄家:/)).toHaveCount(0);
   await expect(page.locator(".center-core-cell")).toHaveCount(0);
   await expect(page.locator(".pending-placeholder")).toHaveCount(0);
+
+  const centerGeometry = await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>(".center-stage")?.getBoundingClientRect();
+    const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')?.getBoundingClientRect();
+    const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')?.getBoundingClientRect();
+    if (!stage || !deck) {
+      throw new Error("Central card stack is missing");
+    }
+    return {
+      stageCenterX: stage.x + stage.width / 2,
+      stageCenterY: stage.y + stage.height / 2,
+      deckCenterX: deck.x + deck.width / 2,
+      deckCenterY: deck.y + deck.height / 2,
+      pendingCenterX: pending ? pending.x + pending.width / 2 : null,
+      pendingCenterY: pending ? pending.y + pending.height / 2 : null,
+    };
+  });
+  expect(Math.abs(centerGeometry.deckCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
+  expect(centerGeometry.deckCenterY).toBeLessThan(centerGeometry.stageCenterY);
+  if (centerGeometry.pendingCenterX !== null && centerGeometry.pendingCenterY !== null) {
+    expect(Math.abs(centerGeometry.pendingCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
+    expect(centerGeometry.pendingCenterY).toBeGreaterThan(centerGeometry.stageCenterY);
+  }
 }
 
 async function expectDedicatedGameHeader(page: Page): Promise<void> {

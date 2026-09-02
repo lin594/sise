@@ -165,6 +165,19 @@
           </div>
           <div class="center-stage">
             <div
+              class="deck-stack"
+              ref="deckAnchorRef"
+              data-testid="deck-stack"
+              role="img"
+              :aria-label="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
+              :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
+            >
+              <span v-for="layer in 8" :key="layer" class="deck-layer" aria-hidden="true"></span>
+              <span class="deck-number" data-testid="deck-count" aria-hidden="true">
+                <strong>{{ props.state?.deckCount ?? 0 }}</strong><small>张</small>
+              </span>
+            </div>
+            <div
               v-if="responseCard"
               class="pending-inline response-focus"
               :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
@@ -181,14 +194,6 @@
                   class="response-card-face"
                 />
               </Transition>
-            </div>
-            <div
-              class="deck-badge"
-              ref="deckAnchorRef"
-              data-testid="deck-count"
-              :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
-            >
-              <span>牌堆</span><strong>{{ props.state?.deckCount ?? 0 }}</strong>
             </div>
           </div>
           <div
@@ -2283,12 +2288,13 @@ watch(canDiscard, (enabled) => {
 }
 
 .center-stage {
-  grid-area: core;
+  grid-column: 2;
+  grid-row: 1 / 4;
   position: relative;
   min-width: 0;
   min-height: 0;
-  display: grid;
-  place-items: center;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .pending-inline {
@@ -2298,7 +2304,10 @@ watch(canDiscard, (enabled) => {
 }
 
 .response-focus {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  bottom: 1%;
+  transform: translateX(-50%);
   min-width: clamp(3rem, 7vh, 4.5rem);
   min-height: clamp(4rem, 9vh, 6rem);
   filter: drop-shadow(0 9px 16px rgba(2, 6, 23, 0.32));
@@ -2323,28 +2332,70 @@ watch(canDiscard, (enabled) => {
   opacity: 0;
 }
 
-.deck-badge {
+.deck-stack {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  min-width: 2.9rem;
-  min-height: 1.45rem;
-  padding: 0.12rem 0.42rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  background: rgba(15, 23, 42, 0.76);
-  color: #cbd5e1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.22rem;
-  font-size: clamp(0.52rem, 1.08vh, 0.68rem);
-  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.22);
+  left: 50%;
+  top: 4%;
+  width: clamp(2.7rem, 6.4vh, 3.6rem);
+  height: clamp(3.15rem, 7.5vh, 4.2rem);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 7px 10px rgba(2, 6, 23, 0.3));
 }
 
-.deck-badge strong {
-  color: #f8fafc;
-  font-size: 1.08em;
+.deck-layer {
+  --deck-offset: 0px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% - 0.45rem);
+  height: calc(100% - 0.42rem);
+  transform: translate(calc(-50% + var(--deck-offset)), calc(-50% - var(--deck-offset)));
+  border: 1px solid rgba(219, 234, 254, 0.7);
+  border-radius: clamp(0.28rem, 0.8vh, 0.42rem);
+  background:
+    linear-gradient(135deg, transparent 44%, rgba(219, 234, 254, 0.3) 45% 48%, transparent 49%),
+    linear-gradient(45deg, transparent 44%, rgba(219, 234, 254, 0.2) 45% 48%, transparent 49%),
+    linear-gradient(145deg, #1d4ed8, #172554);
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.35);
+}
+
+.deck-layer:nth-child(2) { --deck-offset: 1px; }
+.deck-layer:nth-child(3) { --deck-offset: 2px; }
+.deck-layer:nth-child(4) { --deck-offset: 3px; }
+.deck-layer:nth-child(5) { --deck-offset: 4px; }
+.deck-layer:nth-child(6) { --deck-offset: 5px; }
+.deck-layer:nth-child(7) { --deck-offset: 6px; }
+.deck-layer:nth-child(8) { --deck-offset: 7px; }
+
+.deck-number {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 2rem;
+  min-height: 1.65rem;
+  padding: 0.1rem 0.28rem;
+  border: 1px solid rgba(254, 240, 138, 0.62);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #fefce8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.deck-number strong {
+  font-size: clamp(0.86rem, 2vh, 1.12rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-number small {
+  font-size: clamp(0.48rem, 1.08vh, 0.62rem);
+  color: #fde68a;
 }
 
 .resp-move-enter-active {

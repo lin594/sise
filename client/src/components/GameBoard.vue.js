@@ -1040,7 +1040,15 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
@@ -1510,6 +1518,30 @@ if (__VLS_ctx.leftPlayer) {
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "center-stage" },
 });
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "deck-stack" },
+    ref: "deckAnchorRef",
+    'data-testid': "deck-stack",
+    role: "img",
+    'aria-label': (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
+    title: (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
+});
+/** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
+for (const [layer] of __VLS_getVForSourceType((8))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        key: (layer),
+        ...{ class: "deck-layer" },
+        'aria-hidden': "true",
+    });
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "deck-number" },
+    'data-testid': "deck-count",
+    'aria-hidden': "true",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+(props.state?.deckCount ?? 0);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "pending-inline response-focus" },
@@ -1551,16 +1583,6 @@ if (__VLS_ctx.responseCard) {
     }, ...__VLS_functionalComponentArgsRest(__VLS_22));
     var __VLS_21;
 }
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "deck-badge" },
-    ref: "deckAnchorRef",
-    'data-testid': "deck-count",
-    title: (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
-});
-/** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-(props.state?.deckCount ?? 0);
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-right" },
@@ -2211,11 +2233,13 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-seat-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-stage']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-caption']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-card-face']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
