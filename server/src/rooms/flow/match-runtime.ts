@@ -230,7 +230,7 @@ export function ensureBotSeatsForStart(
     }
     const bot = new PlayerState();
     bot.clientId = seatId;
-    bot.name = `BOT_${playerOrder.length + 1}`;
+    bot.name = formatBotName(playerOrder.length);
     bot.isBot = true;
     bot.connected = false;
     state.players.set(seatId, bot);
@@ -250,6 +250,10 @@ export function ensureBotSeatsForStart(
       botIds.delete(seatId);
     }
   }
+}
+
+export function formatBotName(seatIndex: number): string {
+  return `机器人${Math.max(0, Math.trunc(seatIndex)) + 1}`;
 }
 
 /**
@@ -1416,7 +1420,7 @@ function buildSettlementLines(
             }
             items.push({
               key: `MutualGain:${owner.clientId}:${other.clientId}:${detail.key}:${index}`,
-              label: `${other.name}付 ${detail.label}`,
+              label: `${other.name} 付 ${detail.label}`,
               count: 1,
               unit: detail.unit,
               total: detail.unit,

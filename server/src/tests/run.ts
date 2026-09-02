@@ -230,6 +230,7 @@ t("lobby: fixed seats support host bots and atomic occupancy", () => {
   assert.equal(room.seatByToken.get("token-guest"), "seat_1");
   room.handleAddBot(host, { seatIndex: 2, strength: 83 });
   const bot = room.state.players.get("seat_2");
+  assert.equal(bot?.name, "机器人3");
   assert.equal(bot?.isConfiguredBot, true);
   assert.equal(bot?.botStrength, 83);
   assert.deepEqual(room.playerOrder, ["seat_0", "seat_1", "seat_2"]);
@@ -239,6 +240,28 @@ t("lobby: fixed seats support host bots and atomic occupancy", () => {
   assert.equal(room.state.players.has("seat_0"), false);
   assert.deepEqual(room.playerOrder, ["seat_1", "seat_2", "seat_3"]);
   assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "seat_occupied"), true);
+});
+
+t("lobby: practice auto-fill uses compact bot names", () => {
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.targetSeats = 4;
+  room.playerOrder = ["seat_0"];
+  room.playerHands = new Map([["seat_0", []]]);
+  room.botIds = new Set();
+  room.configuredBotIds = new Set();
+  const human = new PlayerState();
+  human.clientId = "seat_0";
+  human.seatIndex = 0;
+  human.name = "玩家";
+  room.state.players.set("seat_0", human);
+
+  room.ensureBotSeatsForStart();
+
+  assert.deepEqual(
+    room.playerOrder.map((seatId: string) => room.state.players.get(seatId)?.name),
+    ["玩家", "机器人2", "机器人3", "机器人4"],
+  );
 });
 
 t("lobby: a seated player may return the table from any active phase", () => {
@@ -565,6 +588,57 @@ t("round_result: exposed peng no longer counts as kan in mutual settlement", () 
   assert.equal(seatD!.totalScore, -4);
   assert.equal(seatB!.scoreBreakdown.filter((item) => item.key.startsWith("MutualGain:")).reduce((sum, item) => sum + item.total, 0), 0);
   assert.equal(seatB!.scoreBreakdown.some((item) => item.key.startsWith("HuLose:SingleJiang") && item.total === -1), true);
+});
+
+t("round_result: mutual payment label separates payer name from payment", () => {
+  const state = new GameState();
+  for (const [seat, name] of [
+    ["A", "玩家1"],
+    ["B", "机器人2"],
+    ["C", "机器人3"],
+    ["D", "机器人4"],
+  ]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = name;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([
+    ["A", []],
+    ["B", []],
+    ["C", []],
+    ["D", []],
+  ]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const owner = state.players.get("A");
+  assert.ok(owner);
+  for (const card of [
+    c("gold_gong", "gold", "gong"),
+    c("gold_hou", "gold", "hou"),
+    c("gold_bo", "gold", "bo"),
+    c("gold_zi", "gold", "zi"),
+  ]) {
+    owner!.exposedArea.push(ops.toSchemaCard(card, false, "upper"));
+  }
+  owner!.exposedGroupSizes.push(4);
+  owner!.exposedGroupKinds.push("kai");
+
+  const result = buildRoundResultPlayers(
+    ["A", "B", "C", "D"],
+    state.players,
+    hands,
+    (card) => ops.toPlainCard(card),
+    null,
+    [],
+  );
+  const ownerResult = result.find((player) => player.clientId === "A");
+  assert.ok(ownerResult);
+  assert.equal(
+    ownerResult!.scoreBreakdown.some(
+      (item) => item.label === "机器人2 付 金条开" && item.total === 18,
+    ),
+    true,
+  );
 });
 
 t("round_result: undeclared identical triplets settle as peng after declared hidden kans", () => {

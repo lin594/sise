@@ -18,6 +18,7 @@ import {
   dealInitialHands as dealInitialHandsFlow,
   decideStartGame,
   endRoundFlow,
+  formatBotName,
   reclaimSeatStateFlow,
   resetRoundPlayers as resetRoundPlayersFlow,
   resetToLobby,
@@ -639,7 +640,7 @@ export class FourColorGameRoom extends Room<GameState> {
     const bot = new PlayerState();
     bot.clientId = seatId;
     bot.seatIndex = seatIndex;
-    bot.name = `机器人 ${seatIndex + 1}`;
+    bot.name = formatBotName(seatIndex);
     bot.isBot = true;
     bot.isConfiguredBot = true;
     bot.botStrength = this.normalizeBotStrength(payload?.strength);
@@ -891,7 +892,7 @@ export class FourColorGameRoom extends Room<GameState> {
       const bot = new PlayerState();
       bot.clientId = seatId;
       bot.seatIndex = seatIndex;
-      bot.name = `机器人 ${seatIndex + 1}`;
+      bot.name = formatBotName(seatIndex);
       bot.isBot = true;
       bot.isConfiguredBot = true;
       bot.botStrength = 50;
