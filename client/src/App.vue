@@ -843,9 +843,9 @@ const declareTotalMs = computed(() => {
   const action = String(state.value?.lastAction ?? "");
   const match = action.match(/DECLARING\s+(\d+)ms/);
   if (match) {
-    return Math.max(1000, Number(match[1]) || 30000);
+    return Math.max(1000, Number(match[1]) || 45000);
   }
-  return 30000;
+  return 45000;
 });
 const declareProgressPercent = computed(() => {
   const endsAt = Number(state.value?.declareEndsAt ?? 0);

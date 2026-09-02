@@ -58,7 +58,7 @@ let dealAnimatingUntil = 0;
 let flashTimer = null;
 let drawHideTimer = null;
 let countdownTimer = null;
-const OP_COUNTDOWN_MS = 20000;
+const OP_COUNTDOWN_MS = 30000;
 function splitExposedGroups(cards, sizes, prefix) {
     const normalizeResponseFlag = (chunk) => {
         const firstResponseIndex = chunk.findIndex((card) => Boolean(card.isResponseCard));
@@ -1188,6 +1188,7 @@ let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "board" },
     'data-testid': "game-board",
+    'data-response-phase': (props.responsePhase ?? ''),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "table" },

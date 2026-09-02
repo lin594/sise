@@ -131,6 +131,9 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
   "DRAW_GAME",
 ]);
 
+export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
+export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
+
 export class FourColorGameRoom extends Room<GameState> {
   maxClients = 8;
 
@@ -165,7 +168,10 @@ export class FourColorGameRoom extends Room<GameState> {
     this.botThinkMinMs,
     Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1400),
   );
-  private readonly operationTimeoutMs = Math.max(1000, Number(process.env.OP_TIMEOUT_MS ?? 20000));
+  private readonly operationTimeoutMs = Math.max(
+    1000,
+    Number(process.env.OP_TIMEOUT_MS ?? DEFAULT_OPERATION_TIMEOUT_MS),
+  );
   private readonly collectiveTimeoutMs = Math.max(
     1000,
     Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
@@ -175,7 +181,10 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 1200));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
-  private readonly declareTimeoutMs = Math.max(1000, Number(process.env.DECLARE_TIMEOUT_MS ?? 30000));
+  private readonly declareTimeoutMs = Math.max(
+    1000,
+    Number(process.env.DECLARE_TIMEOUT_MS ?? DEFAULT_DECLARE_TIMEOUT_MS),
+  );
   private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
   private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
   private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));

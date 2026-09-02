@@ -13,7 +13,11 @@ import {
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
 import { generateToken, normalizeName, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
-import { FourColorGameRoom } from "../rooms/GameRoom.js";
+import {
+  DEFAULT_DECLARE_TIMEOUT_MS,
+  DEFAULT_OPERATION_TIMEOUT_MS,
+  FourColorGameRoom,
+} from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 import { chooseBotAction, chooseBotDiscard, createSeededRandom } from "../rooms/bot-strategy.js";
 
@@ -34,6 +38,11 @@ t("identity: generated room tokens use cryptographically random 192-bit values",
 
   assert.equal(new Set(tokens).size, tokens.length);
   assert.equal(tokens.every((token) => /^pt_[0-9a-f]{48}$/.test(token)), true);
+});
+
+t("accessibility: default human decisions allow extra reading and touch time", () => {
+  assert.equal(DEFAULT_OPERATION_TIMEOUT_MS, 30_000);
+  assert.equal(DEFAULT_DECLARE_TIMEOUT_MS, 45_000);
 });
 
 t("identity: legacy room tokens remain accepted during migration", () => {

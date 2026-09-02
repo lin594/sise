@@ -92,8 +92,20 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
 }
 
 async function reachDiscardConfirmation(page: Page): Promise<void> {
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + 60_000;
   const confirm = page.getByTestId("discard-confirm");
+
+  const clickIfReady = async (testId: string): Promise<boolean> => {
+    const action = page.getByTestId(testId);
+    if (!(await action.isVisible().catch(() => false)) || !(await action.isEnabled().catch(() => false))) {
+      return false;
+    }
+    return action
+      .click({ force: true, timeout: 1_000 })
+      .then(() => true)
+      .catch(() => false);
+  };
+
   while (Date.now() < deadline) {
     if (await confirm.isVisible().catch(() => false)) {
       return;
@@ -103,9 +115,13 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     for (let index = 0; index < await candidates.count(); index += 1) {
       const candidate = candidates.nth(index);
       if ((await candidate.isVisible().catch(() => false)) && (await candidate.isEnabled().catch(() => false))) {
-        await candidate.click({ force: true });
-        candidateActed = true;
-        break;
+        candidateActed = await candidate
+          .click({ force: true, timeout: 1_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (candidateActed) {
+          break;
+        }
       }
     }
     if (candidateActed) {
@@ -115,18 +131,14 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     if (await confirm.isVisible().catch(() => false)) {
       return;
     }
+    const responsePhase = await page.getByTestId("game-board").getAttribute("data-response-phase");
     let acted = false;
-    for (const id of [
-      "action-deferred-pass",
-      "action-peng",
-      "action-kai",
-      "action-chi",
-      "action-pass",
-      "action-hu",
-    ]) {
-      const action = page.getByTestId(id);
-      if ((await action.isVisible().catch(() => false)) && (await action.isEnabled().catch(() => false))) {
-        await action.click({ force: true });
+    const preferredActions =
+      responsePhase === "collective"
+        ? ["action-pass", "action-peng", "action-kai", "action-chi"]
+        : ["action-peng", "action-kai", "action-chi", "action-pass"];
+    for (const id of preferredActions) {
+      if (await clickIfReady(id)) {
         acted = true;
         break;
       }
@@ -134,8 +146,10 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     if (!acted) {
       const fallbackAction = page.locator(".action-dock button:enabled").first();
       if ((await fallbackAction.isVisible().catch(() => false)) && (await fallbackAction.isEnabled().catch(() => false))) {
-        await fallbackAction.click({ force: true });
-        acted = true;
+        acted = await fallbackAction
+          .click({ force: true, timeout: 1_000 })
+          .then(() => true)
+          .catch(() => false);
       }
     }
     await page.waitForTimeout(acted ? 300 : 180);
@@ -221,6 +235,9 @@ test.describe("compact landscape gameplay", () => {
     await expect(handPreview.locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(confirmDeclaration).toContainText(/确认/);
+    const declarationSeconds = Number(await page.locator(".declare-timer strong").textContent());
+    expect(declarationSeconds).toBeGreaterThanOrEqual(40);
+    expect(declarationSeconds).toBeLessThanOrEqual(45);
 
     const declarationMetrics = await page.locator(".declare-panel").evaluate((panel) => {
       const confirm = panel.querySelector<HTMLElement>(".confirm-declaration");
@@ -262,6 +279,9 @@ test.describe("compact landscape gameplay", () => {
     await reachDiscardConfirmation(page);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-guidance")).toContainText(/还剩 \d+ 秒/);
+    const decisionSecondsMatch = (await page.getByTestId("action-guidance").textContent())?.match(/还剩\s*(\d+)\s*秒/);
+    expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeGreaterThanOrEqual(22);
+    expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeLessThanOrEqual(30);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {

@@ -1,5 +1,9 @@
 ﻿<template>
-  <div class="board" data-testid="game-board">
+  <div
+    class="board"
+    data-testid="game-board"
+    :data-response-phase="props.responsePhase ?? ''"
+  >
     <div class="table" ref="tableRef">
       <section
         v-if="leftPlayer && flowCardCount(leftPlayer.clientId)"
@@ -637,7 +641,7 @@ let dealAnimatingUntil = 0;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 let drawHideTimer: ReturnType<typeof setTimeout> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
-const OP_COUNTDOWN_MS = 20000;
+const OP_COUNTDOWN_MS = 30000;
 
 function splitExposedGroups(cards: Card[], sizes: number[], prefix: string): ExposedGroup[] {
   const normalizeResponseFlag = (chunk: Card[]): Card[] => {
