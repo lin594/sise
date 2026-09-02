@@ -148,6 +148,7 @@ ENABLE_MONITOR=0
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。
 - `ROOM_LOG`、`HU_LOG`、`ROOM_TRACE`、`ROOM_TRACE_CARDS`：日志与追踪开关。
 - `ROOM_STATE_LOG_MODE`：`compact | all | off`。
+- `ENABLE_DEBUG_SCENARIOS`：仅供本地自动化构造牌局；默认 `0`。只有非生产环境显式设为 `1` 才注册 `debug_setup`，且仅房主可调用；`NODE_ENV=production` 时即使误设为 `1` 也会硬禁用。
 - `REDIS_URL`：仅部署预留，当前不用于房间持久化。
 
 ### 前端与镜像

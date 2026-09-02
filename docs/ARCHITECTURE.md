@@ -104,7 +104,7 @@
 | `claim_seat` | 好友房领取空座 |
 | `add_bot` / `update_bot` / `remove_seat` | 房主管理座位 |
 | `next_round` / `return_lobby` | 房主结算操作 |
-| `debug_setup` | 测试环境构造可重复牌局 |
+| `debug_setup` | 仅非生产环境显式开启后，由房主构造可重复测试牌局；生产不注册该入口 |
 
 服务端返回的主要自定义消息：
 
@@ -112,7 +112,7 @@
 - 私有数据：`private_hand`、`available_actions`。
 - 结果：`hu_result`、`round_result`。
 - 失败反馈：`join_error`、`lobby_error`、`declare_rejected`、`action_rejected`、`removed_from_room`。
-- 测试反馈：`debug_applied`。
+- 测试反馈：`debug_applied`；仅在非生产环境设置 `ENABLE_DEBUG_SCENARIOS=1` 后存在，且非房主调用返回失败。
 
 动作协议只有 `pass`，没有单独的 `zhua`：`local_upper` 阶段的 `pass` 在产品语言中显示为“抓”。特殊牌本地阶段不提供 pass，单张收下通过一个单牌候选提交。
 
