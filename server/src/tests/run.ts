@@ -106,6 +106,68 @@ t("bot-strategy: hu is mandatory at every strength", () => {
   }
 });
 
+t("bot-strategy: grabbed generals and gold cannot be passed when chi is legal", () => {
+  const specialCards: Card[] = [
+    c("yellow_jiang", "yellow", "jiang", "draw"),
+    c("red_jiang", "red", "jiang", "draw"),
+    c("green_jiang", "green", "jiang", "draw"),
+    c("white_jiang", "white", "jiang", "draw"),
+    c("gold_gong", "gold", "gong", "draw"),
+  ];
+
+  for (const strength of [0, 50, 100]) {
+    for (const pendingCard of specialCards) {
+      const decision = chooseBotAction({
+        hand: [],
+        pendingCard,
+        visibleCards: [],
+        strength,
+        random: () => 0.999999,
+        actions: [
+          {
+            action: "chi",
+            enabled: true,
+            candidates: [
+              {
+                id: `chi-${pendingCard.id}`,
+                action: "chi",
+                kind: "single",
+                cardIds: [],
+                source: "hand",
+                title: "吃下",
+              },
+            ],
+          },
+          { action: "pass", enabled: true },
+        ],
+      });
+      assert.deepEqual(decision, { action: "chi", candidateId: `chi-${pendingCard.id}` });
+    }
+  }
+});
+
+t("bot-strategy: hu still outranks mandatory special-card chi", () => {
+  const decision = chooseBotAction({
+    hand: [],
+    pendingCard: c("yellow_jiang", "yellow", "jiang", "draw"),
+    visibleCards: [],
+    strength: 0,
+    random: () => 0.999999,
+    actions: [
+      { action: "hu", enabled: true },
+      {
+        action: "chi",
+        enabled: true,
+        candidates: [
+          { id: "chi-yellow", action: "chi", kind: "single", cardIds: [], source: "hand", title: "吃下" },
+        ],
+      },
+      { action: "pass", enabled: true },
+    ],
+  });
+  assert.equal(decision.action, "hu");
+});
+
 t("bot-strategy: seeded discard decisions are reproducible", () => {
   const hand = [
     c("rj1", "red", "ju"),

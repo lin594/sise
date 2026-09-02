@@ -125,7 +125,10 @@ export function chooseBotAction(input: BotDecisionInput): BotDecision {
   if (!choices.length) {
     return { action: "pass" };
   }
-  return sampleSoftmax(choices, input.strength, input.random ?? Math.random);
+  const eligibleChoices = isDiscardRestricted(input.pendingCard)
+    ? choices.filter((item) => item.choice.action === "chi")
+    : choices;
+  return sampleSoftmax(eligibleChoices.length ? eligibleChoices : choices, input.strength, input.random ?? Math.random);
 }
 
 export function chooseBotDiscard(input: BotDiscardInput): Card | null {
