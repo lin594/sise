@@ -242,6 +242,8 @@ test.describe("compact landscape gameplay", () => {
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
+    await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(page.getByTestId("action-guidance")).toContainText(/还剩 \d+ 秒/);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {

@@ -458,6 +458,7 @@
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
       :current-player-name="props.currentPlayerName ?? '-'"
+      :seconds-left="seatCountdownSeconds"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
       @confirm-discard="confirmDiscard"

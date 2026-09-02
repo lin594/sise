@@ -9,6 +9,7 @@ const props = withDefaults(defineProps(), {
     canDiscard: false,
     hasDiscardSelection: false,
     discardPending: false,
+    secondsLeft: null,
 });
 const emit = defineEmits();
 const busy = ref(false);
@@ -51,6 +52,11 @@ const normalized = computed(() => {
 });
 const selectionMode = computed(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
+const needsDecision = computed(() => props.canAct || props.canDiscard);
+const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
+    ? Math.max(0, Math.ceil(props.secondsLeft))
+    : null);
+const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
 const panelHint = computed(() => {
     if (props.canDiscard) {
         return props.hasDiscardSelection ? "已选牌，请确认出牌" : "请先从手牌中选择一张";
@@ -174,11 +180,22 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     canDiscard: false,
     hasDiscardSelection: false,
     discardPending: false,
+    secondsLeft: null,
 });
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['urgent']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['urgent']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['locked']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -194,16 +211,43 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['urgent']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "panel" },
     ...{ class: ({ locked: __VLS_ctx.panelLocked }) },
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "sr-only" },
+    role: "status",
+    'aria-live': "polite",
+});
+(__VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.panelHint}` : "");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hint" },
+    ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent }) },
+    'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
+    'data-testid': "action-guidance",
+});
+if (__VLS_ctx.needsDecision) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "decision-line" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
+    if (__VLS_ctx.secondsLeft !== null) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
+        (__VLS_ctx.secondsLeft);
+    }
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "instruction" },
 });
 (__VLS_ctx.panelHint);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -242,7 +286,10 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.canDiscard ? [] : __VLS_
     (__VLS_ctx.text(item));
 }
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['sr-only']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['instruction']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-action']} */ ;
@@ -256,6 +303,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             normalized: normalized,
             selectionMode: selectionMode,
             panelLocked: panelLocked,
+            needsDecision: needsDecision,
+            secondsLeft: secondsLeft,
+            isUrgent: isUrgent,
             panelHint: panelHint,
             isClickable: isClickable,
             text: text,

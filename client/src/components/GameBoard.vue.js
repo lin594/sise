@@ -2139,6 +2139,7 @@ if (props.state?.phase === 'playing') {
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
+        secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
@@ -2155,6 +2156,7 @@ if (props.state?.phase === 'playing') {
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
+        secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }, ...__VLS_functionalComponentArgsRest(__VLS_61));

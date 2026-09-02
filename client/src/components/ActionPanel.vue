@@ -1,6 +1,20 @@
 ﻿<template>
   <div class="panel" :class="{ locked: panelLocked }">
-    <p class="hint">{{ panelHint }}</p>
+    <span class="sr-only" role="status" aria-live="polite">
+      {{ needsDecision ? `该你操作了。${panelHint}` : "" }}
+    </span>
+    <div
+      class="hint"
+      :class="{ active: needsDecision, urgent: isUrgent }"
+      :data-urgent="isUrgent ? 'true' : 'false'"
+      data-testid="action-guidance"
+    >
+      <span v-if="needsDecision" class="decision-line">
+        <strong>{{ isUrgent ? "抓紧操作" : "该你操作了" }}</strong>
+        <b v-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
+      </span>
+      <span class="instruction">{{ panelHint }}</span>
+    </div>
     <div class="actions" :class="{ 'discard-mode': canDiscard }">
       <button
         v-if="canDiscard"
@@ -49,6 +63,7 @@ const props = withDefaults(
     canDiscard?: boolean;
     hasDiscardSelection?: boolean;
     discardPending?: boolean;
+    secondsLeft?: number | null;
   }>(),
   {
     canAct: false,
@@ -60,6 +75,7 @@ const props = withDefaults(
     canDiscard: false,
     hasDiscardSelection: false,
     discardPending: false,
+    secondsLeft: null,
   },
 );
 
@@ -119,6 +135,13 @@ const normalized = computed(() => {
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
+const needsDecision = computed(() => props.canAct || props.canDiscard);
+const secondsLeft = computed<number | null>(() =>
+  typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
+    ? Math.max(0, Math.ceil(props.secondsLeft))
+    : null,
+);
+const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
 
 const panelHint = computed(() => {
   if (props.canDiscard) {
@@ -257,11 +280,73 @@ function onClick(item: PanelAction): void {
   background: #0b1220;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .hint {
   margin: 0;
+  min-width: 0;
+  min-height: 1.35rem;
+  padding: 0.12rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
   text-align: center;
   color: #93c5fd;
   font-size: clamp(0.66rem, 1.5vh, 0.9rem);
+  line-height: 1.15;
+  display: grid;
+  gap: 0.12rem;
+  align-content: center;
+}
+
+.hint.active {
+  border-color: rgba(250, 204, 21, 0.58);
+  background: rgba(113, 63, 18, 0.32);
+  color: #fef3c7;
+}
+
+.decision-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.decision-line strong {
+  color: #fde047;
+  font-size: clamp(0.82rem, 1.9vh, 1.05rem);
+}
+
+.decision-line b {
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+}
+
+.hint.urgent {
+  border-color: rgba(251, 113, 133, 0.9);
+  background: rgba(127, 29, 29, 0.7);
+  animation: urgent-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.hint.urgent .decision-line strong,
+.hint.urgent .decision-line b {
+  color: #fff1f2;
+}
+
+@keyframes urgent-pulse {
+  from { box-shadow: 0 0 0 rgba(251, 113, 133, 0); }
+  to { box-shadow: 0 0 0.7rem rgba(251, 113, 133, 0.28); }
 }
 
 .panel.locked .hint {
@@ -353,8 +438,18 @@ function onClick(item: PanelAction): void {
   }
 
   .hint {
-    font-size: clamp(0.56rem, 1.35vh, 0.72rem);
+    min-height: 0;
+    padding: 0.08rem 0.2rem;
+    font-size: clamp(0.58rem, 1.38vh, 0.74rem);
     line-height: 1.15;
+  }
+
+  .decision-line {
+    gap: 0.22rem;
+  }
+
+  .decision-line strong {
+    font-size: clamp(0.74rem, 1.85vh, 0.88rem);
   }
 
   .actions {
@@ -369,6 +464,12 @@ function onClick(item: PanelAction): void {
     border-radius: 1.2vh;
     font-size: clamp(1rem, 4.2vh, 1.18rem);
     padding: 0 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint.urgent {
+    animation: none;
   }
 }
 </style>
