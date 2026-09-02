@@ -7,6 +7,7 @@
       'ultra-compact-viewport': isUltraCompactViewport,
       'compact-landscape': isCompactViewport && isPlaying,
       'rotated-phone-portrait': isRotatedPhonePortrait,
+      'game-tools-active': showGameTools,
     }"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
@@ -16,22 +17,23 @@
         <h1>四色牌</h1>
         <p class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
-      <div class="meta" v-if="hasLobbySession">
+      <div class="meta" v-if="hasLobbySession && !showGameTools">
         <span>{{ connected ? "已连接" : "同步中..." }}</span>
         <span>座位ID: {{ mySeatId || "-" }}</span>
         <span>房主: {{ state?.hostPlayerId || "-" }}</span>
-        <div class="view-mode-toggle">
-          <button class="ghost mini" :class="{ active: tableCardMode === 'simple' }" @click="tableCardMode = 'simple'">简化大字</button>
-          <button class="ghost mini" :class="{ active: tableCardMode === 'full' }" @click="tableCardMode = 'full'">长条色牌</button>
-        </div>
-        <button v-if="canReturnToLobby" class="ghost reset-btn" @click="returnLobby">返回大厅</button>
-        <button v-else class="ghost reset-btn" @click="showRules = true">查看规则</button>
+        <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
-      <div class="meta" v-else>
+      <div class="meta" v-else-if="!hasLobbySession">
         <span>首页</span>
         <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
     </header>
+    <GameTools
+      v-if="showGameTools"
+      v-model="tableCardMode"
+      @open-rules="showRules = true"
+      @exit="handleLeaveRoom"
+    />
     <p v-if="globalError" class="error global-error">{{ globalError }}</p>
 
     <LoginPage
@@ -290,10 +292,11 @@
         </section>
 
         <div class="end-actions">
-          <button class="primary" :disabled="!isHost || !isEnded" @click="nextRound">
-            下一局（房主）
-          </button>
-          <button class="ghost" :disabled="!isEnded" @click="returnLobby">返回大厅</button>
+          <template v-if="isHost">
+            <button class="primary" :disabled="!isEnded" @click="nextRound">下一局（房主）</button>
+            <button class="ghost" :disabled="!isEnded" @click="returnLobby">全桌返回大厅（房主）</button>
+          </template>
+          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
         </div>
       </div>
     </div>
@@ -371,6 +374,7 @@ import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
+import GameTools from "@/components/GameTools.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -442,6 +446,7 @@ const {
   startGame,
   nextRound,
   returnLobby,
+  leaveRoom,
   claimSeat,
   addBot,
   updateBot,
@@ -491,7 +496,7 @@ const showModeLobby = computed(() => {
   }
   return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
-const canReturnToLobby = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
+const showGameTools = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
 const canPressStartGame = computed(
   () =>
     Boolean(connected.value) &&
@@ -613,9 +618,8 @@ const {
   isRotatedPhonePortrait,
   isUltraCompactViewport,
 } = useResponsiveViewport();
-const tableCardMode = ref<"simple" | "full">(
-  (window.localStorage.getItem("sise_table_card_mode") as "simple" | "full" | null) ?? "simple",
-);
+const storedTableCardMode = window.localStorage.getItem("sise_table_card_mode");
+const tableCardMode = ref<"simple" | "full">(storedTableCardMode === "full" ? "full" : "simple");
 const globalError = ref("");
 const showRules = ref(false);
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -663,6 +667,13 @@ const declareProgressPercent = computed(() => {
 function clearSelection() {
   selectionMode.value = null;
   selectedCandidateId.value = null;
+}
+
+async function handleLeaveRoom(): Promise<void> {
+  globalError.value = "";
+  pendingPracticeAutoStart.value = false;
+  clearSelection();
+  await leaveRoom();
 }
 
 function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }) {
@@ -1519,23 +1530,6 @@ watch(
   margin-left: 0.25rem;
 }
 
-.view-mode-toggle {
-  display: inline-flex;
-  gap: 0.25rem;
-}
-
-.ghost.mini {
-  padding: 0.2rem 0.45rem;
-  min-height: auto;
-  font-size: clamp(0.58rem, 1.25vh, 0.72rem);
-}
-
-.ghost.mini.active {
-  border-color: #38bdf8;
-  color: #e0f2fe;
-  background: rgba(12, 74, 110, 0.35);
-}
-
 .layout.playing {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -2277,6 +2271,13 @@ watch(
   display: flex;
   gap: 8px;
   margin-top: 14px;
+}
+
+.host-actions-hint {
+  margin: 0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .hu-panel > .end-actions {

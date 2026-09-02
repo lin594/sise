@@ -110,7 +110,7 @@
 
 - 服务端保存并推送 `round_result`。
 - 房主可 `next_round`。
-- 任意玩家可 `return_lobby` 回到等待大厅。
+- 房主可发送 `return_lobby` 让整桌回到等待大厅；任意玩家也可从客户端个人退出，进行中的座位随即由机器人托管。
 
 ## 5. 机器人机制
 
@@ -123,6 +123,7 @@
 - `client/src/composables/useRoom.ts`
   - 连接房间、订阅 state、发送消息。
   - 处理 `session_token`。
+  - 个人退出时停用重连、清除房间凭证并主动离开连接。
   - 通过 `/room-id`、`/reset-room`、`/private-state` 辅助进入单人练习和恢复私有手牌。
 
 - `client/src/App.vue`

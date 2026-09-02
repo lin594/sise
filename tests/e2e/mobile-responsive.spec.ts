@@ -48,7 +48,7 @@ test.describe("phone portrait landscape canvas", () => {
 
     await page.getByTestId("open-rules").click();
     await expect(page.locator(".rules-panel")).toBeVisible();
-    await page.getByRole("button", { name: "关闭" }).click();
+    await page.getByRole("button", { name: "关闭", exact: true }).click();
 
     await page.getByTestId("random-nickname").click();
     await page.getByTestId("login-submit").click();
@@ -127,6 +127,7 @@ test.describe("compact landscape gameplay", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
+    await expect(page.getByTestId("game-tools")).toBeVisible();
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
       const cards = Array.from(element.querySelectorAll<HTMLElement>(".hand-card"));
@@ -186,6 +187,35 @@ test.describe("compact landscape gameplay", () => {
     }));
     expect(pageOverflow.width).toBeLessThanOrEqual(pageOverflow.viewportWidth);
     expect(pageOverflow.height).toBeLessThanOrEqual(pageOverflow.viewportHeight);
+
+    await page.getByTestId("game-settings").click();
+    await expect(page.getByTestId("settings-panel")).toBeVisible();
+    await expect(page.getByTestId("card-mode-simple")).toHaveClass(/active/);
+    await page.getByTestId("card-mode-full").click();
+    await expect(page.getByTestId("card-mode-full")).toHaveClass(/active/);
+    expect(await page.evaluate(() => localStorage.getItem("sise_table_card_mode"))).toBe("full");
+    await page.getByTestId("card-mode-simple").click();
+    await page.getByTestId("settings-rules").click();
+    await expect(page.locator(".rules-panel")).toBeVisible();
+    await page.getByRole("button", { name: "关闭", exact: true }).click();
+
+    await page.getByTestId("game-exit").click();
+    await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
+    await page.getByTestId("cancel-exit").click();
+    await expect(page.getByTestId("game-board")).toBeVisible();
+    const departingRoomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
+    await page.getByTestId("game-exit").click();
+    await page.getByTestId("confirm-exit").click();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await page.waitForTimeout(1_200);
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByTestId("game-board")).toHaveCount(0);
+    const leaveState = await page.evaluate((roomId) => ({
+      roomId: localStorage.getItem("four_room_id"),
+      token: roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null,
+      queryRoomId: new URL(location.href).searchParams.get("roomId"),
+    }), departingRoomId);
+    expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
   });
 });
 
@@ -205,6 +235,7 @@ test.describe("desktop declaration", () => {
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
     await expectSimplifiedTableCenter(page);
+    await expect(page.getByTestId("game-tools")).toBeVisible();
   });
 });
 

@@ -3,6 +3,7 @@ import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
+import GameTools from "@/components/GameTools.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -34,7 +35,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
@@ -77,7 +78,7 @@ const showModeLobby = computed(() => {
     }
     return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
-const canReturnToLobby = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
+const showGameTools = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
 const canPressStartGame = computed(() => Boolean(connected.value) &&
     Boolean(state.value) &&
     Boolean(mySeatId.value) &&
@@ -178,7 +179,8 @@ const candidatePromptText = computed(() => {
     return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
 const { effectiveHeight, effectiveWidth, isCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, } = useResponsiveViewport();
-const tableCardMode = ref(window.localStorage.getItem("sise_table_card_mode") ?? "simple");
+const storedTableCardMode = window.localStorage.getItem("sise_table_card_mode");
+const tableCardMode = ref(storedTableCardMode === "full" ? "full" : "simple");
 const globalError = ref("");
 const showRules = ref(false);
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -220,6 +222,12 @@ const declareProgressPercent = computed(() => {
 function clearSelection() {
     selectionMode.value = null;
     selectedCandidateId.value = null;
+}
+async function handleLeaveRoom() {
+    globalError.value = "";
+    pendingPracticeAutoStart.value = false;
+    clearSelection();
+    await leaveRoom();
 }
 function onPanelSelectionChange(payload) {
     selectionMode.value = payload.mode;
@@ -960,8 +968,6 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
@@ -975,12 +981,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['entry-input']} */ ;
 /** @type {__VLS_StyleScopedClasses['lobby-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
@@ -1072,7 +1076,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
@@ -1100,6 +1103,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
             'ultra-compact-viewport': __VLS_ctx.isUltraCompactViewport,
             'compact-landscape': __VLS_ctx.isCompactViewport && __VLS_ctx.isPlaying,
             'rotated-phone-portrait': __VLS_ctx.isRotatedPhonePortrait,
+            'game-tools-active': __VLS_ctx.showGameTools,
         }) },
     'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
@@ -1114,7 +1118,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
     ...{ class: "top-slogan" },
 });
-if (__VLS_ctx.hasLobbySession) {
+if (__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },
     });
@@ -1124,59 +1128,58 @@ if (__VLS_ctx.hasLobbySession) {
     (__VLS_ctx.mySeatId || "-");
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.state?.hostPlayerId || "-");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "view-mode-toggle" },
-    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.hasLobbySession))
+                if (!(__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools))
                     return;
-                __VLS_ctx.tableCardMode = 'simple';
+                __VLS_ctx.showRules = true;
             } },
-        ...{ class: "ghost mini" },
-        ...{ class: ({ active: __VLS_ctx.tableCardMode === 'simple' }) },
+        ...{ class: "ghost reset-btn" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.hasLobbySession))
-                    return;
-                __VLS_ctx.tableCardMode = 'full';
-            } },
-        ...{ class: "ghost mini" },
-        ...{ class: ({ active: __VLS_ctx.tableCardMode === 'full' }) },
-    });
-    if (__VLS_ctx.canReturnToLobby) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.returnLobby) },
-            ...{ class: "ghost reset-btn" },
-        });
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.hasLobbySession))
-                        return;
-                    if (!!(__VLS_ctx.canReturnToLobby))
-                        return;
-                    __VLS_ctx.showRules = true;
-                } },
-            ...{ class: "ghost reset-btn" },
-        });
-    }
 }
-else {
+else if (!__VLS_ctx.hasLobbySession) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                if (!!(__VLS_ctx.hasLobbySession))
+                if (!!(__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools))
+                    return;
+                if (!(!__VLS_ctx.hasLobbySession))
                     return;
                 __VLS_ctx.showRules = true;
             } },
         ...{ class: "ghost reset-btn" },
     });
+}
+if (__VLS_ctx.showGameTools) {
+    /** @type {[typeof GameTools, ]} */ ;
+    // @ts-ignore
+    const __VLS_0 = __VLS_asFunctionalComponent(GameTools, new GameTools({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.tableCardMode),
+    }));
+    const __VLS_1 = __VLS_0({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.tableCardMode),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+    let __VLS_3;
+    let __VLS_4;
+    let __VLS_5;
+    const __VLS_6 = {
+        onOpenRules: (...[$event]) => {
+            if (!(__VLS_ctx.showGameTools))
+                return;
+            __VLS_ctx.showRules = true;
+        }
+    };
+    const __VLS_7 = {
+        onExit: (__VLS_ctx.handleLeaveRoom)
+    };
+    var __VLS_2;
 }
 if (__VLS_ctx.globalError) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1187,7 +1190,7 @@ if (__VLS_ctx.globalError) {
 if (__VLS_ctx.showEntry) {
     /** @type {[typeof LoginPage, ]} */ ;
     // @ts-ignore
-    const __VLS_0 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
+    const __VLS_8 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1198,7 +1201,7 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
     }));
-    const __VLS_1 = __VLS_0({
+    const __VLS_9 = __VLS_8({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1208,43 +1211,43 @@ if (__VLS_ctx.showEntry) {
         entering: (__VLS_ctx.enteringLobby),
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
-    let __VLS_3;
-    let __VLS_4;
-    let __VLS_5;
-    const __VLS_6 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
+    let __VLS_11;
+    let __VLS_12;
+    let __VLS_13;
+    const __VLS_14 = {
         'onUpdate:nickname': (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    const __VLS_7 = {
+    const __VLS_15 = {
         onSubmit: (__VLS_ctx.enterLobby)
     };
-    const __VLS_8 = {
+    const __VLS_16 = {
         onOpenRules: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_9 = {
+    const __VLS_17 = {
         onRandomize: (__VLS_ctx.randomizeNickname)
     };
-    const __VLS_10 = {
+    const __VLS_18 = {
         onSelectHistory: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    var __VLS_2;
+    var __VLS_10;
 }
 else if (__VLS_ctx.showModeLobby) {
     /** @type {[typeof LobbyPage, ]} */ ;
     // @ts-ignore
-    const __VLS_11 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
+    const __VLS_19 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1269,7 +1272,7 @@ else if (__VLS_ctx.showModeLobby) {
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
     }));
-    const __VLS_12 = __VLS_11({
+    const __VLS_20 = __VLS_19({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1293,11 +1296,11 @@ else if (__VLS_ctx.showModeLobby) {
         roomId: (__VLS_ctx.activeRoomId),
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_11));
-    let __VLS_14;
-    let __VLS_15;
-    let __VLS_16;
-    const __VLS_17 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_19));
+    let __VLS_22;
+    let __VLS_23;
+    let __VLS_24;
+    const __VLS_25 = {
         onOpenRules: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1306,10 +1309,10 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_18 = {
+    const __VLS_26 = {
         onStart: (__VLS_ctx.startSelectedMode)
     };
-    const __VLS_19 = {
+    const __VLS_27 = {
         onSelectMode: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1318,13 +1321,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.selectedLobbyMode = $event;
         }
     };
-    const __VLS_20 = {
+    const __VLS_28 = {
         onCopyInvite: (__VLS_ctx.copyInviteLink)
     };
-    const __VLS_21 = {
+    const __VLS_29 = {
         onClaimSeat: (__VLS_ctx.claimSeat)
     };
-    const __VLS_22 = {
+    const __VLS_30 = {
         onAddBot: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1333,13 +1336,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.addBot($event, 50);
         }
     };
-    const __VLS_23 = {
+    const __VLS_31 = {
         onUpdateBot: (__VLS_ctx.updateBot)
     };
-    const __VLS_24 = {
+    const __VLS_32 = {
         onRemoveSeat: (__VLS_ctx.removeSeat)
     };
-    var __VLS_13;
+    var __VLS_21;
 }
 else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1359,7 +1362,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_25 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_33 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1381,7 +1384,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_26 = __VLS_25({
+    const __VLS_34 = __VLS_33({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1402,56 +1405,56 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_25));
-    let __VLS_28;
-    let __VLS_29;
-    let __VLS_30;
-    const __VLS_31 = {
-        onDiscardCard: (__VLS_ctx.sendDiscardCard)
-    };
-    const __VLS_32 = {
-        onSubmitAction: (__VLS_ctx.onPanelSubmit)
-    };
-    const __VLS_33 = {
-        onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
-    };
-    var __VLS_27;
-}
-if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactViewport) {
-    /** @type {[typeof ActionPanel, ]} */ ;
-    // @ts-ignore
-    const __VLS_34 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
-        ...{ 'onSubmit': {} },
-        ...{ 'onSelectionChange': {} },
-        actions: (__VLS_ctx.availableActions),
-        canAct: (__VLS_ctx.canAct),
-        isCurrentTurn: (__VLS_ctx.isMyTurn),
-        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
-        currentPlayerName: (__VLS_ctx.currentPlayerName),
-        selectionMode: (__VLS_ctx.selectionMode),
-        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-    }));
-    const __VLS_35 = __VLS_34({
-        ...{ 'onSubmit': {} },
-        ...{ 'onSelectionChange': {} },
-        actions: (__VLS_ctx.availableActions),
-        canAct: (__VLS_ctx.canAct),
-        isCurrentTurn: (__VLS_ctx.isMyTurn),
-        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
-        currentPlayerName: (__VLS_ctx.currentPlayerName),
-        selectionMode: (__VLS_ctx.selectionMode),
-        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_34));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+    let __VLS_36;
     let __VLS_37;
     let __VLS_38;
-    let __VLS_39;
+    const __VLS_39 = {
+        onDiscardCard: (__VLS_ctx.sendDiscardCard)
+    };
     const __VLS_40 = {
-        onSubmit: (__VLS_ctx.onPanelSubmit)
+        onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
     const __VLS_41 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_36;
+    var __VLS_35;
+}
+if (__VLS_ctx.isPlaying && !__VLS_ctx.isCompactViewport) {
+    /** @type {[typeof ActionPanel, ]} */ ;
+    // @ts-ignore
+    const __VLS_42 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
+        actions: (__VLS_ctx.availableActions),
+        canAct: (__VLS_ctx.canAct),
+        isCurrentTurn: (__VLS_ctx.isMyTurn),
+        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
+        currentPlayerName: (__VLS_ctx.currentPlayerName),
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
+    }));
+    const __VLS_43 = __VLS_42({
+        ...{ 'onSubmit': {} },
+        ...{ 'onSelectionChange': {} },
+        actions: (__VLS_ctx.availableActions),
+        canAct: (__VLS_ctx.canAct),
+        isCurrentTurn: (__VLS_ctx.isMyTurn),
+        responsePhase: (__VLS_ctx.state?.responsePhase || ''),
+        currentPlayerName: (__VLS_ctx.currentPlayerName),
+        selectionMode: (__VLS_ctx.selectionMode),
+        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_42));
+    let __VLS_45;
+    let __VLS_46;
+    let __VLS_47;
+    const __VLS_48 = {
+        onSubmit: (__VLS_ctx.onPanelSubmit)
+    };
+    const __VLS_49 = {
+        onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
+    };
+    var __VLS_44;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1505,14 +1508,14 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                 }));
-                const __VLS_43 = __VLS_42({
+                const __VLS_51 = __VLS_50({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_42));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_50));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -1525,16 +1528,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_53 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_46 = __VLS_45({
+                    const __VLS_54 = __VLS_53({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_45));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_53));
                 }
             }
             else {
@@ -1556,7 +1559,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_48 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_56 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
@@ -1566,7 +1569,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         compact: (__VLS_ctx.isCompactViewport),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
     }));
-    const __VLS_49 = __VLS_48({
+    const __VLS_57 = __VLS_56({
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
@@ -1575,14 +1578,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         serverError: (__VLS_ctx.declareError),
         compact: (__VLS_ctx.isCompactViewport),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
-    let __VLS_51;
-    let __VLS_52;
-    let __VLS_53;
-    const __VLS_54 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_56));
+    let __VLS_59;
+    let __VLS_60;
+    let __VLS_61;
+    const __VLS_62 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    var __VLS_50;
+    var __VLS_58;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1642,16 +1645,16 @@ if (__VLS_ctx.showEndPanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_56 = __VLS_55({
+            const __VLS_64 = __VLS_63({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_63));
         }
     }
     if (__VLS_ctx.settlementPlayers.length) {
@@ -1715,16 +1718,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_59 = __VLS_58({
+                        const __VLS_67 = __VLS_66({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_66));
                     }
                 }
             }
@@ -1761,16 +1764,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_62 = __VLS_61({
+                        const __VLS_70 = __VLS_69({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
                     }
                 }
             }
@@ -1781,16 +1784,16 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_64 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_72 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_65 = __VLS_64({
+                    const __VLS_73 = __VLS_72({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_64));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_72));
                 }
             }
             else {
@@ -1824,16 +1827,23 @@ if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "end-actions" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.nextRound) },
-        ...{ class: "primary" },
-        disabled: (!__VLS_ctx.isHost || !__VLS_ctx.isEnded),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.returnLobby) },
-        ...{ class: "ghost" },
-        disabled: (!__VLS_ctx.isEnded),
-    });
+    if (__VLS_ctx.isHost) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.nextRound) },
+            ...{ class: "primary" },
+            disabled: (!__VLS_ctx.isEnded),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.returnLobby) },
+            ...{ class: "ghost" },
+            disabled: (!__VLS_ctx.isEnded),
+        });
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "host-actions-hint" },
+        });
+    }
 }
 if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1938,13 +1948,6 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['top-brand']} */ ;
 /** @type {__VLS_StyleScopedClasses['top-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['view-mode-toggle']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
@@ -2011,6 +2014,7 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
@@ -2040,6 +2044,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             CardComp: CardComp,
             DeclarationPanel: DeclarationPanel,
             GameBoard: GameBoard,
+            GameTools: GameTools,
             LobbyPage: LobbyPage,
             LoginPage: LoginPage,
             connected: connected,
@@ -2071,7 +2076,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             showEntry: showEntry,
             showSyncingScreen: showSyncingScreen,
             showModeLobby: showModeLobby,
-            canReturnToLobby: canReturnToLobby,
+            showGameTools: showGameTools,
             canStartSelectedMode: canStartSelectedMode,
             lobbyTitle: lobbyTitle,
             lobbySubtitle: lobbySubtitle,
@@ -2100,6 +2105,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,
+            handleLeaveRoom: handleLeaveRoom,
             onPanelSelectionChange: onPanelSelectionChange,
             onPanelSubmit: onPanelSubmit,
             submitCandidate: submitCandidate,

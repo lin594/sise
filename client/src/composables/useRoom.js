@@ -934,6 +934,11 @@ export function useRoom(playerName = "Player") {
                     hostKey: resolvedOptions.hostKey,
                 });
             }
+            if (!isActiveConnection()) {
+                suppressReconnect = true;
+                await joined.leave().catch(() => undefined);
+                return false;
+            }
             room.value = joined;
             myId.value = joined.sessionId;
             connected.value = true;
@@ -1171,6 +1176,35 @@ export function useRoom(playerName = "Player") {
         clearActionLogs();
         safeRoomSend("return_lobby");
     }
+    async function leaveRoom() {
+        const departingRoom = room.value;
+        const departingRoomId = activeRoomId.value.trim();
+        suppressReconnect = true;
+        activeConnectionSeq += 1;
+        connectInFlight = false;
+        clearRoomStateSyncTimer();
+        clearMissingHandSyncTimer();
+        clearReconnectTimer();
+        clearPrivateStatePollTimer();
+        room.value = null;
+        connected.value = false;
+        clearStored(ROOM_KEY);
+        clearStored(LEGACY_TOKEN_KEY);
+        if (departingRoomId) {
+            clearStored(tokenKey(departingRoomId));
+        }
+        playerToken.value = "";
+        activeRoomId.value = "";
+        resetClientRoomState();
+        const url = new URL(window.location.href);
+        url.searchParams.delete("roomId");
+        url.searchParams.delete("playerToken");
+        url.searchParams.delete("new");
+        window.history.replaceState(null, "", url.toString());
+        if (departingRoom) {
+            await departingRoom.leave().catch(() => undefined);
+        }
+    }
     function claimSeat(seatIndex) {
         joinError.value = "";
         safeRoomSend("claim_seat", { seatIndex });
@@ -1223,6 +1257,7 @@ export function useRoom(playerName = "Player") {
         startGame,
         nextRound,
         returnLobby,
+        leaveRoom,
         claimSeat,
         addBot,
         updateBot,

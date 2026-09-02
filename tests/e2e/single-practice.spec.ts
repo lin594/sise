@@ -127,4 +127,6 @@ test("single practice flow reaches settlement", async ({ page }) => {
   await playUntilSettlement(page);
 
   await expect(page.getByText(/胡牌结算|流局结算/)).toBeVisible();
+  await expect(page.getByTestId("game-tools")).toBeVisible();
+  await expect(page.getByRole("button", { name: "全桌返回大厅（房主）" })).toBeVisible();
 });

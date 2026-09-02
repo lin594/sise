@@ -653,6 +653,7 @@ export declare function useRoom(playerName?: string): {
     startGame: () => void;
     nextRound: () => void;
     returnLobby: () => void;
+    leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => void;
     addBot: (seatIndex: number, strength?: number) => void;
     updateBot: (seatIndex: number, strength: number) => void;
