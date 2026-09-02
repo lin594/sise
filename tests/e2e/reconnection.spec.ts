@@ -54,6 +54,11 @@ test.describe("牌局断线恢复", () => {
         cards.map((card) => (card as HTMLElement).dataset.testid),
       ),
     ).toEqual(beforeDisconnect.handIds);
+    expect(
+      await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
+        Math.min(...cards.map((card) => Number.parseFloat(getComputedStyle(card).opacity))),
+      ),
+    ).toBeGreaterThanOrEqual(0.95);
     await expect(page.locator(".action-dock button:enabled")).toHaveCount(0);
     await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
     await expect(page.getByTestId("action-guidance")).toContainText("联网后自动恢复");

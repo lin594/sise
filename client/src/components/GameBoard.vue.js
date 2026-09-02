@@ -497,7 +497,10 @@ function isSystemAction(actionKey) {
     return actionKey === "NO_RESPONSE" || actionKey === "TURN_DRAW" || actionKey === "KONG_DRAW";
 }
 function canDiscardCard(card) {
-    return canDiscard.value && card.type !== "jiang" && card.color !== "gold";
+    return canDiscard.value && !isDiscardProtectedCard(card);
+}
+function isDiscardProtectedCard(card) {
+    return card.type === "jiang" || card.color === "gold";
 }
 function selectDiscardCard(cardId) {
     if (discardingCardId.value) {
@@ -595,7 +598,9 @@ function handCardAccessibleLabel(card) {
         ? "已选中"
         : canDiscardCard(card)
             ? "可选择"
-            : "不可打出";
+            : canDiscard.value && isDiscardProtectedCard(card)
+                ? "规则保护，不能打出"
+                : "当前无需选牌";
     return `${getCardAccessibleText(card)}，${state}`;
 }
 function parseActionDescriptor(action) {
@@ -2207,8 +2212,8 @@ if (__VLS_ctx.selfPlayer) {
                     'mode-large': props.ownCardMode === 'large',
                     'mode-long': props.ownCardMode === 'long',
                     playable: __VLS_ctx.canDiscardCard(card),
-                    blocked: !__VLS_ctx.canDiscardCard(card),
-                    'gold-blocked': card.color === 'gold',
+                    blocked: __VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card),
+                    'gold-blocked': __VLS_ctx.canDiscard && card.color === 'gold',
                     'discard-selected': __VLS_ctx.selectedDiscardCardId === card.id,
                     'candidate-active': __VLS_ctx.isCandidateCard(card.id),
                     'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
@@ -2226,6 +2231,12 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.selectedDiscardCardId === card.id) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "discard-selection-badge" },
+                'aria-hidden': "true",
+            });
+        }
+        else if (__VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card)) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "discard-protected-badge" },
                 'aria-hidden': "true",
             });
         }
@@ -2474,6 +2485,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
@@ -2534,6 +2546,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             playerHandCount: playerHandCount,
             isDealer: isDealer,
             canDiscardCard: canDiscardCard,
+            isDiscardProtectedCard: isDiscardProtectedCard,
             selectDiscardCard: selectDiscardCard,
             updateHandScrollState: updateHandScrollState,
             scrollHand: scrollHand,

@@ -390,6 +390,19 @@ test.describe("compact landscape gameplay", () => {
     });
     expect(redCardContrast).toBeGreaterThanOrEqual(4.5);
 
+    const protectedCardState = await page.locator(".hand").evaluate((hand) => {
+      const blocked = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card.blocked"));
+      return {
+        blockedCount: blocked.length,
+        badgeCount: hand.querySelectorAll(".discard-protected-badge").length,
+        labels: blocked.map((card) => card.getAttribute("aria-label") ?? ""),
+        opacities: blocked.map((card) => Number.parseFloat(getComputedStyle(card).opacity)),
+      };
+    });
+    expect(protectedCardState.badgeCount).toBe(protectedCardState.blockedCount);
+    expect(protectedCardState.labels.every((label) => label.endsWith("规则保护，不能打出"))).toBe(true);
+    expect(protectedCardState.opacities.every((opacity) => opacity >= 0.7)).toBe(true);
+
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");
     expect(selectedCardTestId).toBeTruthy();
@@ -423,6 +436,17 @@ test.describe("compact landscape gameplay", () => {
     await discardConfirm.click();
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
     await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
+    const waitingHandState = await page.locator(".hand").evaluate((hand) => {
+      const cards = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card"));
+      return {
+        blockedCount: hand.querySelectorAll(".hand-card.blocked").length,
+        minimumOpacity: Math.min(...cards.map((card) => Number.parseFloat(getComputedStyle(card).opacity))),
+        labels: cards.map((card) => card.getAttribute("aria-label") ?? ""),
+      };
+    });
+    expect(waitingHandState.blockedCount).toBe(0);
+    expect(waitingHandState.minimumOpacity).toBeGreaterThanOrEqual(0.95);
+    expect(waitingHandState.labels.every((label) => label.endsWith("当前无需选牌"))).toBe(true);
     const visibleFlows = page.locator(".flow-card");
     expect(await visibleFlows.count()).toBeGreaterThan(0);
     await expect(page.getByText("暂无流水", { exact: true })).toHaveCount(0);

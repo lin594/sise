@@ -470,8 +470,8 @@
               'mode-large': props.ownCardMode === 'large',
               'mode-long': props.ownCardMode === 'long',
               playable: canDiscardCard(card),
-              blocked: !canDiscardCard(card),
-              'gold-blocked': card.color === 'gold',
+              blocked: canDiscard && isDiscardProtectedCard(card),
+              'gold-blocked': canDiscard && card.color === 'gold',
               'discard-selected': selectedDiscardCardId === card.id,
               'candidate-active': isCandidateCard(card.id),
               'candidate-selected': isSelectedCandidateCard(card.id),
@@ -488,6 +488,11 @@
               class="discard-selection-badge"
               aria-hidden="true"
             >✓</span>
+            <span
+              v-else-if="canDiscard && isDiscardProtectedCard(card)"
+              class="discard-protected-badge"
+              aria-hidden="true"
+            >留</span>
             <CardComp :card="card" :mode="props.ownCardMode" size="xl" />
           </button>
         </div>
@@ -1178,7 +1183,11 @@ function isSystemAction(actionKey: string): boolean {
 }
 
 function canDiscardCard(card: Card): boolean {
-  return canDiscard.value && card.type !== "jiang" && card.color !== "gold";
+  return canDiscard.value && !isDiscardProtectedCard(card);
+}
+
+function isDiscardProtectedCard(card: Card): boolean {
+  return card.type === "jiang" || card.color === "gold";
 }
 
 function selectDiscardCard(cardId: string): void {
@@ -1288,7 +1297,9 @@ function handCardAccessibleLabel(card: Card): string {
     ? "已选中"
     : canDiscardCard(card)
       ? "可选择"
-      : "不可打出";
+      : canDiscard.value && isDiscardProtectedCard(card)
+        ? "规则保护，不能打出"
+        : "当前无需选牌";
   return `${getCardAccessibleText(card)}，${state}`;
 }
 
@@ -2851,6 +2862,7 @@ watch(canDiscard, (enabled) => {
 }
 
 .hand-card {
+  position: relative;
   background: transparent;
   border: none;
   padding: 0;
@@ -2890,14 +2902,14 @@ watch(canDiscard, (enabled) => {
 }
 
 .hand-card.blocked {
-  opacity: 0.45;
+  opacity: 0.72;
   cursor: not-allowed;
-  filter: grayscale(0.2);
+  filter: saturate(0.72);
 }
 
 .hand-card.gold-blocked {
-  opacity: 0.55;
-  filter: saturate(0.7) grayscale(0.1);
+  opacity: 0.78;
+  filter: saturate(0.82);
 }
 
 .hand-card.candidate-active {
@@ -2940,6 +2952,26 @@ watch(canDiscard, (enabled) => {
   background: #0369a1;
   color: #ffffff;
   font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.55);
+}
+
+.discard-protected-badge {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  z-index: 3;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fef3c7;
+  background: #92400e;
+  color: #fffbeb;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
   box-shadow: 0 1px 4px rgba(2, 6, 23, 0.55);
