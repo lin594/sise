@@ -136,6 +136,14 @@ export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
 export const DEFAULT_RECONNECT_GRACE_MS = 5_000;
 
+export function isDebugScenarioFeatureEnabled(nodeEnv: unknown, rawFlag: unknown): boolean {
+  return String(nodeEnv ?? "").trim().toLowerCase() !== "production" && String(rawFlag ?? "").trim() === "1";
+}
+
+export function canUseDebugScenario(enabled: boolean, seatId: string | undefined, hostPlayerId: string): boolean {
+  return enabled && Boolean(seatId) && seatId === hostPlayerId;
+}
+
 export class FourColorGameRoom extends Room<GameState> {
   maxClients = 8;
 
@@ -194,6 +202,10 @@ export class FourColorGameRoom extends Room<GameState> {
   private readonly reconnectGraceMs = Math.max(
     0,
     Number(process.env.RECONNECT_GRACE_MS ?? DEFAULT_RECONNECT_GRACE_MS),
+  );
+  private readonly debugScenariosEnabled = isDebugScenarioFeatureEnabled(
+    process.env.NODE_ENV,
+    process.env.ENABLE_DEBUG_SCENARIOS,
   );
   private readonly logEnabled = (process.env.ROOM_LOG ?? "1") !== "0";
   private readonly traceEnabled = (process.env.ROOM_TRACE ?? "0") === "1";
@@ -306,11 +318,15 @@ export class FourColorGameRoom extends Room<GameState> {
       this.syncClientState(client);
     });
 
-    this.onMessage("debug_setup", (client, scenario: string) => {
-      const seatId = this.seatBySession.get(client.sessionId);
-      const ok = seatId ? this.applyDebugScenario(seatId, scenario) : false;
-      client.send("debug_applied", { scenario, ok, ts: Date.now() });
-    });
+    if (this.debugScenariosEnabled) {
+      this.onMessage("debug_setup", (client, scenario: string) => {
+        const seatId = this.seatBySession.get(client.sessionId);
+        const ok = canUseDebugScenario(this.debugScenariosEnabled, seatId, this.state.hostPlayerId)
+          ? this.applyDebugScenario(seatId!, scenario)
+          : false;
+        client.send("debug_applied", { scenario, ok, ts: Date.now() });
+      });
+    }
   }
 
   /**

@@ -18,6 +18,8 @@ import {
   DEFAULT_OPERATION_TIMEOUT_MS,
   DEFAULT_RECONNECT_GRACE_MS,
   FourColorGameRoom,
+  canUseDebugScenario,
+  isDebugScenarioFeatureEnabled,
 } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 import { chooseBotAction, chooseBotDiscard, createSeededRandom } from "../rooms/bot-strategy.js";
@@ -39,6 +41,18 @@ t("identity: generated room tokens use cryptographically random 192-bit values",
 
   assert.equal(new Set(tokens).size, tokens.length);
   assert.equal(tokens.every((token) => /^pt_[0-9a-f]{48}$/.test(token)), true);
+});
+
+t("security: debug scenarios are disabled in production and limited to the host", () => {
+  assert.equal(isDebugScenarioFeatureEnabled("production", "1"), false);
+  assert.equal(isDebugScenarioFeatureEnabled(" Production ", "1"), false);
+  assert.equal(isDebugScenarioFeatureEnabled("development", "0"), false);
+  assert.equal(isDebugScenarioFeatureEnabled("development", "true"), false);
+  assert.equal(isDebugScenarioFeatureEnabled("development", "1"), true);
+  assert.equal(canUseDebugScenario(false, "seat_0", "seat_0"), false);
+  assert.equal(canUseDebugScenario(true, undefined, "seat_0"), false);
+  assert.equal(canUseDebugScenario(true, "seat_1", "seat_0"), false);
+  assert.equal(canUseDebugScenario(true, "seat_0", "seat_0"), true);
 });
 
 t("accessibility: default human decisions allow extra reading and touch time", () => {
