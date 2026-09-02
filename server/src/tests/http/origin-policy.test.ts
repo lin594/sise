@@ -109,5 +109,9 @@ test("the HTTP middleware answers an allowed preflight without entering a route"
   assert.equal(response.statusCode, 204);
   assert.equal(headers.get("Access-Control-Allow-Origin"), "https://cards.example.com");
   assert.equal(headers.get("Vary"), "Origin");
+  assert.equal(
+    headers.get("Access-Control-Expose-Headers"),
+    "Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset",
+  );
   assert.equal(routed, false);
 });

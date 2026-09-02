@@ -9,6 +9,7 @@ import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { BACKEND_HTTP_URL } from "@/config/backend";
+import { apiErrorMessage } from "@/utils/http";
 import { getCardLabelText } from "@/utils/cardText";
 const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
@@ -1030,7 +1031,7 @@ async function startPracticeLobby() {
             body: JSON.stringify({ mode: "practice" }),
         });
         if (!response.ok) {
-            throw new Error("创建单人练习房间失败");
+            throw new Error(await apiErrorMessage(response, "创建单人练习房间失败，请稍后重试。"));
         }
         const payload = (await response.json());
         if (!payload?.ok || !payload.roomId) {
@@ -1067,7 +1068,7 @@ async function startFriendLobby() {
             body: JSON.stringify({ mode: "friends" }),
         });
         if (!response.ok) {
-            throw new Error("创建好友房失败");
+            throw new Error(await apiErrorMessage(response, "创建好友房失败，请稍后重试。"));
         }
         const payload = (await response.json());
         if (!payload.ok || !payload.roomId || !payload.hostKey) {

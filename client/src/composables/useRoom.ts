@@ -15,6 +15,7 @@ import type {
 } from "@/types/game";
 import { sortHandCards } from "@/utils/cardSort";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
+import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
@@ -418,6 +419,7 @@ export function useRoom(playerName = "Player") {
   let connectInFlight = false;
   let activeConnectionSeq = 0;
   let lastManualSyncAt = 0;
+  let privateStateRetryAfterAt = 0;
   let reconnectAttempts = 0;
   let suppressReconnect = false;
 
@@ -660,6 +662,9 @@ export function useRoom(playerName = "Player") {
   }
 
   async function fetchPrivateState(reason: string): Promise<void> {
+    if (Date.now() < privateStateRetryAfterAt) {
+      return;
+    }
     const roomId = activeRoomId.value.trim();
     const token = playerToken.value.trim();
     if (!roomId || !token) {
@@ -674,6 +679,9 @@ export function useRoom(playerName = "Player") {
         cache: "no-store",
       });
       if (!response.ok) {
+        if (response.status === 429) {
+          privateStateRetryAfterAt = Date.now() + retryAfterMilliseconds(response);
+        }
         return;
       }
       const payload = (await response.json()) as {
@@ -744,6 +752,7 @@ export function useRoom(playerName = "Player") {
     stateSyncFingerprint = "";
     privateHandFingerprint = "";
     availableActionsFingerprint = "";
+    privateStateRetryAfterAt = 0;
     lastFingerprint = "";
     lastPhase = "";
     if (!keepLogs) {
@@ -964,7 +973,7 @@ export function useRoom(playerName = "Player") {
   async function fetchSingletonRoomId(): Promise<string> {
     const response = await fetch(`${HTTP_URL}/room-id`, { method: "GET" });
     if (!response.ok) {
-      throw new Error("获取房间失败，请稍后重试");
+      throw new Error(await apiErrorMessage(response, "获取房间失败，请稍后重试。"));
     }
     const payload = (await response.json()) as { ok?: boolean; roomId?: string };
     if (!payload?.roomId) {

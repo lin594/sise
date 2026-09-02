@@ -86,6 +86,10 @@ export function createCorsMiddleware(policy: OriginPolicy): RequestHandler {
     }
     res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header(
+      "Access-Control-Expose-Headers",
+      "Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset",
+    );
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
       return;
