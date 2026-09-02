@@ -108,6 +108,8 @@ curl --fail http://localhost:2567/health
 
 iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如果 `npm ci` 连续出现 `ECONNRESET`，先检查该值是否仍指向不可用的镜像站；切换下载源不应改动依赖版本或 lockfile integrity。
 
+普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让凭证明文经过网络。
+
 随后用浏览器访问 `http://imac.tajuren.cn:3000`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
 
 ## 7. 环境变量
