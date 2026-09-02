@@ -3,6 +3,7 @@ import http from "http";
 import { randomBytes } from "node:crypto";
 import { Server, matchMaker } from "colyseus";
 import { monitor } from "@colyseus/monitor";
+import { readPrivateStateToken } from "./http/private-state-auth.js";
 import { FourColorGameRoom } from "./rooms/GameRoom.js";
 import { getRegisteredRoom } from "./rooms/room-registry.js";
 
@@ -131,9 +132,10 @@ app.post("/reset-room", async (_req, res) => {
 });
 
 app.get("/private-state", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   try {
     const roomId = String(req.query.roomId ?? "").trim();
-    const playerToken = String(req.query.playerToken ?? "").trim();
+    const playerToken = readPrivateStateToken(req.headers.authorization, req.query.playerToken);
     if (!roomId || !playerToken) {
       res.status(400).json({ ok: false, message: "roomId and playerToken are required" });
       return;

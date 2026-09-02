@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "npm run build && node dist/tests/run.js && node --test dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
+    "test": "npm run build && node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.0",
