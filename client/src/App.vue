@@ -12,11 +12,24 @@
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
   >
-    <header class="top">
+    <header
+      class="top"
+      :class="{ 'game-control-header': showGameTools }"
+      :data-testid="showGameTools ? 'game-control-header' : undefined"
+    >
       <div class="top-brand">
-        <h1>四色牌</h1>
-        <p class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
+        <div class="brand-lockup">
+          <span class="brand-suits" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <h1>四色牌</h1>
+        </div>
+        <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
+      <GameTools
+        v-if="showGameTools"
+        v-model="tableCardMode"
+        @open-rules="showRules = true"
+        @exit="handleLeaveRoom"
+      />
       <div class="meta" v-if="hasLobbySession && !showGameTools">
         <span>{{ connected ? "已连接" : "同步中..." }}</span>
         <span>座位ID: {{ mySeatId || "-" }}</span>
@@ -28,12 +41,6 @@
         <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
     </header>
-    <GameTools
-      v-if="showGameTools"
-      v-model="tableCardMode"
-      @open-rules="showRules = true"
-      @exit="handleLeaveRoom"
-    />
     <p v-if="globalError" class="error global-error">{{ globalError }}</p>
 
     <LoginPage
@@ -1492,6 +1499,7 @@ watch(
 
 <style scoped>
 .layout {
+  --game-header-height: clamp(2.5rem, 7dvh, 3rem);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -1535,14 +1543,10 @@ watch(
 }
 
 .layout.compact-landscape.playing {
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
+  grid-template-rows: var(--game-header-height) minmax(0, 1fr);
+  gap: 0.2rem;
   padding: max(0.2rem, var(--safe-top)) max(0.2rem, var(--safe-right))
     max(0.2rem, var(--safe-bottom)) max(0.2rem, var(--safe-left));
-}
-
-.layout.compact-landscape .top {
-  display: none;
 }
 
 .top {
@@ -1557,9 +1561,56 @@ watch(
   min-height: 0;
 }
 
+.top.game-control-header {
+  position: relative;
+  z-index: 110;
+  height: var(--game-header-height);
+  min-height: var(--game-header-height);
+  flex: 0 0 auto;
+  padding-block: 0.18rem;
+  background:
+    linear-gradient(90deg, rgba(120, 53, 15, 0.2), transparent 35%),
+    rgba(7, 15, 28, 0.98);
+  border-color: rgba(148, 163, 184, 0.32);
+  box-shadow: 0 5px 18px rgba(2, 6, 23, 0.3);
+}
+
 .top-brand {
   display: grid;
   gap: 0.18rem;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-suits {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.brand-suits i {
+  display: block;
+  width: 0.34rem;
+  height: 1.12rem;
+  border-radius: 999px;
+  background: #facc15;
+  box-shadow: 0 0 7px rgba(250, 204, 21, 0.28);
+}
+
+.brand-suits i:nth-child(2) {
+  background: #ef4444;
+}
+
+.brand-suits i:nth-child(3) {
+  background: #22c55e;
+}
+
+.brand-suits i:nth-child(4) {
+  background: #f8fafc;
 }
 
 .top h1 {
@@ -1584,6 +1635,13 @@ watch(
 
 .meta span {
   white-space: nowrap;
+}
+
+.layout.game-tools-active .hu-mask,
+.layout.game-tools-active .rules-mask,
+.layout.game-tools-active .candidate-mask,
+.layout.game-tools-active :deep(.declare-mask) {
+  top: calc(var(--game-header-height) + 0.45rem);
 }
 
 .lobby {
@@ -2369,10 +2427,15 @@ watch(
   }
 
   .layout.compact-landscape.playing {
-    grid-template-rows: minmax(0, 1fr);
-    gap: 0;
+    grid-template-rows: var(--game-header-height) minmax(0, 1fr);
+    gap: 0.2rem;
     padding: max(0.15rem, var(--safe-top)) max(0.15rem, var(--safe-right))
       max(0.15rem, var(--safe-bottom)) max(0.15rem, var(--safe-left));
+  }
+
+  .top.game-control-header {
+    border-radius: 0.65rem;
+    padding-inline: 0.45rem;
   }
 }
 

@@ -14,6 +14,7 @@
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
           <path d="m19.2 13.4 1.3 1-.1 1.5-1.5 1.8-1.6-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.7-1.4.6h-2.5l-.7-1.5a7.8 7.8 0 0 1-2-.6l-1.4.9-1.3-.8-1.2-2.2.9-1.4a7.8 7.8 0 0 1-.2-2.1L4 11.7l.3-1.5 1.3-2 1.7.1a7.8 7.8 0 0 1 1.7-1.2l.1-1.7 1.4-.7H13l.9 1.4a7.8 7.8 0 0 1 1.9.8l1.5-.7 1.2.9 1 2.3-1 1.3c.2.9.3 1.8.1 2.7h.6Z" />
         </svg>
+        <span>设置</span>
       </button>
       <button
         class="tool-button exit"
@@ -27,6 +28,7 @@
           <path d="M10 5H5v14h5" />
           <path d="M13 8l4 4-4 4M8 12h9" />
         </svg>
+        <span>退出</span>
       </button>
     </div>
 
@@ -110,11 +112,9 @@ function confirmExit(): void {
 
 <style scoped>
 .game-tools {
-  position: fixed;
-  z-index: 105;
-  top: max(0.45rem, var(--safe-top, 0px));
-  right: max(0.45rem, var(--safe-right, 0px));
-  pointer-events: none;
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
 }
 
 .tool-buttons {
@@ -124,16 +124,21 @@ function confirmExit(): void {
 }
 
 .tool-button {
-  pointer-events: auto;
-  width: clamp(2.35rem, 6.8vh, 2.8rem);
-  height: clamp(2.35rem, 6.8vh, 2.8rem);
-  padding: 0.55rem;
-  border-radius: 999px;
+  min-width: clamp(4.25rem, 9vw, 5.25rem);
+  height: clamp(2.15rem, 6.2vh, 2.55rem);
+  padding: 0.35rem 0.62rem;
+  border-radius: 0.72rem;
   border: 1px solid rgba(148, 163, 184, 0.38);
   background: rgba(15, 23, 42, 0.84);
   color: #e2e8f0;
   box-shadow: 0 5px 16px rgba(2, 6, 23, 0.34);
   backdrop-filter: blur(10px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-weight: 750;
+  font-size: clamp(0.76rem, 1.7vh, 0.9rem);
 }
 
 .tool-button:hover,
@@ -148,8 +153,9 @@ function confirmExit(): void {
 }
 
 .tool-button svg {
-  width: 100%;
-  height: 100%;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -158,9 +164,12 @@ function confirmExit(): void {
 }
 
 .settings-panel {
-  pointer-events: auto;
+  position: absolute;
+  top: calc(100% + 0.42rem);
+  right: 0;
   width: min(18rem, calc(100dvw - 1rem));
-  margin-top: 0.45rem;
+  max-height: calc(100dvh - var(--game-header-height, 3rem) - 0.8rem);
+  overflow: auto;
   padding: 0.8rem;
   border-radius: 1rem;
   border: 1px solid rgba(71, 85, 105, 0.9);
@@ -346,16 +355,15 @@ function confirmExit(): void {
 }
 
 @media (max-width: 960px), (max-height: 500px) {
-  .game-tools {
-    top: max(0.25rem, var(--safe-top, 0px));
-    right: max(0.25rem, var(--safe-right, 0px));
-  }
-
   .settings-panel {
     width: min(16rem, calc(100dvw - 0.5rem));
-    max-height: calc(100dvh - 3.2rem);
-    overflow: auto;
     padding: 0.6rem;
+  }
+
+  .tool-button {
+    min-width: clamp(3.85rem, 10vw, 4.6rem);
+    height: clamp(2.05rem, 9.5vh, 2.4rem);
+    padding-inline: 0.5rem;
   }
 
   .mode-options {

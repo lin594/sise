@@ -17,6 +17,30 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.locator(".pending-placeholder")).toHaveCount(0);
 }
 
+async function expectDedicatedGameHeader(page: Page): Promise<void> {
+  const header = page.getByTestId("game-control-header");
+  await expect(header).toBeVisible();
+  await expect(header.getByRole("heading", { name: "四色牌" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "牌局设置" })).toContainText("设置");
+  await expect(header.getByRole("button", { name: "退出牌局" })).toContainText("退出");
+  await expect(header.getByText(/座位ID|房主|已连接|同步中/)).toHaveCount(0);
+
+  const geometry = await page.evaluate(() => {
+    const headerElement = document.querySelector<HTMLElement>('[data-testid="game-control-header"]');
+    const boardElement = document.querySelector<HTMLElement>('[data-testid="game-board"]');
+    if (!headerElement || !boardElement) {
+      throw new Error("Game header or board is missing");
+    }
+    const headerRect = headerElement.getBoundingClientRect();
+    const boardRect = boardElement.getBoundingClientRect();
+    return {
+      headerBottom: Math.round(headerRect.bottom),
+      boardTop: Math.round(boardRect.top),
+    };
+  });
+  expect(geometry.boardTop).toBeGreaterThanOrEqual(geometry.headerBottom);
+}
+
 async function reachDiscardConfirmation(page: Page): Promise<void> {
   const deadline = Date.now() + 45_000;
   const confirm = page.getByTestId("discard-confirm");
@@ -121,6 +145,7 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("lobby-start").click();
 
     await expect(page.getByTestId("game-board")).toBeVisible();
+    await expectDedicatedGameHeader(page);
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
 
@@ -165,7 +190,7 @@ test.describe("compact landscape gameplay", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
-    await expect(page.getByTestId("game-tools")).toBeVisible();
+    await expectDedicatedGameHeader(page);
     await reachDiscardConfirmation(page);
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
@@ -303,7 +328,7 @@ test.describe("desktop declaration", () => {
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
     await expectSimplifiedTableCenter(page);
-    await expect(page.getByTestId("game-tools")).toBeVisible();
+    await expectDedicatedGameHeader(page);
   });
 });
 

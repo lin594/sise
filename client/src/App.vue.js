@@ -971,11 +971,20 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-hero']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-input']} */ ;
@@ -988,6 +997,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
@@ -1031,6 +1043,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['playing']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-control-header']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
@@ -1110,14 +1124,57 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
+    ...{ class: ({ 'game-control-header': __VLS_ctx.showGameTools }) },
+    'data-testid': (__VLS_ctx.showGameTools ? 'game-control-header' : undefined),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "top-brand" },
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-    ...{ class: "top-slogan" },
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "brand-lockup" },
 });
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "brand-suits" },
+    'aria-hidden': "true",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1)({});
+if (!__VLS_ctx.showGameTools) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "top-slogan" },
+    });
+}
+if (__VLS_ctx.showGameTools) {
+    /** @type {[typeof GameTools, ]} */ ;
+    // @ts-ignore
+    const __VLS_0 = __VLS_asFunctionalComponent(GameTools, new GameTools({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.tableCardMode),
+    }));
+    const __VLS_1 = __VLS_0({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.tableCardMode),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+    let __VLS_3;
+    let __VLS_4;
+    let __VLS_5;
+    const __VLS_6 = {
+        onOpenRules: (...[$event]) => {
+            if (!(__VLS_ctx.showGameTools))
+                return;
+            __VLS_ctx.showRules = true;
+        }
+    };
+    const __VLS_7 = {
+        onExit: (__VLS_ctx.handleLeaveRoom)
+    };
+    var __VLS_2;
+}
 if (__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },
@@ -1152,34 +1209,6 @@ else if (!__VLS_ctx.hasLobbySession) {
             } },
         ...{ class: "ghost reset-btn" },
     });
-}
-if (__VLS_ctx.showGameTools) {
-    /** @type {[typeof GameTools, ]} */ ;
-    // @ts-ignore
-    const __VLS_0 = __VLS_asFunctionalComponent(GameTools, new GameTools({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onExit': {} },
-        modelValue: (__VLS_ctx.tableCardMode),
-    }));
-    const __VLS_1 = __VLS_0({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onExit': {} },
-        modelValue: (__VLS_ctx.tableCardMode),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
-    let __VLS_3;
-    let __VLS_4;
-    let __VLS_5;
-    const __VLS_6 = {
-        onOpenRules: (...[$event]) => {
-            if (!(__VLS_ctx.showGameTools))
-                return;
-            __VLS_ctx.showRules = true;
-        }
-    };
-    const __VLS_7 = {
-        onExit: (__VLS_ctx.handleLeaveRoom)
-    };
-    var __VLS_2;
 }
 if (__VLS_ctx.globalError) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1946,6 +1975,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top-brand']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-lockup']} */ ;
+/** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
 /** @type {__VLS_StyleScopedClasses['top-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
