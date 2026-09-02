@@ -16,7 +16,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
   const deadline = Date.now() + 3400;
   while (Date.now() < deadline) {
-    const hasDeclarePanel = await page.getByText("声明鱼和暗坎").isVisible().catch(() => false);
+    const hasDeclarePanel = await page.getByText(/声明(?:鱼和|亮鱼与)暗坎/).isVisible().catch(() => false);
     if (hasDeclarePanel) {
       break;
     }
@@ -62,8 +62,8 @@ async function playUntilSettlement(page: Page): Promise<void> {
       await page.waitForTimeout(120);
       continue;
     }
-    if (await page.getByRole("button", { name: "确认声明" }).isVisible().catch(() => false)) {
-      const declareButton = page.getByRole("button", { name: "确认声明" });
+    if (await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) {
+      const declareButton = page.getByTestId("confirm-declaration");
       if (await declareButton.isEnabled().catch(() => false)) {
         await declareButton.click();
         await page.waitForTimeout(120);
@@ -118,7 +118,7 @@ test("single practice flow reaches settlement", async ({ page }) => {
   await expect(
     page
       .getByTestId("game-board")
-      .or(page.getByText("声明鱼和暗坎"))
+      .or(page.getByText(/声明(?:鱼和|亮鱼与)暗坎/))
       .or(page.getByText("房间准备中")),
   ).toBeVisible();
 

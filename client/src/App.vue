@@ -162,93 +162,17 @@
       </div>
     </div>
 
-    <div v-if="shouldShowDeclarePanel" class="declare-mask">
-      <div class="declare-panel">
-        <div class="declare-header">
-          <div>
-            <h2>声明鱼和暗坎</h2>
-            <p class="declare-desc">先看手牌，鱼按可成组的选项点选，暗坎只声明数量；倒计时结束或四家确认后统一亮出。</p>
-          </div>
-          <div class="declare-timer-card">
-            <strong>{{ declareSecondsLeft }}</strong>
-            <span>秒</span>
-          </div>
-        </div>
-        <p v-if="isDeclareSubmitted" class="declare-submitted">你已提交声明，等待其他玩家...</p>
-        <div class="declare-progress">
-          <div class="declare-progress-fill" :style="{ width: `${declareProgressPercent}%` }"></div>
-        </div>
-
-        <div class="declare-grid">
-          <section class="declare-card-section">
-            <p class="zone-title">鱼</p>
-            <div class="fish-option-list" v-if="fishOptions.length">
-              <button
-                v-for="option in fishOptions"
-                :key="option.id"
-                class="fish-option"
-                :class="{ selected: selectedFishOptionIds.has(option.id) }"
-                :disabled="isDeclareSubmitted"
-                @click="toggleFishOption(option.id)"
-              >
-                <span class="fish-option-title">{{ option.title }}</span>
-                <span class="declare-mini-cards">
-                  <CardComp v-for="card in option.cards" :key="`fish-option-${option.id}-${card.id}`" :card="card" size="sm" />
-                </span>
-              </button>
-            </div>
-            <p v-else class="settlement-empty">（没有可声明的鱼）</p>
-            <p v-if="selectedFishCards.length" class="declare-tip">已选 {{ selectedFishCards.length }} 张，提交后会等四家都声明完再公开。</p>
-            <p v-if="!fishSelectionValid" class="error">亮鱼组合不合法：普通鱼需4张同牌；金条鱼需4或5张金条。</p>
-            <p v-if="declareError" class="error">{{ declareError }}</p>
-          </section>
-
-          <section class="declare-card-section declare-summary-card">
-            <p class="zone-title">暗坎数量</p>
-            <div class="declare-stepper">
-              <button class="ghost mini" :disabled="isDeclareSubmitted || declareKongsInput <= 0" @click="adjustDeclareKongs(-1)">-</button>
-              <div class="declare-stepper-value">
-                <strong>{{ declareKongsInput }}</strong>
-                <span>个</span>
-              </div>
-              <button class="ghost mini" :disabled="isDeclareSubmitted || declareKongsInput >= maxDeclaredKongs" @click="adjustDeclareKongs(1)">+</button>
-            </div>
-            <div class="declare-chip-row">
-              <span class="declare-chip accent">系统建议 {{ suggestedDeclaredKongs }} 个</span>
-              <button class="ghost mini" :disabled="isDeclareSubmitted" @click="useSuggestedDeclaredKongs">采用建议</button>
-            </div>
-            <p class="declare-tip">已选为鱼的牌不会再计入暗坎建议；实际过程里仍要保留声明数量的暗坎。</p>
-          </section>
-        </div>
-
-        <section class="declare-zone">
-          <p class="zone-title">手牌</p>
-          <div class="declare-chip-row">
-            <span v-if="suggestedFishCardIds.size" class="declare-chip">青框可成鱼</span>
-            <span v-if="suggestedKongCardIds.size" class="declare-chip">橙框建议暗坎</span>
-          </div>
-          <div class="declare-cards" v-if="privateHand.length">
-            <button
-              v-for="card in privateHand"
-              :key="`declare-hand-${card.id}`"
-              class="declare-card-btn"
-              :class="{ selected: selectedFishCardIds.has(card.id), suggested: suggestedKongCardIds.has(card.id), fish: suggestedFishCardIds.has(card.id) }"
-              :disabled="isDeclareSubmitted"
-              @click="toggleFishCard(card.id)"
-            >
-              <CardComp :card="card" size="sm" />
-            </button>
-          </div>
-          <p v-else class="settlement-empty">（无可选手牌）</p>
-        </section>
-
-        <div class="end-actions">
-          <button class="primary" :disabled="!fishSelectionValid || isDeclareSubmitted" @click="submitDeclaration">
-            {{ isDeclareSubmitted ? "已提交" : "确认声明" }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeclarationPanel
+      v-if="shouldShowDeclarePanel"
+      :hand="privateHand"
+      :submitted="isDeclareSubmitted"
+      :seconds-left="declareSecondsLeft"
+      :progress-percent="declareProgressPercent"
+      :server-error="declareError"
+      :compact="isCompactViewport"
+      :ultra-compact="isUltraCompactViewport"
+      @submit="submitDeclaration"
+    />
 
     <div v-if="showEndPanel" class="hu-mask">
       <div class="hu-panel">
@@ -446,6 +370,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
+import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
@@ -461,11 +386,6 @@ type SettlementGroupBlock = {
   badge?: string;
   label?: string;
   tone: "meld" | "fish" | "public" | "strong";
-};
-type FishOption = {
-  id: string;
-  title: string;
-  cards: Card[];
 };
 type LobbyModeId = "practice_bots" | "friends" | "ranked_reserved";
 type LobbyMode = {
@@ -713,88 +633,7 @@ const declareDealIntroActive = computed(
   () => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value,
 );
 
-const declareKongsInput = ref(0);
 let declareTick: number | null = null;
-const selectedFishCardIds = ref<Set<string>>(new Set());
-const selectedFishOptionIds = ref<Set<string>>(new Set());
-const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
-const fishOptions = computed<FishOption[]>(() => {
-  const options: FishOption[] = [];
-  const grouped = new Map<string, Card[]>();
-  const goldCards: Card[] = [];
-  for (const card of privateHand.value) {
-    if (card.color === "gold") {
-      goldCards.push(card);
-      continue;
-    }
-    const key = `${card.color}:${card.type}`;
-    const list = grouped.get(key) ?? [];
-    list.push(card);
-    grouped.set(key, list);
-  }
-  for (const [key, cards] of grouped.entries()) {
-    if (cards.length === 4) {
-      options.push({
-        id: `fish:${key}`,
-        title: `${cardLabel(cards[0])}鱼`,
-        cards,
-      });
-    }
-  }
-  if (goldCards.length >= 4) {
-    options.push({
-      id: "fish:gold:4",
-      title: "金条鱼（4张）",
-      cards: goldCards.slice(0, 4),
-    });
-  }
-  if (goldCards.length >= 5) {
-    options.push({
-      id: "fish:gold:5",
-      title: "金条鱼（5张）",
-      cards: goldCards.slice(0, 5),
-    });
-  }
-  return options;
-});
-const suggestedFishCardIds = computed<Set<string>>(() => {
-  const picked = new Set<string>();
-  for (const option of fishOptions.value) {
-    option.cards.forEach((card) => picked.add(card.id));
-  }
-  return picked;
-});
-const suggestedKongCardIds = computed<Set<string>>(() => {
-  const byFace = new Map<string, Card[]>();
-  const goldCards: Card[] = [];
-  for (const card of privateHand.value) {
-    if (selectedFishCardIds.value.has(card.id)) {
-      continue;
-    }
-    if (card.color === "gold") {
-      goldCards.push(card);
-      continue;
-    }
-    const key = `${card.color}:${card.type}`;
-    const list = byFace.get(key) ?? [];
-    list.push(card);
-    byFace.set(key, list);
-  }
-
-  const picked = new Set<string>();
-  for (const cards of byFace.values()) {
-    const count = Math.floor(cards.length / 3) * 3;
-    for (const card of cards.slice(0, count)) {
-      picked.add(card.id);
-    }
-  }
-  for (const card of goldCards.slice(0, Math.floor(goldCards.length / 3) * 3)) {
-    picked.add(card.id);
-  }
-  return picked;
-});
-const suggestedDeclaredKongs = computed(() => Math.floor(suggestedKongCardIds.value.size / 3));
-const maxDeclaredKongs = computed(() => Math.max(suggestedDeclaredKongs.value, Number(mePlayer.value?.declaredKongs ?? 0), 0));
 const declareSecondsLeft = computed(() => {
   if (declareDealIntroActive.value) {
     return 0;
@@ -822,84 +661,6 @@ const declareProgressPercent = computed(() => {
   const percent = (remain / declareTotalMs.value) * 100;
   return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-const fishSelectionValid = computed(() => {
-  const cards = selectedFishCards.value;
-  if (!cards.length) {
-    return true;
-  }
-  let goldCount = 0;
-  const nonGoldFaceCounter = new Map<string, number>();
-  for (const card of cards) {
-    if (card.color === "gold") {
-      goldCount += 1;
-      continue;
-    }
-    const key = `${card.color}:${card.type}`;
-    nonGoldFaceCounter.set(key, (nonGoldFaceCounter.get(key) ?? 0) + 1);
-  }
-  for (const count of nonGoldFaceCounter.values()) {
-    if (count !== 4) {
-      return false;
-    }
-  }
-  return goldCount === 0 || goldCount === 4 || goldCount === 5;
-});
-
-function syncSelectedFishOptionsFromCards() {
-  const cardIds = selectedFishCardIds.value;
-  const next = new Set<string>();
-  for (const option of fishOptions.value) {
-    if (option.cards.every((card) => cardIds.has(card.id))) {
-      next.add(option.id);
-    }
-  }
-  selectedFishOptionIds.value = next;
-}
-
-function toggleFishOption(optionId: string) {
-  if (isDeclareSubmitted.value) {
-    return;
-  }
-  const option = fishOptions.value.find((item) => item.id === optionId);
-  if (!option) {
-    return;
-  }
-  const nextCards = new Set(selectedFishCardIds.value);
-  const nextOptions = new Set(selectedFishOptionIds.value);
-  const selected = nextOptions.has(optionId);
-  if (selected) {
-    option.cards.forEach((card) => nextCards.delete(card.id));
-    nextOptions.delete(optionId);
-  } else {
-    option.cards.forEach((card) => nextCards.add(card.id));
-    if (optionId === "fish:gold:4") {
-      nextOptions.delete("fish:gold:5");
-      fishOptions.value.find((item) => item.id === "fish:gold:5")?.cards.forEach((card) => nextCards.delete(card.id));
-      option.cards.forEach((card) => nextCards.add(card.id));
-    }
-    if (optionId === "fish:gold:5") {
-      nextOptions.delete("fish:gold:4");
-    }
-    nextOptions.add(optionId);
-  }
-  selectedFishCardIds.value = nextCards;
-  selectedFishOptionIds.value = nextOptions;
-}
-
-function toggleFishCard(cardId: string) {
-  if (isDeclareSubmitted.value) {
-    return;
-  }
-  const next = new Set(selectedFishCardIds.value);
-  if (next.has(cardId)) {
-    next.delete(cardId);
-  } else {
-    next.add(cardId);
-  }
-  selectedFishCardIds.value = next;
-  syncSelectedFishOptionsFromCards();
-}
-
 function clearSelection() {
   selectionMode.value = null;
   selectedCandidateId.value = null;
@@ -1035,34 +796,12 @@ function submitDeferredGrabIfReady() {
   sendAction("pass");
 }
 
-function submitDeclaration() {
-  if (!fishSelectionValid.value || isDeclareSubmitted.value) {
+function submitDeclaration(payload: { declaredKongs: number; fishCardIds: string[] }) {
+  if (isDeclareSubmitted.value) {
     return;
   }
-  declareSetup({
-    declaredKongs: Math.max(0, Number(declareKongsInput.value) || 0),
-    fishCardIds: [...selectedFishCardIds.value],
-  });
+  declareSetup(payload);
 }
-
-function adjustDeclareKongs(delta: number) {
-  declareKongsInput.value = Math.min(maxDeclaredKongs.value, Math.max(0, declareKongsInput.value + delta));
-}
-
-function useSuggestedDeclaredKongs() {
-  declareKongsInput.value = suggestedDeclaredKongs.value;
-}
-
-watch(shouldShowDeclarePanel, (show) => {
-  if (show) {
-    selectedFishCardIds.value = new Set();
-    selectedFishOptionIds.value = new Set();
-    declareKongsInput.value = Math.max(
-      Number(mePlayer.value?.declaredKongs ?? 0),
-      Number(suggestedDeclaredKongs.value ?? 0),
-    );
-  }
-});
 
 watch(
   () => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`,
@@ -2102,18 +1841,6 @@ watch(
     max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
 }
 
-.declare-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.65);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 90;
-  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
-    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
-}
-
 .rules-mask {
   position: fixed;
   inset: 0;
@@ -2322,245 +2049,6 @@ watch(
   color: #1d4ed8;
   font-size: 0.82rem;
   font-weight: 600;
-}
-
-.declare-panel {
-  background: linear-gradient(180deg, #fffdf7 0%, #f8fafc 100%);
-  color: #0f172a;
-  padding: clamp(0.9rem, 2vh, 1.2rem);
-  border-radius: 18px;
-  min-width: 320px;
-  width: min(96vw, 1100px);
-  max-height: 90vh;
-  overflow: auto;
-  overflow-x: hidden;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.8rem;
-}
-
-.declare-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.8rem;
-  position: sticky;
-  top: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
-  z-index: 4;
-  padding: clamp(0.9rem, 2vh, 1.2rem) 0 0.55rem;
-  background: linear-gradient(180deg, #fffdf7 84%, rgba(255, 253, 247, 0));
-  min-width: 0;
-}
-
-.declare-header > div:first-child {
-  min-width: 0;
-}
-
-.declare-header h2 {
-  margin: 0;
-  font-size: clamp(1.1rem, 2.2vh, 1.4rem);
-}
-
-.declare-timer-card {
-  min-width: 4.8rem;
-  padding: 0.7rem 0.8rem;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #7c2d12, #dc2626);
-  color: #fff7ed;
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-}
-
-.declare-timer-card strong {
-  font-size: clamp(1.3rem, 3vh, 1.8rem);
-  line-height: 1;
-}
-
-.declare-timer-card span {
-  font-size: 0.78rem;
-}
-
-.declare-desc {
-  margin: 0.35rem 0 0;
-  color: #475569;
-}
-
-.declare-submitted {
-  margin: 0 0 10px;
-  color: #16a34a;
-  font-weight: 600;
-}
-
-.declare-progress {
-  height: 8px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  overflow: hidden;
-}
-
-.declare-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #22c55e, #84cc16);
-  transition: width 0.3s ease;
-}
-
-.declare-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-  min-width: 0;
-}
-
-.declare-card-section {
-  border: 1px solid #dbe4f0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
-  padding: 0.85rem;
-  display: grid;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.declare-summary-card {
-  background: linear-gradient(180deg, rgba(255, 247, 237, 0.95), rgba(255, 255, 255, 0.88));
-}
-
-.declare-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.declare-stepper-value {
-  flex: 1 1 auto;
-  min-height: 4.2rem;
-  border-radius: 16px;
-  background: #fff;
-  border: 1px solid #dbe4f0;
-  display: grid;
-  place-items: center;
-  min-width: 0;
-}
-
-.declare-stepper-value strong {
-  font-size: clamp(1.5rem, 3.8vh, 2.2rem);
-  line-height: 1;
-}
-
-.declare-stepper-value span {
-  color: #64748b;
-  font-size: 0.82rem;
-}
-
-.declare-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: center;
-}
-
-.declare-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0.2rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  color: #475569;
-  background: #eef2ff;
-}
-
-.declare-chip.accent {
-  color: #9a3412;
-  background: #ffedd5;
-}
-
-.fish-option-list {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.fish-option {
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  background: rgba(248, 250, 252, 0.95);
-  color: #0f172a;
-  padding: 0.55rem;
-  display: grid;
-  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
-  gap: 0.55rem;
-  align-items: center;
-  text-align: left;
-  cursor: pointer;
-}
-
-.fish-option.selected {
-  border-color: #0f766e;
-  background: rgba(240, 253, 250, 0.98);
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.16);
-}
-
-.fish-option-title {
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.declare-tip {
-  margin: 0;
-  color: #475569;
-  font-size: 13px;
-}
-
-.declare-zone {
-  padding-top: 0.25rem;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.declare-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(2.6rem, max-content));
-  gap: 0.45rem;
-}
-
-.declare-mini-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.declare-card-btn {
-  border: 1px solid #d6deea;
-  background: rgba(255, 255, 255, 0.96);
-  padding: 0.18rem;
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    background 0.18s ease;
-}
-
-.declare-card-btn.selected {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
-  background: rgba(240, 253, 244, 0.95);
-}
-
-.declare-card-btn.suggested {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
-  background: rgba(245, 158, 11, 0.06);
-}
-
-.declare-card-btn.fish {
-  border-color: #0f766e;
-  background: rgba(240, 253, 250, 0.92);
 }
 
 .hu-panel {
@@ -2800,7 +2288,6 @@ watch(
   margin-top: 14px;
 }
 
-.declare-panel > .end-actions,
 .hu-panel > .end-actions {
   position: sticky;
   bottom: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
@@ -2838,17 +2325,6 @@ watch(
     grid-template-columns: 1fr;
   }
 
-  .declare-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .declare-header {
-    align-items: stretch;
-  }
-
-  .fish-option {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-height: 600px) {
@@ -2909,7 +2385,6 @@ watch(
 }
 
 .layout.compact-viewport .hu-mask,
-.layout.compact-viewport .declare-mask,
 .layout.compact-viewport .rules-mask,
 .layout.compact-viewport .candidate-mask {
   align-items: stretch;
@@ -2917,7 +2392,6 @@ watch(
 
 .layout.compact-viewport .candidate-panel,
 .layout.compact-viewport .rules-panel,
-.layout.compact-viewport .declare-panel,
 .layout.compact-viewport .hu-panel {
   width: 100%;
   max-width: none;
@@ -2947,42 +2421,12 @@ watch(
   border-radius: 12px;
 }
 
-.layout.compact-viewport .declare-panel,
 .layout.compact-viewport .hu-panel {
   padding: 0.65rem;
 }
 
-.layout.compact-viewport .declare-header {
-  top: -0.65rem;
-  padding: 0.65rem 0 0.45rem;
-}
-
-.layout.compact-viewport .declare-grid,
 .layout.compact-viewport .settlement-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.layout.compact-viewport .declare-card-section {
-  padding: 0.6rem;
-  gap: 0.45rem;
-}
-
-.layout.compact-viewport .declare-cards {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.4rem;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  touch-action: pan-x;
-  padding-bottom: 0.25rem;
-  width: 100%;
-  min-width: 0;
-}
-
-.layout.compact-viewport .declare-card-btn {
-  flex: 0 0 48px;
-  min-width: 48px;
-  min-height: 48px;
 }
 
 .layout.compact-viewport .candidate-panel {
@@ -2994,7 +2438,6 @@ watch(
   padding: 0.65rem 0 0.45rem;
 }
 
-.layout.compact-viewport .declare-panel > .end-actions,
 .layout.compact-viewport .hu-panel > .end-actions {
   bottom: -0.65rem;
   margin-inline: -0.65rem;
@@ -3012,8 +2455,7 @@ watch(
   display: none;
 }
 
-.layout.ultra-compact-viewport .rules-slogan,
-.layout.ultra-compact-viewport .declare-desc {
+.layout.ultra-compact-viewport .rules-slogan {
   display: none;
 }
 

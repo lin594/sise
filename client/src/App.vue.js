@@ -1,6 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
+import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
@@ -188,87 +189,7 @@ const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot));
 const declareDealIntroActive = computed(() => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value);
-const declareKongsInput = ref(0);
 let declareTick = null;
-const selectedFishCardIds = ref(new Set());
-const selectedFishOptionIds = ref(new Set());
-const selectedFishCards = computed(() => privateHand.value.filter((card) => selectedFishCardIds.value.has(card.id)));
-const fishOptions = computed(() => {
-    const options = [];
-    const grouped = new Map();
-    const goldCards = [];
-    for (const card of privateHand.value) {
-        if (card.color === "gold") {
-            goldCards.push(card);
-            continue;
-        }
-        const key = `${card.color}:${card.type}`;
-        const list = grouped.get(key) ?? [];
-        list.push(card);
-        grouped.set(key, list);
-    }
-    for (const [key, cards] of grouped.entries()) {
-        if (cards.length === 4) {
-            options.push({
-                id: `fish:${key}`,
-                title: `${cardLabel(cards[0])}鱼`,
-                cards,
-            });
-        }
-    }
-    if (goldCards.length >= 4) {
-        options.push({
-            id: "fish:gold:4",
-            title: "金条鱼（4张）",
-            cards: goldCards.slice(0, 4),
-        });
-    }
-    if (goldCards.length >= 5) {
-        options.push({
-            id: "fish:gold:5",
-            title: "金条鱼（5张）",
-            cards: goldCards.slice(0, 5),
-        });
-    }
-    return options;
-});
-const suggestedFishCardIds = computed(() => {
-    const picked = new Set();
-    for (const option of fishOptions.value) {
-        option.cards.forEach((card) => picked.add(card.id));
-    }
-    return picked;
-});
-const suggestedKongCardIds = computed(() => {
-    const byFace = new Map();
-    const goldCards = [];
-    for (const card of privateHand.value) {
-        if (selectedFishCardIds.value.has(card.id)) {
-            continue;
-        }
-        if (card.color === "gold") {
-            goldCards.push(card);
-            continue;
-        }
-        const key = `${card.color}:${card.type}`;
-        const list = byFace.get(key) ?? [];
-        list.push(card);
-        byFace.set(key, list);
-    }
-    const picked = new Set();
-    for (const cards of byFace.values()) {
-        const count = Math.floor(cards.length / 3) * 3;
-        for (const card of cards.slice(0, count)) {
-            picked.add(card.id);
-        }
-    }
-    for (const card of goldCards.slice(0, Math.floor(goldCards.length / 3) * 3)) {
-        picked.add(card.id);
-    }
-    return picked;
-});
-const suggestedDeclaredKongs = computed(() => Math.floor(suggestedKongCardIds.value.size / 3));
-const maxDeclaredKongs = computed(() => Math.max(suggestedDeclaredKongs.value, Number(mePlayer.value?.declaredKongs ?? 0), 0));
 const declareSecondsLeft = computed(() => {
     if (declareDealIntroActive.value) {
         return 0;
@@ -296,82 +217,6 @@ const declareProgressPercent = computed(() => {
     const percent = (remain / declareTotalMs.value) * 100;
     return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-const fishSelectionValid = computed(() => {
-    const cards = selectedFishCards.value;
-    if (!cards.length) {
-        return true;
-    }
-    let goldCount = 0;
-    const nonGoldFaceCounter = new Map();
-    for (const card of cards) {
-        if (card.color === "gold") {
-            goldCount += 1;
-            continue;
-        }
-        const key = `${card.color}:${card.type}`;
-        nonGoldFaceCounter.set(key, (nonGoldFaceCounter.get(key) ?? 0) + 1);
-    }
-    for (const count of nonGoldFaceCounter.values()) {
-        if (count !== 4) {
-            return false;
-        }
-    }
-    return goldCount === 0 || goldCount === 4 || goldCount === 5;
-});
-function syncSelectedFishOptionsFromCards() {
-    const cardIds = selectedFishCardIds.value;
-    const next = new Set();
-    for (const option of fishOptions.value) {
-        if (option.cards.every((card) => cardIds.has(card.id))) {
-            next.add(option.id);
-        }
-    }
-    selectedFishOptionIds.value = next;
-}
-function toggleFishOption(optionId) {
-    if (isDeclareSubmitted.value) {
-        return;
-    }
-    const option = fishOptions.value.find((item) => item.id === optionId);
-    if (!option) {
-        return;
-    }
-    const nextCards = new Set(selectedFishCardIds.value);
-    const nextOptions = new Set(selectedFishOptionIds.value);
-    const selected = nextOptions.has(optionId);
-    if (selected) {
-        option.cards.forEach((card) => nextCards.delete(card.id));
-        nextOptions.delete(optionId);
-    }
-    else {
-        option.cards.forEach((card) => nextCards.add(card.id));
-        if (optionId === "fish:gold:4") {
-            nextOptions.delete("fish:gold:5");
-            fishOptions.value.find((item) => item.id === "fish:gold:5")?.cards.forEach((card) => nextCards.delete(card.id));
-            option.cards.forEach((card) => nextCards.add(card.id));
-        }
-        if (optionId === "fish:gold:5") {
-            nextOptions.delete("fish:gold:4");
-        }
-        nextOptions.add(optionId);
-    }
-    selectedFishCardIds.value = nextCards;
-    selectedFishOptionIds.value = nextOptions;
-}
-function toggleFishCard(cardId) {
-    if (isDeclareSubmitted.value) {
-        return;
-    }
-    const next = new Set(selectedFishCardIds.value);
-    if (next.has(cardId)) {
-        next.delete(cardId);
-    }
-    else {
-        next.add(cardId);
-    }
-    selectedFishCardIds.value = next;
-    syncSelectedFishOptionsFromCards();
-}
 function clearSelection() {
     selectionMode.value = null;
     selectedCandidateId.value = null;
@@ -492,28 +337,12 @@ function submitDeferredGrabIfReady() {
     pendingDeferredGrab.value = false;
     sendAction("pass");
 }
-function submitDeclaration() {
-    if (!fishSelectionValid.value || isDeclareSubmitted.value) {
+function submitDeclaration(payload) {
+    if (isDeclareSubmitted.value) {
         return;
     }
-    declareSetup({
-        declaredKongs: Math.max(0, Number(declareKongsInput.value) || 0),
-        fishCardIds: [...selectedFishCardIds.value],
-    });
+    declareSetup(payload);
 }
-function adjustDeclareKongs(delta) {
-    declareKongsInput.value = Math.min(maxDeclaredKongs.value, Math.max(0, declareKongsInput.value + delta));
-}
-function useSuggestedDeclaredKongs() {
-    declareKongsInput.value = suggestedDeclaredKongs.value;
-}
-watch(shouldShowDeclarePanel, (show) => {
-    if (show) {
-        selectedFishCardIds.value = new Set();
-        selectedFishOptionIds.value = new Set();
-        declareKongsInput.value = Math.max(Number(mePlayer.value?.declaredKongs ?? 0), Number(suggestedDeclaredKongs.value ?? 0));
-    }
-});
 watch(() => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`, () => {
     clearSelection();
     submitDeferredGrabIfReady();
@@ -1167,19 +996,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-stepper-value']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-stepper-value']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish-option']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
@@ -1189,7 +1005,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-formula']} */ ;
@@ -1200,17 +1015,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-cards-preview']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish-option']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
@@ -1228,9 +1038,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
@@ -1241,9 +1048,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
@@ -1258,38 +1062,16 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-section']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
@@ -1312,9 +1094,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-slogan']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
@@ -1784,221 +1563,35 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     }
 }
 if (__VLS_ctx.shouldShowDeclarePanel) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-mask" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-panel" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-header" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "declare-desc" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-timer-card" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (__VLS_ctx.declareSecondsLeft);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    if (__VLS_ctx.isDeclareSubmitted) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "declare-submitted" },
-        });
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-progress" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-progress-fill" },
-        ...{ style: ({ width: `${__VLS_ctx.declareProgressPercent}%` }) },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-grid" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "declare-card-section" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "zone-title" },
-    });
-    if (__VLS_ctx.fishOptions.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "fish-option-list" },
-        });
-        for (const [option] of __VLS_getVForSourceType((__VLS_ctx.fishOptions))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-                ...{ onClick: (...[$event]) => {
-                        if (!(__VLS_ctx.shouldShowDeclarePanel))
-                            return;
-                        if (!(__VLS_ctx.fishOptions.length))
-                            return;
-                        __VLS_ctx.toggleFishOption(option.id);
-                    } },
-                key: (option.id),
-                ...{ class: "fish-option" },
-                ...{ class: ({ selected: __VLS_ctx.selectedFishOptionIds.has(option.id) }) },
-                disabled: (__VLS_ctx.isDeclareSubmitted),
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "fish-option-title" },
-            });
-            (option.title);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "declare-mini-cards" },
-            });
-            for (const [card] of __VLS_getVForSourceType((option.cards))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`fish-option-${option.id}-${card.id}`),
-                    card: (card),
-                    size: "sm",
-                }));
-                const __VLS_49 = __VLS_48({
-                    key: (`fish-option-${option.id}-${card.id}`),
-                    card: (card),
-                    size: "sm",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_48));
-            }
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "settlement-empty" },
-        });
-    }
-    if (__VLS_ctx.selectedFishCards.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "declare-tip" },
-        });
-        (__VLS_ctx.selectedFishCards.length);
-    }
-    if (!__VLS_ctx.fishSelectionValid) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "error" },
-        });
-    }
-    if (__VLS_ctx.declareError) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "error" },
-        });
-        (__VLS_ctx.declareError);
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "declare-card-section declare-summary-card" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "zone-title" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-stepper" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.shouldShowDeclarePanel))
-                    return;
-                __VLS_ctx.adjustDeclareKongs(-1);
-            } },
-        ...{ class: "ghost mini" },
-        disabled: (__VLS_ctx.isDeclareSubmitted || __VLS_ctx.declareKongsInput <= 0),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-stepper-value" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (__VLS_ctx.declareKongsInput);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.shouldShowDeclarePanel))
-                    return;
-                __VLS_ctx.adjustDeclareKongs(1);
-            } },
-        ...{ class: "ghost mini" },
-        disabled: (__VLS_ctx.isDeclareSubmitted || __VLS_ctx.declareKongsInput >= __VLS_ctx.maxDeclaredKongs),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-chip-row" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "declare-chip accent" },
-    });
-    (__VLS_ctx.suggestedDeclaredKongs);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.useSuggestedDeclaredKongs) },
-        ...{ class: "ghost mini" },
-        disabled: (__VLS_ctx.isDeclareSubmitted),
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "declare-tip" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "declare-zone" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "zone-title" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "declare-chip-row" },
-    });
-    if (__VLS_ctx.suggestedFishCardIds.size) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "declare-chip" },
-        });
-    }
-    if (__VLS_ctx.suggestedKongCardIds.size) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "declare-chip" },
-        });
-    }
-    if (__VLS_ctx.privateHand.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "declare-cards" },
-        });
-        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.privateHand))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-                ...{ onClick: (...[$event]) => {
-                        if (!(__VLS_ctx.shouldShowDeclarePanel))
-                            return;
-                        if (!(__VLS_ctx.privateHand.length))
-                            return;
-                        __VLS_ctx.toggleFishCard(card.id);
-                    } },
-                key: (`declare-hand-${card.id}`),
-                ...{ class: "declare-card-btn" },
-                ...{ class: ({ selected: __VLS_ctx.selectedFishCardIds.has(card.id), suggested: __VLS_ctx.suggestedKongCardIds.has(card.id), fish: __VLS_ctx.suggestedFishCardIds.has(card.id) }) },
-                disabled: (__VLS_ctx.isDeclareSubmitted),
-            });
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (card),
-                size: "sm",
-            }));
-            const __VLS_52 = __VLS_51({
-                card: (card),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_51));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "settlement-empty" },
-        });
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "end-actions" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.submitDeclaration) },
-        ...{ class: "primary" },
-        disabled: (!__VLS_ctx.fishSelectionValid || __VLS_ctx.isDeclareSubmitted),
-    });
-    (__VLS_ctx.isDeclareSubmitted ? "已提交" : "确认声明");
+    /** @type {[typeof DeclarationPanel, ]} */ ;
+    // @ts-ignore
+    const __VLS_48 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+        ...{ 'onSubmit': {} },
+        hand: (__VLS_ctx.privateHand),
+        submitted: (__VLS_ctx.isDeclareSubmitted),
+        secondsLeft: (__VLS_ctx.declareSecondsLeft),
+        progressPercent: (__VLS_ctx.declareProgressPercent),
+        serverError: (__VLS_ctx.declareError),
+        compact: (__VLS_ctx.isCompactViewport),
+        ultraCompact: (__VLS_ctx.isUltraCompactViewport),
+    }));
+    const __VLS_49 = __VLS_48({
+        ...{ 'onSubmit': {} },
+        hand: (__VLS_ctx.privateHand),
+        submitted: (__VLS_ctx.isDeclareSubmitted),
+        secondsLeft: (__VLS_ctx.declareSecondsLeft),
+        progressPercent: (__VLS_ctx.declareProgressPercent),
+        serverError: (__VLS_ctx.declareError),
+        compact: (__VLS_ctx.isCompactViewport),
+        ultraCompact: (__VLS_ctx.isUltraCompactViewport),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+    let __VLS_51;
+    let __VLS_52;
+    let __VLS_53;
+    const __VLS_54 = {
+        onSubmit: (__VLS_ctx.submitDeclaration)
+    };
+    var __VLS_50;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2058,16 +1651,16 @@ if (__VLS_ctx.showEndPanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
             }));
-            const __VLS_55 = __VLS_54({
+            const __VLS_56 = __VLS_55({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_54));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
         }
     }
     if (__VLS_ctx.settlementPlayers.length) {
@@ -2131,16 +1724,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_58 = __VLS_57({
+                        const __VLS_59 = __VLS_58({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
                     }
                 }
             }
@@ -2177,16 +1770,16 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_60 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                         }));
-                        const __VLS_61 = __VLS_60({
+                        const __VLS_62 = __VLS_61({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_61));
                     }
                 }
             }
@@ -2197,16 +1790,16 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_64 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                     }));
-                    const __VLS_64 = __VLS_63({
+                    const __VLS_65 = __VLS_64({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_64));
                 }
             }
             else {
@@ -2388,50 +1981,6 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['preview-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-raw']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-header']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-desc']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-timer-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-submitted']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-progress']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-progress-fill']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-grid']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-section']} */ ;
-/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish-option-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish-option']} */ ;
-/** @type {__VLS_StyleScopedClasses['fish-option-title']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-mini-cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-tip']} */ ;
-/** @type {__VLS_StyleScopedClasses['error']} */ ;
-/** @type {__VLS_StyleScopedClasses['error']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-section']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-summary-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-stepper']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-stepper-value']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip']} */ ;
-/** @type {__VLS_StyleScopedClasses['accent']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['mini']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-tip']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-zone']} */ ;
-/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-chip']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['declare-card-btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-global-info']} */ ;
@@ -2498,6 +2047,7 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             ActionPanel: ActionPanel,
             CardComp: CardComp,
+            DeclarationPanel: DeclarationPanel,
             GameBoard: GameBoard,
             LobbyPage: LobbyPage,
             LoginPage: LoginPage,
@@ -2556,20 +2106,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
-            declareKongsInput: declareKongsInput,
-            selectedFishCardIds: selectedFishCardIds,
-            selectedFishOptionIds: selectedFishOptionIds,
-            selectedFishCards: selectedFishCards,
-            fishOptions: fishOptions,
-            suggestedFishCardIds: suggestedFishCardIds,
-            suggestedKongCardIds: suggestedKongCardIds,
-            suggestedDeclaredKongs: suggestedDeclaredKongs,
-            maxDeclaredKongs: maxDeclaredKongs,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
-            fishSelectionValid: fishSelectionValid,
-            toggleFishOption: toggleFishOption,
-            toggleFishCard: toggleFishCard,
             clearSelection: clearSelection,
             onPanelSelectionChange: onPanelSelectionChange,
             onPanelSubmit: onPanelSubmit,
@@ -2579,8 +2117,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             cardLabel: cardLabel,
             candidateGroupCards: candidateGroupCards,
             submitDeclaration: submitDeclaration,
-            adjustDeclareKongs: adjustDeclareKongs,
-            useSuggestedDeclaredKongs: useSuggestedDeclaredKongs,
             endPanelTitle: endPanelTitle,
             derivedWinnerId: derivedWinnerId,
             winnerName: winnerName,

@@ -73,8 +73,47 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("lobby-start").click();
 
     await expect(page.getByTestId("game-board")).toBeVisible();
-    const confirmDeclaration = page.getByRole("button", { name: "确认声明" });
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByRole("heading", { name: "声明亮鱼与暗坎" })).toBeVisible();
+    const handPreview = page.getByTestId("declare-hand-preview");
+    await expect(handPreview).toBeVisible();
+    await expect(handPreview.locator("button")).toHaveCount(0);
+    await expect(page.getByTestId("kong-count-0")).toBeVisible();
+    await expect(confirmDeclaration).toContainText(/确认/);
+
+    const declarationMetrics = await page.locator(".declare-panel").evaluate((panel) => {
+      const confirm = panel.querySelector<HTMLElement>(".confirm-declaration");
+      const quantityButtons = Array.from(panel.querySelectorAll<HTMLElement>(".kong-choice"));
+      if (!confirm || quantityButtons.length === 0) {
+        throw new Error("Declaration panel is missing primary controls");
+      }
+      const panelRect = panel.getBoundingClientRect();
+      const confirmRect = confirm.getBoundingClientRect();
+      return {
+        panel: { width: Math.round(panelRect.width), height: Math.round(panelRect.height) },
+        confirm: {
+          width: Math.round(confirmRect.width),
+          height: Math.round(confirmRect.height),
+          top: Math.round(confirmRect.top),
+          bottom: Math.round(confirmRect.bottom),
+        },
+        minimumQuantityWidth: Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().width)),
+        minimumQuantityHeight: Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().height)),
+      };
+    });
+    expect(declarationMetrics.panel.width).toBeGreaterThan(0);
+    expect(declarationMetrics.panel.width).toBeLessThanOrEqual(667);
+    expect(declarationMetrics.panel.height).toBeGreaterThan(0);
+    expect(declarationMetrics.panel.height).toBeLessThanOrEqual(375);
+    expect(declarationMetrics.confirm.width).toBeGreaterThanOrEqual(48);
+    expect(declarationMetrics.confirm.height).toBeGreaterThanOrEqual(48);
+    expect(declarationMetrics.confirm.top).toBeGreaterThanOrEqual(0);
+    expect(declarationMetrics.confirm.bottom).toBeLessThanOrEqual(375);
+    expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(48);
+    expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
+
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
 
@@ -136,6 +175,24 @@ test.describe("compact landscape gameplay", () => {
     }));
     expect(pageOverflow.width).toBeLessThanOrEqual(pageOverflow.viewportWidth);
     expect(pageOverflow.height).toBeLessThanOrEqual(pageOverflow.viewportHeight);
+  });
+});
+
+test.describe("desktop declaration", () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+
+  test("uses the same grouped declaration workflow without compact styling", async ({ page }) => {
+    test.setTimeout(60_000);
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const panel = page.locator(".declare-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel).not.toHaveClass(/compact/);
+    await expect(page.getByTestId("declare-hand-preview")).toBeVisible();
+    await expect(page.getByTestId("declare-hand-preview").locator("button")).toHaveCount(0);
+    await expect(page.getByTestId("kong-count-0")).toBeVisible();
+    await expect(page.getByTestId("confirm-declaration")).toBeVisible();
   });
 });
 
