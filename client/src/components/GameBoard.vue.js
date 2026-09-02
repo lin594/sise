@@ -29,6 +29,7 @@ const rightPlayer = computed(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed(() => orderedPlayers.value[3] ?? null);
 const discardingCardId = ref(null);
+const selectedDiscardCardId = ref(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref([]);
 const showDealAnimation = ref(false);
@@ -311,6 +312,14 @@ const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "co
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const canConfirmDiscard = computed(() => {
+    const selectedId = selectedDiscardCardId.value;
+    if (!selectedId || !canDiscard.value) {
+        return false;
+    }
+    const card = props.privateHand.find((item) => item.id === selectedId);
+    return Boolean(card && canDiscardCard(card));
+});
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed(() => {
     if (props.state?.phase === "waiting") {
@@ -394,7 +403,7 @@ const compactCenterHint = computed(() => {
         return props.turnHint;
     }
     if (canDiscard.value) {
-        return "请选择弃牌";
+        return "选择手牌后确认出牌";
     }
     if (String(props.state?.responsePhase ?? "") === "collective") {
         return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
@@ -468,13 +477,30 @@ function isSystemAction(actionKey) {
 function canDiscardCard(card) {
     return canDiscard.value && card.type !== "jiang" && card.color !== "gold";
 }
-function onDiscard(cardId, event) {
-    if (!canDiscard.value || discardingCardId.value) {
+function selectDiscardCard(cardId) {
+    if (discardingCardId.value) {
         return;
     }
     const picked = props.privateHand.find((card) => card.id === cardId);
-    if (picked && event?.currentTarget instanceof HTMLElement) {
-        triggerDiscardAnimationFromElement(event.currentTarget, picked);
+    if (!picked || !canDiscardCard(picked)) {
+        return;
+    }
+    selectedDiscardCardId.value = cardId;
+}
+function confirmDiscard() {
+    const cardId = selectedDiscardCardId.value;
+    if (!cardId || !canConfirmDiscard.value || discardingCardId.value) {
+        return;
+    }
+    const picked = props.privateHand.find((card) => card.id === cardId);
+    if (!picked) {
+        selectedDiscardCardId.value = null;
+        return;
+    }
+    const cardElement = Array.from(selfHandRef.value?.querySelectorAll("[data-card-id]") ?? [])
+        .find((element) => element.dataset.cardId === cardId);
+    if (cardElement) {
+        triggerDiscardAnimationFromElement(cardElement, picked);
         lastLocalDiscardAt.value = Date.now();
     }
     discardingCardId.value = cardId;
@@ -955,6 +981,14 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
         discardingCardId.value = null;
     }
+    if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
+        selectedDiscardCardId.value = null;
+    }
+});
+watch(canDiscard, (enabled) => {
+    if (!enabled) {
+        selectedDiscardCardId.value = null;
+    }
 });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
@@ -1020,9 +1054,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['playable']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -1084,6 +1120,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
@@ -1889,6 +1926,9 @@ if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-hand-panel" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "hand-toolbar" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "discard-tip" },
     });
@@ -1898,6 +1938,15 @@ if (__VLS_ctx.selfPlayer) {
     }
     if (__VLS_ctx.canDiscard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    }
+    if (__VLS_ctx.canDiscard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.confirmDiscard) },
+            ...{ class: "confirm-discard" },
+            type: "button",
+            'data-testid': "discard-confirm",
+            disabled: (!__VLS_ctx.canConfirmDiscard || Boolean(__VLS_ctx.discardingCardId)),
+        });
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "cards hand" },
@@ -1909,18 +1958,26 @@ if (__VLS_ctx.selfPlayer) {
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    __VLS_ctx.onDiscard(card.id, $event);
+                    __VLS_ctx.selectDiscardCard(card.id);
+                } },
+            ...{ onDblclick: (...[$event]) => {
+                    if (!(__VLS_ctx.selfPlayer))
+                        return;
+                    __VLS_ctx.selectDiscardCard(card.id);
                 } },
             key: (`me-${card.id}`),
             'data-testid': (`hand-card-${card.id}`),
+            'data-card-id': (card.id),
             ...{ class: "hand-card" },
             ...{ class: ({
                     playable: __VLS_ctx.canDiscardCard(card),
                     blocked: !__VLS_ctx.canDiscardCard(card),
                     'gold-blocked': card.color === 'gold',
+                    'discard-selected': __VLS_ctx.selectedDiscardCardId === card.id,
                     'candidate-active': __VLS_ctx.isCandidateCard(card.id),
                     'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
                 }) },
+            'aria-pressed': (__VLS_ctx.selectedDiscardCardId === card.id),
             disabled: (!__VLS_ctx.canDiscardCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
         if (__VLS_ctx.candidateBadgeText(card.id)) {
@@ -2149,7 +2206,9 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -2170,6 +2229,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             topPlayer: topPlayer,
             leftPlayer: leftPlayer,
             discardingCardId: discardingCardId,
+            selectedDiscardCardId: selectedDiscardCardId,
             flights: flights,
             showDealAnimation: showDealAnimation,
             dealerReveal: dealerReveal,
@@ -2193,6 +2253,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             displayTurnPlayerId: displayTurnPlayerId,
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
+            canConfirmDiscard: canConfirmDiscard,
             displayPrivateHand: displayPrivateHand,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,
@@ -2208,7 +2269,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             playerHandCount: playerHandCount,
             isDealer: isDealer,
             canDiscardCard: canDiscardCard,
-            onDiscard: onDiscard,
+            selectDiscardCard: selectDiscardCard,
+            confirmDiscard: confirmDiscard,
             onSubmitAction: onSubmitAction,
             onSelectionChange: onSelectionChange,
             isCandidateCard: isCandidateCard,

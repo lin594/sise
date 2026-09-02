@@ -17,6 +17,44 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.locator(".pending-placeholder")).toHaveCount(0);
 }
 
+async function reachDiscardConfirmation(page: Page): Promise<void> {
+  const deadline = Date.now() + 45_000;
+  const confirm = page.getByTestId("discard-confirm");
+  while (Date.now() < deadline) {
+    if (await confirm.isVisible().catch(() => false)) {
+      return;
+    }
+    const candidates = page.locator(".candidate-item");
+    let candidateActed = false;
+    for (let index = 0; index < await candidates.count(); index += 1) {
+      const candidate = candidates.nth(index);
+      if ((await candidate.isVisible().catch(() => false)) && (await candidate.isEnabled().catch(() => false))) {
+        await candidate.click({ force: true });
+        candidateActed = true;
+        break;
+      }
+    }
+    if (candidateActed) {
+      await page.waitForTimeout(300);
+      continue;
+    }
+    if (await confirm.isVisible().catch(() => false)) {
+      return;
+    }
+    let acted = false;
+    for (const id of ["action-peng", "action-kai", "action-chi", "action-pass", "action-hu"]) {
+      const action = page.getByTestId(id);
+      if ((await action.isVisible().catch(() => false)) && (await action.isEnabled().catch(() => false))) {
+        await action.click({ force: true });
+        acted = true;
+        break;
+      }
+    }
+    await page.waitForTimeout(acted ? 300 : 180);
+  }
+  throw new Error("Timed out before the player received a discard confirmation turn");
+}
+
 test.describe("phone portrait landscape canvas", () => {
   test.use({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true });
 
@@ -128,6 +166,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
     await expect(page.getByTestId("game-tools")).toBeVisible();
+    await reachDiscardConfirmation(page);
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
       const cards = Array.from(element.querySelectorAll<HTMLElement>(".hand-card"));
@@ -136,6 +175,7 @@ test.describe("compact landscape gameplay", () => {
         cardCount: cards.length,
         cardHeights: rects.map((rect) => Math.round(rect.height)),
         cardWidths: rects.map((rect) => Math.round(rect.width)),
+        cardGaps: rects.slice(1).map((rect, index) => Math.round(rect.left - rects[index]!.right)),
         cardRows: new Set(rects.map((rect) => Math.round(rect.y))).size,
         clientHeight: element.clientHeight,
         scrollHeight: element.scrollHeight,
@@ -147,12 +187,40 @@ test.describe("compact landscape gameplay", () => {
     });
     expect(handMetrics.cardCount).toBeGreaterThan(0);
     expect(handMetrics.cardRows).toBe(1);
-    expect(Math.min(...handMetrics.cardWidths)).toBeGreaterThanOrEqual(48);
-    expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(48);
+    expect(Math.min(...handMetrics.cardWidths)).toBeGreaterThanOrEqual(30);
+    expect(Math.max(...handMetrics.cardWidths)).toBeLessThanOrEqual(36);
+    expect(Math.min(...handMetrics.cardGaps)).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...handMetrics.cardGaps)).toBeLessThanOrEqual(4);
+    expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(36);
     expect(handMetrics.scrollWidth).toBeGreaterThan(handMetrics.clientWidth);
     expect(handMetrics.scrollHeight).toBeLessThanOrEqual(handMetrics.clientHeight);
     expect(handMetrics.overflowX).toBe("auto");
     expect(handMetrics.overflowY).toBe("hidden");
+
+    const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
+    const selectedCardTestId = await selectedCard.getAttribute("data-testid");
+    expect(selectedCardTestId).toBeTruthy();
+    const handBeforeSelection = await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
+      cards.map((card) => (card as HTMLElement).dataset.testid),
+    );
+    await selectedCard.click();
+    await selectedCard.dblclick();
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
+    expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
+      cards.map((card) => (card as HTMLElement).dataset.testid),
+    )).toEqual(handBeforeSelection);
+    const discardConfirm = page.getByTestId("discard-confirm");
+    await expect(discardConfirm).toBeEnabled();
+    const discardButtonRect = await discardConfirm.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return { height: Math.round(rect.height), right: Math.round(rect.right), bottom: Math.round(rect.bottom) };
+    });
+    expect(discardButtonRect.height).toBeGreaterThanOrEqual(36);
+    expect(discardButtonRect.height).toBeLessThan(48);
+    expect(discardButtonRect.right).toBeLessThanOrEqual(667);
+    expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
+    await discardConfirm.click();
+    await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
 
     const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
       const first = element.querySelector<HTMLButtonElement>(".btn");

@@ -85,7 +85,25 @@ async function playUntilSettlement(page: Page): Promise<void> {
       await page.waitForTimeout(120);
       continue;
     }
-    if (await clickFirstVisible(page.locator("[data-testid^='hand-card-']"))) {
+    const handCards = page.locator("[data-testid^='hand-card-']");
+    for (let index = 0; index < await handCards.count(); index += 1) {
+      const card = handCards.nth(index);
+      if (!(await card.isVisible().catch(() => false)) || !(await card.isEnabled().catch(() => false))) {
+        continue;
+      }
+      const handBeforeSelection = await snapshotBoard(page);
+      await card.click({ force: true });
+      await card.dblclick({ force: true });
+      await expect(card).toHaveAttribute("aria-pressed", "true");
+      const handAfterSelection = await snapshotBoard(page);
+      expect(handAfterSelection.handCards).toEqual(handBeforeSelection.handCards);
+      const discardConfirm = page.getByTestId("discard-confirm");
+      await expect(discardConfirm).toBeEnabled();
+      await discardConfirm.click({ force: true });
+      acted = true;
+      break;
+    }
+    if (acted) {
       await page.waitForTimeout(120);
       continue;
     }

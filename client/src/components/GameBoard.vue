@@ -390,24 +390,40 @@
 
     <section v-if="selfPlayer" class="self-hand-card">
       <div class="self-hand-panel">
-        <p class="discard-tip">
-          手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 点击弃一张（将牌/金条不可弃）</span>
-        </p>
+        <div class="hand-toolbar">
+          <p class="discard-tip">
+            手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 先选牌，再确认出牌</span>
+          </p>
+          <button
+            v-if="canDiscard"
+            class="confirm-discard"
+            type="button"
+            data-testid="discard-confirm"
+            :disabled="!canConfirmDiscard || Boolean(discardingCardId)"
+            @click="confirmDiscard"
+          >
+            出牌
+          </button>
+        </div>
         <div class="cards hand" ref="selfHandRef">
           <button
             v-for="card in displayPrivateHand"
             :key="`me-${card.id}`"
             :data-testid="`hand-card-${card.id}`"
+            :data-card-id="card.id"
             class="hand-card"
             :class="{
               playable: canDiscardCard(card),
               blocked: !canDiscardCard(card),
               'gold-blocked': card.color === 'gold',
+              'discard-selected': selectedDiscardCardId === card.id,
               'candidate-active': isCandidateCard(card.id),
               'candidate-selected': isSelectedCandidateCard(card.id),
             }"
+            :aria-pressed="selectedDiscardCardId === card.id"
             :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
-            @click="onDiscard(card.id, $event)"
+            @click="selectDiscardCard(card.id)"
+            @dblclick.prevent="selectDiscardCard(card.id)"
           >
             <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
             <CardComp :card="card" size="xl" />
@@ -545,6 +561,7 @@ const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?
 const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
 const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
 const discardingCardId = ref<string | null>(null);
+const selectedDiscardCardId = ref<string | null>(null);
 const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
@@ -869,6 +886,14 @@ const isMyTurn = computed(
 );
 
 const canDiscard = computed(() => Boolean(props.canDiscard));
+const canConfirmDiscard = computed(() => {
+  const selectedId = selectedDiscardCardId.value;
+  if (!selectedId || !canDiscard.value) {
+    return false;
+  }
+  const card = props.privateHand.find((item) => item.id === selectedId);
+  return Boolean(card && canDiscardCard(card));
+});
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed<Card[]>(() => {
   if (props.state?.phase === "waiting") {
@@ -964,7 +989,7 @@ const compactCenterHint = computed(() => {
     return props.turnHint;
   }
   if (canDiscard.value) {
-    return "请选择弃牌";
+    return "选择手牌后确认出牌";
   }
   if (String(props.state?.responsePhase ?? "") === "collective") {
     return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
@@ -1050,13 +1075,31 @@ function canDiscardCard(card: Card): boolean {
   return canDiscard.value && card.type !== "jiang" && card.color !== "gold";
 }
 
-function onDiscard(cardId: string, event?: MouseEvent): void {
-  if (!canDiscard.value || discardingCardId.value) {
+function selectDiscardCard(cardId: string): void {
+  if (discardingCardId.value) {
     return;
   }
   const picked = props.privateHand.find((card) => card.id === cardId);
-  if (picked && event?.currentTarget instanceof HTMLElement) {
-    triggerDiscardAnimationFromElement(event.currentTarget, picked);
+  if (!picked || !canDiscardCard(picked)) {
+    return;
+  }
+  selectedDiscardCardId.value = cardId;
+}
+
+function confirmDiscard(): void {
+  const cardId = selectedDiscardCardId.value;
+  if (!cardId || !canConfirmDiscard.value || discardingCardId.value) {
+    return;
+  }
+  const picked = props.privateHand.find((card) => card.id === cardId);
+  if (!picked) {
+    selectedDiscardCardId.value = null;
+    return;
+  }
+  const cardElement = Array.from(selfHandRef.value?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])
+    .find((element) => element.dataset.cardId === cardId);
+  if (cardElement) {
+    triggerDiscardAnimationFromElement(cardElement, picked);
     lastLocalDiscardAt.value = Date.now();
   }
   discardingCardId.value = cardId;
@@ -1579,8 +1622,17 @@ watch(
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
       discardingCardId.value = null;
     }
+    if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
+      selectedDiscardCardId.value = null;
+    }
   },
 );
+
+watch(canDiscard, (enabled) => {
+  if (!enabled) {
+    selectedDiscardCardId.value = null;
+  }
+});
 </script>
 
 <style scoped>
@@ -2440,6 +2492,14 @@ watch(
   gap: clamp(0.25rem, 0.7vh, 0.5rem);
 }
 
+.hand-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
 .self-area {
   background: #111827;
   border: 1px solid #334155;
@@ -2469,6 +2529,27 @@ watch(
   font-size: 13px;
 }
 
+.confirm-discard {
+  flex: 0 0 auto;
+  min-width: clamp(4.2rem, 8vw, 5.4rem);
+  min-height: clamp(2.35rem, 5.8vh, 2.85rem);
+  padding: 0.35rem 0.8rem;
+  border-radius: 0.78rem;
+  border: 1px solid #38bdf8;
+  background: linear-gradient(145deg, #0284c7, #0369a1);
+  color: #f0f9ff;
+  font-size: clamp(0.86rem, 1.7vh, 1rem);
+  font-weight: 850;
+  box-shadow: 0 5px 14px rgba(3, 105, 161, 0.3);
+}
+
+.confirm-discard:disabled {
+  border-color: #475569;
+  background: #1e293b;
+  color: #64748b;
+  box-shadow: none;
+}
+
 .tone-red {
   background: #e53935;
 }
@@ -2495,7 +2576,7 @@ watch(
   align-content: flex-start;
   overflow: auto;
   padding-right: 0;
-  gap: clamp(0.2rem, 0.7vh, 0.55rem);
+  gap: clamp(2px, 0.3vw, 4px);
 }
 
 .hand-card {
@@ -2504,8 +2585,10 @@ watch(
   padding: 0;
   cursor: pointer;
   border-radius: 10px;
-  min-width: 48px;
-  min-height: 48px;
+  flex: 0 0 clamp(34px, 3.2vw, 44px);
+  width: clamp(34px, 3.2vw, 44px);
+  min-width: 0;
+  min-height: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2520,6 +2603,13 @@ watch(
 
 .hand-card.playable:active {
   transform: translateY(-2px) scale(0.97);
+}
+
+.hand-card.discard-selected {
+  z-index: 2;
+  transform: translateY(-5px);
+  filter: drop-shadow(0 7px 6px rgba(2, 132, 199, 0.38));
+  box-shadow: 0 0 0 2px #38bdf8;
 }
 
 .hand-card.blocked {
@@ -3061,7 +3151,7 @@ watch(
     overflow-y: hidden;
     display: flex;
     flex-wrap: nowrap;
-    gap: 0.3rem;
+    gap: clamp(2px, 0.45vw, 4px);
     min-height: 0;
     align-items: center;
     align-content: center;
@@ -3074,10 +3164,16 @@ watch(
 
   .hand-card {
     border-radius: 0.7vh;
-    flex: 0 0 clamp(48px, 6vw, 56px);
-    width: clamp(48px, 6vw, 56px);
-    min-height: 48px;
+    flex: 0 0 clamp(30px, 5vw, 36px);
+    width: clamp(30px, 5vw, 36px);
+    min-height: 0;
     scroll-snap-align: start;
+  }
+
+  .confirm-discard {
+    min-width: clamp(3.8rem, 10vw, 4.8rem);
+    min-height: clamp(2.25rem, 9.5vh, 2.75rem);
+    padding: 0.25rem 0.65rem;
   }
 
   .hand :deep(.size-xl) {

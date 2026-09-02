@@ -2,6 +2,9 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Stateful game-flow specs share one local Colyseus process. Running them in
+  // parallel makes their operation timers contend and produces false timeouts.
+  workers: 1,
   timeout: 180_000,
   expect: {
     timeout: 10_000,
