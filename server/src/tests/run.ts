@@ -310,6 +310,37 @@ t("lobby: practice auto-fill uses compact bot names", () => {
   );
 });
 
+t("lobby: active disconnect keeps the human name while enabling temporary bot control", () => {
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.state.phase = "playing";
+  room.playerOrder = ["seat_0"];
+  room.seatBySession = new Map([["session-human", "seat_0"]]);
+  room.pendingNameBySession = new Map();
+  room.pendingTokenBySession = new Map();
+  room.baseNameBySeat = new Map([["seat_0", "张阿姨"]]);
+  room.botIds = new Set();
+  room.tickBots = () => {};
+  room.scheduleRoomIdleIfEmpty = () => {};
+
+  const human = new PlayerState();
+  human.clientId = "seat_0";
+  human.name = "张阿姨";
+  human.connected = true;
+  human.isBot = false;
+  human.isConfiguredBot = false;
+  room.state.players.set("seat_0", human);
+
+  room.onLeave({ sessionId: "session-human" });
+
+  assert.equal(human.name, "张阿姨");
+  assert.equal(human.connected, false);
+  assert.equal(human.isBot, true);
+  assert.equal(human.isConfiguredBot, false);
+  assert.equal(room.botIds.has("seat_0"), true);
+  assert.equal(room.state.lastAction, "TAKEOVER seat_0");
+});
+
 t("lobby: a seated player may return the table from any active phase", () => {
   assert.equal(canReturnLobby("seat_0", "declaring"), true);
   assert.equal(canReturnLobby("seat_0", "playing"), true);

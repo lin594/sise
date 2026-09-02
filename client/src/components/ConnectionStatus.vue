@@ -64,6 +64,7 @@ const title = computed(() => {
   }
 });
 const detail = computed(() => {
+  if (props.state === "restored") return "托管期间的最新牌局已同步";
   if (props.state === "offline") return "联网后自动恢复";
   if (props.state === "retry_wait") return "系统会继续重试";
   return "";

@@ -52,7 +52,7 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status">{{ statusText(topPlayer) }}</span>
+            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(topPlayer) }">{{ statusText(topPlayer) }}</span>
           </div>
         </header>
         <p class="seat-meta">牌组 {{ topGroupBlocks.length }} 组 · 暗坎 {{ topPlayer.declaredKongs }}</p>
@@ -130,7 +130,7 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status">{{ statusText(leftPlayer) }}</span>
+            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(leftPlayer) }">{{ statusText(leftPlayer) }}</span>
           </div>
         </header>
         <p class="seat-meta">牌组 {{ leftGroupBlocks.length }} 组 · 暗坎 {{ leftPlayer.declaredKongs }}</p>
@@ -267,7 +267,7 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status">{{ statusText(rightPlayer) }}</span>
+            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(rightPlayer) }">{{ statusText(rightPlayer) }}</span>
           </div>
         </header>
         <p class="seat-meta">牌组 {{ rightGroupBlocks.length }} 组 · 暗坎 {{ rightPlayer.declaredKongs }}</p>
@@ -402,7 +402,7 @@
         <div class="seat-tags">
           <span v-if="isMyTurn" class="tag turn">当前回合</span>
           <span v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-countdown">剩余 {{ seatCountdownSeconds }}s</span>
-          <span class="tag status">{{ statusText(selfPlayer) }}</span>
+          <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(selfPlayer) }">{{ statusText(selfPlayer) }}</span>
         </div>
       </header>
       <div v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-timer-bar self-turn-timer">
@@ -1084,10 +1084,17 @@ function isCurrentTurn(playerId: string): boolean {
 }
 
 function statusText(player: PlayerState): string {
-  if (player.isBot) {
-    return "BOT托管";
+  if (player.isConfiguredBot) {
+    return "机器人";
   }
-  return player.connected ? "在线" : "离线";
+  if (player.isBot) {
+    return props.ultraCompact ? "托管中" : "暂由机器人";
+  }
+  return player.connected ? "真人在线" : "真人离线";
+}
+
+function isTemporaryBotControl(player: PlayerState): boolean {
+  return player.isBot && !player.isConfiguredBot;
 }
 
 function playerHandCount(player: PlayerState): number {
@@ -3348,8 +3355,16 @@ watch(canDiscard, (enabled) => {
 @media (max-width: 720px), (max-height: 380px) {
   .seat-meta,
   .self-info-hint,
-  .tag.status {
+  .tag.status:not(.temporary-control) {
     display: none;
+  }
+
+  .tag.status.temporary-control {
+    display: inline-flex;
+    border-color: rgba(251, 113, 133, 0.82);
+    background: rgba(127, 29, 29, 0.78);
+    color: #fff1f2;
+    font-weight: 800;
   }
 
   .seat-tags {

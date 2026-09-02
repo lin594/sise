@@ -458,10 +458,16 @@ function isCurrentTurn(playerId) {
     return displayTurnPlayerId.value === playerId;
 }
 function statusText(player) {
-    if (player.isBot) {
-        return "BOT托管";
+    if (player.isConfiguredBot) {
+        return "机器人";
     }
-    return player.connected ? "在线" : "离线";
+    if (player.isBot) {
+        return props.ultraCompact ? "托管中" : "暂由机器人";
+    }
+    return player.connected ? "真人在线" : "真人离线";
+}
+function isTemporaryBotControl(player) {
+    return player.isBot && !player.isConfiguredBot;
 }
 function playerHandCount(player) {
     if (player.clientId === props.mySeatId) {
@@ -1157,6 +1163,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
+/** @type {__VLS_StyleScopedClasses['tag']} */ ;
+/** @type {__VLS_StyleScopedClasses['status']} */ ;
+/** @type {__VLS_StyleScopedClasses['temporary-control']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
@@ -1288,6 +1297,7 @@ if (__VLS_ctx.topPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "tag status" },
+        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.topPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.topPlayer));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1448,6 +1458,7 @@ if (__VLS_ctx.leftPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "tag status" },
+        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.leftPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.leftPlayer));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1712,6 +1723,7 @@ if (__VLS_ctx.rightPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "tag status" },
+        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.rightPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.rightPlayer));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -2034,6 +2046,7 @@ if (__VLS_ctx.selfPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "tag status" },
+        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.selfPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.selfPlayer));
     if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
@@ -2406,6 +2419,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             hasSeatAction: hasSeatAction,
             isCurrentTurn: isCurrentTurn,
             statusText: statusText,
+            isTemporaryBotControl: isTemporaryBotControl,
             playerHandCount: playerHandCount,
             isDealer: isDealer,
             canDiscardCard: canDiscardCard,

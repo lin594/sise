@@ -380,7 +380,7 @@ export class FourColorGameRoom extends Room<GameState> {
     } else {
       player.isBot = true;
       player.botStrength = 50;
-      player.name = `${baseName} [BOT]`;
+      player.name = baseName;
       this.botIds.add(seatId);
       this.state.lastAction = `TAKEOVER ${seatId}`;
     }
