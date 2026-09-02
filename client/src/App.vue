@@ -108,6 +108,7 @@
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
+        :seat-direction="displayPreferences.seatDirection"
         :selection-mode="selectionMode"
         :selected-candidate-id="selectedCandidateId"
         :active-candidates="activeCandidates"

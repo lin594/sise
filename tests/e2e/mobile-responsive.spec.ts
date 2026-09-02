@@ -286,6 +286,12 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("settings-panel")).toBeVisible();
     await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
+    await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
+    const initialSeatIds = {
+      left: await page.getByTestId("player-left").getAttribute("data-player-id"),
+      right: await page.getByTestId("player-right").getAttribute("data-player-id"),
+      top: await page.getByTestId("player-top").getAttribute("data-player-id"),
+    };
     await expect(page.locator(".hand [data-card-mode='large']").first()).toBeVisible();
     await page.getByTestId("card-mode-own-long").click();
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
@@ -296,6 +302,17 @@ test.describe("compact landscape gameplay", () => {
       tableCards: "long",
       seatDirection: "counterclockwise",
     });
+    await page.getByTestId("seat-direction-clockwise").click();
+    await expect(page.getByTestId("seat-direction-clockwise")).toHaveClass(/active/);
+    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.right!);
+    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.left!);
+    await expect(page.getByTestId("player-top")).toHaveAttribute("data-player-id", initialSeatIds.top!);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
+      seatDirection: "clockwise",
+    });
+    await page.getByTestId("seat-direction-counterclockwise").click();
+    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.left!);
+    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
     await page.getByTestId("card-mode-own-adaptive").click();
     await page.getByTestId("card-mode-table-adaptive").click();
     await page.getByTestId("settings-rules").click();

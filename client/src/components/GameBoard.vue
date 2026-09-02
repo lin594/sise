@@ -22,6 +22,8 @@
         v-if="topPlayer"
         :ref="(el) => topPlayer && setSeatRef(topPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-top"
+        data-testid="player-top"
+        :data-player-id="topPlayer.clientId"
         :class="{
           active: isCurrentTurn(topPlayer.clientId),
           dealer: isDealer(topPlayer.clientId),
@@ -93,6 +95,8 @@
         v-if="leftPlayer"
         :ref="(el) => leftPlayer && setSeatRef(leftPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-left"
+        data-testid="player-left"
+        :data-player-id="leftPlayer.clientId"
         :class="{
           active: isCurrentTurn(leftPlayer.clientId),
           dealer: isDealer(leftPlayer.clientId),
@@ -211,6 +215,8 @@
         v-if="rightPlayer"
         :ref="(el) => rightPlayer && setSeatRef(rightPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-right"
+        data-testid="player-right"
+        :data-player-id="rightPlayer.clientId"
         :class="{
           active: isCurrentTurn(rightPlayer.clientId),
           dealer: isDealer(rightPlayer.clientId),
@@ -349,6 +355,8 @@
     <section
       v-if="selfPlayer"
       class="self-info-card"
+      data-testid="player-self"
+      :data-player-id="selfPlayer.clientId"
       :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
@@ -462,6 +470,7 @@ import type {
   Card,
   PlayerState,
   RenderedCardMode,
+  SeatDirection,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
 
@@ -517,6 +526,7 @@ const props = defineProps<{
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
+  seatDirection?: SeatDirection;
   selectionMode?: "kai" | "peng" | "chi" | null;
   selectedCandidateId?: string | null;
   activeCandidates?: ActionCandidate[];
@@ -555,9 +565,13 @@ const orderedPlayers = computed<PlayerState[]>(() => {
 });
 
 const selfPlayer = computed<PlayerState | null>(() => orderedPlayers.value[0] ?? null);
-const rightPlayer = computed<PlayerState | null>(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed<PlayerState | null>(() => orderedPlayers.value[2] ?? null);
-const leftPlayer = computed<PlayerState | null>(() => orderedPlayers.value[3] ?? null);
+const rightPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? orderedPlayers.value[3] ?? null : orderedPlayers.value[1] ?? null,
+);
+const leftPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? orderedPlayers.value[1] ?? null : orderedPlayers.value[3] ?? null,
+);
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
 const lastLocalDiscardAt = ref(0);

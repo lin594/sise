@@ -25,9 +25,9 @@ const orderedPlayers = computed(() => {
     return [...list.slice(idx), ...list.slice(0, idx)];
 });
 const selfPlayer = computed(() => orderedPlayers.value[0] ?? null);
-const rightPlayer = computed(() => orderedPlayers.value[1] ?? null);
 const topPlayer = computed(() => orderedPlayers.value[2] ?? null);
-const leftPlayer = computed(() => orderedPlayers.value[3] ?? null);
+const rightPlayer = computed(() => props.seatDirection === "clockwise" ? orderedPlayers.value[3] ?? null : orderedPlayers.value[1] ?? null);
+const leftPlayer = computed(() => props.seatDirection === "clockwise" ? orderedPlayers.value[1] ?? null : orderedPlayers.value[3] ?? null);
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
 const lastLocalDiscardAt = ref(0);
@@ -1209,6 +1209,8 @@ if (__VLS_ctx.topPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ref: ((el) => __VLS_ctx.topPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.topPlayer.clientId, el)),
         ...{ class: "player-card player-top" },
+        'data-testid': "player-top",
+        'data-player-id': (__VLS_ctx.topPlayer.clientId),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.topPlayer.clientId),
@@ -1362,6 +1364,8 @@ if (__VLS_ctx.leftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ref: ((el) => __VLS_ctx.leftPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.leftPlayer.clientId, el)),
         ...{ class: "player-card player-left" },
+        'data-testid': "player-left",
+        'data-player-id': (__VLS_ctx.leftPlayer.clientId),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.leftPlayer.clientId),
@@ -1594,6 +1598,8 @@ if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ref: ((el) => __VLS_ctx.rightPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.rightPlayer.clientId, el)),
         ...{ class: "player-card player-right" },
+        'data-testid': "player-right",
+        'data-player-id': (__VLS_ctx.rightPlayer.clientId),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.rightPlayer.clientId),
@@ -1912,6 +1918,8 @@ var __VLS_54;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-info-card" },
+        'data-testid': "player-self",
+        'data-player-id': (__VLS_ctx.selfPlayer.clientId),
         ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         ref: "selfZoneRef",
     });
@@ -2296,8 +2304,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             ActionPanel: ActionPanel,
             CardComp: CardComp,
             selfPlayer: selfPlayer,
-            rightPlayer: rightPlayer,
             topPlayer: topPlayer,
+            rightPlayer: rightPlayer,
             leftPlayer: leftPlayer,
             discardingCardId: discardingCardId,
             selectedDiscardCardId: selectedDiscardCardId,

@@ -83,6 +83,36 @@
             </button>
           </div>
         </div>
+        <div class="preference-group">
+          <div class="preference-copy">
+            <strong>玩家摆放</strong>
+            <small>只调整你看到的左右方向</small>
+          </div>
+          <div class="direction-options" role="radiogroup" aria-label="玩家摆放方向">
+            <button
+              type="button"
+              role="radio"
+              data-testid="seat-direction-clockwise"
+              :aria-checked="props.modelValue.seatDirection === 'clockwise'"
+              :class="{ active: props.modelValue.seatDirection === 'clockwise' }"
+              @click="setSeatDirection('clockwise')"
+            >
+              <span aria-hidden="true">↻</span>
+              <span><strong>顺时针</strong><small>下家在左</small></span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              data-testid="seat-direction-counterclockwise"
+              :aria-checked="props.modelValue.seatDirection === 'counterclockwise'"
+              :class="{ active: props.modelValue.seatDirection === 'counterclockwise' }"
+              @click="setSeatDirection('counterclockwise')"
+            >
+              <span aria-hidden="true">↺</span>
+              <span><strong>逆时针</strong><small>下家在右</small></span>
+            </button>
+          </div>
+        </div>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
@@ -107,7 +137,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import type { CardDisplayMode, GameDisplayPreferences } from "@/types/game";
+import type { CardDisplayMode, GameDisplayPreferences, SeatDirection } from "@/types/game";
 
 const props = defineProps<{
   modelValue: GameDisplayPreferences;
@@ -129,6 +159,10 @@ const cardModes: Array<{ value: CardDisplayMode; label: string; sample: string }
 
 function setCardMode(key: "ownCards" | "tableCards", mode: CardDisplayMode): void {
   emit("update:modelValue", { ...props.modelValue, [key]: mode });
+}
+
+function setSeatDirection(direction: SeatDirection): void {
+  emit("update:modelValue", { ...props.modelValue, seatDirection: direction });
 }
 
 function openRules(): void {
@@ -267,6 +301,7 @@ function confirmExit(): void {
 }
 
 .mode-options button,
+.direction-options button,
 .rules-entry {
   width: 100%;
   min-height: 2.75rem;
@@ -291,6 +326,38 @@ function confirmExit(): void {
   border-color: rgba(56, 189, 248, 0.88);
   background: rgba(8, 47, 73, 0.78);
   box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2) inset;
+}
+
+.direction-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.direction-options button {
+  min-height: 2.85rem;
+  padding: 0.3rem 0.45rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.42rem;
+  text-align: left;
+}
+
+.direction-options button > span:first-child {
+  color: #fbbf24;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.direction-options button > span:last-child {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.direction-options button.active {
+  border-color: rgba(56, 189, 248, 0.88);
+  background: rgba(8, 47, 73, 0.78);
 }
 
 .mode-sample {
