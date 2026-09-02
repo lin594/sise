@@ -481,6 +481,32 @@ function statusText(player) {
     }
     return player.connected ? "真人在线" : "真人离线";
 }
+function seatMetaText(groupCount, declaredKongs) {
+    const parts = [];
+    if (groupCount > 0) {
+        parts.push(`牌组 ${groupCount} 组`);
+    }
+    if (declaredKongs > 0) {
+        parts.push(`暗坎 ${declaredKongs}`);
+    }
+    return parts.join(" · ");
+}
+function playerAccessibleSummary(player, groupCount) {
+    const parts = [
+        player.clientId === props.mySeatId ? `${player.name}，你的位置` : player.name,
+        `剩余手牌 ${playerHandCount(player)} 张`,
+        `公开牌组 ${groupCount} 组`,
+        `暗坎 ${Number(player.declaredKongs ?? 0)} 组`,
+        statusText(player),
+    ];
+    if (isDealer(player.clientId)) {
+        parts.push("庄家");
+    }
+    if (isCurrentTurn(player.clientId)) {
+        parts.push("当前回合");
+    }
+    return parts.join("，");
+}
 function isTemporaryBotControl(player) {
     return player.isBot && !player.isConfiguredBot;
 }
@@ -1310,6 +1336,8 @@ if (__VLS_ctx.topPlayer) {
         ...{ class: "player-card player-top" },
         'data-testid': "player-top",
         'data-player-id': (__VLS_ctx.topPlayer.clientId),
+        role: "group",
+        'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.topPlayer, __VLS_ctx.topGroupBlocks.length)),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.topPlayer.clientId),
@@ -1379,11 +1407,12 @@ if (__VLS_ctx.topPlayer) {
         ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.topPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.topPlayer));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "seat-meta" },
-    });
-    (__VLS_ctx.topGroupBlocks.length);
-    (__VLS_ctx.topPlayer.declaredKongs);
+    if (__VLS_ctx.seatMetaText(__VLS_ctx.topGroupBlocks.length, __VLS_ctx.topPlayer.declaredKongs)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "seat-meta" },
+        });
+        (__VLS_ctx.seatMetaText(__VLS_ctx.topGroupBlocks.length, __VLS_ctx.topPlayer.declaredKongs));
+    }
     if (__VLS_ctx.topGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
@@ -1467,6 +1496,8 @@ if (__VLS_ctx.leftPlayer) {
         ...{ class: "player-card player-left" },
         'data-testid': "player-left",
         'data-player-id': (__VLS_ctx.leftPlayer.clientId),
+        role: "group",
+        'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.leftPlayer, __VLS_ctx.leftGroupBlocks.length)),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.leftPlayer.clientId),
@@ -1536,11 +1567,12 @@ if (__VLS_ctx.leftPlayer) {
         ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.leftPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.leftPlayer));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "seat-meta" },
-    });
-    (__VLS_ctx.leftGroupBlocks.length);
-    (__VLS_ctx.leftPlayer.declaredKongs);
+    if (__VLS_ctx.seatMetaText(__VLS_ctx.leftGroupBlocks.length, __VLS_ctx.leftPlayer.declaredKongs)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "seat-meta" },
+        });
+        (__VLS_ctx.seatMetaText(__VLS_ctx.leftGroupBlocks.length, __VLS_ctx.leftPlayer.declaredKongs));
+    }
     if (__VLS_ctx.leftGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
@@ -1732,6 +1764,8 @@ if (__VLS_ctx.rightPlayer) {
         ...{ class: "player-card player-right" },
         'data-testid': "player-right",
         'data-player-id': (__VLS_ctx.rightPlayer.clientId),
+        role: "group",
+        'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.rightPlayer, __VLS_ctx.rightGroupBlocks.length)),
         ...{ class: ({
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId),
                 dealer: __VLS_ctx.isDealer(__VLS_ctx.rightPlayer.clientId),
@@ -1801,11 +1835,12 @@ if (__VLS_ctx.rightPlayer) {
         ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.rightPlayer) }) },
     });
     (__VLS_ctx.statusText(__VLS_ctx.rightPlayer));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "seat-meta" },
-    });
-    (__VLS_ctx.rightGroupBlocks.length);
-    (__VLS_ctx.rightPlayer.declaredKongs);
+    if (__VLS_ctx.seatMetaText(__VLS_ctx.rightGroupBlocks.length, __VLS_ctx.rightPlayer.declaredKongs)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "seat-meta" },
+        });
+        (__VLS_ctx.seatMetaText(__VLS_ctx.rightGroupBlocks.length, __VLS_ctx.rightPlayer.declaredKongs));
+    }
     if (__VLS_ctx.rightGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
@@ -2046,6 +2081,8 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "self-info-card" },
         'data-testid': "player-self",
         'data-player-id': (__VLS_ctx.selfPlayer.clientId),
+        role: "group",
+        'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.selfPlayer, __VLS_ctx.selfGroupBlocks.length)),
         ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         ref: "selfZoneRef",
     });
@@ -2089,10 +2126,12 @@ if (__VLS_ctx.selfPlayer) {
             size: "xs",
         }, ...__VLS_functionalComponentArgsRest(__VLS_55));
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-    (__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer));
-    (__VLS_ctx.selfGroupBlocks.length);
-    (__VLS_ctx.selfPlayer.declaredKongs);
+    if (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            'data-testid': "self-seat-meta",
+        });
+        (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs));
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
@@ -2539,6 +2578,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             hasSeatAction: hasSeatAction,
             isCurrentTurn: isCurrentTurn,
             statusText: statusText,
+            seatMetaText: seatMetaText,
+            playerAccessibleSummary: playerAccessibleSummary,
             isTemporaryBotControl: isTemporaryBotControl,
             playerHandCount: playerHandCount,
             isDealer: isDealer,

@@ -31,6 +31,8 @@
         class="player-card player-top"
         data-testid="player-top"
         :data-player-id="topPlayer.clientId"
+        role="group"
+        :aria-label="playerAccessibleSummary(topPlayer, topGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(topPlayer.clientId),
           dealer: isDealer(topPlayer.clientId),
@@ -62,7 +64,9 @@
             <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(topPlayer) }">{{ statusText(topPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">牌组 {{ topGroupBlocks.length }} 组 · 暗坎 {{ topPlayer.declaredKongs }}</p>
+        <p v-if="seatMetaText(topGroupBlocks.length, topPlayer.declaredKongs)" class="seat-meta">
+          {{ seatMetaText(topGroupBlocks.length, topPlayer.declaredKongs) }}
+        </p>
         <div v-if="topGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in topGroupBlocks"
@@ -112,6 +116,8 @@
         class="player-card player-left"
         data-testid="player-left"
         :data-player-id="leftPlayer.clientId"
+        role="group"
+        :aria-label="playerAccessibleSummary(leftPlayer, leftGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(leftPlayer.clientId),
           dealer: isDealer(leftPlayer.clientId),
@@ -143,7 +149,9 @@
             <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(leftPlayer) }">{{ statusText(leftPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">牌组 {{ leftGroupBlocks.length }} 组 · 暗坎 {{ leftPlayer.declaredKongs }}</p>
+        <p v-if="seatMetaText(leftGroupBlocks.length, leftPlayer.declaredKongs)" class="seat-meta">
+          {{ seatMetaText(leftGroupBlocks.length, leftPlayer.declaredKongs) }}
+        </p>
         <div v-if="leftGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in leftGroupBlocks"
@@ -249,6 +257,8 @@
         class="player-card player-right"
         data-testid="player-right"
         :data-player-id="rightPlayer.clientId"
+        role="group"
+        :aria-label="playerAccessibleSummary(rightPlayer, rightGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(rightPlayer.clientId),
           dealer: isDealer(rightPlayer.clientId),
@@ -280,7 +290,9 @@
             <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(rightPlayer) }">{{ statusText(rightPlayer) }}</span>
           </div>
         </header>
-        <p class="seat-meta">牌组 {{ rightGroupBlocks.length }} 组 · 暗坎 {{ rightPlayer.declaredKongs }}</p>
+        <p v-if="seatMetaText(rightGroupBlocks.length, rightPlayer.declaredKongs)" class="seat-meta">
+          {{ seatMetaText(rightGroupBlocks.length, rightPlayer.declaredKongs) }}
+        </p>
         <div v-if="rightGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in rightGroupBlocks"
@@ -406,6 +418,8 @@
       class="self-info-card"
       data-testid="player-self"
       :data-player-id="selfPlayer.clientId"
+      role="group"
+      :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
       :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
@@ -419,7 +433,9 @@
               <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
             </span>
           </div>
-          <p>手牌 {{ playerHandCount(selfPlayer) }} 张 · 牌组 {{ selfGroupBlocks.length }} 组 · 暗坎 {{ selfPlayer.declaredKongs }}</p>
+          <p v-if="seatMetaText(selfGroupBlocks.length, selfPlayer.declaredKongs)" data-testid="self-seat-meta">
+            {{ seatMetaText(selfGroupBlocks.length, selfPlayer.declaredKongs) }}
+          </p>
         </div>
         <div class="seat-tags">
           <span v-if="isMyTurn" class="tag turn">当前回合</span>
@@ -1167,6 +1183,34 @@ function statusText(player: PlayerState): string {
     return props.ultraCompact ? "托管中" : "暂由机器人";
   }
   return player.connected ? "真人在线" : "真人离线";
+}
+
+function seatMetaText(groupCount: number, declaredKongs: number): string {
+  const parts: string[] = [];
+  if (groupCount > 0) {
+    parts.push(`牌组 ${groupCount} 组`);
+  }
+  if (declaredKongs > 0) {
+    parts.push(`暗坎 ${declaredKongs}`);
+  }
+  return parts.join(" · ");
+}
+
+function playerAccessibleSummary(player: PlayerState, groupCount: number): string {
+  const parts = [
+    player.clientId === props.mySeatId ? `${player.name}，你的位置` : player.name,
+    `剩余手牌 ${playerHandCount(player)} 张`,
+    `公开牌组 ${groupCount} 组`,
+    `暗坎 ${Number(player.declaredKongs ?? 0)} 组`,
+    statusText(player),
+  ];
+  if (isDealer(player.clientId)) {
+    parts.push("庄家");
+  }
+  if (isCurrentTurn(player.clientId)) {
+    parts.push("当前回合");
+  }
+  return parts.join("，");
 }
 
 function isTemporaryBotControl(player: PlayerState): boolean {

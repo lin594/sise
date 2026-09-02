@@ -280,6 +280,14 @@ test.describe("compact landscape gameplay", () => {
     await expectSimplifiedTableCenter(page);
     await expect(page.getByText("暂无牌组")).toHaveCount(0);
     await expect(page.locator(".self-groups-card")).toHaveClass(/empty/);
+    await expect(page.getByText(/牌组 0 组/)).toHaveCount(0);
+    await expect(page.getByText(/暗坎 0(?:\D|$)/)).toHaveCount(0);
+    await expect(page.locator(".self-head")).not.toContainText(/手牌 \d+ 张/);
+    const seatAccessibleLabels = await page.locator(".player-card[role='group'], .self-info-card[role='group']")
+      .evaluateAll((seats) => seats.map((seat) => seat.getAttribute("aria-label") ?? ""));
+    expect(seatAccessibleLabels).toHaveLength(4);
+    expect(seatAccessibleLabels.every((label) => /剩余手牌 \d+ 张/.test(label))).toBe(true);
+    expect(seatAccessibleLabels.every((label) => /公开牌组 \d+ 组/.test(label))).toBe(true);
     await expectDedicatedGameHeader(page);
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();
