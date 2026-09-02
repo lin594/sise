@@ -104,7 +104,6 @@
         :response-phase="state?.responsePhase || ''"
         :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
-        :embedded-action-panel="isCompactViewport"
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
@@ -117,19 +116,6 @@
         @selection-change="onPanelSelectionChange"
       />
     </template>
-
-    <ActionPanel
-      v-if="isPlaying && !isCompactViewport"
-      :actions="availableActions"
-      :can-act="canAct"
-      :is-current-turn="isMyTurn"
-      :response-phase="state?.responsePhase || ''"
-      :current-player-name="currentPlayerName"
-      :selection-mode="selectionMode"
-      :selected-candidate-id="selectedCandidateId"
-      @submit="onPanelSubmit"
-      @selection-change="onPanelSelectionChange"
-    />
 
     <div v-if="isPlaying && selectionMode" class="candidate-mask">
       <div class="candidate-panel">
@@ -390,7 +376,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import ActionPanel from "@/components/ActionPanel.vue";
 import CardComp from "@/components/Card.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";

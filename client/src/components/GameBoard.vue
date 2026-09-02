@@ -395,16 +395,6 @@
           <p class="discard-tip">
             手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 先选牌，再确认出牌</span>
           </p>
-          <button
-            v-if="canDiscard"
-            class="confirm-discard"
-            type="button"
-            data-testid="discard-confirm"
-            :disabled="!canConfirmDiscard || Boolean(discardingCardId)"
-            @click="confirmDiscard"
-          >
-            出牌
-          </button>
         </div>
         <div class="cards hand" ref="selfHandRef">
           <button
@@ -436,15 +426,19 @@
     </section>
 
     <ActionPanel
-      v-if="props.embeddedActionPanel && props.state?.phase === 'playing'"
+      v-if="props.state?.phase === 'playing'"
       class="embedded-actions action-dock"
       :actions="props.actions ?? []"
       :can-act="Boolean(props.canAct)"
+      :can-discard="canDiscard"
+      :has-discard-selection="Boolean(selectedDiscardCardId)"
+      :discard-pending="Boolean(discardingCardId)"
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
       :current-player-name="props.currentPlayerName ?? '-'"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
+      @confirm-discard="confirmDiscard"
       @submit="onSubmitAction"
       @selection-change="onSelectionChange"
     />
@@ -527,7 +521,6 @@ const props = defineProps<{
   responsePhase?: string;
   currentPlayerName?: string;
   turnHint?: string;
-  embeddedActionPanel?: boolean;
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
@@ -841,7 +834,7 @@ function flowCardCount(playerId: string): number {
 
 function visibleFlowCards(playerId: string): Card[] {
   const cards = flowCards(playerId);
-  const limit = props.ultraCompact ? 8 : props.embeddedActionPanel ? 10 : 14;
+  const limit = props.ultraCompact ? 8 : 14;
   return cards.slice(Math.max(0, cards.length - limit));
 }
 
@@ -1651,7 +1644,7 @@ watch(canDiscard, (enabled) => {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 23%) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(10rem, 23%) minmax(0, 1fr) clamp(12rem, 22vw, 18rem);
   grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
   gap: clamp(0.3rem, 0.9vh, 0.5rem);
   overflow: hidden;
@@ -1810,7 +1803,7 @@ watch(canDiscard, (enabled) => {
 }
 
 .self-hand-card {
-  grid-column: 2 / 4;
+  grid-column: 2;
   overflow: hidden;
 }
 
@@ -2592,27 +2585,6 @@ watch(canDiscard, (enabled) => {
   font-size: 13px;
 }
 
-.confirm-discard {
-  flex: 0 0 auto;
-  min-width: clamp(4.2rem, 8vw, 5.4rem);
-  min-height: clamp(2.35rem, 5.8vh, 2.85rem);
-  padding: 0.35rem 0.8rem;
-  border-radius: 0.78rem;
-  border: 1px solid #38bdf8;
-  background: linear-gradient(145deg, #0284c7, #0369a1);
-  color: #f0f9ff;
-  font-size: clamp(0.86rem, 1.7vh, 1rem);
-  font-weight: 850;
-  box-shadow: 0 5px 14px rgba(3, 105, 161, 0.3);
-}
-
-.confirm-discard:disabled {
-  border-color: #475569;
-  background: #1e293b;
-  color: #64748b;
-  box-shadow: none;
-}
-
 .tone-red {
   background: #e53935;
 }
@@ -2723,12 +2695,23 @@ watch(canDiscard, (enabled) => {
 }
 
 .embedded-actions {
-  flex: 0 0 auto;
+  margin: 0;
+  background: #0b1220;
+  position: relative;
+  z-index: 2;
+  border: 1px solid #1e293b;
+  border-radius: clamp(0.45rem, 1vh, 0.75rem);
+  padding: clamp(0.2rem, 0.65vh, 0.45rem);
+  overflow: hidden;
   min-height: 0;
 }
 
-.embedded-actions-side {
-  margin-top: auto;
+.action-dock {
+  grid-column: 3;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: center;
 }
 
 .embedded-actions :deep(.panel) {
@@ -2739,7 +2722,7 @@ watch(canDiscard, (enabled) => {
 }
 
 .embedded-actions :deep(.hint) {
-  display: none;
+  font-size: clamp(0.62rem, 1.35vh, 0.8rem);
 }
 
 .fx-layer {
@@ -3247,12 +3230,6 @@ watch(canDiscard, (enabled) => {
     scroll-snap-align: start;
   }
 
-  .confirm-discard {
-    min-width: clamp(3.8rem, 10vw, 4.8rem);
-    min-height: clamp(2.25rem, 9.5vh, 2.75rem);
-    padding: 0.25rem 0.65rem;
-  }
-
   .hand :deep(.size-xl.mode-long) {
     width: clamp(0.9rem, 2.2vw, 1.3rem);
     height: clamp(2.7rem, 6.6vh, 3.8rem);
@@ -3266,22 +3243,10 @@ watch(canDiscard, (enabled) => {
   }
 
   .embedded-actions {
-    margin: 0;
     background: #0b1220;
-    position: relative;
-    z-index: 2;
     border: 1px solid #1e293b;
     border-radius: 1.1vh;
     padding: 0.35vh;
-    overflow: hidden;
-  }
-
-  .action-dock {
-    grid-column: 3;
-    min-width: 0;
-    min-height: 0;
-    display: grid;
-    align-content: center;
   }
 
   .embedded-actions :deep(.actions) {

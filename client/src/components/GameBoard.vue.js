@@ -261,7 +261,7 @@ function flowCardCount(playerId) {
 }
 function visibleFlowCards(playerId) {
     const cards = flowCards(playerId);
-    const limit = props.ultraCompact ? 8 : props.embeddedActionPanel ? 10 : 14;
+    const limit = props.ultraCompact ? 8 : 14;
     return cards.slice(Math.max(0, cards.length - limit));
 }
 function isActiveDiscardCard(playerId, card, index) {
@@ -1063,7 +1063,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['playable']} */ ;
@@ -1140,7 +1139,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
@@ -2040,15 +2038,6 @@ if (__VLS_ctx.selfPlayer) {
     if (__VLS_ctx.canDiscard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
-    if (__VLS_ctx.canDiscard) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.confirmDiscard) },
-            ...{ class: "confirm-discard" },
-            type: "button",
-            'data-testid': "discard-confirm",
-            disabled: (!__VLS_ctx.canConfirmDiscard || Boolean(__VLS_ctx.discardingCardId)),
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "cards hand" },
         ref: "selfHandRef",
@@ -2103,15 +2092,19 @@ if (__VLS_ctx.selfPlayer) {
         }, ...__VLS_functionalComponentArgsRest(__VLS_58));
     }
 }
-if (props.embeddedActionPanel && props.state?.phase === 'playing') {
+if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
     const __VLS_61 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        ...{ 'onConfirmDiscard': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
         canAct: (Boolean(props.canAct)),
+        canDiscard: (__VLS_ctx.canDiscard),
+        hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+        discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
@@ -2119,11 +2112,15 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
     const __VLS_62 = __VLS_61({
+        ...{ 'onConfirmDiscard': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
         canAct: (Boolean(props.canAct)),
+        canDiscard: (__VLS_ctx.canDiscard),
+        hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+        discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
@@ -2134,9 +2131,12 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
     let __VLS_65;
     let __VLS_66;
     const __VLS_67 = {
-        onSubmit: (__VLS_ctx.onSubmitAction)
+        onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
     const __VLS_68 = {
+        onSubmit: (__VLS_ctx.onSubmitAction)
+    };
+    const __VLS_69 = {
         onSelectionChange: (__VLS_ctx.onSelectionChange)
     };
     var __VLS_63;
@@ -2159,16 +2159,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_70 = __VLS_69({
+        const __VLS_71 = __VLS_70({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2311,7 +2311,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
-/** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -2356,7 +2355,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             displayTurnPlayerId: displayTurnPlayerId,
             isMyTurn: isMyTurn,
             canDiscard: canDiscard,
-            canConfirmDiscard: canConfirmDiscard,
             displayPrivateHand: displayPrivateHand,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,

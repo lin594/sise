@@ -251,6 +251,11 @@ test.describe("compact landscape gameplay", () => {
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");
     expect(selectedCardTestId).toBeTruthy();
+    const discardConfirm = page.getByTestId("discard-confirm");
+    await expect(page.locator(".action-dock").getByTestId("discard-confirm")).toBeVisible();
+    await expect(page.locator(".hand-toolbar").getByTestId("discard-confirm")).toHaveCount(0);
+    await expect(discardConfirm).toBeDisabled();
+    await expect(discardConfirm).toHaveText("先选牌");
     const handBeforeSelection = await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     );
@@ -260,14 +265,14 @@ test.describe("compact landscape gameplay", () => {
     expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handBeforeSelection);
-    const discardConfirm = page.getByTestId("discard-confirm");
     await expect(discardConfirm).toBeEnabled();
+    await expect(discardConfirm).toHaveText("出牌");
     const discardButtonRect = await discardConfirm.evaluate((button) => {
       const rect = button.getBoundingClientRect();
       return { height: Math.round(rect.height), right: Math.round(rect.right), bottom: Math.round(rect.bottom) };
     });
     expect(discardButtonRect.height).toBeGreaterThanOrEqual(36);
-    expect(discardButtonRect.height).toBeLessThan(48);
+    expect(discardButtonRect.height).toBeLessThanOrEqual(48);
     expect(discardButtonRect.right).toBeLessThanOrEqual(667);
     expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
     await discardConfirm.click();

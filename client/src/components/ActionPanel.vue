@@ -1,9 +1,20 @@
 ﻿<template>
-  <div class="panel" :class="{ locked: !canAct }">
+  <div class="panel" :class="{ locked: panelLocked }">
     <p class="hint">{{ panelHint }}</p>
-    <div class="actions">
+    <div class="actions" :class="{ 'discard-mode': canDiscard }">
       <button
-        v-for="item in normalized"
+        v-if="canDiscard"
+        type="button"
+        class="btn discard-action"
+        data-testid="discard-confirm"
+        :class="{ enabled: hasDiscardSelection && !discardPending }"
+        :disabled="!hasDiscardSelection || discardPending"
+        @click="emit('confirmDiscard')"
+      >
+        {{ hasDiscardSelection ? (discardPending ? "出牌中…" : "出牌") : "先选牌" }}
+      </button>
+      <button
+        v-for="item in canDiscard ? [] : normalized"
         :key="item.key"
         :data-testid="`action-${item.key}`"
         class="btn"
@@ -35,6 +46,9 @@ const props = withDefaults(
     currentPlayerName?: string;
     selectionMode?: SelectionMode;
     selectedCandidateId?: string | null;
+    canDiscard?: boolean;
+    hasDiscardSelection?: boolean;
+    discardPending?: boolean;
   }>(),
   {
     canAct: false,
@@ -43,11 +57,15 @@ const props = withDefaults(
     currentPlayerName: "-",
     selectionMode: null,
     selectedCandidateId: null,
+    canDiscard: false,
+    hasDiscardSelection: false,
+    discardPending: false,
   },
 );
 
 const emit = defineEmits<{
   submit: [request: ActionRequest];
+  confirmDiscard: [];
   selectionChange: [payload: { mode: SelectionMode; selectedCandidateId: string | null }];
 }>();
 
@@ -100,8 +118,12 @@ const normalized = computed(() => {
 });
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
+const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 
 const panelHint = computed(() => {
+  if (props.canDiscard) {
+    return props.hasDiscardSelection ? "已选牌，请确认出牌" : "请先从手牌中选择一张";
+  }
   if (!props.canAct) {
     return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
   }
@@ -231,6 +253,14 @@ function onClick(item: PanelAction): void {
   gap: clamp(0.3rem, 0.8vh, 0.55rem);
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.actions.discard-mode {
+  width: 100%;
+}
+
+.discard-action {
+  width: min(100%, 10rem);
 }
 
 .btn {

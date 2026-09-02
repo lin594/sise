@@ -6,6 +6,9 @@ const props = withDefaults(defineProps(), {
     currentPlayerName: "-",
     selectionMode: null,
     selectedCandidateId: null,
+    canDiscard: false,
+    hasDiscardSelection: false,
+    discardPending: false,
 });
 const emit = defineEmits();
 const busy = ref(false);
@@ -47,7 +50,11 @@ const normalized = computed(() => {
     return ordered;
 });
 const selectionMode = computed(() => props.selectionMode ?? null);
+const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const panelHint = computed(() => {
+    if (props.canDiscard) {
+        return props.hasDiscardSelection ? "已选牌，请确认出牌" : "请先从手牌中选择一张";
+    }
     if (!props.canAct) {
         return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
     }
@@ -148,6 +155,9 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     currentPlayerName: "-",
     selectionMode: null,
     selectedCandidateId: null,
+    canDiscard: false,
+    hasDiscardSelection: false,
+    discardPending: false,
 });
 const __VLS_ctx = {};
 let __VLS_components;
@@ -156,6 +166,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['locked']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
@@ -173,7 +184,7 @@ let __VLS_directives;
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "panel" },
-    ...{ class: ({ locked: !__VLS_ctx.canAct }) },
+    ...{ class: ({ locked: __VLS_ctx.panelLocked }) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
     ...{ class: "hint" },
@@ -181,8 +192,24 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
 (__VLS_ctx.panelHint);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "actions" },
+    ...{ class: ({ 'discard-mode': __VLS_ctx.canDiscard }) },
 });
-for (const [item] of __VLS_getVForSourceType((__VLS_ctx.normalized))) {
+if (__VLS_ctx.canDiscard) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.canDiscard))
+                    return;
+                __VLS_ctx.emit('confirmDiscard');
+            } },
+        type: "button",
+        ...{ class: "btn discard-action" },
+        'data-testid': "discard-confirm",
+        ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending }) },
+        disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending),
+    });
+    (__VLS_ctx.hasDiscardSelection ? (__VLS_ctx.discardPending ? "出牌中…" : "出牌") : "先选牌");
+}
+for (const [item] of __VLS_getVForSourceType((__VLS_ctx.canDiscard ? [] : __VLS_ctx.normalized))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 __VLS_ctx.onClick(item);
@@ -202,13 +229,17 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.normalized))) {
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-action']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            emit: emit,
             busy: busy,
             normalized: normalized,
             selectionMode: selectionMode,
+            panelLocked: panelLocked,
             panelHint: panelHint,
             isClickable: isClickable,
             text: text,
