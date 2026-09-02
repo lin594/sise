@@ -21,7 +21,8 @@ RUN npm run build
 FROM ${NODE_IMAGE} AS production
 WORKDIR /app
 ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org
-ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
+ENV NODE_ENV=production \
+    NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist /app/dist

@@ -3,30 +3,44 @@ import http from "http";
 import { randomBytes } from "node:crypto";
 import { Server, matchMaker } from "colyseus";
 import { monitor } from "@colyseus/monitor";
+import { WebSocketTransport } from "@colyseus/ws-transport";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
+import {
+  buildCorsOriginHeaders,
+  createCorsMiddleware,
+  createOriginPolicy,
+  isOriginAllowed,
+  shouldEnableMonitor,
+} from "./http/origin-policy.js";
 import { FourColorGameRoom } from "./rooms/GameRoom.js";
 import { getRegisteredRoom } from "./rooms/room-registry.js";
 
 const port = Number(process.env.PORT ?? 2567);
+const runtimeEnv = process.env.NODE_ENV;
+const originPolicy = createOriginPolicy(process.env.CORS_ALLOWED_ORIGINS, runtimeEnv);
 const app = express();
 const server = http.createServer(app);
-const gameServer = new Server({ server });
-
-app.use(express.json());
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    res.sendStatus(204);
-    return;
-  }
-  next();
+const gameServer = new Server({
+  transport: new WebSocketTransport({
+    server,
+    verifyClient: ({ origin }: { origin?: string }) => isOriginAllowed(origin, originPolicy),
+  }),
 });
 
+matchMaker.controller.DEFAULT_CORS_HEADERS["Access-Control-Allow-Origin"] = "null";
+matchMaker.controller.getCorsHeaders = (req) => {
+  const rawOrigin = req.headers.origin;
+  const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+  return buildCorsOriginHeaders(origin, originPolicy);
+};
+
+app.use(express.json());
+app.use(createCorsMiddleware(originPolicy));
+
 gameServer.define("four-color", FourColorGameRoom);
-app.use("/colyseus", monitor());
+if (shouldEnableMonitor(runtimeEnv, process.env.ENABLE_MONITOR)) {
+  app.use("/colyseus", monitor());
+}
 
 let creatingSingletonRoom: Promise<string> | null = null;
 let singletonRoomId = "";

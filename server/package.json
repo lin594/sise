@@ -10,8 +10,9 @@
     "test": "npm run build && node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
   },
   "dependencies": {
-    "@colyseus/schema": "^3.0.0",
     "@colyseus/monitor": "^0.16.5",
+    "@colyseus/schema": "^3.0.0",
+    "@colyseus/ws-transport": "^0.16.5",
     "colyseus": "^0.16.5",
     "express": "^4.21.2"
   },
