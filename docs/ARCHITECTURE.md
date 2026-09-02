@@ -1,162 +1,134 @@
-# 四色牌架构说明（当前实现）
+# 系统架构
 
-## 1. 架构概览
+## 1. 总览
 
-- 前端：Vue 3 + TypeScript
-- 后端：Colyseus + TypeScript
-- 通信：WebSocket（Room state patch + custom messages）和少量 HTTP 辅助接口
-- 当前可用模式：单人练习、好友同桌私有房
+- 前端：Vue 3 + TypeScript。
+- 服务端：Colyseus + TypeScript，使用 Express 提供少量 HTTP 辅助接口。
+- 实时通信：Colyseus 房间状态补丁与自定义 WebSocket 消息。
+- 运行模式：单人练习和好友同桌私有房。
+- 数据保存：牌局状态只在当前服务端进程内存中；Redis 服务和 `REDIS_URL` 是部署预留，尚未参与持久化。
 
-当前已跑通单人练习、好友同桌、规则流和结算。联机匹配、账号体系与公开房间大厅只保留入口或扩展位。
+规则裁决全部在服务端。客户端只渲染公开状态、本人的私有手牌和服务端签发的合法动作，不能自行决定胡、吃、碰、开或弃牌是否成功。
 
-## 2. 核心状态模型
+## 2. 状态边界
 
-### 2.1 `GameState`（公开同步）
+### 2.1 公开 `GameState`
+
+主要字段：
 
 - `phase`: `waiting | declaring | playing | ended`
 - `roomMode`: `practice | friends`
-- `hostPlayerId`: 房主 seatId
-- `dealerId`: 当前庄家 seatId
-- `dealerPickerId`: 当前定庄翻牌者 seatId
-- `currentPlayerId`: 当前本地阶段的牌主 seatId
-- `currentTurnPlayerId`: 当前展示用行动位 seatId
-- `previousPlayerId`: 上一个产生目标牌的 seatId
-- `pollOriginPlayerId`: 当前集体响应的起点 seatId
-- `activeResponderId`: 当前集体响应者 seatId
+- `hostPlayerId`、`dealerId`、`dealerPickerId`
+- `currentPlayerId`、`currentTurnPlayerId`、`previousPlayerId`
+- `pollOriginPlayerId`、`activeResponderId`
 - `responsePhase`: `collective | local_upper | local_draw`
-- `responseEndsAt`: 当前响应超时时间戳
-- `players`: `MapSchema<PlayerState>`
-- `publicDiscardPile`: 全局公开弃牌序列
-- `lastAction`: 流程提示 / debug 标记
-- `deckCount`: 牌堆剩余
-- `responseCard`: 当前待响牌
-- `targetCard`: 当前目标牌
-- `dealerCard`: 本局定庄牌
-- `declareEndsAt`: 声明阶段截止时间戳
+- `responseEndsAt`、`declareEndsAt`
+- `players: MapSchema<PlayerState>`
+- `publicDiscardPile`、`responseCard`、`targetCard`、`dealerCard`
+- `deckCount`、`lastAction`
 
-### 2.2 `PlayerState`（公开同步）
+`PlayerState` 公开名字、固定座位索引、连接/机器人状态、机器人强度、手牌数量、声明状态、弃牌、明示牌组、鱼和结算分数。对手只能看到 `handCount`，看不到实际手牌。
 
-- `clientId`: 固定逻辑座位 ID（`seat_0` 至 `seat_3`）
-- `seatIndex`: 固定回合顺序索引（0–3）
-- `isConfiguredBot`: 是否为房主主动配置的机器人
-- `botStrength`: 机器人连续强度（0–100）
-- `name`
-- `handCount`: 手牌数量
-- `declaredKongs`: 声明暗坎数量
-- `declaredReady`: 是否完成开局声明
-- `isBot`
-- `connected`
-- `discardPile`
-- `exposedArea`
-- `exposedGroupSizes`
-- `exposedGroupKinds`
-- `generalArea`
-- `wildcardPool`: 历史兼容字段，当前不作为万能牌池参与组牌
-- `fishArea`
+`generalArea` 与 `wildcardPool` 是历史兼容字段；`wildcardPool` 不作为万能牌替代参与组牌。当前单张将或金条的收取统一写入一张牌的 `exposedArea` 牌组，不创建新的特殊牌展示区。
 
-### 2.3 私有状态（房间内存）
+### 2.2 私有房间状态
+
+服务端内存保存：
 
 - `playerHands: Map<seatId, Card[]>`
-- `seatBySession: Map<sessionId, seatId>`
-- `seatByToken: Map<playerToken, seatId>`
-- `botIds: Set<seatId>`
-- `pendingResponse`: 当前待响应牌和集体选择
-- `awaitingDiscardOwnerId`: 当前必须弃牌的玩家
+- session、player token 与 seatId 的映射
+- 机器人座位集合
+- 当前待响应上下文及集体选择
+- 当前必须弃牌的座位
+- 超时任务、断线托管和本局结算快照
 
-## 3. 座位与身份机制
+私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。
 
-### 3.1 `seatId` 与 `sessionId` 分离
+## 3. 座位、身份与房主
 
-- `sessionId` 是连接级别，断线会变。
-- `seatId` 是座位级别，断线不变。
-- 所有回合逻辑按 `seatId` 运转，确保 token 重连能恢复原座位。
+- `sessionId` 属于一次连接，断线后会改变。
+- `seatId` 是 `seat_0` 至 `seat_3` 的固定逻辑座位，回合和规则始终按 seatId 运转。
+- 第一次加入时服务端签发 `playerToken + seatId`；客户端按房间保存 token，重连时用它恢复原座。
+- 等待大厅断线座位会短暂保留；进行中断线立即由机器人托管，同 token 重连后可夺回控制。
+- 房主权限与座位号分离。房主断线后转给座位顺序最靠前的在线真人。
+- 单人练习开局自动补足机器人；好友房只使用房主显式配置的机器人。
 
-### 3.2 token 重连
-
-1. 首次加入房间：服务端分配 `playerToken + seatId`。
-2. 前端保存 token 到 `localStorage`。
-3. 断线后重连：前端带 token 加入，服务端定位原 seatId。
-4. 该座位从 BOT 托管恢复为真人控制。
-
-该机制服务于单人练习、好友房选座及断线恢复，但不等同于账号登录。
+客户端的座位方向偏好只改变左右布局，不改变上述映射或服务端行动顺序。
 
 ## 4. 房间生命周期
 
 ### `waiting`
 
-- 前端先经过昵称入口，再进入大厅。
-- 当前开放“单人练习”和“好友同桌”。
-- 创建者默认占首席并成为房主；房主权限与座位号独立。
-- 好友房访客先以未入座连接进入，再原子领取空座。
-- 房主可添加/调整/移除机器人及移除非房主真人。
-- 房主可发送 `start_game`。
-- 单人练习开始前自动补机器人；好友房不会自动补位。
+昵称入口后进入模式大厅。好友房访客可以通过 `roomId` 加入并原子领取空座；房主可以添加、调整或移除机器人，并在四席就绪时开局。
 
 ### `declaring`
 
-- 开局定庄和发牌动画结束后进入声明阶段。
-- 玩家声明鱼和暗坎数量。
-- 四家都提交或 `DECLARE_TIMEOUT_MS` 到期后进入正式对局。
-- BOT 和断线托管座位会自动提交默认声明。
+服务端完成定庄与发牌，客户端播放短动画；随后玩家一次性声明鱼与暗坎。四座均提交或声明超时后进入正式对局，机器人和断线托管座位自动声明。
 
 ### `playing`
 
-- 服务端运行 collective/local 双阶段状态机。
-- 集体响应按轮询顺序处理 `胡 / 开 / 碰 / 过`。
-- 本地阶段处理 `吃 / 抓` 或抓后 `吃 / 过`。
-- 成功 `开 / 碰 / 吃` 后进入强制弃牌阶段；若无合法可弃牌则直接结算为胡。
+状态机按 [GAME_RULES.md](GAME_RULES.md) 运行集体响应和本地响应。动作执行遵循“先验证、后统一扣除”：吃、碰、开必须验证目标牌、全部手牌和唯一牌 ID，再一次性更新手牌、牌池与明示牌组，防止半成功状态。
 
 ### `ended`
 
-- 服务端保存并推送 `round_result`。
-- 房主可 `next_round`。
-- 房主可发送 `return_lobby` 让整桌回到等待大厅；任意玩家也可从客户端个人退出，进行中的座位随即由机器人托管。
+服务端广播并保存 `round_result`。房主可以开始下一局或让整桌返回等待大厅；任何真人都可以从客户端个人退出，进行中的空座由机器人继续托管。
 
-## 5. 机器人机制
+## 5. 消息接口
 
-- 补位机器人：单人练习开始时补足到 4 座；好友房只使用房主显式配置的机器人。
-- 托管机器人：真人断线后立即接管该真人座位。
-- 决策策略：对合法动作、组合候选和弃牌模拟评分，并由 `botStrength` 连续控制高级权重与 softmax 随机温度；能胡必胡且不读取其他玩家私有手牌。
+客户端发往房间的主要消息：
 
-## 6. 前端结构与职责
+| 消息 | 用途 |
+|---|---|
+| `start_game` | 房主开始牌局 |
+| `declare_setup` | 一次提交鱼与暗坎声明 |
+| `declare_kongs` | 旧客户端兼容的暗坎声明 |
+| `action` | 提交胡、开、碰、吃或过 |
+| `discard_card` | 提交已确认的弃牌 ID |
+| `sync_state` | 请求重新发送快照、私有手牌和动作 |
+| `claim_seat` | 好友房领取空座 |
+| `add_bot` / `update_bot` / `remove_seat` | 房主管理座位 |
+| `next_round` / `return_lobby` | 房主结算操作 |
+| `debug_setup` | 测试环境构造可重复牌局 |
 
-- `client/src/composables/useRoom.ts`
-  - 连接房间、订阅 state、发送消息。
-  - 处理 `session_token`。
-  - 个人退出时停用重连、清除房间凭证并主动离开连接。
-  - 通过 `/room-id`、`/reset-room`、`/private-state` 辅助进入单人练习和恢复私有手牌。
+服务端返回的主要自定义消息：
 
-- `client/src/App.vue`
-  - 首页入口、模式选择、等待大厅。
-  - 声明鱼/暗坎面板。
-  - 结算面板和规则弹层。
+- 身份与快照：`session_token`、`room_snapshot`、`lobby_presence`。
+- 私有数据：`private_hand`、`available_actions`。
+- 结果：`hu_result`、`round_result`。
+- 失败反馈：`join_error`、`lobby_error`、`declare_rejected`、`action_rejected`、`removed_from_room`。
+- 测试反馈：`debug_applied`。
 
-- `client/src/components/GameBoard.vue`
-  - 对局桌面、手牌、明示区、弃牌区、待响牌。
+动作协议只有 `pass`，没有单独的 `zhua`：`local_upper` 阶段的 `pass` 在产品语言中显示为“抓”。特殊牌本地阶段不提供 pass，单张收下通过一个单牌候选提交。
 
-- `client/src/components/ActionPanel.vue`
-  - 动作按钮展示和提交。
-  - 注意：协议动作为 `pass`，在 `local_upper` 阶段界面显示为“抓”。
+## 6. HTTP 辅助接口
 
-## 7. 服务端结构与职责
+| 方法与路径 | 用途 |
+|---|---|
+| `GET /health` | 服务健康检查 |
+| `POST /rooms` | 创建指定模式的独立房间 |
+| `GET /room-id` | 获取或创建单人练习入口房间 |
+| `POST /reset-room` | 重置单人练习入口房间 |
+| `GET /private-state` | 按房间 token 恢复本人私有状态 |
 
-- `server/src/index.ts`
-  - Express/Colyseus 启动。
-  - HTTP 辅助接口：`/health`、`/room-id`、`/reset-room`、`/private-state`。
+项目没有公开房间列表、账号鉴权 API 或跨进程房间恢复。
 
-- `server/src/rooms/GameRoom.ts`
-  - 房间生命周期和消息路由。
-  - 座位、token、BOT、声明、结算入口。
+## 7. 代码职责
 
-- `server/src/rooms/flow/`
-  - 对局流程拆分：状态写入、主循环、动作执行、结算运行时。
+```text
+client/src/App.vue                    页面阶段、设置、声明与结算
+client/src/composables/useRoom.ts     连接、重连、消息和个人退出
+client/src/components/GameBoard.vue  牌桌、座位、牌组、手牌与操作坞
+client/src/components/ActionPanel.vue 合法动作和弃牌确认
+server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
+server/src/rooms/GameRoom.ts          房间生命周期、座位和消息路由
+server/src/rooms/flow/                牌局状态机、动作执行与结算
+server/src/rules/                     牌堆、动作候选、胡牌拆解
+server/src/schema/                    公开同步 Schema
+```
 
-- `server/src/rules/`
-  - 牌堆、动作候选、胡牌拆解和计分基础。
+## 8. 当前边界
 
-## 8. 已知边界
-
-- 当前可用模式为单人练习和好友同桌；联机匹配与账号登录未接后端能力。
-- 当前服务端使用内存保存房间状态，Redis 相关配置是部署预留。
-- token 暂仅本地存储，不是生产级账号安全方案。
-- `/rooms` 可创建独立私有房，但尚无公开房间列表或跨进程持久化。
+- token 是房间级重连凭证，不是生产级账号体系。
+- 房间状态无法在服务端进程重启后恢复。
+- 匹配、公开大厅和账号级邀请码尚未实现。
+- 未最终确定的规则不得由旧 SRS 推断，统一记录在 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)。
