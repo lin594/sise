@@ -1137,13 +1137,44 @@ async function copyInviteLink() {
     }
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set("roomId", activeRoomId.value);
-    try {
-        await navigator.clipboard.writeText(url.toString());
+    const inviteUrl = url.toString();
+    let copied = false;
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(inviteUrl);
+            copied = true;
+        }
+        catch {
+            copied = false;
+        }
+    }
+    if (!copied) {
+        const textarea = document.createElement("textarea");
+        textarea.value = inviteUrl;
+        textarea.readOnly = true;
+        textarea.style.position = "fixed";
+        textarea.style.inset = "0 auto auto -9999px";
+        textarea.style.fontSize = "16px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, inviteUrl.length);
+        try {
+            copied = document.execCommand("copy");
+        }
+        catch {
+            copied = false;
+        }
+        finally {
+            textarea.remove();
+        }
+    }
+    if (copied) {
         globalError.value = "";
         showGlobalNotice("邀请链接已复制，可以发给朋友了");
     }
-    catch {
-        window.prompt("请复制邀请链接", url.toString());
+    else {
+        window.prompt("请长按并复制邀请链接", inviteUrl);
     }
 }
 function clearGlobalNotice() {

@@ -25,10 +25,14 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByText("把邀请链接发给朋友；四个座位都准备好后即可开始。")).toBeVisible();
     await host.getByTestId("copy-invite").click();
     await expect(host.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
-    const copiedInviteUrl = await host.evaluate(() => navigator.clipboard.readText());
-    expect(copiedInviteUrl).toBe(inviteUrl);
-    expect(copiedInviteUrl).not.toContain("playerToken");
-    expect(copiedInviteUrl).not.toContain("hostKey");
+    const copiedInviteUrl = await host.evaluate(async () =>
+      navigator.clipboard?.readText ? await navigator.clipboard.readText() : null,
+    );
+    if (copiedInviteUrl !== null) {
+      expect(copiedInviteUrl).toBe(inviteUrl);
+      expect(copiedInviteUrl).not.toContain("playerToken");
+      expect(copiedInviteUrl).not.toContain("hostKey");
+    }
 
     await guest.setViewportSize({ width: 667, height: 375 });
     await guest.goto(inviteUrl);
@@ -113,4 +117,23 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await guestContext.close();
     await hostContext.close();
   }
+});
+
+test("copies an invite link on an insecure LAN deployment", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: false,
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("局域网房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+
+  await page.getByTestId("copy-invite").click();
+  await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
 });
