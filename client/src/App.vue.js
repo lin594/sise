@@ -339,8 +339,14 @@ let globalNoticeTimer = null;
 const showRules = ref(false);
 const rulesPanelRef = ref(null);
 const rulesCloseButtonRef = ref(null);
+const settlementPanelRef = ref(null);
 let rulesReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
+watch(showEndPanel, (visible) => {
+    if (visible) {
+        void nextTick(() => settlementPanelRef.value?.focus());
+    }
+}, { immediate: true });
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
 const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
@@ -681,7 +687,31 @@ const winnerName = computed(() => {
     const player = players.value.find((x) => x.clientId === winnerId);
     return player?.name || winnerId;
 });
+const roundOutcomeText = computed(() => {
+    if (!derivedWinnerId.value) {
+        return "本局流局";
+    }
+    return derivedWinnerId.value === mySeatId.value ? "你胡牌了" : `${winnerName.value} 胡牌`;
+});
 const settlementPlayers = computed(() => roundResult.value?.players ?? []);
+const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const mySettlementPlayer = computed(() => settlementPlayers.value.find((player) => player.clientId === mySeatId.value) ?? null);
+const orderedSettlementPlayers = computed(() => {
+    const winnerId = derivedWinnerId.value;
+    return settlementPlayers.value
+        .map((player, index) => ({ player, index }))
+        .sort((a, b) => {
+        const rank = (player) => {
+            if (player.clientId === mySeatId.value)
+                return 0;
+            if (winnerId && player.clientId === winnerId)
+                return 1;
+            return 2;
+        };
+        return rank(a.player) - rank(b.player) || a.index - b.index;
+    })
+        .map(({ player }) => player);
+});
 const remainingDeckPreview = computed(() => roundResult.value?.remainingDeck ?? []);
 function splitCardGroups(cards, sizes) {
     const groups = [];
@@ -1303,6 +1333,16 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
@@ -1320,8 +1360,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['positive']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['negative']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['neutral']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
@@ -1375,6 +1418,30 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-formula']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
@@ -1909,19 +1976,50 @@ if (__VLS_ctx.showEndPanel) {
         ...{ class: "hu-mask" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ref: "settlementPanelRef",
         ...{ class: "hu-panel" },
+        'data-testid': "settlement-panel",
+        role: "dialog",
+        'aria-labelledby': "settlement-panel-title",
+        'aria-busy': (!__VLS_ctx.settlementReady),
+        tabindex: "-1",
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
+    /** @type {typeof __VLS_ctx.settlementPanelRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
+        id: "settlement-panel-title",
+    });
     (__VLS_ctx.endPanelTitle);
-    if (__VLS_ctx.derivedWinnerId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.winnerName);
+    if (!__VLS_ctx.settlementReady) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "settlement-loading" },
+            'data-testid': "settlement-loading",
+            role: "status",
+            'aria-live': "polite",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
     else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "round-overview" },
+            'data-testid': "round-overview",
+            role: "status",
+            'aria-live': "polite",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.roundOutcomeText);
+        if (__VLS_ctx.mySettlementPlayer) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
+                ...{ class: (__VLS_ctx.scoreToneClass(__VLS_ctx.mySettlementPlayer.totalScore)) },
+            });
+            (__VLS_ctx.signedScore(__VLS_ctx.mySettlementPlayer.totalScore));
+        }
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+    }
+    if (__VLS_ctx.settlementReady && !__VLS_ctx.derivedWinnerId) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
         (__VLS_ctx.endSummary);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.state?.lastAction || "-");
     }
     if (__VLS_ctx.roundDealerCard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -1950,32 +2048,6 @@ if (__VLS_ctx.showEndPanel) {
             (__VLS_ctx.signedScore(line.unit));
         }
     }
-    if (__VLS_ctx.remainingDeckPreview.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-            ...{ class: "settlement remaining-deck" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-        (__VLS_ctx.remainingDeckPreview.length);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "settlement-cards" },
-        });
-        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_62 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`remain-${card.id}`),
-                card: (card),
-                size: "sm",
-                mode: (__VLS_ctx.resolvedTableCardMode),
-            }));
-            const __VLS_63 = __VLS_62({
-                key: (`remain-${card.id}`),
-                card: (card),
-                size: "sm",
-                mode: (__VLS_ctx.resolvedTableCardMode),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_62));
-        }
-    }
     if (__VLS_ctx.settlementPlayers.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
             ...{ class: "settlement" },
@@ -1984,7 +2056,7 @@ if (__VLS_ctx.showEndPanel) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "settlement-list" },
         });
-        for (const [p] of __VLS_getVForSourceType((__VLS_ctx.settlementPlayers))) {
+        for (const [p] of __VLS_getVForSourceType((__VLS_ctx.orderedSettlementPlayers))) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 key: (`settle-${p.clientId}`),
                 ...{ class: "settlement-item" },
@@ -1998,6 +2070,12 @@ if (__VLS_ctx.showEndPanel) {
                 ...{ class: "settlement-name" },
             });
             (p.name);
+            if (p.clientId === __VLS_ctx.mySeatId) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            }
+            if (__VLS_ctx.isSettlementWinner(p)) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
                 ...{ class: "settlement-meta" },
             });
@@ -2037,18 +2115,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_62 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.resolvedTableCardMode),
                         }));
-                        const __VLS_66 = __VLS_65({
+                        const __VLS_63 = __VLS_62({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.resolvedTableCardMode),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_65));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_62));
                     }
                 }
             }
@@ -2085,18 +2163,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_68 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_69 = __VLS_68({
+                        const __VLS_66 = __VLS_65({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_65));
                     }
                 }
             }
@@ -2107,18 +2185,18 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_68 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                     }));
-                    const __VLS_72 = __VLS_71({
+                    const __VLS_69 = __VLS_68({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_68));
                 }
             }
             else {
@@ -2149,6 +2227,32 @@ if (__VLS_ctx.showEndPanel) {
             }
         }
     }
+    if (__VLS_ctx.remainingDeckPreview.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+            ...{ class: "settlement remaining-deck" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+        (__VLS_ctx.remainingDeckPreview.length);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "settlement-cards" },
+        });
+        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                key: (`remain-${card.id}`),
+                card: (card),
+                size: "sm",
+                mode: (__VLS_ctx.resolvedTableCardMode),
+            }));
+            const __VLS_72 = __VLS_71({
+                key: (`remain-${card.id}`),
+                card: (card),
+                size: "sm",
+                mode: (__VLS_ctx.resolvedTableCardMode),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "end-actions" },
     });
@@ -2156,12 +2260,13 @@ if (__VLS_ctx.showEndPanel) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.nextRound) },
             ...{ class: "primary" },
-            disabled: (!__VLS_ctx.isEnded),
+            disabled: (!__VLS_ctx.settlementReady),
         });
+        (__VLS_ctx.settlementReady ? "下一局（房主）" : "正在结算…");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.returnLobby) },
             ...{ class: "ghost" },
-            disabled: (!__VLS_ctx.isEnded),
+            disabled: (!__VLS_ctx.settlementReady),
         });
     }
     else {
@@ -2322,13 +2427,12 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['candidate-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-global-info']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['scoring-explain']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-formula']} */ ;
-/** @type {__VLS_StyleScopedClasses['settlement']} */ ;
-/** @type {__VLS_StyleScopedClasses['remaining-deck']} */ ;
-/** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
@@ -2356,6 +2460,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement']} */ ;
+/** @type {__VLS_StyleScopedClasses['remaining-deck']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
@@ -2418,7 +2525,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             abandonSessionResume: abandonSessionResume,
             isWaiting: isWaiting,
             isPlaying: isPlaying,
-            isEnded: isEnded,
             isHost: isHost,
             hasLobbySession: hasLobbySession,
             isConnectingWithoutState: isConnectingWithoutState,
@@ -2455,6 +2561,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             showRules: showRules,
             rulesPanelRef: rulesPanelRef,
             rulesCloseButtonRef: rulesCloseButtonRef,
+            settlementPanelRef: settlementPanelRef,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
@@ -2476,8 +2583,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             submitDeclaration: submitDeclaration,
             endPanelTitle: endPanelTitle,
             derivedWinnerId: derivedWinnerId,
-            winnerName: winnerName,
+            roundOutcomeText: roundOutcomeText,
             settlementPlayers: settlementPlayers,
+            settlementReady: settlementReady,
+            mySettlementPlayer: mySettlementPlayer,
+            orderedSettlementPlayers: orderedSettlementPlayers,
             remainingDeckPreview: remainingDeckPreview,
             settlementGroupBlocks: settlementGroupBlocks,
             settlementHandBlocks: settlementHandBlocks,

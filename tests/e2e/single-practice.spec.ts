@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
+
 async function snapshotBoard(page: Page) {
   return page.evaluate(() => {
     const handCards = Array.from(document.querySelectorAll("[data-testid^='hand-card-']")).map((el) =>
@@ -134,7 +136,7 @@ async function playUntilSettlement(page: Page): Promise<void> {
   throw new Error("Timed out before settlement");
 }
 
-test("single practice flow reaches settlement", async ({ page }) => {
+test("single practice flow reaches settlement", async ({ page }, testInfo) => {
   test.setTimeout(420_000);
 
   await page.goto("/");
@@ -157,6 +159,44 @@ test("single practice flow reaches settlement", async ({ page }) => {
   await playUntilSettlement(page);
 
   await expect(page.getByText(/胡牌结算|流局结算/)).toBeVisible();
+  const settlementPanel = page.getByTestId("settlement-panel");
+  const nextRoundButton = page.getByRole("button", { name: /下一局（房主）|正在结算…/ });
+  if (await page.getByTestId("settlement-loading").isVisible().catch(() => false)) {
+    await expect(settlementPanel).toHaveAttribute("aria-busy", "true");
+    await expect(nextRoundButton).toBeDisabled();
+  }
+  const settlementList = page.locator(".settlement-list");
+  await expect(settlementList).toBeVisible({ timeout: 10_000 });
+  await expect(settlementPanel).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByTestId("round-overview")).toContainText("你本局");
+  await expect(page.locator(".settlement-item").first().locator(".settlement-name")).toContainText("（你）");
+  await expect(page.getByText(/最后动作/)).toHaveCount(0);
   await expect(page.getByTestId("game-tools")).toBeVisible();
-  await expect(page.getByRole("button", { name: "全桌返回大厅（房主）" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "下一局（房主）" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "全桌返回大厅（房主）" })).toBeEnabled();
+  const settlementMetrics = await settlementList.evaluate((list) => {
+    const panel = document.querySelector<HTMLElement>("[data-testid='settlement-panel']")!;
+    const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+    const firstCard = list.querySelector<HTMLElement>(".settlement-cards .card");
+    const firstMeta = list.querySelector<HTMLElement>(".settlement-meta");
+    const panelRect = panel.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const cardRect = firstCard?.getBoundingClientRect();
+    return {
+      columnCount: getComputedStyle(list).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+      panelTop: Math.round(panelRect.top),
+      headerBottom: Math.round(headerRect.bottom),
+      cardWidth: Math.round(cardRect?.width ?? 0),
+      cardFontSize: Number.parseFloat(firstCard ? getComputedStyle(firstCard).fontSize : "0"),
+      metaFontSize: Number.parseFloat(firstMeta ? getComputedStyle(firstMeta).fontSize : "0"),
+    };
+  });
+  expect(settlementMetrics.columnCount).toBe(1);
+  expect(settlementMetrics.panelTop).toBeGreaterThanOrEqual(settlementMetrics.headerBottom);
+  expect(settlementMetrics.cardWidth).toBeGreaterThanOrEqual(32);
+  expect(settlementMetrics.cardFontSize).toBeGreaterThanOrEqual(16);
+  expect(settlementMetrics.metaFontSize).toBeGreaterThanOrEqual(12);
+  await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement.png") });
+  await settlementList.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement-details.png") });
 });

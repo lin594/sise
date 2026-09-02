@@ -194,15 +194,28 @@
     />
 
     <div v-if="showEndPanel" class="hu-mask">
-      <div class="hu-panel">
-        <h2>{{ endPanelTitle }}</h2>
-        <template v-if="derivedWinnerId">
-          <p>赢家: {{ winnerName }}</p>
-        </template>
-        <template v-else>
-          <p>{{ endSummary }}</p>
-          <p>最后动作: {{ state?.lastAction || "-" }}</p>
-        </template>
+      <div
+        ref="settlementPanelRef"
+        class="hu-panel"
+        data-testid="settlement-panel"
+        role="dialog"
+        aria-labelledby="settlement-panel-title"
+        :aria-busy="!settlementReady"
+        tabindex="-1"
+      >
+        <h2 id="settlement-panel-title">{{ endPanelTitle }}</h2>
+        <div v-if="!settlementReady" class="settlement-loading" data-testid="settlement-loading" role="status" aria-live="polite">
+          <strong>正在整理本局得分…</strong>
+          <span>请稍候，结算完成后才能开始下一局。</span>
+        </div>
+        <div v-else class="round-overview" data-testid="round-overview" role="status" aria-live="polite">
+          <strong>{{ roundOutcomeText }}</strong>
+          <span v-if="mySettlementPlayer">
+            你本局 <b :class="scoreToneClass(mySettlementPlayer.totalScore)">{{ signedScore(mySettlementPlayer.totalScore) }}分</b>
+          </span>
+          <small>你的结果排在最前面，向下滑动可查看每家明细。</small>
+        </div>
+        <p v-if="settlementReady && !derivedWinnerId">{{ endSummary }}</p>
         <p v-if="roundDealerCard" class="end-global-info">本局定庄牌: {{ cardLabel(roundDealerCard) }}</p>
         <section v-if="winnerSettlementPlayer && huCalculationLines.length" class="settlement scoring-explain">
           <h3>胡牌计分</h3>
@@ -216,31 +229,20 @@
           </div>
         </section>
 
-        <section v-if="remainingDeckPreview.length" class="settlement remaining-deck">
-          <h3>留底牌堆前{{ remainingDeckPreview.length }}张</h3>
-          <div class="settlement-cards">
-            <CardComp
-              v-for="card in remainingDeckPreview"
-              :key="`remain-${card.id}`"
-              :card="card"
-              size="sm"
-              :mode="resolvedTableCardMode"
-            />
-          </div>
-        </section>
-
         <section v-if="settlementPlayers.length" class="settlement">
-          <h3>结算展示</h3>
+          <h3>各家结算</h3>
           <div class="settlement-list">
             <div
-              v-for="p in settlementPlayers"
+              v-for="p in orderedSettlementPlayers"
               :key="`settle-${p.clientId}`"
               class="settlement-item"
               :class="{ winner: isSettlementWinner(p) }"
             >
               <div class="settlement-head">
                 <div>
-                  <p class="settlement-name">{{ p.name }}</p>
+                  <p class="settlement-name">
+                    {{ p.name }}<span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
+                  </p>
                   <p class="settlement-meta">
                     手牌 {{ p.hand.length }} 张 · 牌组 {{ settlementGroupBlocks(p).length }} 组 · 流水 {{ p.discardCount }} 张
                   </p>
@@ -318,10 +320,25 @@
           </div>
         </section>
 
+        <section v-if="remainingDeckPreview.length" class="settlement remaining-deck">
+          <h3>留底牌堆前{{ remainingDeckPreview.length }}张</h3>
+          <div class="settlement-cards">
+            <CardComp
+              v-for="card in remainingDeckPreview"
+              :key="`remain-${card.id}`"
+              :card="card"
+              size="sm"
+              :mode="resolvedTableCardMode"
+            />
+          </div>
+        </section>
+
         <div class="end-actions">
           <template v-if="isHost">
-            <button class="primary" :disabled="!isEnded" @click="nextRound">下一局（房主）</button>
-            <button class="ghost" :disabled="!isEnded" @click="returnLobby">全桌返回大厅（房主）</button>
+            <button class="primary" :disabled="!settlementReady" @click="nextRound">
+              {{ settlementReady ? "下一局（房主）" : "正在结算…" }}
+            </button>
+            <button class="ghost" :disabled="!settlementReady" @click="returnLobby">全桌返回大厅（房主）</button>
           </template>
           <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
         </div>
@@ -850,8 +867,18 @@ let globalNoticeTimer: number | null = null;
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
+const settlementPanelRef = ref<HTMLElement | null>(null);
 let rulesReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
+watch(
+  showEndPanel,
+  (visible) => {
+    if (visible) {
+      void nextTick(() => settlementPanelRef.value?.focus());
+    }
+  },
+  { immediate: true },
+);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
 const shouldShowDeclarePanel = computed(
@@ -1263,8 +1290,32 @@ const winnerName = computed(() => {
   const player = players.value.find((x) => x.clientId === winnerId);
   return player?.name || winnerId;
 });
+const roundOutcomeText = computed(() => {
+  if (!derivedWinnerId.value) {
+    return "本局流局";
+  }
+  return derivedWinnerId.value === mySeatId.value ? "你胡牌了" : `${winnerName.value} 胡牌`;
+});
 
 const settlementPlayers = computed<RoundResultPlayer[]>(() => roundResult.value?.players ?? []);
+const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const mySettlementPlayer = computed<RoundResultPlayer | null>(() =>
+  settlementPlayers.value.find((player) => player.clientId === mySeatId.value) ?? null,
+);
+const orderedSettlementPlayers = computed<RoundResultPlayer[]>(() => {
+  const winnerId = derivedWinnerId.value;
+  return settlementPlayers.value
+    .map((player, index) => ({ player, index }))
+    .sort((a, b) => {
+      const rank = (player: RoundResultPlayer): number => {
+        if (player.clientId === mySeatId.value) return 0;
+        if (winnerId && player.clientId === winnerId) return 1;
+        return 2;
+      };
+      return rank(a.player) - rank(b.player) || a.index - b.index;
+    })
+    .map(({ player }) => player);
+});
 const remainingDeckPreview = computed<Card[]>(() => roundResult.value?.remainingDeck ?? []);
 
 function splitCardGroups(cards: Card[], sizes: number[]): Card[][] {
@@ -2519,6 +2570,61 @@ watch(
   font-size: clamp(0.84rem, 1.45vh, 1rem);
 }
 
+.hu-panel:focus-visible {
+  outline: 3px solid #38bdf8;
+  outline-offset: -3px;
+}
+
+.settlement-loading,
+.round-overview {
+  margin-top: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.settlement-loading {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.settlement-loading span {
+  color: #334155;
+}
+
+.round-overview {
+  border: 2px solid #f59e0b;
+  background: #fffbeb;
+  color: #451a03;
+}
+
+.round-overview strong {
+  font-size: clamp(1.1rem, 2.8vh, 1.45rem);
+}
+
+.round-overview > span {
+  font-size: clamp(0.96rem, 2.2vh, 1.15rem);
+}
+
+.round-overview small {
+  color: #57534e;
+  font-size: clamp(0.78rem, 1.6vh, 0.9rem);
+}
+
+.round-overview b.positive {
+  color: #166534;
+}
+
+.round-overview b.negative {
+  color: #b91c1c;
+}
+
+.round-overview b.neutral {
+  color: #0f172a;
+}
+
 .settlement {
   margin-top: 12px;
   border-top: 1px dashed #cbd5e1;
@@ -2894,7 +3000,31 @@ watch(
 }
 
 .layout.compact-viewport .settlement-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.layout.compact-viewport .round-overview,
+.layout.compact-viewport .settlement-loading {
+  padding: 0.55rem 0.7rem;
+}
+
+.layout.compact-viewport .settlement-name {
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.layout.compact-viewport .settlement-meta,
+.layout.compact-viewport .zone-title,
+.layout.compact-viewport .score-formula li,
+.layout.compact-viewport .score-breakdown li {
+  font-size: clamp(0.78rem, 3.2vh, 0.92rem);
+  line-height: 1.4;
+}
+
+.layout.compact-viewport .settlement-cards :deep(.size-sm.mode-large) {
+  width: clamp(2rem, 9vh, 2.25rem);
+  height: clamp(2.2rem, 10vh, 2.5rem);
+  font-size: clamp(1rem, 4.4vh, 1.15rem);
 }
 
 .layout.compact-viewport .candidate-panel {
