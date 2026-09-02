@@ -1,4 +1,4 @@
-import { isDiscardRestricted, isGeneral, isGold } from "../../rules/deck.js";
+import { isDiscardRestricted } from "../../rules/deck.js";
 import type { ActionType, Card } from "../../rules/types.js";
 import { buildChiCandidates, buildKaiCandidates, buildPengCandidates, type ActionCandidate } from "./action-candidates.js";
 import {
@@ -226,7 +226,11 @@ export function enterOwnerLocalPhaseAfterNoResponseFlow(deps: EnterOwnerLocalDep
   deps.clearActiveResponder();
   deps.clearResponseEndsAt();
 
-  if (pending.card.source === "draw" && plan.responsePhase === "local_draw" && (isGeneral(pending.card) || isGold(pending.card))) {
+  // “抓”到的新牌沿用 upper 来源并通过 responsePhaseAfterNoResponse 标记为
+  // local_draw，因此不能只看 card.source，否则将牌/金条仍可能进入过牌分支。
+  const isSelfDrawResolution =
+    pending.card.source === "draw" || pending.responsePhaseAfterNoResponse === "local_draw";
+  if (isSelfDrawResolution && plan.responsePhase === "local_draw" && isDiscardRestricted(pending.card)) {
     deps.addWildcardCardToPlayer(plan.localOwnerId, pending.card, "draw");
     deps.setLastAction(`${plan.localOwnerId} FORCE_TAKE`);
     deps.enterDiscardStage(plan.localOwnerId, "FORCE_TAKE");

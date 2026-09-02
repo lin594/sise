@@ -113,6 +113,10 @@ t("bot-strategy: grabbed generals and gold cannot be passed when chi is legal", 
     c("green_jiang", "green", "jiang", "draw"),
     c("white_jiang", "white", "jiang", "draw"),
     c("gold_gong", "gold", "gong", "draw"),
+    c("gold_hou", "gold", "hou", "draw"),
+    c("gold_bo", "gold", "bo", "draw"),
+    c("gold_zi", "gold", "zi", "draw"),
+    c("gold_nan", "gold", "nan", "draw"),
   ];
 
   for (const strength of [0, 50, 100]) {
@@ -1008,25 +1012,52 @@ t("room: local upper pass draws new target without adding to hand", () => {
   assert.equal(room.state.responsePhase, "local_draw");
 });
 
-t("room: zhua follow-up to single jiang enables local chi candidate", () => {
-  const room = mkRoom(["A", "B", "C", "D"]);
-  room.pendingResponse = {
-    ownerId: "A",
-    card: c("draw1", "red", "jiang", "upper"),
-    collectives: new Map(),
-    responsePhaseAfterNoResponse: "local_draw",
-  };
-  room.state.responsePhase = "collective";
-  room.playerHands.set("B", [c("ym1", "yellow", "ma")]);
-  room.enterOwnerLocalPhaseAfterNoResponse("A");
+t("room: bots force-take every grabbed general and gold card", () => {
+  const specialCards: Card[] = [
+    c("yellow_jiang", "yellow", "jiang", "upper"),
+    c("red_jiang", "red", "jiang", "upper"),
+    c("green_jiang", "green", "jiang", "upper"),
+    c("white_jiang", "white", "jiang", "upper"),
+    c("gold_gong", "gold", "gong", "upper"),
+    c("gold_hou", "gold", "hou", "upper"),
+    c("gold_bo", "gold", "bo", "upper"),
+    c("gold_zi", "gold", "zi", "upper"),
+    c("gold_nan", "gold", "nan", "upper"),
+  ];
 
-  const chi = room.getAvailableActions("B").find((item: any) => item.action === "chi");
-  assert.equal(room.state.responsePhase, "local_draw");
-  assert.equal(Boolean(chi?.enabled), true);
-  assert.equal(chi?.candidates?.some((item: any) => item.kind === "single"), true);
+  for (const strength of [0, 50, 100]) {
+    for (const specialCard of specialCards) {
+      const room = mkRoom(["A", "B", "C", "D"]);
+      const bot = room.state.players.get("B");
+      bot.botStrength = strength;
+      room.botIds.add("B");
+      room.botThinkMinMs = 60_000;
+      room.botThinkMaxMs = 60_000;
+      room.pendingResponse = {
+        ownerId: "A",
+        card: specialCard,
+        collectives: new Map(),
+        responsePhaseAfterNoResponse: "local_draw",
+      };
+      room.state.responsePhase = "collective";
+      room.playerHands.set("B", [c(`discard-${strength}-${specialCard.id}`, "yellow", "ma")]);
+
+      room.enterOwnerLocalPhaseAfterNoResponse("A");
+
+      const player = room.state.players.get("B");
+      assert.equal(player?.generalArea.some((card: Card) => card.id === specialCard.id), true);
+      assert.equal(player?.wildcardPool.some((card: Card) => card.id === specialCard.id), true);
+      assert.equal(player?.discardPile.some((card: Card) => card.id === specialCard.id), false);
+      assert.equal(room.state.publicDiscardPile.some((card: Card) => card.id === specialCard.id), false);
+      assert.equal(room.awaitingDiscardOwnerId, "B");
+      assert.equal(room.pendingResponse?.card.id.startsWith("discard-"), true);
+      assert.equal(room.state.lastAction, "B FORCE_TAKE");
+      room.onDispose();
+    }
+  }
 });
 
-t("room: zhua follow-up to jiang still offers jsx chi candidate", () => {
+t("room: grabbed general is force-taken even when a jsx group is available", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "A",
@@ -1035,11 +1066,17 @@ t("room: zhua follow-up to jiang still offers jsx chi candidate", () => {
     responsePhaseAfterNoResponse: "local_draw",
   };
   room.state.responsePhase = "collective";
-  room.playerHands.set("B", [c("rs1", "red", "shi"), c("rx1", "red", "xiang")]);
+  room.playerHands.set("B", [
+    c("rs1", "red", "shi"),
+    c("rx1", "red", "xiang"),
+    c("ym1", "yellow", "ma"),
+  ]);
+
   room.enterOwnerLocalPhaseAfterNoResponse("A");
 
-  const chi = room.getAvailableActions("B").find((item: any) => item.action === "chi");
-  assert.equal(chi?.candidates?.some((item: any) => item.kind === "jsx"), true);
+  assert.equal(room.state.players.get("B")?.generalArea.some((card: Card) => card.id === "draw1"), true);
+  assert.equal(room.state.players.get("B")?.exposedArea.some((card: Card) => card.id === "draw1"), false);
+  assert.equal(room.awaitingDiscardOwnerId, "B");
 });
 
 t("room: local draw pass_to_next keeps recipient as next local upper owner", () => {
