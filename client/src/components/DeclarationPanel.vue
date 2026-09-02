@@ -49,7 +49,7 @@
                 kong: hiddenKongAnalysis.cardIds.has(card.id),
               }"
             >
-              <CardComp :card="card" size="sm" />
+              <CardComp :card="card" size="sm" :mode="cardMode" />
             </div>
           </div>
         </section>
@@ -86,6 +86,7 @@
                     :key="`${option.id}-${card.id}`"
                     :card="card"
                     size="sm"
+                    :mode="cardMode"
                   />
                 </span>
                 <span class="option-check" aria-hidden="true">✓</span>
@@ -166,7 +167,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
-import type { Card } from "@/types/game";
+import type { Card, RenderedCardMode } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
 import {
   analyzeHiddenKongs,
@@ -186,6 +187,7 @@ const props = defineProps<{
   serverError: string;
   compact: boolean;
   ultraCompact: boolean;
+  cardMode: RenderedCardMode;
 }>();
 
 const emit = defineEmits<{

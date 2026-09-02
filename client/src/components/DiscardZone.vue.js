@@ -31,10 +31,12 @@ for (const [card] of __VLS_getVForSourceType((__VLS_ctx.cards))) {
     const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         key: (card.id),
         card: (card),
+        mode: (__VLS_ctx.cardMode),
     }));
     const __VLS_1 = __VLS_0({
         key: (card.id),
         card: (card),
+        mode: (__VLS_ctx.cardMode),
     }, ...__VLS_functionalComponentArgsRest(__VLS_0));
 }
 /** @type {__VLS_StyleScopedClasses['zone']} */ ;

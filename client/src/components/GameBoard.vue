@@ -4,15 +4,16 @@
       <section v-if="leftPlayer" class="flow-card flow-top-left">
         <p>{{ flowTitle(leftPlayer.clientId) }}</p>
         <div v-if="flowCardCount(leftPlayer.clientId)" class="discard-strip">
-          <span
+          <CardComp
             v-for="(card, index) in visibleFlowCards(leftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
+            :card="card"
+            :mode="props.tableCardMode"
+            size="xs"
             class="discard-token"
-            :class="[cardColorClass(card), { active: isActiveDiscardCard(leftPlayer.clientId, card, index) }]"
+            :class="{ active: isActiveDiscardCard(leftPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
-          >
-            {{ cardGlyph(card) }}
-          </span>
+          />
         </div>
         <div v-else class="discard-empty">暂无流水</div>
       </section>
@@ -33,8 +34,7 @@
             <strong>{{ topPlayer.name }}</strong>
             <span v-if="isDealer(topPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(topPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
-              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
             </span>
           </div>
           <div class="seat-tags">
@@ -58,15 +58,15 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip">
-              <span
+              <CardComp
                 v-for="card in group.cards"
                 :key="`top-group-card-${card.id}`"
+                :card="card"
+                :mode="props.tableCardMode"
+                size="xs"
                 class="mini-card"
-                :class="cardColorClass(card)"
                 :title="cardLabel(card)"
-              >
-                {{ cardGlyph(card) }}
-              </span>
+              />
             </div>
           </div>
         </div>
@@ -75,15 +75,16 @@
       <section v-if="topPlayer" class="flow-card flow-top-right">
         <p>{{ flowTitle(topPlayer.clientId) }}</p>
         <div v-if="flowCardCount(topPlayer.clientId)" class="discard-strip">
-          <span
+          <CardComp
             v-for="(card, index) in visibleFlowCards(topPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
+            :card="card"
+            :mode="props.tableCardMode"
+            size="xs"
             class="discard-token"
-            :class="[cardColorClass(card), { active: isActiveDiscardCard(topPlayer.clientId, card, index) }]"
+            :class="{ active: isActiveDiscardCard(topPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
-          >
-            {{ cardGlyph(card) }}
-          </span>
+          />
         </div>
         <div v-else class="discard-empty">暂无流水</div>
       </section>
@@ -104,8 +105,7 @@
             <strong>{{ leftPlayer.name }}</strong>
             <span v-if="isDealer(leftPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(leftPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
-              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
             </span>
           </div>
           <div class="seat-tags">
@@ -129,15 +129,15 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip">
-              <span
+              <CardComp
                 v-for="card in group.cards"
                 :key="`left-group-card-${card.id}`"
+                :card="card"
+                :mode="props.tableCardMode"
+                size="xs"
                 class="mini-card"
-                :class="cardColorClass(card)"
                 :title="cardLabel(card)"
-              >
-                {{ cardGlyph(card) }}
-              </span>
+              />
             </div>
           </div>
         </div>
@@ -170,19 +170,12 @@
               <span class="response-caption">待响</span>
               <Transition name="resp-move" mode="out-in">
                 <CardComp
-                  v-if="props.tableCardMode === 'full'"
-                  :key="`resp-full-${responseCard.id}-${responseCard.source || 'upper'}`"
+                  :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
                   :card="responseCard"
+                  :mode="props.tableCardMode"
                   size="lg"
+                  class="response-card-face"
                 />
-                <div
-                  v-else
-                  :key="`resp-simple-${responseCard.id}-${responseCard.source || 'upper'}`"
-                  class="corner-card response-card-simple"
-                  :class="cardColorClass(responseCard)"
-                >
-                  {{ cardGlyph(responseCard) }}
-                </div>
               </Transition>
             </div>
             <div
@@ -230,8 +223,7 @@
             <strong>{{ rightPlayer.name }}</strong>
             <span v-if="isDealer(rightPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(rightPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
-              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
             </span>
           </div>
           <div class="seat-tags">
@@ -255,15 +247,15 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip">
-              <span
+              <CardComp
                 v-for="card in group.cards"
                 :key="`right-group-card-${card.id}`"
+                :card="card"
+                :mode="props.tableCardMode"
+                size="xs"
                 class="mini-card"
-                :class="cardColorClass(card)"
                 :title="cardLabel(card)"
-              >
-                {{ cardGlyph(card) }}
-              </span>
+              />
             </div>
           </div>
         </div>
@@ -272,15 +264,16 @@
       <section v-if="selfPlayer" class="flow-card flow-bottom-left">
         <p>{{ flowTitle(selfPlayer.clientId) }}</p>
         <div v-if="flowCardCount(selfPlayer.clientId)" class="discard-strip">
-          <span
+          <CardComp
             v-for="(card, index) in visibleFlowCards(selfPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
+            :card="card"
+            :mode="props.tableCardMode"
+            size="xs"
             class="discard-token"
-            :class="[cardColorClass(card), { active: isActiveDiscardCard(selfPlayer.clientId, card, index) }]"
+            :class="{ active: isActiveDiscardCard(selfPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
-          >
-            {{ cardGlyph(card) }}
-          </span>
+          />
         </div>
         <div v-else class="discard-empty">暂无流水</div>
       </section>
@@ -296,15 +289,15 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip">
-              <span
+              <CardComp
                 v-for="card in group.cards"
                 :key="`self-exp-card-${card.id}`"
+                :card="card"
+                :mode="props.tableCardMode"
+                size="xs"
                 class="mini-card"
-                :class="cardColorClass(card)"
                 :title="cardLabel(card)"
-              >
-                {{ cardGlyph(card) }}
-              </span>
+              />
             </div>
           </div>
         </div>
@@ -314,15 +307,16 @@
       <section v-if="rightPlayer" class="flow-card flow-bottom-right">
         <p>{{ flowTitle(rightPlayer.clientId) }}</p>
         <div v-if="flowCardCount(rightPlayer.clientId)" class="discard-strip">
-          <span
+          <CardComp
             v-for="(card, index) in visibleFlowCards(rightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
+            :card="card"
+            :mode="props.tableCardMode"
+            size="xs"
             class="discard-token"
-            :class="[cardColorClass(card), { active: isActiveDiscardCard(rightPlayer.clientId, card, index) }]"
+            :class="{ active: isActiveDiscardCard(rightPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
-          >
-            {{ cardGlyph(card) }}
-          </span>
+          />
         </div>
         <div v-else class="discard-empty">暂无流水</div>
       </section>
@@ -335,12 +329,7 @@
         <div v-if="dealerReveal" :key="`dealer-${dealerReveal.id}`" class="dealer-reveal">
           <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
           <div v-if="dealerReveal.card" class="dealer-reveal-card">
-            <CardComp
-              v-if="props.tableCardMode === 'full'"
-              :card="dealerReveal.card"
-              size="md"
-            />
-            <div v-else class="corner-card" :class="cardColorClass(dealerReveal.card)">{{ cardGlyph(dealerReveal.card) }}</div>
+            <CardComp :card="dealerReveal.card" :mode="props.tableCardMode" size="md" />
           </div>
         </div>
       </Transition>
@@ -370,8 +359,7 @@
             <h3>{{ selfPlayer.name }}（你）</h3>
             <span v-if="isDealer(selfPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(selfPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
-              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
             </span>
           </div>
           <p>手牌 {{ playerHandCount(selfPlayer) }} 张 · 牌组 {{ selfGroupBlocks.length }} 组 · 暗坎 {{ selfPlayer.declaredKongs }}</p>
@@ -413,6 +401,8 @@
             :data-card-id="card.id"
             class="hand-card"
             :class="{
+              'mode-large': props.ownCardMode === 'large',
+              'mode-long': props.ownCardMode === 'long',
               playable: canDiscardCard(card),
               blocked: !canDiscardCard(card),
               'gold-blocked': card.color === 'gold',
@@ -426,7 +416,7 @@
             @dblclick.prevent="selectDiscardCard(card.id)"
           >
             <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
-            <CardComp :card="card" size="xl" />
+            <CardComp :card="card" :mode="props.ownCardMode" size="xl" />
           </button>
         </div>
       </div>
@@ -455,7 +445,7 @@
         :style="flightStyle(flight)"
       >
         <div v-if="flight.mode === 'deal'" class="card-back"></div>
-        <CardComp v-else-if="flight.card" :card="flight.card" size="md" />
+        <CardComp v-else-if="flight.card" :card="flight.card" :mode="props.tableCardMode" size="md" />
       </div>
     </div>
   </div>
@@ -465,8 +455,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import type { ActionCandidate, ActionRequest, AvailableAction, Card, PlayerState } from "@/types/game";
-import { getCardFaceText, getCardLabelText } from "@/utils/cardText";
+import type {
+  ActionCandidate,
+  ActionRequest,
+  AvailableAction,
+  Card,
+  PlayerState,
+  RenderedCardMode,
+} from "@/types/game";
+import { getCardLabelText } from "@/utils/cardText";
 
 type ExposedGroup = {
   id: string;
@@ -518,7 +515,8 @@ const props = defineProps<{
   turnHint?: string;
   embeddedActionPanel?: boolean;
   ultraCompact?: boolean;
-  tableCardMode?: "simple" | "full";
+  ownCardMode?: RenderedCardMode;
+  tableCardMode?: RenderedCardMode;
   selectionMode?: "kai" | "peng" | "chi" | null;
   selectedCandidateId?: string | null;
   activeCandidates?: ActionCandidate[];
@@ -1135,14 +1133,6 @@ function candidateBadgeText(cardId: string): string {
 
 function cardLabel(card: Card): string {
   return getCardLabelText(card);
-}
-
-function cardGlyph(card: Card): string {
-  return getCardFaceText(card);
-}
-
-function cardColorClass(card: Card): string {
-  return `tone-${card.color || "white"}`;
 }
 
 function parseActionDescriptor(action: string): { actor: string; keyword: string } {
@@ -1988,20 +1978,23 @@ watch(canDiscard, (enabled) => {
 
 .discard-token {
   position: relative;
-  width: clamp(1.72rem, 3.3vh, 1.95rem);
-  height: clamp(1.72rem, 3.3vh, 1.95rem);
   border-radius: 0.45rem;
   border: 2px solid rgba(15, 23, 42, 0.45);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: clamp(0.84rem, 1.55vh, 0.98rem);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  color: #020617;
+  flex: 0 0 auto;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.discard-token.mode-large {
+  width: clamp(1.72rem, 3.3vh, 1.95rem);
+  height: clamp(1.82rem, 3.5vh, 2.05rem);
+  font-size: clamp(0.76rem, 1.5vh, 0.92rem);
+}
+
+.discard-token.mode-long {
+  width: clamp(1rem, 1.8vh, 1.2rem);
+  height: clamp(2rem, 4vh, 2.4rem);
+  font-size: clamp(0.56rem, 1.05vh, 0.68rem);
 }
 
 .discard-token.active {
@@ -2099,18 +2092,22 @@ watch(canDiscard, (enabled) => {
 }
 
 .mini-card {
-  width: clamp(1.55rem, 3vh, 1.8rem);
-  height: clamp(1.68rem, 3.2vh, 1.95rem);
   border-radius: 0.45rem;
   border: 2px solid rgba(15, 23, 42, 0.42);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #020617;
-  font-size: clamp(0.84rem, 1.5vh, 0.98rem);
-  font-weight: 800;
-  line-height: 1;
+  flex: 0 0 auto;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.mini-card.mode-large {
+  width: clamp(1.55rem, 3vh, 1.8rem);
+  height: clamp(1.68rem, 3.2vh, 1.95rem);
+  font-size: clamp(0.76rem, 1.45vh, 0.92rem);
+}
+
+.mini-card.mode-long {
+  width: clamp(0.95rem, 1.7vh, 1.15rem);
+  height: clamp(1.95rem, 3.8vh, 2.3rem);
+  font-size: clamp(0.54rem, 1vh, 0.66rem);
 }
 
 .group-chip {
@@ -2650,9 +2647,14 @@ watch(canDiscard, (enabled) => {
   padding: 0 3px;
 }
 
-.hand :deep(.size-xl) {
+.hand :deep(.size-xl.mode-long) {
   width: clamp(1.3rem, 2vw, 2rem);
   height: clamp(3.5rem, 5.2vw, 5.3rem);
+}
+
+.hand :deep(.size-xl.mode-large) {
+  width: clamp(2.55rem, 3.7vw, 3.15rem);
+  height: clamp(3.2rem, 4.5vw, 3.9rem);
 }
 
 .embedded-actions {
@@ -2905,7 +2907,7 @@ watch(canDiscard, (enabled) => {
     aspect-ratio: auto;
   }
 
-  .hand :deep(.size-xl) {
+  .hand :deep(.size-xl.mode-long) {
     height: clamp(3rem, 4.3vw, 4.8rem);
   }
 }
@@ -3012,7 +3014,7 @@ watch(canDiscard, (enabled) => {
     font-size: clamp(0.5rem, 1.15vh, 0.62rem);
   }
 
-  .mini-card {
+  .mini-card.mode-large {
     width: 1.3rem;
     height: 1.45rem;
     font-size: clamp(0.62rem, 1.32vh, 0.74rem);
@@ -3141,7 +3143,7 @@ watch(canDiscard, (enabled) => {
     font-size: clamp(0.56rem, 1.35vh, 0.72rem);
   }
 
-  .discard-token {
+  .discard-token.mode-large {
     width: 1.45rem;
     height: 1.45rem;
     font-size: clamp(0.62rem, 1.35vh, 0.76rem);
@@ -3163,10 +3165,19 @@ watch(canDiscard, (enabled) => {
     scrollbar-width: thin;
   }
 
-  .hand-card {
+  .hand-card.mode-long {
     border-radius: 0.7vh;
-    flex: 0 0 clamp(30px, 5vw, 36px);
-    width: clamp(30px, 5vw, 36px);
+    flex-basis: clamp(28px, 4.5vw, 32px);
+    width: clamp(28px, 4.5vw, 32px);
+  }
+
+  .hand-card.mode-large {
+    border-radius: 0.7vh;
+    flex-basis: clamp(40px, 6.2vw, 44px);
+    width: clamp(40px, 6.2vw, 44px);
+  }
+
+  .hand-card {
     min-height: 0;
     scroll-snap-align: start;
   }
@@ -3177,10 +3188,16 @@ watch(canDiscard, (enabled) => {
     padding: 0.25rem 0.65rem;
   }
 
-  .hand :deep(.size-xl) {
+  .hand :deep(.size-xl.mode-long) {
     width: clamp(0.9rem, 2.2vw, 1.3rem);
     height: clamp(2.7rem, 6.6vh, 3.8rem);
     font-size: clamp(0.62rem, 1.55vh, 0.82rem);
+  }
+
+  .hand :deep(.size-xl.mode-large) {
+    width: clamp(40px, 6.2vw, 44px);
+    height: clamp(52px, 14vh, 60px);
+    font-size: clamp(1.05rem, 5.8vh, 1.45rem);
   }
 
   .embedded-actions {

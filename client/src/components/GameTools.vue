@@ -41,25 +41,47 @@
           </div>
           <button type="button" aria-label="关闭设置" @click="settingsOpen = false">×</button>
         </header>
-        <div class="mode-options" role="group" aria-label="牌面显示模式">
-          <button
-            type="button"
-            data-testid="card-mode-simple"
-            :class="{ active: props.modelValue === 'simple' }"
-            @click="emit('update:modelValue', 'simple')"
-          >
-            <span class="mode-sample simple">帅</span>
-            <span><strong>简化大字</strong><small>更适合小屏辨认</small></span>
-          </button>
-          <button
-            type="button"
-            data-testid="card-mode-full"
-            :class="{ active: props.modelValue === 'full' }"
-            @click="emit('update:modelValue', 'full')"
-          >
-            <span class="mode-sample full">帥</span>
-            <span><strong>长条色牌</strong><small>保留传统牌面</small></span>
-          </button>
+        <div class="preference-group">
+          <div class="preference-copy">
+            <strong>我的牌</strong>
+            <small>手牌、声明与本人结算</small>
+          </div>
+          <div class="mode-options" role="radiogroup" aria-label="我的牌显示模式">
+            <button
+              v-for="mode in cardModes"
+              :key="`own-${mode.value}`"
+              type="button"
+              role="radio"
+              :data-testid="`card-mode-own-${mode.value}`"
+              :aria-checked="props.modelValue.ownCards === mode.value"
+              :class="{ active: props.modelValue.ownCards === mode.value }"
+              @click="setCardMode('ownCards', mode.value)"
+            >
+              <span class="mode-sample" :class="mode.value">{{ mode.sample }}</span>
+              <span>{{ mode.label }}</span>
+            </button>
+          </div>
+        </div>
+        <div class="preference-group">
+          <div class="preference-copy">
+            <strong>桌面牌</strong>
+            <small>待响、定庄、牌组与流水</small>
+          </div>
+          <div class="mode-options" role="radiogroup" aria-label="桌面牌显示模式">
+            <button
+              v-for="mode in cardModes"
+              :key="`table-${mode.value}`"
+              type="button"
+              role="radio"
+              :data-testid="`card-mode-table-${mode.value}`"
+              :aria-checked="props.modelValue.tableCards === mode.value"
+              :class="{ active: props.modelValue.tableCards === mode.value }"
+              @click="setCardMode('tableCards', mode.value)"
+            >
+              <span class="mode-sample" :class="mode.value">{{ mode.sample }}</span>
+              <span>{{ mode.label }}</span>
+            </button>
+          </div>
         </div>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
@@ -85,19 +107,29 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import type { CardDisplayMode, GameDisplayPreferences } from "@/types/game";
 
 const props = defineProps<{
-  modelValue: "simple" | "full";
+  modelValue: GameDisplayPreferences;
 }>();
 
 const emit = defineEmits<{
-  "update:modelValue": [mode: "simple" | "full"];
+  "update:modelValue": [preferences: GameDisplayPreferences];
   openRules: [];
   exit: [];
 }>();
 
 const settingsOpen = ref(false);
 const confirmingExit = ref(false);
+const cardModes: Array<{ value: CardDisplayMode; label: string; sample: string }> = [
+  { value: "large", label: "大字", sample: "帅" },
+  { value: "adaptive", label: "自适应", sample: "自" },
+  { value: "long", label: "长牌", sample: "帥" },
+];
+
+function setCardMode(key: "ownCards" | "tableCards", mode: CardDisplayMode): void {
+  emit("update:modelValue", { ...props.modelValue, [key]: mode });
+}
 
 function openRules(): void {
   settingsOpen.value = false;
@@ -187,7 +219,7 @@ function confirmExit(): void {
 }
 
 .settings-panel header div,
-.mode-options button > span:last-child {
+.preference-copy {
   display: grid;
   gap: 0.12rem;
   text-align: left;
@@ -212,10 +244,26 @@ function confirmExit(): void {
   font-size: 1.25rem;
 }
 
+.preference-group {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.preference-copy {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.preference-copy strong {
+  font-size: 0.86rem;
+}
+
 .mode-options {
   display: grid;
-  gap: 0.42rem;
-  margin-top: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
 }
 
 .mode-options button,
@@ -229,11 +277,14 @@ function confirmExit(): void {
 }
 
 .mode-options button {
-  display: grid;
-  grid-template-columns: 2.15rem minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.62rem;
-  padding: 0.42rem 0.55rem;
+  justify-content: center;
+  gap: 0.24rem;
+  padding: 0.35rem 0.2rem;
+  font-size: 0.74rem;
+  font-weight: 750;
 }
 
 .mode-options button.active {
@@ -243,25 +294,31 @@ function confirmExit(): void {
 }
 
 .mode-sample {
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   display: inline-grid;
   place-items: center;
   border-radius: 0.48rem;
   font-weight: 900;
 }
 
-.mode-sample.simple {
+.mode-sample.large {
   background: #facc15;
   color: #422006;
 }
 
-.mode-sample.full {
-  width: 1.28rem;
+.mode-sample.long {
+  width: 1.05rem;
   justify-self: center;
   border: 2px solid #b91c1c;
   background: #fff7ed;
   color: #991b1b;
+}
+
+.mode-sample.adaptive {
+  background: linear-gradient(135deg, #facc15 0 48%, #fff7ed 48% 100%);
+  color: #172033;
+  border: 1px solid rgba(148, 163, 184, 0.65);
 }
 
 .rules-entry {
@@ -366,14 +423,8 @@ function confirmExit(): void {
     padding-inline: 0.5rem;
   }
 
-  .mode-options {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .mode-options button {
-    min-height: 3rem;
-    grid-template-columns: 1.8rem minmax(0, 1fr);
-    padding: 0.35rem;
+    min-height: 3.15rem;
   }
 
   .mode-sample {

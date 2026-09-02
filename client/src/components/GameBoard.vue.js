@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
-import { getCardFaceText, getCardLabelText } from "@/utils/cardText";
+import { getCardLabelText } from "@/utils/cardText";
 const props = defineProps();
 const emit = defineEmits();
 const nowMs = ref(Date.now());
@@ -531,12 +531,6 @@ function candidateBadgeText(cardId) {
 function cardLabel(card) {
     return getCardLabelText(card);
 }
-function cardGlyph(card) {
-    return getCardFaceText(card);
-}
-function cardColorClass(card) {
-    return `tone-${card.color || "white"}`;
-}
 function parseActionDescriptor(action) {
     const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
     if (!parts.length) {
@@ -1021,12 +1015,18 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
@@ -1065,6 +1065,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
@@ -1072,6 +1076,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
@@ -1090,6 +1095,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
@@ -1119,11 +1125,20 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['confirm-discard']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
@@ -1162,13 +1177,26 @@ if (__VLS_ctx.leftPlayer) {
             ...{ class: "discard-strip" },
         });
         for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.leftPlayer.clientId)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`flow-top-left-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
                 ...{ class: "discard-token" },
-                ...{ class: ([__VLS_ctx.cardColorClass(card), { active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }]) },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
                 title: (__VLS_ctx.cardLabel(card)),
-            });
-            (__VLS_ctx.cardGlyph(card));
+            }));
+            const __VLS_1 = __VLS_0({
+                key: (`flow-top-left-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
+                ...{ class: "discard-token" },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
+                title: (__VLS_ctx.cardLabel(card)),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_0));
         }
     }
     else {
@@ -1212,25 +1240,18 @@ if (__VLS_ctx.topPlayer) {
             ...{ class: "dealer-card-mark" },
             'data-testid': "dealer-card",
         });
-        if (props.tableCardMode === 'full') {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }));
-            const __VLS_1 = __VLS_0({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_0));
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "dealer-card-simple" },
-                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
-            });
-            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
-        }
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }));
+        const __VLS_4 = __VLS_3({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_3));
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
@@ -1276,13 +1297,24 @@ if (__VLS_ctx.topPlayer) {
                 ...{ class: "mini-card-strip" },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`top-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
                     ...{ class: "mini-card" },
-                    ...{ class: (__VLS_ctx.cardColorClass(card)) },
                     title: (__VLS_ctx.cardLabel(card)),
-                });
-                (__VLS_ctx.cardGlyph(card));
+                }));
+                const __VLS_7 = __VLS_6({
+                    key: (`top-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
+                    ...{ class: "mini-card" },
+                    title: (__VLS_ctx.cardLabel(card)),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_6));
             }
         }
     }
@@ -1298,13 +1330,26 @@ if (__VLS_ctx.topPlayer) {
             ...{ class: "discard-strip" },
         });
         for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.topPlayer.clientId)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`flow-top-right-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
                 ...{ class: "discard-token" },
-                ...{ class: ([__VLS_ctx.cardColorClass(card), { active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }]) },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
                 title: (__VLS_ctx.cardLabel(card)),
-            });
-            (__VLS_ctx.cardGlyph(card));
+            }));
+            const __VLS_10 = __VLS_9({
+                key: (`flow-top-right-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
+                ...{ class: "discard-token" },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
+                title: (__VLS_ctx.cardLabel(card)),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_9));
         }
     }
     else {
@@ -1348,25 +1393,18 @@ if (__VLS_ctx.leftPlayer) {
             ...{ class: "dealer-card-mark" },
             'data-testid': "dealer-card",
         });
-        if (props.tableCardMode === 'full') {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }));
-            const __VLS_4 = __VLS_3({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "dealer-card-simple" },
-                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
-            });
-            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
-        }
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }));
+        const __VLS_13 = __VLS_12({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
@@ -1412,13 +1450,24 @@ if (__VLS_ctx.leftPlayer) {
                 ...{ class: "mini-card-strip" },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`left-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
                     ...{ class: "mini-card" },
-                    ...{ class: (__VLS_ctx.cardColorClass(card)) },
                     title: (__VLS_ctx.cardLabel(card)),
-                });
-                (__VLS_ctx.cardGlyph(card));
+                }));
+                const __VLS_16 = __VLS_15({
+                    key: (`left-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
+                    ...{ class: "mini-card" },
+                    title: (__VLS_ctx.cardLabel(card)),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_15));
             }
         }
     }
@@ -1468,41 +1517,35 @@ if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "response-caption" },
     });
-    const __VLS_6 = {}.Transition;
+    const __VLS_18 = {}.Transition;
     /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
     // @ts-ignore
-    const __VLS_7 = __VLS_asFunctionalComponent(__VLS_6, new __VLS_6({
+    const __VLS_19 = __VLS_asFunctionalComponent(__VLS_18, new __VLS_18({
         name: "resp-move",
         mode: "out-in",
     }));
-    const __VLS_8 = __VLS_7({
+    const __VLS_20 = __VLS_19({
         name: "resp-move",
         mode: "out-in",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_7));
-    __VLS_9.slots.default;
-    if (props.tableCardMode === 'full') {
-        /** @type {[typeof CardComp, ]} */ ;
-        // @ts-ignore
-        const __VLS_10 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-            key: (`resp-full-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
-            card: (__VLS_ctx.responseCard),
-            size: "lg",
-        }));
-        const __VLS_11 = __VLS_10({
-            key: (`resp-full-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
-            card: (__VLS_ctx.responseCard),
-            size: "lg",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_10));
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            key: (`resp-simple-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
-            ...{ class: "corner-card response-card-simple" },
-            ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.responseCard)) },
-        });
-        (__VLS_ctx.cardGlyph(__VLS_ctx.responseCard));
-    }
-    var __VLS_9;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_19));
+    __VLS_21.slots.default;
+    /** @type {[typeof CardComp, ]} */ ;
+    // @ts-ignore
+    const __VLS_22 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
+        card: (__VLS_ctx.responseCard),
+        mode: (props.tableCardMode),
+        size: "lg",
+        ...{ class: "response-card-face" },
+    }));
+    const __VLS_23 = __VLS_22({
+        key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
+        card: (__VLS_ctx.responseCard),
+        mode: (props.tableCardMode),
+        size: "lg",
+        ...{ class: "response-card-face" },
+    }, ...__VLS_functionalComponentArgsRest(__VLS_22));
+    var __VLS_21;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "deck-badge" },
@@ -1582,25 +1625,18 @@ if (__VLS_ctx.rightPlayer) {
             ...{ class: "dealer-card-mark" },
             'data-testid': "dealer-card",
         });
-        if (props.tableCardMode === 'full') {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_13 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }));
-            const __VLS_14 = __VLS_13({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_13));
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "dealer-card-simple" },
-                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
-            });
-            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
-        }
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_25 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }));
+        const __VLS_26 = __VLS_25({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_25));
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
@@ -1646,13 +1682,24 @@ if (__VLS_ctx.rightPlayer) {
                 ...{ class: "mini-card-strip" },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_28 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`right-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
                     ...{ class: "mini-card" },
-                    ...{ class: (__VLS_ctx.cardColorClass(card)) },
                     title: (__VLS_ctx.cardLabel(card)),
-                });
-                (__VLS_ctx.cardGlyph(card));
+                }));
+                const __VLS_29 = __VLS_28({
+                    key: (`right-group-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
+                    ...{ class: "mini-card" },
+                    title: (__VLS_ctx.cardLabel(card)),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_28));
             }
         }
     }
@@ -1668,13 +1715,26 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: "discard-strip" },
         });
         for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.selfPlayer.clientId)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`flow-bottom-left-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
                 ...{ class: "discard-token" },
-                ...{ class: ([__VLS_ctx.cardColorClass(card), { active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }]) },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
                 title: (__VLS_ctx.cardLabel(card)),
-            });
-            (__VLS_ctx.cardGlyph(card));
+            }));
+            const __VLS_32 = __VLS_31({
+                key: (`flow-bottom-left-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
+                ...{ class: "discard-token" },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
+                title: (__VLS_ctx.cardLabel(card)),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_31));
         }
     }
     else {
@@ -1711,13 +1771,24 @@ if (__VLS_ctx.selfPlayer) {
                 ...{ class: "mini-card-strip" },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_34 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`self-exp-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
                     ...{ class: "mini-card" },
-                    ...{ class: (__VLS_ctx.cardColorClass(card)) },
                     title: (__VLS_ctx.cardLabel(card)),
-                });
-                (__VLS_ctx.cardGlyph(card));
+                }));
+                const __VLS_35 = __VLS_34({
+                    key: (`self-exp-card-${card.id}`),
+                    card: (card),
+                    mode: (props.tableCardMode),
+                    size: "xs",
+                    ...{ class: "mini-card" },
+                    title: (__VLS_ctx.cardLabel(card)),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_34));
             }
         }
     }
@@ -1738,13 +1809,26 @@ if (__VLS_ctx.rightPlayer) {
             ...{ class: "discard-strip" },
         });
         for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.rightPlayer.clientId)))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_37 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`flow-bottom-right-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
                 ...{ class: "discard-token" },
-                ...{ class: ([__VLS_ctx.cardColorClass(card), { active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }]) },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
                 title: (__VLS_ctx.cardLabel(card)),
-            });
-            (__VLS_ctx.cardGlyph(card));
+            }));
+            const __VLS_38 = __VLS_37({
+                key: (`flow-bottom-right-${card.id}`),
+                card: (card),
+                mode: (props.tableCardMode),
+                size: "xs",
+                ...{ class: "discard-token" },
+                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
+                title: (__VLS_ctx.cardLabel(card)),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_37));
         }
     }
     else {
@@ -1753,32 +1837,32 @@ if (__VLS_ctx.rightPlayer) {
         });
     }
 }
-const __VLS_16 = {}.Transition;
+const __VLS_40 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({
+const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({
     name: "deal-fade",
 }));
-const __VLS_18 = __VLS_17({
+const __VLS_42 = __VLS_41({
     name: "deal-fade",
-}, ...__VLS_functionalComponentArgsRest(__VLS_17));
-__VLS_19.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_41));
+__VLS_43.slots.default;
 if (__VLS_ctx.showDealAnimation) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "deal-overlay" },
     });
 }
-var __VLS_19;
-const __VLS_20 = {}.Transition;
+var __VLS_43;
+const __VLS_44 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({
+const __VLS_45 = __VLS_asFunctionalComponent(__VLS_44, new __VLS_44({
     name: "dealer-reveal",
 }));
-const __VLS_22 = __VLS_21({
+const __VLS_46 = __VLS_45({
     name: "dealer-reveal",
-}, ...__VLS_functionalComponentArgsRest(__VLS_21));
-__VLS_23.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_45));
+__VLS_47.slots.default;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -1792,38 +1876,31 @@ if (__VLS_ctx.dealerReveal) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "dealer-reveal-card" },
         });
-        if (props.tableCardMode === 'full') {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (__VLS_ctx.dealerReveal.card),
-                size: "md",
-            }));
-            const __VLS_25 = __VLS_24({
-                card: (__VLS_ctx.dealerReveal.card),
-                size: "md",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_24));
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "corner-card" },
-                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerReveal.card)) },
-            });
-            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerReveal.card));
-        }
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (__VLS_ctx.dealerReveal.card),
+            mode: (props.tableCardMode),
+            size: "md",
+        }));
+        const __VLS_49 = __VLS_48({
+            card: (__VLS_ctx.dealerReveal.card),
+            mode: (props.tableCardMode),
+            size: "md",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
     }
 }
-var __VLS_23;
-const __VLS_27 = {}.Transition;
+var __VLS_47;
+const __VLS_51 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_28 = __VLS_asFunctionalComponent(__VLS_27, new __VLS_27({
+const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({
     name: "dealer-flight",
 }));
-const __VLS_29 = __VLS_28({
+const __VLS_53 = __VLS_52({
     name: "dealer-flight",
-}, ...__VLS_functionalComponentArgsRest(__VLS_28));
-__VLS_30.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_52));
+__VLS_54.slots.default;
 if (__VLS_ctx.dealerFlight) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
@@ -1831,7 +1908,7 @@ if (__VLS_ctx.dealerFlight) {
         ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
     });
 }
-var __VLS_30;
+var __VLS_54;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-info-card" },
@@ -1865,25 +1942,18 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: "dealer-card-mark" },
             'data-testid': "dealer-card",
         });
-        if (props.tableCardMode === 'full') {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }));
-            const __VLS_32 = __VLS_31({
-                card: (__VLS_ctx.dealerInfoCard),
-                size: "sm",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_31));
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "dealer-card-simple" },
-                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
-            });
-            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
-        }
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }));
+        const __VLS_56 = __VLS_55({
+            card: (__VLS_ctx.dealerInfoCard),
+            mode: (props.tableCardMode),
+            size: "xs",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_55));
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
     (__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer));
@@ -1971,6 +2041,8 @@ if (__VLS_ctx.selfPlayer) {
             'data-card-id': (card.id),
             ...{ class: "hand-card" },
             ...{ class: ({
+                    'mode-large': props.ownCardMode === 'large',
+                    'mode-long': props.ownCardMode === 'long',
                     playable: __VLS_ctx.canDiscardCard(card),
                     blocked: !__VLS_ctx.canDiscardCard(card),
                     'gold-blocked': card.color === 'gold',
@@ -1989,20 +2061,22 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_34 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
+            mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_35 = __VLS_34({
+        const __VLS_59 = __VLS_58({
             card: (card),
+            mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_34));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
     }
 }
 if (props.embeddedActionPanel && props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_37 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_61 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -2014,7 +2088,7 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
-    const __VLS_38 = __VLS_37({
+    const __VLS_62 = __VLS_61({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -2025,17 +2099,17 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         currentPlayerName: (props.currentPlayerName ?? '-'),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_37));
-    let __VLS_40;
-    let __VLS_41;
-    let __VLS_42;
-    const __VLS_43 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+    let __VLS_64;
+    let __VLS_65;
+    let __VLS_66;
+    const __VLS_67 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    const __VLS_44 = {
+    const __VLS_68 = {
         onSelectionChange: (__VLS_ctx.onSelectionChange)
     };
-    var __VLS_39;
+    var __VLS_63;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
@@ -2055,14 +2129,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
+            mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_46 = __VLS_45({
+        const __VLS_70 = __VLS_69({
             card: (flight.card),
+            mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_45));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2079,7 +2155,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2106,7 +2181,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2132,8 +2206,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-caption']} */ ;
-/** @type {__VLS_StyleScopedClasses['corner-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-card-simple']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-card-face']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-right']} */ ;
@@ -2151,7 +2224,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2186,7 +2258,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['corner-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
@@ -2195,7 +2266,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2278,8 +2348,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             isSelectedCandidateCard: isSelectedCandidateCard,
             candidateBadgeText: candidateBadgeText,
             cardLabel: cardLabel,
-            cardGlyph: cardGlyph,
-            cardColorClass: cardColorClass,
             setSeatRef: setSeatRef,
             flightStyle: flightStyle,
             dealerFlightStyle: dealerFlightStyle,

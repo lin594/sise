@@ -152,6 +152,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByRole("heading", { name: "声明亮鱼与暗坎" })).toBeVisible();
     const handPreview = page.getByTestId("declare-hand-preview");
     await expect(handPreview).toBeVisible();
+    await expect(handPreview.locator("[data-card-mode='large']").first()).toBeVisible();
     await expect(handPreview.locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(confirmDeclaration).toContainText(/确认/);
@@ -212,8 +213,8 @@ test.describe("compact landscape gameplay", () => {
     });
     expect(handMetrics.cardCount).toBeGreaterThan(0);
     expect(handMetrics.cardRows).toBe(1);
-    expect(Math.min(...handMetrics.cardWidths)).toBeGreaterThanOrEqual(30);
-    expect(Math.max(...handMetrics.cardWidths)).toBeLessThanOrEqual(36);
+    expect(Math.min(...handMetrics.cardWidths)).toBeGreaterThanOrEqual(40);
+    expect(Math.max(...handMetrics.cardWidths)).toBeLessThanOrEqual(44);
     expect(Math.min(...handMetrics.cardGaps)).toBeGreaterThanOrEqual(2);
     expect(Math.max(...handMetrics.cardGaps)).toBeLessThanOrEqual(4);
     expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(36);
@@ -283,11 +284,20 @@ test.describe("compact landscape gameplay", () => {
 
     await page.getByTestId("game-settings").click();
     await expect(page.getByTestId("settings-panel")).toBeVisible();
-    await expect(page.getByTestId("card-mode-simple")).toHaveClass(/active/);
-    await page.getByTestId("card-mode-full").click();
-    await expect(page.getByTestId("card-mode-full")).toHaveClass(/active/);
-    expect(await page.evaluate(() => localStorage.getItem("sise_table_card_mode"))).toBe("full");
-    await page.getByTestId("card-mode-simple").click();
+    await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
+    await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
+    await expect(page.locator(".hand [data-card-mode='large']").first()).toBeVisible();
+    await page.getByTestId("card-mode-own-long").click();
+    await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
+    await page.getByTestId("card-mode-table-long").click();
+    await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
+      ownCards: "long",
+      tableCards: "long",
+      seatDirection: "counterclockwise",
+    });
+    await page.getByTestId("card-mode-own-adaptive").click();
+    await page.getByTestId("card-mode-table-adaptive").click();
     await page.getByTestId("settings-rules").click();
     await expect(page.locator(".rules-panel")).toBeVisible();
     await page.getByRole("button", { name: "关闭", exact: true }).click();
@@ -324,6 +334,7 @@ test.describe("desktop declaration", () => {
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel).not.toHaveClass(/compact/);
     await expect(page.getByTestId("declare-hand-preview")).toBeVisible();
+    await expect(page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first()).toBeVisible();
     await expect(page.getByTestId("declare-hand-preview").locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
@@ -354,4 +365,22 @@ test.describe("responsive viewport tiers", () => {
       }
     });
   }
+});
+
+test.describe("display preference compatibility", () => {
+  test("migrates the previous full table preference into the new model", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("sise_game_display_preferences_v2");
+      localStorage.setItem("sise_table_card_mode", "full");
+    });
+    await page.goto("/");
+
+    await expect.poll(() =>
+      page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}")),
+    ).toMatchObject({
+      ownCards: "adaptive",
+      tableCards: "long",
+      seatDirection: "counterclockwise",
+    });
+  });
 });

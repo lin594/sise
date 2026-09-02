@@ -26,7 +26,7 @@
       </div>
       <GameTools
         v-if="showGameTools"
-        v-model="tableCardMode"
+        v-model="displayPreferences"
         @open-rules="showRules = true"
         @exit="handleLeaveRoom"
       />
@@ -106,7 +106,8 @@
         :turn-hint="turnHint"
         :embedded-action-panel="isCompactViewport"
         :ultra-compact="isUltraCompactViewport"
-        :table-card-mode="tableCardMode"
+        :own-card-mode="resolvedOwnCardMode"
+        :table-card-mode="resolvedTableCardMode"
         :selection-mode="selectionMode"
         :selected-candidate-id="selectedCandidateId"
         :active-candidates="activeCandidates"
@@ -148,7 +149,7 @@
             <div class="candidate-cards-preview">
               <div class="preview-col target" v-if="candidateTargetCard">
                 <small>目标牌</small>
-                <CardComp :card="candidateTargetCard" size="sm" />
+                <CardComp :card="candidateTargetCard" size="sm" :mode="resolvedTableCardMode" />
               </div>
               <div class="preview-col group">
                 <small>组合牌</small>
@@ -158,6 +159,7 @@
                     :key="`cand-${candidate.id}-${card.id}`"
                     :card="card"
                     size="sm"
+                    :mode="resolvedOwnCardMode"
                   />
                 </div>
                 <small v-else class="candidate-raw">{{ candidate.cardIds.join("、") || "无需手牌" }}</small>
@@ -179,6 +181,7 @@
       :server-error="declareError"
       :compact="isCompactViewport"
       :ultra-compact="isUltraCompactViewport"
+      :card-mode="resolvedOwnCardMode"
       @submit="submitDeclaration"
     />
 
@@ -213,6 +216,7 @@
               :key="`remain-${card.id}`"
               :card="card"
               size="sm"
+              :mode="resolvedTableCardMode"
             />
           </div>
         </section>
@@ -252,6 +256,7 @@
                         :key="`settle-e-${p.clientId}-${group.id}-${card.id}`"
                         :card="card"
                         size="sm"
+                        :mode="resolvedTableCardMode"
                       />
                     </div>
                   </div>
@@ -275,12 +280,19 @@
                         :key="`settle-hg-${p.clientId}-${group.id}-${card.id}`"
                         :card="card"
                         size="sm"
+                        :mode="settlementHandCardMode(p.clientId)"
                       />
                     </div>
                   </div>
                 </div>
                 <div class="settlement-cards" v-else-if="p.hand.length">
-                  <CardComp v-for="card in p.hand" :key="`settle-${p.clientId}-${card.id}`" :card="card" size="sm" />
+                  <CardComp
+                    v-for="card in p.hand"
+                    :key="`settle-${p.clientId}-${card.id}`"
+                    :card="card"
+                    size="sm"
+                    :mode="settlementHandCardMode(p.clientId)"
+                  />
                 </div>
                 <p v-else class="settlement-empty">（无手牌）</p>
               </div>
@@ -387,7 +399,15 @@ import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { BACKEND_HTTP_URL } from "@/config/backend";
-import type { ActionCandidate, ActionRequest, Card, RoundResultPlayer } from "@/types/game";
+import type {
+  ActionCandidate,
+  ActionRequest,
+  Card,
+  CardDisplayMode,
+  GameDisplayPreferences,
+  RenderedCardMode,
+  RoundResultPlayer,
+} from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
 
 type SettlementGroupBlock = {
@@ -405,6 +425,35 @@ type LobbyMode = {
   enabled: boolean;
 };
 const HTTP_URL = BACKEND_HTTP_URL;
+const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
+const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
+
+function normalizeCardDisplayMode(value: unknown): CardDisplayMode | null {
+  return value === "large" || value === "adaptive" || value === "long" ? value : null;
+}
+
+function readDisplayPreferences(): GameDisplayPreferences {
+  try {
+    const stored = window.localStorage.getItem(DISPLAY_PREFERENCES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
+      return {
+        ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
+        tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
+        seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
+      };
+    }
+  } catch {
+    // Invalid local preferences fall back to the compatible defaults below.
+  }
+
+  const legacyMode = window.localStorage.getItem(LEGACY_TABLE_CARD_MODE_KEY);
+  return {
+    ownCards: "adaptive",
+    tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
+    seatDirection: "counterclockwise",
+  };
+}
 
 function randomFrom(list: string[]): string {
   return list[Math.floor(Math.random() * list.length)] ?? list[0] ?? "玩家";
@@ -625,8 +674,19 @@ const {
   isRotatedPhonePortrait,
   isUltraCompactViewport,
 } = useResponsiveViewport();
-const storedTableCardMode = window.localStorage.getItem("sise_table_card_mode");
-const tableCardMode = ref<"simple" | "full">(storedTableCardMode === "full" ? "full" : "simple");
+const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
+  if (mode !== "adaptive") {
+    return mode;
+  }
+  return isCompactViewport.value ? "large" : "long";
+}
+const resolvedOwnCardMode = computed<RenderedCardMode>(() =>
+  resolveCardDisplayMode(displayPreferences.value.ownCards),
+);
+const resolvedTableCardMode = computed<RenderedCardMode>(() =>
+  resolveCardDisplayMode(displayPreferences.value.tableCards),
+);
 const globalError = ref("");
 const showRules = ref(false);
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -861,7 +921,7 @@ onMounted(() => {
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
-  window.localStorage.setItem("sise_table_card_mode", tableCardMode.value);
+  window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
 });
 
 onUnmounted(() => {
@@ -871,9 +931,13 @@ onUnmounted(() => {
   }
 });
 
-watch(tableCardMode, (mode) => {
-  window.localStorage.setItem("sise_table_card_mode", mode);
-});
+watch(
+  displayPreferences,
+  (preferences) => {
+    window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
+  },
+  { deep: true },
+);
 
 function maybeAutoStartPractice() {
   if (!pendingPracticeAutoStart.value || !canPressStartGame.value) {
@@ -1214,6 +1278,10 @@ function scoreToneClass(value: number): string {
 
 function isSettlementWinner(player: RoundResultPlayer): boolean {
   return Boolean(roundResult.value?.winnerId) && roundResult.value?.winnerId === player.clientId;
+}
+
+function settlementHandCardMode(playerId: string): RenderedCardMode {
+  return playerId === mySeatId.value ? resolvedOwnCardMode.value : resolvedTableCardMode.value;
 }
 
 function huFormulaLineOrder(key: string): number {

@@ -1,5 +1,14 @@
 export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass";
 export type ResponsePhase = "collective" | "local_upper" | "local_draw";
+export type CardDisplayMode = "large" | "adaptive" | "long";
+export type RenderedCardMode = Exclude<CardDisplayMode, "adaptive">;
+export type SeatDirection = "clockwise" | "counterclockwise";
+
+export interface GameDisplayPreferences {
+  ownCards: CardDisplayMode;
+  tableCards: CardDisplayMode;
+  seatDirection: SeatDirection;
+}
 
 export interface Card {
   id: string;

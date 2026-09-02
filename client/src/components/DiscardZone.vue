@@ -5,19 +5,20 @@
       <span>{{ expanded ? "收起" : "展开" }}</span>
     </header>
     <div class="cards" v-show="expanded">
-      <CardComp v-for="card in cards" :key="card.id" :card="card" />
+      <CardComp v-for="card in cards" :key="card.id" :card="card" :mode="cardMode" />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import type { Card } from "@/types/game";
+import type { Card, RenderedCardMode } from "@/types/game";
 import CardComp from "./Card.vue";
 
 defineProps<{
   title: string;
   cards: Card[];
+  cardMode?: RenderedCardMode;
 }>();
 
 const expanded = ref(true);
