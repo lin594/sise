@@ -545,6 +545,14 @@ function candidateBadgeText(cardId) {
 function cardLabel(card) {
     return getCardLabelText(card);
 }
+function handCardAccessibleLabel(card) {
+    const state = selectedDiscardCardId.value === card.id
+        ? "已选中"
+        : canDiscardCard(card)
+            ? "可选择"
+            : "不可打出";
+    return `${cardLabel(card)}，${state}`;
+}
 function parseActionDescriptor(action) {
     const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
     if (!parts.length) {
@@ -1090,7 +1098,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
@@ -2107,6 +2114,7 @@ if (__VLS_ctx.selfPlayer) {
                     'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
                 }) },
             'aria-pressed': (__VLS_ctx.selectedDiscardCardId === card.id),
+            'aria-label': (__VLS_ctx.handCardAccessibleLabel(card)),
             disabled: (!__VLS_ctx.canDiscardCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
         if (__VLS_ctx.candidateBadgeText(card.id)) {
@@ -2114,6 +2122,12 @@ if (__VLS_ctx.selfPlayer) {
                 ...{ class: "candidate-badge" },
             });
             (__VLS_ctx.candidateBadgeText(card.id));
+        }
+        if (__VLS_ctx.selectedDiscardCardId === card.id) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "discard-selection-badge" },
+                'aria-hidden': "true",
+            });
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
@@ -2356,6 +2370,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
@@ -2421,6 +2436,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isSelectedCandidateCard: isSelectedCandidateCard,
             candidateBadgeText: candidateBadgeText,
             cardLabel: cardLabel,
+            handCardAccessibleLabel: handCardAccessibleLabel,
             setSeatRef: setSeatRef,
             flightStyle: flightStyle,
             dealerFlightStyle: dealerFlightStyle,

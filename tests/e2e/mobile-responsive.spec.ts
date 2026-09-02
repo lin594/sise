@@ -282,6 +282,20 @@ test.describe("compact landscape gameplay", () => {
     const decisionSecondsMatch = (await page.getByTestId("action-guidance").textContent())?.match(/还剩\s*(\d+)\s*秒/);
     expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeGreaterThanOrEqual(22);
     expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeLessThanOrEqual(30);
+    const guidanceMetrics = await page.getByTestId("action-guidance").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
+      return {
+        fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+        top: rect.top,
+        bottom: rect.bottom,
+        dockTop: dock.top,
+        dockBottom: dock.bottom,
+      };
+    });
+    expect(guidanceMetrics.fontSize).toBeGreaterThanOrEqual(12);
+    expect(guidanceMetrics.top).toBeGreaterThanOrEqual(guidanceMetrics.dockTop);
+    expect(guidanceMetrics.bottom).toBeLessThanOrEqual(guidanceMetrics.dockBottom);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
@@ -336,6 +350,8 @@ test.describe("compact landscape gameplay", () => {
     await selectedCard.click();
     await selectedCard.dblclick();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
+    await expect(selectedCard).toHaveAttribute("aria-label", /已选中$/);
+    await expect(selectedCard.locator(".discard-selection-badge")).toHaveText("✓");
     expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handBeforeSelection);

@@ -452,11 +452,17 @@
               'candidate-selected': isSelectedCandidateCard(card.id),
             }"
             :aria-pressed="selectedDiscardCardId === card.id"
+            :aria-label="handCardAccessibleLabel(card)"
             :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
             @click="selectDiscardCard(card.id)"
             @dblclick.prevent="selectDiscardCard(card.id)"
           >
             <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
+            <span
+              v-if="selectedDiscardCardId === card.id"
+              class="discard-selection-badge"
+              aria-hidden="true"
+            >✓</span>
             <CardComp :card="card" :mode="props.ownCardMode" size="xl" />
           </button>
         </div>
@@ -1200,6 +1206,15 @@ function candidateBadgeText(cardId: string): string {
 
 function cardLabel(card: Card): string {
   return getCardLabelText(card);
+}
+
+function handCardAccessibleLabel(card: Card): string {
+  const state = selectedDiscardCardId.value === card.id
+    ? "已选中"
+    : canDiscardCard(card)
+      ? "可选择"
+      : "不可打出";
+  return `${cardLabel(card)}，${state}`;
 }
 
 function parseActionDescriptor(action: string): { actor: string; keyword: string } {
@@ -2778,6 +2793,25 @@ watch(canDiscard, (enabled) => {
   padding: 0 3px;
 }
 
+.discard-selection-badge {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #e0f2fe;
+  background: #0369a1;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.55);
+}
+
 .hand :deep(.size-xl.mode-long) {
   width: clamp(1.3rem, 2vw, 2rem);
   height: clamp(3.5rem, 5.2vw, 5.3rem);
@@ -2813,10 +2847,6 @@ watch(canDiscard, (enabled) => {
   border-top: none;
   padding: 0;
   gap: clamp(0.2rem, 0.5vh, 0.4rem);
-}
-
-.embedded-actions :deep(.hint) {
-  font-size: clamp(0.62rem, 1.35vh, 0.8rem);
 }
 
 .fx-layer {

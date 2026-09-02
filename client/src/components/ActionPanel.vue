@@ -145,13 +145,13 @@ const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== nul
 
 const panelHint = computed(() => {
   if (props.canDiscard) {
-    return props.hasDiscardSelection ? "已选牌，请确认出牌" : "请先从手牌中选择一张";
+    return props.hasDiscardSelection ? "已选好，请点出牌" : "请先选择一张手牌";
   }
   if (!props.canAct) {
-    return `当前回合: ${props.currentPlayerName}，你暂时不能操作`;
+    return `${props.currentPlayerName}操作中`;
   }
   if (selectionMode.value) {
-    return `已选择${actionText(selectionMode.value)}，请在中间弹窗选择牌组确认`;
+    return `已选择${actionText(selectionMode.value)}，请在中间选牌组`;
   }
   const specialChi = normalized.value.find(
     (item) => item.action === "chi" && item.candidates?.some((candidate) => candidate.kind === "single"),
@@ -159,27 +159,27 @@ const panelHint = computed(() => {
   if (specialChi) {
     if (props.responsePhase === "collective") {
       return (specialChi.candidates?.length ?? 0) > 1
-        ? "可预选吃牌组合或单独收下，系统会先等待其他玩家响应"
-        : "可预选收下，系统会先等待其他玩家响应";
+        ? "先选吃法，再等其他玩家响应"
+        : "先选收下，再等其他玩家响应";
     }
     return (specialChi.candidates?.length ?? 0) > 1
-      ? "请选择吃牌组合，或单独收下这张将/金条"
-      : "将和金条不能过，请收下后再出牌";
+      ? "请选择吃法，或单独收下"
+      : "将和金条不能过，请收下";
   }
   if (props.responsePhase === "collective" && !props.isCurrentTurn) {
     if (normalized.value.some((item) => item.key === "deferred-pass")) {
-      return "这张待响牌给你：可胡/开/碰，或先选吃/抓";
+      return "可胡、开、碰，或先选吃/抓";
     }
     if (normalized.value.some((item) => item.action === "chi" && item.deferred)) {
-      return "他人待响阶段：可先选吃，系统会先过待响，稍后自动吃";
+      return "可先选吃法，其他人响应后生效";
     }
-    return "他人待响阶段：你可以选择胡/开/碰/过";
+    return "可选择胡、开、碰或过";
   }
   if (props.responsePhase === "local_upper") {
-    return "当前待响牌来自上家，可选择吃或抓";
+    return "可吃上家牌，或抓一张";
   }
   if (props.responsePhase === "local_draw") {
-    return "当前待响牌需要你决定吃或过";
+    return "可吃这张牌，或过给下家";
   }
   if (!normalized.value.some((x) => isClickable(x))) {
     return "当前阶段没有可执行动作";
@@ -440,16 +440,22 @@ function onClick(item: PanelAction): void {
   .hint {
     min-height: 0;
     padding: 0.08rem 0.2rem;
-    font-size: clamp(0.58rem, 1.38vh, 0.74rem);
-    line-height: 1.15;
+    font-size: clamp(0.75rem, 3.2vh, 0.84rem);
+    line-height: 1.2;
   }
 
   .decision-line {
-    gap: 0.22rem;
+    gap: 0.04rem 0.28rem;
+    flex-wrap: wrap;
+    white-space: normal;
   }
 
   .decision-line strong {
-    font-size: clamp(0.74rem, 1.85vh, 0.88rem);
+    font-size: clamp(0.82rem, 3.55vh, 0.92rem);
+  }
+
+  .decision-line b {
+    font-size: 0.75rem;
   }
 
   .actions {
