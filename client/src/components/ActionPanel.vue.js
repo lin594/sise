@@ -4,6 +4,7 @@ const props = withDefaults(defineProps(), {
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    pausedHint: "",
     selectionMode: null,
     selectedCandidateId: null,
     canDiscard: false,
@@ -58,6 +59,9 @@ const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Numb
     : null);
 const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
 const panelHint = computed(() => {
+    if (props.pausedHint) {
+        return props.pausedHint;
+    }
     if (props.canDiscard) {
         return props.hasDiscardSelection ? "已选好，请点出牌" : "请先选择一张手牌";
     }
@@ -175,6 +179,7 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    pausedHint: "",
     selectionMode: null,
     selectedCandidateId: null,
     canDiscard: false,
@@ -187,6 +192,10 @@ let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['paused']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -229,14 +238,20 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     role: "status",
     'aria-live': "polite",
 });
-(__VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.panelHint}` : "");
+(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.panelHint}` : "");
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hint" },
-    ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent }) },
+    ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint) }) },
     'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
     'data-testid': "action-guidance",
 });
-if (__VLS_ctx.needsDecision) {
+if (__VLS_ctx.pausedHint) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "decision-line" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+}
+else if (__VLS_ctx.needsDecision) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "decision-line" },
     });
@@ -251,46 +266,67 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     ...{ class: "instruction" },
 });
 (__VLS_ctx.panelHint);
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "actions" },
-    ...{ class: ({ 'discard-mode': __VLS_ctx.canDiscard }) },
-});
-if (__VLS_ctx.canDiscard) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.canDiscard))
-                    return;
-                __VLS_ctx.emit('confirmDiscard');
-            } },
-        type: "button",
-        ...{ class: "btn discard-action" },
-        'data-testid': "discard-confirm",
-        ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending }) },
-        disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending),
+if (__VLS_ctx.pausedHint) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "paused-state" },
+        'data-testid': "action-paused",
     });
-    (__VLS_ctx.hasDiscardSelection ? (__VLS_ctx.discardPending ? "出牌中…" : "出牌") : "先选牌");
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "paused-symbol" },
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候");
 }
-for (const [item] of __VLS_getVForSourceType((__VLS_ctx.canDiscard ? [] : __VLS_ctx.normalized))) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                __VLS_ctx.onClick(item);
-            } },
-        key: (item.key),
-        'data-testid': (`action-${item.key}`),
-        ...{ class: "btn" },
-        ...{ class: ({
-                enabled: __VLS_ctx.isClickable(item) && __VLS_ctx.canAct,
-                selected: __VLS_ctx.selectionMode === item.action,
-            }) },
-        disabled: (!__VLS_ctx.canAct || !__VLS_ctx.isClickable(item) || __VLS_ctx.busy),
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "actions" },
+        ...{ class: ({ 'discard-mode': __VLS_ctx.canDiscard }) },
     });
-    (__VLS_ctx.text(item));
+    if (__VLS_ctx.canDiscard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!!(__VLS_ctx.pausedHint))
+                        return;
+                    if (!(__VLS_ctx.canDiscard))
+                        return;
+                    __VLS_ctx.emit('confirmDiscard');
+                } },
+            type: "button",
+            ...{ class: "btn discard-action" },
+            'data-testid': "discard-confirm",
+            ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending }) },
+            disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending),
+        });
+        (__VLS_ctx.hasDiscardSelection ? (__VLS_ctx.discardPending ? "出牌中…" : "出牌") : "先选牌");
+    }
+    for (const [item] of __VLS_getVForSourceType((__VLS_ctx.canDiscard ? [] : __VLS_ctx.normalized))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!!(__VLS_ctx.pausedHint))
+                        return;
+                    __VLS_ctx.onClick(item);
+                } },
+            key: (item.key),
+            'data-testid': (`action-${item.key}`),
+            ...{ class: "btn" },
+            ...{ class: ({
+                    enabled: __VLS_ctx.isClickable(item) && __VLS_ctx.canAct,
+                    selected: __VLS_ctx.selectionMode === item.action,
+                }) },
+            disabled: (!__VLS_ctx.canAct || !__VLS_ctx.isClickable(item) || __VLS_ctx.busy),
+        });
+        (__VLS_ctx.text(item));
+    }
 }
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['sr-only']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['instruction']} */ ;
+/** @type {__VLS_StyleScopedClasses['paused-state']} */ ;
+/** @type {__VLS_StyleScopedClasses['paused-symbol']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-action']} */ ;

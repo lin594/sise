@@ -480,6 +480,7 @@
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
       :current-player-name="props.currentPlayerName ?? '-'"
+      :paused-hint="props.interactionPausedMessage ?? ''"
       :seconds-left="seatCountdownSeconds"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
@@ -566,6 +567,7 @@ const props = defineProps<{
   responsePhase?: string;
   currentPlayerName?: string;
   turnHint?: string;
+  interactionPausedMessage?: string;
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
@@ -1050,6 +1052,9 @@ const seatCountdownPercent = computed<number>(() => {
 });
 
 const compactCenterHint = computed(() => {
+  if (props.interactionPausedMessage) {
+    return props.interactionPausedMessage;
+  }
   if (props.turnHint) {
     return props.turnHint;
   }

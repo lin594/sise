@@ -52,9 +52,9 @@ const title = computed(() => {
     case "restored":
       return "牌局已恢复";
     case "offline":
-      return "网络已断开";
+      return "断网 · 自动恢复中";
     case "retry_wait":
-      return "暂时未连上";
+      return "未连上 · 自动重试中";
     case "failed":
       return "连接失败";
     case "reconnecting":

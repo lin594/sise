@@ -1,21 +1,28 @@
 ﻿<template>
   <div class="panel" :class="{ locked: panelLocked }">
     <span class="sr-only" role="status" aria-live="polite">
-      {{ needsDecision ? `该你操作了。${panelHint}` : "" }}
+      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `该你操作了。${panelHint}` : "" }}
     </span>
     <div
       class="hint"
-      :class="{ active: needsDecision, urgent: isUrgent }"
+      :class="{ active: needsDecision, urgent: isUrgent, paused: Boolean(pausedHint) }"
       :data-urgent="isUrgent ? 'true' : 'false'"
       data-testid="action-guidance"
     >
-      <span v-if="needsDecision" class="decision-line">
+      <span v-if="pausedHint" class="decision-line">
+        <strong>操作已暂停</strong>
+      </span>
+      <span v-else-if="needsDecision" class="decision-line">
         <strong>{{ isUrgent ? "抓紧操作" : "该你操作了" }}</strong>
         <b v-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
       </span>
       <span class="instruction">{{ panelHint }}</span>
     </div>
-    <div class="actions" :class="{ 'discard-mode': canDiscard }">
+    <div v-if="pausedHint" class="paused-state" data-testid="action-paused">
+      <span class="paused-symbol" aria-hidden="true">↻</span>
+      <strong>{{ pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候" }}</strong>
+    </div>
+    <div v-else class="actions" :class="{ 'discard-mode': canDiscard }">
       <button
         v-if="canDiscard"
         type="button"
@@ -58,6 +65,7 @@ const props = withDefaults(
     isCurrentTurn?: boolean;
     responsePhase?: string;
     currentPlayerName?: string;
+    pausedHint?: string;
     selectionMode?: SelectionMode;
     selectedCandidateId?: string | null;
     canDiscard?: boolean;
@@ -70,6 +78,7 @@ const props = withDefaults(
     isCurrentTurn: false,
     responsePhase: "",
     currentPlayerName: "-",
+    pausedHint: "",
     selectionMode: null,
     selectedCandidateId: null,
     canDiscard: false,
@@ -144,6 +153,9 @@ const secondsLeft = computed<number | null>(() =>
 const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
 
 const panelHint = computed(() => {
+  if (props.pausedHint) {
+    return props.pausedHint;
+  }
   if (props.canDiscard) {
     return props.hasDiscardSelection ? "已选好，请点出牌" : "请先选择一张手牌";
   }
@@ -312,6 +324,36 @@ function onClick(item: PanelAction): void {
   border-color: rgba(250, 204, 21, 0.58);
   background: rgba(113, 63, 18, 0.32);
   color: #fef3c7;
+}
+
+.hint.paused {
+  border-color: rgba(251, 113, 133, 0.72);
+  background: rgba(127, 29, 29, 0.42);
+  color: #ffe4e6;
+}
+
+.hint.paused .decision-line strong {
+  color: #fecdd3;
+}
+
+.paused-state {
+  min-height: clamp(2.55rem, 6.2vh, 3.9rem);
+  padding: 0.3rem 0.45rem;
+  border: 1px solid rgba(251, 113, 133, 0.58);
+  border-radius: clamp(0.45rem, 0.9vh, 0.8rem);
+  background: rgba(69, 10, 10, 0.48);
+  color: #fff1f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+  font-size: clamp(0.8rem, 1.8vh, 0.98rem);
+}
+
+.paused-symbol {
+  flex: 0 0 auto;
+  font-size: 1.15em;
 }
 
 .decision-line {

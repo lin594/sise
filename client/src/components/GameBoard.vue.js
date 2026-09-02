@@ -408,6 +408,9 @@ const seatCountdownPercent = computed(() => {
     return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
 });
 const compactCenterHint = computed(() => {
+    if (props.interactionPausedMessage) {
+        return props.interactionPausedMessage;
+    }
     if (props.turnHint) {
         return props.turnHint;
     }
@@ -2160,6 +2163,7 @@ if (props.state?.phase === 'playing') {
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
+        pausedHint: (props.interactionPausedMessage ?? ''),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
@@ -2177,6 +2181,7 @@ if (props.state?.phase === 'playing') {
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
+        pausedHint: (props.interactionPausedMessage ?? ''),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),

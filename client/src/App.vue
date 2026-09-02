@@ -124,6 +124,7 @@
         :response-phase="state?.responsePhase || ''"
         :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
+        :interaction-paused-message="interactionPausedMessage"
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
@@ -767,6 +768,21 @@ const canDiscard = computed(
     state.value?.responsePhase === "local_draw" &&
     availableActions.value.length === 0,
 );
+const interactionPausedMessage = computed(() => {
+  if (connected.value || !isPlaying.value) {
+    return "";
+  }
+  if (connectionState.value === "offline") {
+    return "网络已断开，联网后自动恢复";
+  }
+  if (connectionState.value === "failed") {
+    return "连接失败，请点上方立即重试";
+  }
+  if (connectionState.value === "retry_wait") {
+    return "暂时未连上，系统会继续重试";
+  }
+  return "正在恢复牌局，请稍候";
+});
 const selectionMode = ref<"kai" | "peng" | "chi" | null>(null);
 const selectedCandidateId = ref<string | null>(null);
 const pendingDeferredChiCandidateId = ref<string | null>(null);

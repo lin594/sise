@@ -46,7 +46,7 @@ test.describe("牌局断线恢复", () => {
 
     await context.setOffline(true);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "offline", { timeout: 10_000 });
-    await expect(page.getByTestId("connection-status")).toContainText("网络已断开");
+    await expect(page.getByTestId("connection-status")).toContainText("断网 · 自动恢复中");
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(beforeDisconnect.handIds.length);
     expect(
@@ -55,6 +55,10 @@ test.describe("牌局断线恢复", () => {
       ),
     ).toEqual(beforeDisconnect.handIds);
     await expect(page.locator(".action-dock button:enabled")).toHaveCount(0);
+    await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
+    await expect(page.getByTestId("action-guidance")).toContainText("联网后自动恢复");
+    await expect(page.getByTestId("action-paused")).toContainText("无需操作，请稍候");
+    await expect(page.getByTestId("player-self")).toContainText("网络已断开，联网后自动恢复");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-offline.png") });
 
     await context.setOffline(false);

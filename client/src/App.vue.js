@@ -279,6 +279,21 @@ const canDiscard = computed(() => connected.value &&
     isMyTurn.value &&
     state.value?.responsePhase === "local_draw" &&
     availableActions.value.length === 0);
+const interactionPausedMessage = computed(() => {
+    if (connected.value || !isPlaying.value) {
+        return "";
+    }
+    if (connectionState.value === "offline") {
+        return "网络已断开，联网后自动恢复";
+    }
+    if (connectionState.value === "failed") {
+        return "连接失败，请点上方立即重试";
+    }
+    if (connectionState.value === "retry_wait") {
+        return "暂时未连上，系统会继续重试";
+    }
+    return "正在恢复牌局，请稍候";
+});
 const selectionMode = ref(null);
 const selectedCandidateId = ref(null);
 const pendingDeferredChiCandidateId = ref(null);
@@ -1629,6 +1644,7 @@ else {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
+        interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         ownCardMode: (__VLS_ctx.resolvedOwnCardMode),
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
@@ -1652,6 +1668,7 @@ else {
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
+        interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         ownCardMode: (__VLS_ctx.resolvedOwnCardMode),
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
@@ -2325,6 +2342,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isMyTurn: isMyTurn,
             canAct: canAct,
             canDiscard: canDiscard,
+            interactionPausedMessage: interactionPausedMessage,
             selectionMode: selectionMode,
             selectedCandidateId: selectedCandidateId,
             activeCandidates: activeCandidates,
