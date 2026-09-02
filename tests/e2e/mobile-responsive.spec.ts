@@ -675,15 +675,23 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-counterclockwise.png") });
     await page.getByTestId("settings-rules").click();
-    await expect(page.locator(".rules-panel")).toBeVisible();
-    await page.getByRole("button", { name: "关闭", exact: true }).click();
+    const rulesDialog = page.getByRole("dialog", { name: "四色牌规则" });
+    await expect(rulesDialog).toBeVisible();
+    await expect(page.getByTestId("close-rules")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(rulesDialog).toHaveCount(0);
+    await expect(gameSettings).toBeFocused();
 
     await gameSettings.click();
     await expect(settingsPanel).toBeVisible();
+    await page.getByTestId("settings-rules").click();
+    await expect(rulesDialog).toBeVisible();
     await confirmDeclaration.dispatchEvent("click");
     await expect(gameSettings).toBeDisabled({ timeout: 30_000 });
+    await expect(rulesDialog).toHaveCount(0);
     await expect(settingsPanel).toHaveCount(0);
     await expect(gameSettings).toContainText("先操作");
+    await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
     await expect.poll(() => page.title()).toBe("轮到你了 · 四色牌");
     const vibrationCalls = await page.evaluate(() =>

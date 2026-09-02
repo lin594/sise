@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
@@ -337,6 +337,9 @@ const globalError = ref("");
 const globalNotice = ref("");
 let globalNoticeTimer = null;
 const showRules = ref(false);
+const rulesPanelRef = ref(null);
+const rulesCloseButtonRef = ref(null);
+let rulesReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -345,6 +348,66 @@ const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot));
 const settingsDecisionActive = computed(() => canAct.value || canDiscard.value);
+function openRules() {
+    if (settingsDecisionActive.value) {
+        return;
+    }
+    rulesReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    showRules.value = true;
+    void nextTick(() => rulesCloseButtonRef.value?.focus());
+}
+function closeRules(restoreFocus = true) {
+    const returnTarget = rulesReturnFocus;
+    const returnToGameSettings = Boolean(returnTarget?.closest("[data-testid='settings-panel']"));
+    rulesReturnFocus = null;
+    showRules.value = false;
+    if (!restoreFocus) {
+        return;
+    }
+    void nextTick(() => {
+        const fallback = document.querySelector("[data-testid='game-settings'], [data-testid='login-submit'], .reset-btn");
+        (returnTarget?.isConnected && !returnToGameSettings ? returnTarget : fallback)?.focus();
+    });
+}
+function trapRulesFocus(event) {
+    const panel = rulesPanelRef.value;
+    if (!panel) {
+        return;
+    }
+    const focusable = Array.from(panel.querySelectorAll("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")).filter((element) => !element.hasAttribute("hidden"));
+    if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+    }
+    else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+function closeRulesForDecision() {
+    if (!showRules.value) {
+        return;
+    }
+    closeRules(false);
+    void nextTick(() => {
+        const target = canDiscard.value
+            ? document.querySelector(".hand-card.playable")
+            : document.querySelector(".action-dock .btn:not(:disabled)");
+        target?.focus();
+    });
+}
+watch(settingsDecisionActive, (active) => {
+    if (active) {
+        closeRulesForDecision();
+    }
+});
 const decisionAlertKey = computed(() => {
     if (!settingsDecisionActive.value) {
         return "";
@@ -1425,11 +1488,7 @@ if (__VLS_ctx.showGameTools) {
     let __VLS_11;
     let __VLS_12;
     const __VLS_13 = {
-        onOpenRules: (...[$event]) => {
-            if (!(__VLS_ctx.showGameTools))
-                return;
-            __VLS_ctx.showRules = true;
-        }
+        onOpenRules: (__VLS_ctx.openRules)
     };
     const __VLS_14 = {
         onExit: (__VLS_ctx.handleLeaveRoom)
@@ -1442,11 +1501,7 @@ if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState))
-                    return;
-                __VLS_ctx.showRules = true;
-            } },
+        ...{ onClick: (__VLS_ctx.openRules) },
         ...{ class: "ghost reset-btn" },
     });
 }
@@ -1507,11 +1562,7 @@ if (__VLS_ctx.showEntry) {
         onSubmit: (__VLS_ctx.enterLobby)
     };
     const __VLS_23 = {
-        onOpenRules: (...[$event]) => {
-            if (!(__VLS_ctx.showEntry))
-                return;
-            __VLS_ctx.showRules = true;
-        }
+        onOpenRules: (__VLS_ctx.openRules)
     };
     const __VLS_24 = {
         onRandomize: (__VLS_ctx.randomizeNickname)
@@ -1582,13 +1633,7 @@ else if (__VLS_ctx.showModeLobby) {
     let __VLS_30;
     let __VLS_31;
     const __VLS_32 = {
-        onOpenRules: (...[$event]) => {
-            if (!!(__VLS_ctx.showEntry))
-                return;
-            if (!(__VLS_ctx.showModeLobby))
-                return;
-            __VLS_ctx.showRules = true;
-        }
+        onOpenRules: (__VLS_ctx.openRules)
     };
     const __VLS_33 = {
         onStart: (__VLS_ctx.startSelectedMode)
@@ -2130,13 +2175,26 @@ if (__VLS_ctx.showRules) {
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showRules))
                     return;
-                __VLS_ctx.showRules = false;
+                __VLS_ctx.closeRules();
             } },
         ...{ class: "rules-mask" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onKeydown: (...[$event]) => {
+                if (!(__VLS_ctx.showRules))
+                    return;
+                __VLS_ctx.closeRules();
+            } },
+        ...{ onKeydown: (__VLS_ctx.trapRulesFocus) },
+        ref: "rulesPanelRef",
         ...{ class: "rules-panel" },
+        'data-testid': "rules-panel",
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-labelledby': "rules-panel-title",
+        tabindex: "-1",
     });
+    /** @type {typeof __VLS_ctx.rulesPanelRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "rules-head" },
     });
@@ -2144,7 +2202,9 @@ if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "rules-kicker" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
+        id: "rules-panel-title",
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "rules-slogan" },
     });
@@ -2152,10 +2212,13 @@ if (__VLS_ctx.showRules) {
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showRules))
                     return;
-                __VLS_ctx.showRules = false;
+                __VLS_ctx.closeRules();
             } },
+        ref: "rulesCloseButtonRef",
         ...{ class: "ghost" },
+        'data-testid': "close-rules",
     });
+    /** @type {typeof __VLS_ctx.rulesCloseButtonRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "rules-section" },
     });
@@ -2390,10 +2453,15 @@ const __VLS_self = (await import('vue')).defineComponent({
             globalError: globalError,
             globalNotice: globalNotice,
             showRules: showRules,
+            rulesPanelRef: rulesPanelRef,
+            rulesCloseButtonRef: rulesCloseButtonRef,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
             settingsDecisionActive: settingsDecisionActive,
+            openRules: openRules,
+            closeRules: closeRules,
+            trapRulesFocus: trapRulesFocus,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,

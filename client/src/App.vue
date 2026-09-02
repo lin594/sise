@@ -36,12 +36,12 @@
         v-if="showGameTools"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
-        @open-rules="showRules = true"
+        @open-rules="openRules"
         @exit="handleLeaveRoom"
       />
       <div class="meta" v-if="!hasLobbySession && !isConnectingWithoutState">
         <span>首页</span>
-        <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
+        <button class="ghost reset-btn" @click="openRules">查看规则</button>
       </div>
     </header>
     <p v-if="globalError" class="error global-error" role="alert">{{ globalError }}</p>
@@ -62,7 +62,7 @@
       :history-names="nicknameHistory"
       @update:nickname="entryName = $event"
       @submit="enterLobby"
-      @open-rules="showRules = true"
+      @open-rules="openRules"
       @randomize="randomizeNickname"
       @select-history="entryName = $event"
     />
@@ -84,7 +84,7 @@
       :room-id="activeRoomId"
       :room-mode="state?.roomMode || ''"
       :players="players"
-      @open-rules="showRules = true"
+      @open-rules="openRules"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
@@ -328,15 +328,25 @@
       </div>
     </div>
 
-    <div v-if="showRules" class="rules-mask" @click.self="showRules = false">
-      <div class="rules-panel">
+    <div v-if="showRules" class="rules-mask" @click.self="closeRules()">
+      <div
+        ref="rulesPanelRef"
+        class="rules-panel"
+        data-testid="rules-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rules-panel-title"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="closeRules()"
+        @keydown.tab="trapRulesFocus"
+      >
         <div class="rules-head">
           <div>
             <p class="rules-kicker">玩家速查</p>
-            <h2>四色牌规则</h2>
+            <h2 id="rules-panel-title">四色牌规则</h2>
             <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
           </div>
-          <button class="ghost" @click="showRules = false">关闭</button>
+          <button ref="rulesCloseButtonRef" class="ghost" data-testid="close-rules" @click="closeRules()">关闭</button>
         </div>
 
         <section class="rules-section">
@@ -396,7 +406,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
@@ -838,6 +848,9 @@ const globalError = ref("");
 const globalNotice = ref("");
 let globalNoticeTimer: number | null = null;
 const showRules = ref(false);
+const rulesPanelRef = ref<HTMLElement | null>(null);
+const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
+let rulesReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -851,6 +864,77 @@ const shouldShowDeclarePanel = computed(
 const settingsDecisionActive = computed(
   () => canAct.value || canDiscard.value,
 );
+
+function openRules(): void {
+  if (settingsDecisionActive.value) {
+    return;
+  }
+  rulesReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  showRules.value = true;
+  void nextTick(() => rulesCloseButtonRef.value?.focus());
+}
+
+function closeRules(restoreFocus = true): void {
+  const returnTarget = rulesReturnFocus;
+  const returnToGameSettings = Boolean(returnTarget?.closest("[data-testid='settings-panel']"));
+  rulesReturnFocus = null;
+  showRules.value = false;
+  if (!restoreFocus) {
+    return;
+  }
+  void nextTick(() => {
+    const fallback = document.querySelector<HTMLElement>(
+      "[data-testid='game-settings'], [data-testid='login-submit'], .reset-btn",
+    );
+    (returnTarget?.isConnected && !returnToGameSettings ? returnTarget : fallback)?.focus();
+  });
+}
+
+function trapRulesFocus(event: KeyboardEvent): void {
+  const panel = rulesPanelRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((element) => !element.hasAttribute("hidden"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function closeRulesForDecision(): void {
+  if (!showRules.value) {
+    return;
+  }
+  closeRules(false);
+  void nextTick(() => {
+    const target = canDiscard.value
+      ? document.querySelector<HTMLElement>(".hand-card.playable")
+      : document.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
+    target?.focus();
+  });
+}
+
+watch(settingsDecisionActive, (active) => {
+  if (active) {
+    closeRulesForDecision();
+  }
+});
+
 const decisionAlertKey = computed(() => {
   if (!settingsDecisionActive.value) {
     return "";
