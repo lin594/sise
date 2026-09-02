@@ -2286,7 +2286,6 @@ watch(canDiscard, (enabled) => {
   position: relative;
   min-width: 0;
   min-height: 0;
-  z-index: 0;
   pointer-events: none;
 }
 
@@ -2301,6 +2300,7 @@ watch(canDiscard, (enabled) => {
   left: 50%;
   bottom: 1%;
   transform: translateX(-50%);
+  z-index: 5;
   min-width: clamp(3rem, 7vh, 4.5rem);
   min-height: clamp(4rem, 9vh, 6rem);
   filter: drop-shadow(0 9px 16px rgba(2, 6, 23, 0.32));
@@ -2332,6 +2332,7 @@ watch(canDiscard, (enabled) => {
   width: clamp(2.7rem, 6.4vh, 3.6rem);
   height: clamp(3.15rem, 7.5vh, 4.2rem);
   transform: translateX(-50%);
+  z-index: 5;
   filter: drop-shadow(0 7px 10px rgba(2, 6, 23, 0.3));
 }
 
@@ -3019,25 +3020,25 @@ watch(canDiscard, (enabled) => {
 
 @media (max-width: 960px), (max-height: 500px) {
   .board {
-    grid-template-columns: clamp(7rem, 18vw, 9.5rem) minmax(0, 1fr) clamp(9.75rem, 24vw, 12rem);
+    grid-template-columns: clamp(6rem, 15vw, 7.5rem) minmax(0, 1fr) clamp(8.4rem, 21vw, 10.5rem);
     grid-template-rows: minmax(0, 1fr) clamp(6.75rem, 31dvh, 7.5rem);
-    gap: 0.55vh;
+    gap: 0.4vh;
   }
 
   .table {
     height: 100%;
     max-height: none;
     aspect-ratio: auto;
-    padding: 0.7vh;
+    padding: 0.45vh;
     border-radius: 1.6vh;
-    grid-template-columns: minmax(0, 24%) minmax(0, 1fr) minmax(0, 24%);
-    grid-template-rows: minmax(3.9rem, 0.82fr) minmax(4.6rem, 1fr) minmax(4rem, 0.88fr);
+    grid-template-columns: minmax(0, 22%) minmax(0, 1fr) minmax(0, 22%);
+    grid-template-rows: minmax(3.1rem, 0.65fr) minmax(6.15rem, 1.4fr) minmax(3.1rem, 0.65fr);
     grid-template-areas:
       "flowtl top flowtr"
       "left center right"
       "flowbl selfgroups flowbr";
-    column-gap: 0.55vh;
-    row-gap: 0.55vh;
+    column-gap: 0.35vh;
+    row-gap: 0.35vh;
   }
 
   .corner-card {
@@ -3063,9 +3064,9 @@ watch(canDiscard, (enabled) => {
   }
 
   .mini-card.mode-large {
-    width: 1.3rem;
-    height: 1.45rem;
-    font-size: clamp(0.62rem, 1.32vh, 0.74rem);
+    width: 1.55rem;
+    height: 1.7rem;
+    font-size: clamp(0.78rem, 3.4vh, 0.9rem);
   }
 
   .player-card,
@@ -3073,8 +3074,8 @@ watch(canDiscard, (enabled) => {
   .self-groups-card,
   .self-info-card,
   .self-hand-card {
-    padding: 0.45vh 0.55vh;
-    gap: 0.35vh;
+    padding: 0.3vh 0.42vh;
+    gap: 0.25vh;
   }
 
   .player-top {
@@ -3082,7 +3083,7 @@ watch(canDiscard, (enabled) => {
   }
 
   .seat-head strong {
-    font-size: clamp(0.88rem, 2.1vh, 1.02rem);
+    font-size: clamp(0.92rem, 4vh, 1.05rem);
   }
 
   .seat-meta {
@@ -3097,7 +3098,7 @@ watch(canDiscard, (enabled) => {
 
   .flow-card p,
   .self-groups-card p {
-    font-size: clamp(0.55rem, 1.3vh, 0.66rem);
+    font-size: clamp(0.6rem, 2.6vh, 0.7rem);
   }
 
   .center {
@@ -3130,9 +3131,9 @@ watch(canDiscard, (enabled) => {
 
   .center-seat-action {
     min-width: 2.4rem;
-    min-height: 1.55rem;
+    min-height: 1.7rem;
     padding: 0.12rem 0.28rem;
-    font-size: clamp(0.62rem, 1.28vh, 0.76rem);
+    font-size: clamp(0.7rem, 3vh, 0.82rem);
   }
 
   .response-wrap {
@@ -3151,12 +3152,12 @@ watch(canDiscard, (enabled) => {
   }
 
   .self-head h3 {
-    font-size: clamp(0.92rem, 2.25vh, 1.08rem);
+    font-size: clamp(0.96rem, 4.2vh, 1.1rem);
     line-height: 1.08;
   }
 
   .self-head p {
-    font-size: clamp(0.58rem, 1.45vh, 0.72rem);
+    font-size: clamp(0.64rem, 2.8vh, 0.75rem);
   }
 
   .self-head .seat-tags {
@@ -3168,7 +3169,7 @@ watch(canDiscard, (enabled) => {
   .self-info-card {
     grid-column: 1;
     border-radius: 1.4vh;
-    padding: 0.55vh 0.8vh;
+    padding: 0.4vh 0.55vh;
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
   }
@@ -3176,7 +3177,7 @@ watch(canDiscard, (enabled) => {
   .self-groups-card,
   .self-hand-card {
     border-radius: 1.1vh;
-    padding: 0.35vh 0.55vh;
+    padding: 0.25vh 0.4vh;
   }
 
   .self-hand-card {
@@ -3188,13 +3189,13 @@ watch(canDiscard, (enabled) => {
   }
 
   .discard-tip {
-    font-size: clamp(0.56rem, 1.35vh, 0.72rem);
+    font-size: clamp(0.62rem, 2.7vh, 0.74rem);
   }
 
   .discard-token.mode-large {
-    width: 1.45rem;
-    height: 1.45rem;
-    font-size: clamp(0.62rem, 1.35vh, 0.76rem);
+    width: 1.55rem;
+    height: 1.65rem;
+    font-size: clamp(0.76rem, 3.2vh, 0.88rem);
   }
 
   .hand {
@@ -3202,11 +3203,11 @@ watch(canDiscard, (enabled) => {
     overflow-y: hidden;
     display: flex;
     flex-wrap: nowrap;
-    gap: clamp(2px, 0.45vw, 4px);
+    gap: 2px;
     min-height: 0;
     align-items: center;
     align-content: center;
-    padding: 0.1rem 0.2rem 0.35rem;
+    padding: 0.08rem 0.08rem 0.25rem;
     scroll-snap-type: x proximity;
     overscroll-behavior-inline: contain;
     touch-action: pan-x;
@@ -3239,7 +3240,7 @@ watch(canDiscard, (enabled) => {
   .hand :deep(.size-xl.mode-large) {
     width: clamp(40px, 6.2vw, 44px);
     height: clamp(52px, 14vh, 60px);
-    font-size: clamp(1.05rem, 5.8vh, 1.45rem);
+    font-size: clamp(22px, 5.8vh, 1.55rem);
   }
 
   .embedded-actions {
@@ -3252,7 +3253,7 @@ watch(canDiscard, (enabled) => {
   .embedded-actions :deep(.actions) {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, minmax(48px, 1fr));
+    grid-template-columns: repeat(3, minmax(40px, 1fr));
     gap: 0.45vh;
     justify-content: initial;
     align-items: stretch;
@@ -3262,10 +3263,19 @@ watch(canDiscard, (enabled) => {
   .embedded-actions :deep(.btn) {
     width: 100%;
     flex: 0 0 auto;
-    min-width: 48px;
-    min-height: 48px;
-    font-size: clamp(0.84rem, 1.95vh, 1rem);
+    min-width: clamp(40px, 7vw, 48px);
+    min-height: clamp(40px, 11.5vh, 46px);
+    font-size: clamp(0.96rem, 4vh, 1.08rem);
     border-radius: 0.85vh;
+  }
+
+  .embedded-actions :deep(.actions.discard-mode) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .embedded-actions :deep(.discard-action) {
+    width: 100%;
+    max-width: none;
   }
 
   .embedded-actions :deep(.btn:disabled) {
@@ -3297,8 +3307,28 @@ watch(canDiscard, (enabled) => {
     display: none;
   }
 
+  .discard-empty {
+    display: none;
+  }
+
+  .deck-stack {
+    top: 0;
+    width: 2.35rem;
+    height: 2.65rem;
+  }
+
+  .deck-number strong {
+    font-size: 0.95rem;
+  }
+
+  .response-focus {
+    bottom: 0;
+    min-width: 2.8rem;
+    min-height: 3.25rem;
+  }
+
   .dealer-card-mark :deep(.card) {
-    transform: scale(0.62);
+    transform: scale(0.78);
   }
 }
 

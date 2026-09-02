@@ -264,8 +264,8 @@ function onClick(item: PanelAction): void {
 }
 
 .btn {
-  min-width: max(48px, clamp(3rem, 5vw, 5.2rem));
-  min-height: max(48px, clamp(3rem, 6.2vh, 3.9rem));
+  min-width: clamp(2.7rem, 5vw, 5.2rem);
+  min-height: clamp(2.55rem, 6.2vh, 3.9rem);
   border: none;
   border-radius: clamp(0.45rem, 0.9vh, 0.8rem);
   color: #fff;
@@ -344,10 +344,10 @@ function onClick(item: PanelAction): void {
   }
 
   .btn {
-    min-width: 48px;
-    min-height: 48px;
+    min-width: clamp(40px, 7vw, 48px);
+    min-height: clamp(40px, 11.5vh, 46px);
     border-radius: 1.2vh;
-    font-size: clamp(0.95rem, 2.4vh, 1.18rem);
+    font-size: clamp(1rem, 4.2vh, 1.18rem);
     padding: 0 0.35rem;
   }
 }

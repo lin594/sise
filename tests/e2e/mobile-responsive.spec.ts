@@ -155,7 +155,7 @@ test.describe("phone portrait landscape canvas", () => {
 test.describe("compact landscape gameplay", () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
-  test("keeps lobby actions reachable and gameplay controls touch sized", async ({ page }) => {
+  test("keeps lobby actions reachable and gameplay controls touch sized", async ({ page }, testInfo) => {
     test.setTimeout(90_000);
     await enterLobby(page);
 
@@ -218,16 +218,23 @@ test.describe("compact landscape gameplay", () => {
     await expectSimplifiedTableCenter(page);
     await expectDedicatedGameHeader(page);
     await reachDiscardConfirmation(page);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
       const cards = Array.from(element.querySelectorAll<HTMLElement>(".hand-card"));
       const rects = cards.map((card) => card.getBoundingClientRect());
+      const handRect = element.getBoundingClientRect();
       return {
         cardCount: cards.length,
         cardHeights: rects.map((rect) => Math.round(rect.height)),
         cardWidths: rects.map((rect) => Math.round(rect.width)),
+        cardFontSizes: cards.map((card) => {
+          const face = card.querySelector<HTMLElement>(".text-top");
+          return face ? Number.parseFloat(getComputedStyle(face).fontSize) : 0;
+        }),
         cardGaps: rects.slice(1).map((rect, index) => Math.round(rect.left - rects[index]!.right)),
         cardRows: new Set(rects.map((rect) => Math.round(rect.y))).size,
+        fullyVisibleCards: rects.filter((rect) => rect.left >= handRect.left && rect.right <= handRect.right + 0.5).length,
         clientHeight: element.clientHeight,
         scrollHeight: element.scrollHeight,
         clientWidth: element.clientWidth,
@@ -242,7 +249,10 @@ test.describe("compact landscape gameplay", () => {
     expect(Math.max(...handMetrics.cardWidths)).toBeLessThanOrEqual(44);
     expect(Math.min(...handMetrics.cardGaps)).toBeGreaterThanOrEqual(2);
     expect(Math.max(...handMetrics.cardGaps)).toBeLessThanOrEqual(4);
-    expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(36);
+    expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(52);
+    expect(Math.min(...handMetrics.cardFontSizes)).toBeGreaterThanOrEqual(22);
+    expect(handMetrics.fullyVisibleCards).toBeGreaterThanOrEqual(9);
+    expect(handMetrics.fullyVisibleCards).toBeLessThanOrEqual(10);
     expect(handMetrics.scrollWidth).toBeGreaterThan(handMetrics.clientWidth);
     expect(handMetrics.scrollHeight).toBeLessThanOrEqual(handMetrics.clientHeight);
     expect(handMetrics.overflowX).toBe("auto");
@@ -267,6 +277,7 @@ test.describe("compact landscape gameplay", () => {
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
     await expect(discardConfirm).toHaveText("出牌");
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-selected-card.png") });
     const discardButtonRect = await discardConfirm.evaluate((button) => {
       const rect = button.getBoundingClientRect();
       return { height: Math.round(rect.height), right: Math.round(rect.right), bottom: Math.round(rect.bottom) };
@@ -277,6 +288,20 @@ test.describe("compact landscape gameplay", () => {
     expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
     await discardConfirm.click();
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
+    await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
+    const pendingGeometry = await page.evaluate(() => {
+      const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')!.getBoundingClientRect();
+      const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')!.getBoundingClientRect();
+      return {
+        deckBottom: deck.bottom,
+        pendingTop: pending.top,
+        deckCenterX: deck.x + deck.width / 2,
+        pendingCenterX: pending.x + pending.width / 2,
+      };
+    });
+    expect(pendingGeometry.deckBottom).toBeLessThanOrEqual(pendingGeometry.pendingTop);
+    expect(Math.abs(pendingGeometry.deckCenterX - pendingGeometry.pendingCenterX)).toBeLessThanOrEqual(2);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-pending-card.png") });
 
     const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
       const first = element.querySelector<HTMLButtonElement>(".btn");
@@ -300,8 +325,9 @@ test.describe("compact landscape gameplay", () => {
       return { sizes, rows };
     });
     expect(actionMetrics.rows).toBe(2);
-    expect(Math.min(...actionMetrics.sizes.map((size) => size.width))).toBeGreaterThanOrEqual(48);
-    expect(Math.min(...actionMetrics.sizes.map((size) => size.height))).toBeGreaterThanOrEqual(48);
+    expect(Math.min(...actionMetrics.sizes.map((size) => size.width))).toBeGreaterThanOrEqual(40);
+    expect(Math.min(...actionMetrics.sizes.map((size) => size.height))).toBeGreaterThanOrEqual(40);
+    expect(Math.max(...actionMetrics.sizes.map((size) => size.height))).toBeLessThanOrEqual(46);
 
     const pageOverflow = await page.evaluate(() => ({
       width: document.body.scrollWidth,
@@ -314,6 +340,21 @@ test.describe("compact landscape gameplay", () => {
 
     await page.getByTestId("game-settings").click();
     await expect(page.getByTestId("settings-panel")).toBeVisible();
+    const settingsGeometry = await page.getByTestId("settings-panel").evaluate((panel) => {
+      const panelRect = panel.getBoundingClientRect();
+      const headerRect = document.querySelector<HTMLElement>('[data-testid="game-control-header"]')!.getBoundingClientRect();
+      return {
+        top: panelRect.top,
+        bottom: panelRect.bottom,
+        headerBottom: headerRect.bottom,
+        viewportHeight: innerHeight,
+        overflowY: getComputedStyle(panel).overflowY,
+      };
+    });
+    expect(settingsGeometry.top).toBeGreaterThanOrEqual(settingsGeometry.headerBottom);
+    expect(settingsGeometry.bottom).toBeLessThanOrEqual(settingsGeometry.viewportHeight);
+    expect(settingsGeometry.overflowY).toBe("auto");
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-settings.png") });
     await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
@@ -340,9 +381,11 @@ test.describe("compact landscape gameplay", () => {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
       seatDirection: "clockwise",
     });
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
     await page.getByTestId("seat-direction-counterclockwise").click();
     await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.left!);
     await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-counterclockwise.png") });
     await page.getByTestId("card-mode-own-adaptive").click();
     await page.getByTestId("card-mode-table-adaptive").click();
     await page.getByTestId("settings-rules").click();
