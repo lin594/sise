@@ -1,14 +1,18 @@
 <template>
   <section class="entry-shell">
     <div class="entry-hero">
-      <p class="entry-kicker">开始游戏</p>
-      <h2>先取一个昵称</h2>
-      <p class="entry-desc">输入昵称后进入大厅，当前可直接开始单人练习。</p>
+      <p class="entry-kicker">{{ friendInvite ? "好友邀请" : "开始游戏" }}</p>
+      <h2>{{ friendInvite ? "输入昵称，加入好友房" : "先取一个昵称" }}</h2>
+      <p class="entry-desc">
+        {{ friendInvite
+          ? "这是朋友发来的牌局邀请。输入昵称后进入房间，再选择一个空座位。"
+          : "输入昵称后进入大厅，可以开始单人练习或创建好友房。" }}
+      </p>
     </div>
 
     <div class="entry-card">
       <label class="entry-field">
-        <span>昵称</span>
+        <span>{{ friendInvite ? "你在牌桌上的名字" : "昵称" }}</span>
         <input
           :value="nickname"
           data-testid="nickname-input"
@@ -53,6 +57,7 @@ defineProps<{
   nickname: string;
   entering: boolean;
   primaryLabel: string;
+  friendInvite: boolean;
   historyNames: string[];
 }>();
 

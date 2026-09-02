@@ -217,6 +217,9 @@ defineEmits<{
   .lobby { gap:.4rem; padding:.5rem; }
   .mode-card p { font-size:.75rem; line-height:1.3; }
   .lobby-rule-tip { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .invite-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; }
+  .invite-card p { display:none; }
+  .invite-card .ghost { min-height:42px; padding:.5rem .7rem; }
   .seat-card { min-height:96px; }
 }
 </style>

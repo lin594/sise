@@ -44,13 +44,21 @@
         <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
     </header>
-    <p v-if="globalError" class="error global-error">{{ globalError }}</p>
+    <p v-if="globalError" class="error global-error" role="alert">{{ globalError }}</p>
+    <p
+      v-else-if="globalNotice"
+      class="global-notice"
+      role="status"
+      aria-live="polite"
+      data-testid="global-notice"
+    >{{ globalNotice }}</p>
 
     <LoginPage
       v-if="showEntry"
       :nickname="entryName"
       :entering="enteringLobby"
       :primary-label="entryPrimaryLabel"
+      :friend-invite="hasFriendInvite"
       :history-names="nicknameHistory"
       @update:nickname="entryName = $event"
       @submit="enterLobby"
@@ -653,11 +661,21 @@ const canStartSelectedMode = computed(
     canPressStartGame.value,
 );
 const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
-const lobbySubtitle = computed(() =>
-  isWaiting.value
-    ? "你已经进入房间页，正在同步开局状态。"
-    : "选择一键单人练习，或创建一个可以邀请朋友和配置机器人的好友房。",
-);
+const lobbySubtitle = computed(() => {
+  if (!isWaiting.value) {
+    return "选择一键单人练习，或创建一个可以邀请朋友和配置机器人的好友房。";
+  }
+  if (state.value?.roomMode !== "friends") {
+    return "正在补齐机器人并准备开始单人练习。";
+  }
+  if (!mySeatId.value) {
+    return "请选择一个写着“等待入座”的空座位；入座后等待房主开始。";
+  }
+  if (isHost.value) {
+    return "把邀请链接发给朋友；四个座位都准备好后即可开始。";
+  }
+  return "你已入座；等待房主开始，也可以换到其他空座位。";
+});
 const lobbyStartLabel = computed(() => {
   if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
     return "该模式尚未开放";
@@ -667,6 +685,9 @@ const lobbyStartLabel = computed(() => {
   }
   if (pendingPracticeAutoStart.value) {
     return "正在自动开始...";
+  }
+  if (state.value?.roomMode === "friends" && !mySeatId.value) {
+    return "请先选择座位";
   }
   return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
 });
@@ -679,10 +700,10 @@ const lobbyStartHint = computed(() => {
   if (players.value.some((player) => !player.isConfiguredBot && !player.connected)) return "仍有真人玩家离线";
   return "四席已就绪";
 });
-const entryPrimaryLabel = computed(() => {
-  const query = new URLSearchParams(window.location.search);
-  return query.get("roomId") ? "加入大厅" : "进入大厅";
-});
+const hasFriendInvite = computed(
+  () => Boolean(new URLSearchParams(window.location.search).get("roomId")?.trim()),
+);
+const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "进入大厅"));
 const nowMs = ref(Date.now());
 const displayTurnPlayerId = computed(() => {
   if (state.value?.responsePhase === "collective") {
@@ -786,6 +807,8 @@ const resolvedTableCardMode = computed<RenderedCardMode>(() =>
   resolveCardDisplayMode(displayPreferences.value.tableCards),
 );
 const globalError = ref("");
+const globalNotice = ref("");
+let globalNoticeTimer: number | null = null;
 const showRules = ref(false);
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
@@ -1030,6 +1053,16 @@ onUnmounted(() => {
   if (declareTick !== null) {
     window.clearInterval(declareTick);
     declareTick = null;
+  }
+  if (globalNoticeTimer !== null) {
+    window.clearTimeout(globalNoticeTimer);
+    globalNoticeTimer = null;
+  }
+});
+
+watch(globalError, (message) => {
+  if (message) {
+    clearGlobalNotice();
   }
 });
 
@@ -1653,10 +1686,28 @@ async function copyInviteLink() {
   url.searchParams.set("roomId", activeRoomId.value);
   try {
     await navigator.clipboard.writeText(url.toString());
-    globalError.value = "邀请链接已复制";
+    globalError.value = "";
+    showGlobalNotice("邀请链接已复制，可以发给朋友了");
   } catch {
     window.prompt("请复制邀请链接", url.toString());
   }
+}
+
+function clearGlobalNotice(): void {
+  if (globalNoticeTimer !== null) {
+    window.clearTimeout(globalNoticeTimer);
+    globalNoticeTimer = null;
+  }
+  globalNotice.value = "";
+}
+
+function showGlobalNotice(message: string): void {
+  clearGlobalNotice();
+  globalNotice.value = message;
+  globalNoticeTimer = window.setTimeout(() => {
+    globalNotice.value = "";
+    globalNoticeTimer = null;
+  }, 3_000);
 }
 
 watch(
@@ -1705,6 +1756,16 @@ watch(
 
 .global-error {
   margin: 0;
+}
+
+.global-notice {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(74, 222, 128, 0.6);
+  border-radius: 0.65rem;
+  background: rgba(20, 83, 45, 0.96);
+  color: #dcfce7;
+  font-weight: 750;
 }
 
 .reset-btn {
