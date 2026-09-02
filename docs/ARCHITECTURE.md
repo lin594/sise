@@ -2,8 +2,8 @@
 
 ## 1. 总览
 
-- 前端：Vue 3 + TypeScript。
-- 服务端：Colyseus + TypeScript，使用 Express 提供少量 HTTP 辅助接口。
+- 前端：Vue 3 + TypeScript，使用 `@colyseus/sdk` 0.18 连接实时服务。
+- 服务端：Colyseus Core 0.18 + Schema 5 + TypeScript，使用 Express 提供少量 HTTP 辅助接口。
 - 实时通信：Colyseus 房间状态补丁与自定义 WebSocket 消息。
 - 运行模式：单人练习和好友同桌私有房。
 - 数据保存：牌局状态只在当前服务端进程内存中；Redis 服务和 `REDIS_URL` 是部署预留，尚未参与持久化。
@@ -45,6 +45,8 @@
 私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。
 
 生产服务只接受 `CORS_ALLOWED_ORIGINS` 明确列出的浏览器来源。Express 辅助接口、Colyseus 匹配接口和 WebSocket 握手共用同一来源策略；没有浏览器 `Origin` 的健康检查与服务间调用仍可访问。开发环境默认放开来源，便于局域网手机联调。Colyseus 管理监控页在生产环境默认关闭，只能通过显式配置临时启用。
+
+服务启动必须通过 `gameServer.listen()`，由 Colyseus 在同一个 HTTP Server 上挂载 `/matchmake/*` 路由并保留 Express 辅助接口；不能绕过它直接调用原生 `http.Server.listen()`。房间将 `autoDispose` 在类初始化阶段关闭，再由业务层的等待房和活动房空闲计时器负责回收，保证 HTTP 创建房间与浏览器加入之间不会提前销毁。
 
 创建房间、查询练习房入口和恢复私有状态分别使用按客户端 IP 计算的内存限流；超限返回 `429`、`Retry-After` 和稳定错误码，并通过 CORS 暴露限流响应头供客户端显示准确等待时间。直接访问服务时不信任转发头；Traefik 部署只信任紧邻的一层代理，以免伪造 IP 绕过限流。HTTP 响应不公开 Express 技术标识。限流状态不跨进程共享，当前单进程部署足够使用。
 

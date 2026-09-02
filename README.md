@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-需要 Node.js 20+ 与 npm 10+。
+需要 Node.js 22+ 与 npm 10+。
 
 ```bash
 npm install

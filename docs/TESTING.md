@@ -8,6 +8,8 @@
 npm --prefix server test
 npm run build
 npm run e2e
+npm --prefix server audit --omit=dev --registry=https://registry.npmjs.org
+npm --prefix client audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 - 服务端测试同时运行旧版规则回归、Node 测试套件和机器人完整牌局压力测试。
@@ -17,6 +19,8 @@ npm run e2e
 ```bash
 PLAYWRIGHT_CHANNEL=chrome npm run e2e
 ```
+
+- 两条生产依赖审计命令显式使用 npm 官方 registry，因为部分镜像站没有实现审计接口；当前基线要求服务端和客户端均为 0 个已知生产依赖漏洞。
 
 提交前还应运行：
 

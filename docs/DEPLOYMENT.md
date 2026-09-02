@@ -4,7 +4,7 @@
 
 ## 1. 环境要求
 
-- Node.js 20+
+- Node.js 22+
 - npm 10+
 - Docker Compose v2（容器部署时）
 
@@ -115,6 +115,14 @@ curl --fail http://localhost:2567/health
 
 iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如果 `npm ci` 连续出现 `ECONNRESET`，先检查该值是否仍指向不可用的镜像站；切换下载源不应改动依赖版本或 lockfile integrity。
 
+当前实时服务依赖 Colyseus 0.18，构建镜像必须使用 Node.js 22 或更高版本。旧部署若在 `.env` 中固定过 `NODE_IMAGE=node:20-alpine`，需要改为：
+
+```dotenv
+NODE_IMAGE=node:22-alpine
+```
+
+仓库中的 Compose 默认值已经是 Node.js 22，但 `.env` 的显式值优先级更高；保留旧值会让 `npm ci` 因依赖引擎要求失败。
+
 iMac 通过带端口的试玩地址访问时，还必须设置：
 
 ```dotenv
@@ -165,3 +173,4 @@ ENABLE_MONITOR=0
 - 手机无法打开开发服务：确认同一局域网、防火墙及 5173/2567 端口。
 - 重启后牌局消失：这是当前内存状态模型的预期行为。
 - 页面还是旧版：核对远端 commit，重新执行带 `--build` 的 compose 命令，并清理浏览器缓存后复查。
+- `npm ci` 报 Node 引擎不兼容：检查 `.env` 是否仍覆盖为 `node:20-alpine`，并确认构建日志中的 Node 主版本为 22 或更高。
