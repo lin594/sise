@@ -32,7 +32,10 @@ type ConnectOptions = {
 };
 
 function generateLocalPlayerToken(): string {
-  return `pt_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  const encoded = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `pt_${encoded}`;
 }
 
 function asCardArray(input: unknown): Card[] {

@@ -11,7 +11,7 @@ import {
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
-import { resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
+import { generateToken, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 import { chooseBotAction, chooseBotDiscard, createSeededRandom } from "../rooms/bot-strategy.js";
@@ -27,6 +27,63 @@ function t(name: string, fn: TestFn) {
 function c(id: string, color: Card["color"], type: Card["type"], source?: "upper" | "draw"): Card {
   return source ? { id, color, type, source } : { id, color, type };
 }
+
+t("identity: generated room tokens use cryptographically random 192-bit values", () => {
+  const tokens = Array.from({ length: 256 }, () => generateToken());
+
+  assert.equal(new Set(tokens).size, tokens.length);
+  assert.equal(tokens.every((token) => /^pt_[0-9a-f]{48}$/.test(token)), true);
+});
+
+t("identity: legacy room tokens remain accepted during migration", () => {
+  assert.equal(normalizeToken(" old_timestamp_random_token "), "old_timestamp_random_token");
+});
+
+t("identity: a legacy token still reclaims its active seat", () => {
+  const legacyToken = "old_timestamp_random_token";
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.state.phase = "playing";
+  room.seatByToken = new Map([[legacyToken, "seat_0"]]);
+  room.seatBySession = new Map();
+  room.baseNameBySeat = new Map([["seat_0", "张阿姨"]]);
+  room.botIds = new Set(["seat_0"]);
+  room.clients = [];
+  room.clearRoomIdleTimer = () => {};
+  room.syncAllPrivateHands = () => {};
+  room.broadcastAvailableActions = () => {};
+  room.tickBots = () => {};
+
+  const player = new PlayerState();
+  player.clientId = "seat_0";
+  player.name = "张阿姨";
+  player.connected = false;
+  player.isBot = true;
+  room.state.players.set("seat_0", player);
+
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "restored-session",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+    leave: () => {},
+  };
+
+  room.onJoin(client, { name: "张阿姨", playerToken: ` ${legacyToken} ` });
+
+  assert.equal(room.seatBySession.get("restored-session"), "seat_0");
+  assert.equal(player.connected, true);
+  assert.equal(player.isBot, false);
+  assert.equal(room.botIds.has("seat_0"), false);
+  assert.equal(
+    sent.some(
+      (message) =>
+        message.event === "session_token" &&
+        message.payload.playerToken === legacyToken &&
+        message.payload.reclaimed === true,
+    ),
+    true,
+  );
+});
 
 t("actions: kai requires 3 exact cards", () => {
   const response = c("rj", "red", "ju");

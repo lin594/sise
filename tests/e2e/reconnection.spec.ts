@@ -39,7 +39,7 @@ test.describe("牌局断线恢复", () => {
       };
     });
     expect(beforeDisconnect.roomId).toBeTruthy();
-    expect(beforeDisconnect.token).toBeTruthy();
+    expect(beforeDisconnect.token).toMatch(/^pt_[0-9a-f]{48}$/);
     expect(beforeDisconnect.handIds.length).toBeGreaterThan(0);
 
     await context.setOffline(true);

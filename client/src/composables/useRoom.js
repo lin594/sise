@@ -7,7 +7,10 @@ const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 function generateLocalPlayerToken() {
-    return `pt_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+    const bytes = new Uint8Array(24);
+    globalThis.crypto.getRandomValues(bytes);
+    const encoded = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `pt_${encoded}`;
 }
 function asCardArray(input) {
     const isCard = (x) => x &&
