@@ -434,6 +434,11 @@ test.describe("compact landscape gameplay", () => {
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
     await expect(discardConfirm).toHaveText("出牌");
+    const gameSettings = page.getByTestId("game-settings");
+    await expect(gameSettings).toBeDisabled();
+    await expect(gameSettings).toContainText("先操作");
+    await expect(gameSettings).toHaveAttribute("aria-label", "请先完成当前操作，再打开设置");
+    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-selected-card.png") });
     const discardButtonRect = await discardConfirm.evaluate((button) => {
       const rect = button.getBoundingClientRect();
@@ -528,12 +533,6 @@ test.describe("compact landscape gameplay", () => {
     }));
     expect(pageOverflow.width).toBeLessThanOrEqual(pageOverflow.viewportWidth);
     expect(pageOverflow.height).toBeLessThanOrEqual(pageOverflow.viewportHeight);
-
-    const gameSettings = page.getByTestId("game-settings");
-    await expect(gameSettings).toBeDisabled();
-    await expect(gameSettings).toContainText("先操作");
-    await expect(gameSettings).toHaveAttribute("aria-label", "请先完成当前操作，再打开设置");
-    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
 
     await page.getByTestId("game-exit").click();
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
