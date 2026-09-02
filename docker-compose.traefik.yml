@@ -11,7 +11,7 @@ services:
       target: production
       args:
         NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
-        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
     restart: unless-stopped
     environment:
       PORT: "2567"
@@ -47,7 +47,7 @@ services:
       args:
         NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
         NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.27-alpine}"
-        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+        NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
         VITE_SERVER_URL: "${VITE_SERVER_URL:?Set VITE_SERVER_URL, for example wss://sise-api.example.com}"
         VITE_SERVER_HTTP_URL: "${VITE_SERVER_HTTP_URL:?Set VITE_SERVER_HTTP_URL, for example https://sise-api.example.com}"
     restart: unless-stopped

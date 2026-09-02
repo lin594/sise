@@ -100,7 +100,7 @@ Playwright 至少覆盖 375×667 旋转画布、667×375 iPhone SE 级别横屏�
 按 [DEPLOYMENT.md](DEPLOYMENT.md) 更新 iMac 后：
 
 1. 确认容器均为运行状态，服务健康检查返回成功。
-2. 访问 `https://imac.tajuren.cn`，确认首页资源、WebSocket 和单人练习可用。
+2. 普通 Compose 部署访问 `http://imac.tajuren.cn:3000`，确认首页资源、WebSocket 和单人练习可用；只有部署 Traefik/TLS 后才使用无端口 HTTPS 地址。
 3. 至少进入一局，检查牌堆造型、对手余牌数、操作坞和特殊牌提示。
 4. 对比部署 commit 与本地已验证 commit，避免只重建了旧代码。
 

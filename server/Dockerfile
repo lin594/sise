@@ -2,7 +2,7 @@ ARG NODE_IMAGE=docker.m.daocloud.io/library/node:20-alpine
 
 FROM ${NODE_IMAGE} AS base
 WORKDIR /app
-ARG NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org
 ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 
 FROM base AS development
@@ -20,7 +20,7 @@ RUN npm run build
 
 FROM ${NODE_IMAGE} AS production
 WORKDIR /app
-ARG NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org
 ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev

@@ -84,7 +84,12 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 ## 6. iMac 试玩环境
 
-试玩机仓库位于 `~/workspace/lin594/sise`，对外地址为 `https://imac.tajuren.cn`。确认本地 commit 已推送后执行：
+试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。普通 `docker-compose.yml` 直接映射端口，因此当前访问地址为：
+
+- Web：`http://imac.tajuren.cn:3000`
+- 后端健康检查：`http://imac.tajuren.cn:2567/health`
+
+只有另行部署并配置 Traefik/TLS 后，才使用不带端口的 HTTPS 域名。确认本地 commit 已推送后执行：
 
 ```bash
 ssh imac
@@ -101,7 +106,9 @@ git rev-parse --short HEAD
 curl --fail http://localhost:2567/health
 ```
 
-随后用浏览器访问 `https://imac.tajuren.cn`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
+iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如果 `npm ci` 连续出现 `ECONNRESET`，先检查该值是否仍指向不可用的镜像站；切换下载源不应改动依赖版本或 lockfile integrity。
+
+随后用浏览器访问 `http://imac.tajuren.cn:3000`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
 
 ## 7. 环境变量
 
@@ -123,7 +130,7 @@ curl --fail http://localhost:2567/health
 - `VITE_SERVER_URL`：浏览器连接的 WebSocket 地址。
 - `VITE_SERVER_HTTP_URL`：浏览器请求的 HTTP API 地址。
 - `NODE_IMAGE`、`NGINX_IMAGE`、`REDIS_IMAGE`：构建使用的基础镜像。
-- `NPM_CONFIG_REGISTRY`：容器构建使用的 npm registry。
+- `NPM_CONFIG_REGISTRY`：容器构建使用的 npm registry，默认 `https://registry.npmjs.org`；只有确认镜像站稳定时才覆盖。
 - `TRAEFIK_NETWORK`、`TRAEFIK_CERT_RESOLVER`、`TRAEFIK_WEB_RULE`、`TRAEFIK_SERVER_RULE`：Traefik 配置。
 
 ## 8. 常见问题
