@@ -10,7 +10,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
 
   try {
     await host.goto("/");
-    await host.getByTestId("random-nickname").click();
+    await host.getByTestId("nickname-input").fill("同名牌友");
     await host.getByTestId("login-submit").click();
     await expect(host.getByText("游戏模式选择")).toBeVisible();
     await host.getByTestId("mode-friends").click();
@@ -36,7 +36,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByText("这是朋友发来的牌局邀请。输入昵称后进入房间，再选择一个空座位。")).toBeVisible();
     await expect(guest.getByTestId("login-submit")).toHaveText("加入好友房");
     await guest.screenshot({ path: testInfo.outputPath("friend-invite-entry-iphone-se.png") });
-    await guest.getByTestId("random-nickname").click();
+    await guest.getByTestId("nickname-input").fill("同名牌友");
     await guest.getByTestId("login-submit").click();
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByText("请选择一个写着“等待入座”的空座位；入座后等待房主开始。")).toBeVisible();
@@ -56,6 +56,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await guest.screenshot({ path: testInfo.outputPath("friend-lobby-iphone-se.png") });
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");
+    await expect(guest.getByTestId("seat-1").locator(".player-name")).toHaveText("同名牌友（2）");
     await expect(guest.getByText("你已入座；等待房主开始，也可以换到其他空座位。")).toBeVisible();
     await expect(host.getByTestId("seat-1")).toContainText("真人在线");
 
@@ -103,6 +104,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await restoredGuest.goto(inviteUrl);
     await expect(restoredGuest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(restoredGuest.getByTestId("player-self")).toHaveAttribute("data-player-id", guestIdentity.seatId);
+    await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）（你）");
     await host.setViewportSize({ width: 1280, height: 720 });
     await expect(guestSeatOnHost).toContainText("真人在线");
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);

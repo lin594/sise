@@ -305,8 +305,12 @@ export function normalizeAction(action: string): ActionType | null {
 }
 
 export function normalizeName(input: unknown): string {
-  const name = String(input ?? "").trim();
-  return name.slice(0, 24);
+  const name = String(input ?? "")
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return Array.from(name).slice(0, 24).join("");
 }
 
 export function normalizeToken(input: unknown): string {

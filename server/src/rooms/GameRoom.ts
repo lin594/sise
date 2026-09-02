@@ -19,6 +19,7 @@ import {
   decideStartGame,
   endRoundFlow,
   formatBotName,
+  makeUniqueHumanName,
   reclaimSeatStateFlow,
   resetRoundPlayers as resetRoundPlayersFlow,
   resetToLobby,
@@ -566,7 +567,7 @@ export class FourColorGameRoom extends Room<GameState> {
       return false;
     }
 
-    const name = this.pendingNameBySession.get(client.sessionId) || "玩家";
+    const requestedName = this.pendingNameBySession.get(client.sessionId) || "玩家";
     let player = currentSeatId ? this.state.players.get(currentSeatId) : undefined;
     if (currentSeatId && currentSeatId !== targetSeatId && player) {
       const hand = this.playerHands.get(currentSeatId) ?? [];
@@ -586,6 +587,13 @@ export class FourColorGameRoom extends Room<GameState> {
         }
       }
     } else if (!player) {
+      const name = makeUniqueHumanName(
+        requestedName,
+        [...this.state.players.entries()]
+          .filter(([seatId]) => seatId !== targetSeatId)
+          .map(([, existingPlayer]) => existingPlayer.name),
+        this.targetSeats,
+      );
       player = new PlayerState();
       player.clientId = targetSeatId;
       player.seatIndex = seatIndex;
@@ -599,7 +607,7 @@ export class FourColorGameRoom extends Room<GameState> {
       this.baseNameBySeat.set(targetSeatId, name);
     }
 
-    player.name = this.baseNameBySeat.get(targetSeatId) || name;
+    player.name = this.baseNameBySeat.get(targetSeatId) || requestedName;
     player.connected = true;
     player.isBot = false;
     player.isConfiguredBot = false;

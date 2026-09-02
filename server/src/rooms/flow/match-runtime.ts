@@ -2,6 +2,7 @@ import type { MapSchema } from "@colyseus/schema";
 import { CardSchema, GameState, PlayerState } from "../../schema/game-state.schema.js";
 import { explainHu } from "../../rules/hu.js";
 import type { Card } from "../../rules/types.js";
+import { normalizeName } from "./support.js";
 
 /**
  * 对局阶段管理层：负责等待/声明/结算等阶段切换与开局准备。
@@ -152,7 +153,10 @@ export function createHumanSeatFlow(
   rawName: string,
 ): string {
   const seatId = `seat_${ctx.seatByTokenSize + 1}`;
-  const name = rawName || `玩家${ctx.seatByTokenSize + 1}`;
+  const name = makeUniqueHumanName(
+    rawName || `玩家${ctx.seatByTokenSize + 1}`,
+    [...ctx.state.players.values()].map((player) => player.name),
+  );
 
   const player = new PlayerState();
   player.clientId = seatId;
@@ -200,7 +204,7 @@ export function reclaimSeatStateFlow(
     return false;
   }
 
-  const name = rawName || ctx.baseNameBySeat.get(seatId) || player.name;
+  const name = ctx.baseNameBySeat.get(seatId) || player.name || rawName || "玩家";
   ctx.baseNameBySeat.set(seatId, name);
   player.name = name;
   player.connected = true;
@@ -254,6 +258,50 @@ export function ensureBotSeatsForStart(
 
 export function formatBotName(seatIndex: number): string {
   return `机器人${Math.max(0, Math.trunc(seatIndex)) + 1}`;
+}
+
+function comparablePlayerName(value: string): string {
+  return normalizeName(value).toLocaleLowerCase("zh-CN");
+}
+
+function appendNameSuffix(base: string, suffix: string): string {
+  const suffixLength = Array.from(suffix).length;
+  const stem = Array.from(base).slice(0, Math.max(1, 24 - suffixLength)).join("");
+  return `${stem}${suffix}`;
+}
+
+/**
+ * 作用：为真人生成房间内稳定且可区分的显示名，并保留机器人座位名。
+ * 关键输入/输出：输入用户昵称、当前占用名和座位数，输出不冲突且最长 24 字符的名字。
+ * 副作用：无。
+ */
+export function makeUniqueHumanName(
+  rawName: string,
+  unavailableNames: Iterable<string>,
+  targetSeats = 4,
+): string {
+  let base = normalizeName(rawName) || "玩家";
+  const reservedBotNames = new Set(
+    Array.from({ length: Math.max(1, targetSeats) }, (_, seatIndex) => comparablePlayerName(formatBotName(seatIndex))),
+  );
+  if (reservedBotNames.has(comparablePlayerName(base))) {
+    base = appendNameSuffix(base, "（玩家）");
+  }
+
+  const unavailable = new Set(
+    [...unavailableNames].map((name) => comparablePlayerName(name)).filter(Boolean),
+  );
+  if (!unavailable.has(comparablePlayerName(base))) {
+    return base;
+  }
+
+  for (let index = 2; index < 10_000; index += 1) {
+    const candidate = appendNameSuffix(base, `（${index}）`);
+    if (!unavailable.has(comparablePlayerName(candidate))) {
+      return candidate;
+    }
+  }
+  return appendNameSuffix(base, `（${Date.now()}）`);
 }
 
 /**

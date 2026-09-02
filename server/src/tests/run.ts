@@ -8,10 +8,11 @@ import {
   buildRoundResultPlayers,
   canReturnLobby,
   dealInitialHands,
+  makeUniqueHumanName,
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
-import { generateToken, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
+import { generateToken, normalizeName, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
 import { FourColorGameRoom } from "../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../schema/game-state.schema.js";
 import { chooseBotAction, chooseBotDiscard, createSeededRandom } from "../rooms/bot-strategy.js";
@@ -37,6 +38,19 @@ t("identity: generated room tokens use cryptographically random 192-bit values",
 
 t("identity: legacy room tokens remain accepted during migration", () => {
   assert.equal(normalizeToken(" old_timestamp_random_token "), "old_timestamp_random_token");
+});
+
+t("identity: player names remove invisible controls and preserve whole Unicode characters", () => {
+  assert.equal(normalizeName("  张\u200b　阿姨\n "), "张 阿姨");
+  const emojiName = normalizeName("牌友" + "🙂".repeat(30));
+  assert.equal(Array.from(emojiName).length, 24);
+  assert.equal(emojiName.endsWith("🙂"), true);
+});
+
+t("identity: duplicate humans and reserved bot names receive readable suffixes", () => {
+  assert.equal(makeUniqueHumanName("张阿姨", ["张阿姨", "张阿姨（2）"]), "张阿姨（3）");
+  assert.equal(makeUniqueHumanName("Ａlice", ["alice"]), "Alice（2）");
+  assert.equal(makeUniqueHumanName("机器人2", []), "机器人2（玩家）");
 });
 
 t("identity: a legacy token still reclaims its active seat", () => {
@@ -68,11 +82,12 @@ t("identity: a legacy token still reclaims its active seat", () => {
     leave: () => {},
   };
 
-  room.onJoin(client, { name: "张阿姨", playerToken: ` ${legacyToken} ` });
+  room.onJoin(client, { name: "冒名者", playerToken: ` ${legacyToken} ` });
 
   assert.equal(room.seatBySession.get("restored-session"), "seat_0");
   assert.equal(player.connected, true);
   assert.equal(player.isBot, false);
+  assert.equal(player.name, "张阿姨");
   assert.equal(room.botIds.has("seat_0"), false);
   assert.equal(
     sent.some(
