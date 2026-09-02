@@ -68,7 +68,10 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   const header = page.getByTestId("game-control-header");
   await expect(header).toBeVisible();
   await expect(header.getByRole("heading", { name: "四色牌" })).toBeVisible();
-  await expect(header.getByRole("button", { name: "牌局设置" })).toContainText("设置");
+  const settingsButton = header.getByTestId("game-settings");
+  await expect(settingsButton).toBeVisible();
+  await expect(settingsButton).toContainText(/设置|先操作/);
+  await expect(settingsButton).toHaveAttribute("aria-label", /牌局设置|请先完成当前操作，再打开设置/);
   await expect(header.getByRole("button", { name: "退出牌局" })).toContainText("退出");
   await expect(header.getByText(/座位ID|房主|已连接|同步中/)).toHaveCount(0);
 
@@ -330,6 +333,22 @@ test.describe("compact landscape gameplay", () => {
     await discardConfirm.click();
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
     await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
+    const visibleFlows = page.locator(".flow-card");
+    expect(await visibleFlows.count()).toBeGreaterThan(0);
+    await expect(page.getByText("暂无流水", { exact: true })).toHaveCount(0);
+    const flowMetrics = await visibleFlows.evaluateAll((flows) => flows.map((flow) => {
+      const title = flow.querySelector<HTMLElement>("p")!;
+      return {
+        cardCount: flow.querySelectorAll(".discard-token").length,
+        label: flow.getAttribute("aria-label"),
+        title: title.textContent,
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      };
+    }));
+    expect(flowMetrics.every((flow) => flow.cardCount > 0)).toBe(true);
+    expect(flowMetrics.every((flow) => flow.label?.startsWith("流水："))).toBe(true);
+    expect(flowMetrics.every((flow) => flow.title?.includes(" → "))).toBe(true);
+    expect(Math.min(...flowMetrics.map((flow) => flow.titleFontSize))).toBeGreaterThanOrEqual(12);
     const pendingGeometry = await page.evaluate(() => {
       const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')!.getBoundingClientRect();
       const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')!.getBoundingClientRect();

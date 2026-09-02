@@ -1,9 +1,13 @@
 ﻿<template>
   <div class="board" data-testid="game-board">
     <div class="table" ref="tableRef">
-      <section v-if="leftPlayer" class="flow-card flow-top-left">
-        <p>{{ flowTitle(leftPlayer.clientId) }}</p>
-        <div v-if="flowCardCount(leftPlayer.clientId)" class="discard-strip">
+      <section
+        v-if="leftPlayer && flowCardCount(leftPlayer.clientId)"
+        class="flow-card flow-top-left"
+        :aria-label="flowAccessibleTitle(leftPlayer.clientId)"
+      >
+        <p aria-hidden="true">{{ flowTitle(leftPlayer.clientId) }}</p>
+        <div class="discard-strip">
           <CardComp
             v-for="(card, index) in visibleFlowCards(leftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
@@ -15,7 +19,6 @@
             :title="cardLabel(card)"
           />
         </div>
-        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <section
@@ -79,9 +82,13 @@
         </div>
       </section>
 
-      <section v-if="topPlayer" class="flow-card flow-top-right">
-        <p>{{ flowTitle(topPlayer.clientId) }}</p>
-        <div v-if="flowCardCount(topPlayer.clientId)" class="discard-strip">
+      <section
+        v-if="topPlayer && flowCardCount(topPlayer.clientId)"
+        class="flow-card flow-top-right"
+        :aria-label="flowAccessibleTitle(topPlayer.clientId)"
+      >
+        <p aria-hidden="true">{{ flowTitle(topPlayer.clientId) }}</p>
+        <div class="discard-strip">
           <CardComp
             v-for="(card, index) in visibleFlowCards(topPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
@@ -93,7 +100,6 @@
             :title="cardLabel(card)"
           />
         </div>
-        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <section
@@ -294,9 +300,13 @@
         </div>
       </section>
 
-      <section v-if="selfPlayer" class="flow-card flow-bottom-left">
-        <p>{{ flowTitle(selfPlayer.clientId) }}</p>
-        <div v-if="flowCardCount(selfPlayer.clientId)" class="discard-strip">
+      <section
+        v-if="selfPlayer && flowCardCount(selfPlayer.clientId)"
+        class="flow-card flow-bottom-left"
+        :aria-label="flowAccessibleTitle(selfPlayer.clientId)"
+      >
+        <p aria-hidden="true">{{ flowTitle(selfPlayer.clientId) }}</p>
+        <div class="discard-strip">
           <CardComp
             v-for="(card, index) in visibleFlowCards(selfPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
@@ -308,7 +318,6 @@
             :title="cardLabel(card)"
           />
         </div>
-        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <section v-if="selfPlayer" class="self-groups-card" ref="selfOpenRef">
@@ -337,9 +346,13 @@
         <div v-else class="discard-empty">暂无牌组</div>
       </section>
 
-      <section v-if="rightPlayer" class="flow-card flow-bottom-right">
-        <p>{{ flowTitle(rightPlayer.clientId) }}</p>
-        <div v-if="flowCardCount(rightPlayer.clientId)" class="discard-strip">
+      <section
+        v-if="rightPlayer && flowCardCount(rightPlayer.clientId)"
+        class="flow-card flow-bottom-right"
+        :aria-label="flowAccessibleTitle(rightPlayer.clientId)"
+      >
+        <p aria-hidden="true">{{ flowTitle(rightPlayer.clientId) }}</p>
+        <div class="discard-strip">
           <CardComp
             v-for="(card, index) in visibleFlowCards(rightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
@@ -351,7 +364,6 @@
             :title="cardLabel(card)"
           />
         </div>
-        <div v-else class="discard-empty">暂无流水</div>
       </section>
 
       <Transition name="deal-fade">
@@ -811,7 +823,16 @@ function flowTitle(playerId: string): string {
   if (!receiver?.name || !sender?.name) {
     return "流水";
   }
-  return `${sender.name} -> ${receiver.name} 的流水`;
+  return `${sender.name} → ${receiver.name}`;
+}
+
+function flowAccessibleTitle(playerId: string): string {
+  const receiver = props.players.find((player) => player.clientId === playerId);
+  const sender = flowOwner(playerId);
+  if (!receiver?.name || !sender?.name) {
+    return "流水牌";
+  }
+  return `流水：${sender.name} 打给 ${receiver.name}`;
 }
 
 const activeFlowSourcePlayerId = computed(() => {
@@ -3166,7 +3187,7 @@ watch(canDiscard, (enabled) => {
 
   .flow-card p,
   .self-groups-card p {
-    font-size: clamp(0.6rem, 2.6vh, 0.7rem);
+    font-size: clamp(0.75rem, 3.2vh, 0.85rem);
   }
 
   .center {

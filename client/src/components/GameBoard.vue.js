@@ -221,7 +221,15 @@ function flowTitle(playerId) {
     if (!receiver?.name || !sender?.name) {
         return "流水";
     }
-    return `${sender.name} -> ${receiver.name} 的流水`;
+    return `${sender.name} → ${receiver.name}`;
+}
+function flowAccessibleTitle(playerId) {
+    const receiver = props.players.find((player) => player.clientId === playerId);
+    const sender = flowOwner(playerId);
+    if (!receiver?.name || !sender?.name) {
+        return "流水牌";
+    }
+    return `流水：${sender.name} 打给 ${receiver.name}`;
 }
 const activeFlowSourcePlayerId = computed(() => {
     const pending = responseCard.value;
@@ -1186,43 +1194,39 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "tableRef",
 });
 /** @type {typeof __VLS_ctx.tableRef} */ ;
-if (__VLS_ctx.leftPlayer) {
+if (__VLS_ctx.leftPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.leftPlayer.clientId)) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-top-left" },
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.leftPlayer.clientId)),
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        'aria-hidden': "true",
+    });
     (__VLS_ctx.flowTitle(__VLS_ctx.leftPlayer.clientId));
-    if (__VLS_ctx.flowCardCount(__VLS_ctx.leftPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-strip" },
-        });
-        for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.leftPlayer.clientId)))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`flow-top-left-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }));
-            const __VLS_1 = __VLS_0({
-                key: (`flow-top-left-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_0));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-empty" },
-        });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "discard-strip" },
+    });
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.leftPlayer.clientId)))) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            key: (`flow-top-left-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }));
+        const __VLS_1 = __VLS_0({
+            key: (`flow-top-left-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_0));
     }
 }
 if (__VLS_ctx.topPlayer) {
@@ -1347,43 +1351,39 @@ if (__VLS_ctx.topPlayer) {
         }
     }
 }
-if (__VLS_ctx.topPlayer) {
+if (__VLS_ctx.topPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.topPlayer.clientId)) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-top-right" },
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.topPlayer.clientId)),
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        'aria-hidden': "true",
+    });
     (__VLS_ctx.flowTitle(__VLS_ctx.topPlayer.clientId));
-    if (__VLS_ctx.flowCardCount(__VLS_ctx.topPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-strip" },
-        });
-        for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.topPlayer.clientId)))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`flow-top-right-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }));
-            const __VLS_10 = __VLS_9({
-                key: (`flow-top-right-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_9));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-empty" },
-        });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "discard-strip" },
+    });
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.topPlayer.clientId)))) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            key: (`flow-top-right-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }));
+        const __VLS_10 = __VLS_9({
+            key: (`flow-top-right-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_9));
     }
 }
 if (__VLS_ctx.leftPlayer) {
@@ -1773,43 +1773,39 @@ if (__VLS_ctx.rightPlayer) {
         }
     }
 }
-if (__VLS_ctx.selfPlayer) {
+if (__VLS_ctx.selfPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientId)) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-bottom-left" },
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.selfPlayer.clientId)),
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        'aria-hidden': "true",
+    });
     (__VLS_ctx.flowTitle(__VLS_ctx.selfPlayer.clientId));
-    if (__VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-strip" },
-        });
-        for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.selfPlayer.clientId)))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`flow-bottom-left-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }));
-            const __VLS_32 = __VLS_31({
-                key: (`flow-bottom-left-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_31));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-empty" },
-        });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "discard-strip" },
+    });
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.selfPlayer.clientId)))) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            key: (`flow-bottom-left-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }));
+        const __VLS_32 = __VLS_31({
+            key: (`flow-bottom-left-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_31));
     }
 }
 if (__VLS_ctx.selfPlayer) {
@@ -1867,43 +1863,39 @@ if (__VLS_ctx.selfPlayer) {
         });
     }
 }
-if (__VLS_ctx.rightPlayer) {
+if (__VLS_ctx.rightPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clientId)) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-bottom-right" },
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.rightPlayer.clientId)),
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        'aria-hidden': "true",
+    });
     (__VLS_ctx.flowTitle(__VLS_ctx.rightPlayer.clientId));
-    if (__VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-strip" },
-        });
-        for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.rightPlayer.clientId)))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_37 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`flow-bottom-right-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }));
-            const __VLS_38 = __VLS_37({
-                key: (`flow-bottom-right-${card.id}`),
-                card: (card),
-                mode: (props.tableCardMode),
-                size: "xs",
-                ...{ class: "discard-token" },
-                ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
-                title: (__VLS_ctx.cardLabel(card)),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_37));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "discard-empty" },
-        });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "discard-strip" },
+    });
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.rightPlayer.clientId)))) {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_37 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            key: (`flow-bottom-right-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }));
+        const __VLS_38 = __VLS_37({
+            key: (`flow-bottom-right-${card.id}`),
+            card: (card),
+            mode: (props.tableCardMode),
+            size: "xs",
+            ...{ class: "discard-token" },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
+            title: (__VLS_ctx.cardLabel(card)),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_37));
     }
 }
 const __VLS_40 = {}.Transition;
@@ -2223,7 +2215,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
@@ -2249,7 +2240,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
@@ -2325,7 +2315,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
@@ -2337,7 +2326,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['deal-overlay']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
@@ -2401,6 +2389,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             rightGroupBlocks: rightGroupBlocks,
             responseCard: responseCard,
             flowTitle: flowTitle,
+            flowAccessibleTitle: flowAccessibleTitle,
             flowCardCount: flowCardCount,
             visibleFlowCards: visibleFlowCards,
             isActiveDiscardCard: isActiveDiscardCard,
