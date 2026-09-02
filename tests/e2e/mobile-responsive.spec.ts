@@ -452,6 +452,18 @@ test.describe("compact landscape gameplay", () => {
 
   test("keeps settings readable and clears them when a turn needs attention", async ({ page }, testInfo) => {
     test.setTimeout(60_000);
+    await page.addInitScript(() => {
+      const key = "sise_test_vibration_calls";
+      Object.defineProperty(navigator, "vibrate", {
+        configurable: true,
+        value: (pattern: VibratePattern) => {
+          const calls = JSON.parse(sessionStorage.getItem(key) ?? "[]") as VibratePattern[];
+          calls.push(pattern);
+          sessionStorage.setItem(key, JSON.stringify(calls));
+          return true;
+        },
+      });
+    });
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
 
@@ -497,6 +509,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
+    await expect(page.getByTestId("turn-alert-sound-vibration")).toHaveClass(/active/);
     const initialSeatIds = {
       left: await page.getByTestId("player-left").getAttribute("data-player-id"),
       right: await page.getByTestId("player-right").getAttribute("data-player-id"),
@@ -507,6 +520,9 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("card-mode-table-long").click();
     await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
     await page.getByTestId("seat-direction-clockwise").click();
+    await page.getByTestId("turn-alert-sound").click();
+    await expect(page.getByTestId("turn-alert-sound")).toHaveClass(/active/);
+    await page.getByTestId("turn-alert-sound-vibration").click();
     await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.right!);
     await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.left!);
     await expect(page.getByTestId("player-top")).toHaveAttribute("data-player-id", initialSeatIds.top!);
@@ -514,6 +530,7 @@ test.describe("compact landscape gameplay", () => {
       ownCards: "long",
       tableCards: "long",
       seatDirection: "clockwise",
+      turnAlert: "sound-vibration",
     });
     await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
     await page.getByTestId("seat-direction-counterclockwise").click();
@@ -531,6 +548,11 @@ test.describe("compact landscape gameplay", () => {
     await expect(settingsPanel).toHaveCount(0);
     await expect(gameSettings).toContainText("先操作");
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
+    await expect.poll(() => page.title()).toBe("轮到你了 · 四色牌");
+    const vibrationCalls = await page.evaluate(() =>
+      JSON.parse(sessionStorage.getItem("sise_test_vibration_calls") ?? "[]") as unknown[],
+    );
+    expect(vibrationCalls.some((pattern) => Array.isArray(pattern) && pattern.length === 3)).toBe(true);
   });
 });
 

@@ -120,6 +120,27 @@
             </button>
           </div>
         </div>
+        <div class="preference-group">
+          <div class="preference-copy">
+            <strong>轮到我提醒</strong>
+            <small>每个操作窗口只提醒一次</small>
+          </div>
+          <div class="alert-options" role="radiogroup" aria-label="轮到我提醒方式">
+            <button
+              v-for="mode in alertModes"
+              :key="mode.value"
+              type="button"
+              role="radio"
+              :data-testid="`turn-alert-${mode.value}`"
+              :aria-checked="props.modelValue.turnAlert === mode.value"
+              :class="{ active: props.modelValue.turnAlert === mode.value }"
+              @click="setTurnAlert(mode.value)"
+            >
+              <span aria-hidden="true">{{ mode.icon }}</span>
+              <span>{{ mode.label }}</span>
+            </button>
+          </div>
+        </div>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
@@ -144,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { CardDisplayMode, GameDisplayPreferences, SeatDirection } from "@/types/game";
+import type { CardDisplayMode, GameDisplayPreferences, SeatDirection, TurnAlertMode } from "@/types/game";
 
 const props = defineProps<{
   modelValue: GameDisplayPreferences;
@@ -164,6 +185,11 @@ const cardModes: Array<{ value: CardDisplayMode; label: string; sample: string }
   { value: "adaptive", label: "自适应", sample: "自" },
   { value: "long", label: "长牌", sample: "帥" },
 ];
+const alertModes: Array<{ value: TurnAlertMode; label: string; icon: string }> = [
+  { value: "sound-vibration", label: "响铃+震动", icon: "♪" },
+  { value: "sound", label: "仅响铃", icon: "♫" },
+  { value: "off", label: "关闭", icon: "—" },
+];
 
 watch(
   () => props.decisionActive,
@@ -180,6 +206,10 @@ function setCardMode(key: "ownCards" | "tableCards", mode: CardDisplayMode): voi
 
 function setSeatDirection(direction: SeatDirection): void {
   emit("update:modelValue", { ...props.modelValue, seatDirection: direction });
+}
+
+function setTurnAlert(turnAlert: TurnAlertMode): void {
+  emit("update:modelValue", { ...props.modelValue, turnAlert });
 }
 
 function openRules(): void {
@@ -327,8 +357,15 @@ function confirmExit(): void {
   gap: 0.35rem;
 }
 
+.alert-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
 .mode-options button,
 .direction-options button,
+.alert-options button,
 .rules-entry {
   width: 100%;
   min-height: 2.75rem;
@@ -336,6 +373,27 @@ function confirmExit(): void {
   border: 1px solid rgba(71, 85, 105, 0.78);
   background: rgba(15, 23, 42, 0.76);
   color: #e2e8f0;
+}
+
+.alert-options button {
+  min-width: 0;
+  padding: 0.38rem 0.2rem;
+  display: grid;
+  place-items: center;
+  gap: 0.08rem;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.alert-options button > span:first-child {
+  color: #fbbf24;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.alert-options button.active {
+  border-color: rgba(56, 189, 248, 0.88);
+  background: rgba(8, 47, 73, 0.78);
 }
 
 .mode-options button {

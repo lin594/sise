@@ -8,6 +8,7 @@ import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
+import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { getCardLabelText } from "@/utils/cardText";
@@ -16,6 +17,9 @@ const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
 const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
 function normalizeCardDisplayMode(value) {
     return value === "large" || value === "adaptive" || value === "long" ? value : null;
+}
+function normalizeTurnAlertMode(value) {
+    return value === "sound" || value === "off" || value === "sound-vibration" ? value : "sound-vibration";
 }
 function readDisplayPreferences() {
     try {
@@ -26,6 +30,7 @@ function readDisplayPreferences() {
                 ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
                 tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
                 seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
+                turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
             };
         }
     }
@@ -37,6 +42,7 @@ function readDisplayPreferences() {
         ownCards: "adaptive",
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
         seatDirection: "counterclockwise",
+        turnAlert: "sound-vibration",
     };
 }
 function randomFrom(list) {
@@ -321,6 +327,19 @@ const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot));
 const settingsDecisionActive = computed(() => canAct.value || canDiscard.value);
+const decisionAlertKey = computed(() => {
+    if (!settingsDecisionActive.value) {
+        return "";
+    }
+    return [
+        activeRoomId.value,
+        state.value?.responsePhase ?? "",
+        state.value?.responseEndsAt ?? 0,
+        canDiscard.value ? "discard" : "action",
+    ].join("|");
+});
+const turnAlertMode = computed(() => displayPreferences.value.turnAlert);
+useTurnAlert({ active: settingsDecisionActive, decisionKey: decisionAlertKey, mode: turnAlertMode });
 const declareDealIntroActive = computed(() => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value);
 let declareTick = null;
 const declareSecondsLeft = computed(() => {

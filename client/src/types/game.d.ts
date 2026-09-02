@@ -3,11 +3,13 @@ export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 export type CardDisplayMode = "large" | "adaptive" | "long";
 export type RenderedCardMode = Exclude<CardDisplayMode, "adaptive">;
 export type SeatDirection = "clockwise" | "counterclockwise";
+export type TurnAlertMode = "sound-vibration" | "sound" | "off";
 export type RoomConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "retry_wait" | "offline" | "restored" | "failed";
 export interface GameDisplayPreferences {
     ownCards: CardDisplayMode;
     tableCards: CardDisplayMode;
     seatDirection: SeatDirection;
+    turnAlert: TurnAlertMode;
 }
 export interface Card {
     id: string;
