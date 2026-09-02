@@ -163,6 +163,11 @@ test.describe("phone portrait landscape canvas", () => {
   test("renders a fully interactive rotated canvas without an orientation guard", async ({ page }) => {
     await page.goto("/");
 
+    const viewportMeta = await page.locator('meta[name="viewport"]').getAttribute("content");
+    expect(viewportMeta).toContain("width=device-width");
+    expect(viewportMeta).not.toContain("maximum-scale");
+    expect(viewportMeta).not.toContain("user-scalable=no");
+
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "667x375");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
