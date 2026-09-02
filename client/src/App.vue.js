@@ -8,6 +8,7 @@ import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
+import { useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
@@ -31,6 +32,7 @@ function readDisplayPreferences() {
                 tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
                 seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
                 turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
+                keepScreenAwake: parsed.keepScreenAwake !== false,
             };
         }
     }
@@ -43,6 +45,7 @@ function readDisplayPreferences() {
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
         seatDirection: "counterclockwise",
         turnAlert: "sound-vibration",
+        keepScreenAwake: true,
     };
 }
 function randomFrom(list) {
@@ -340,6 +343,9 @@ const decisionAlertKey = computed(() => {
 });
 const turnAlertMode = computed(() => displayPreferences.value.turnAlert);
 useTurnAlert({ active: settingsDecisionActive, decisionKey: decisionAlertKey, mode: turnAlertMode });
+const wakeLockActive = computed(() => connected.value && (isDeclaring.value || isPlaying.value));
+const keepScreenAwake = computed(() => displayPreferences.value.keepScreenAwake);
+useScreenWakeLock(wakeLockActive, keepScreenAwake);
 const declareDealIntroActive = computed(() => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value);
 let declareTick = null;
 const declareSecondsLeft = computed(() => {

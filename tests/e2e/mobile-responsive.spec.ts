@@ -507,6 +507,31 @@ test.describe("compact landscape gameplay", () => {
           return true;
         },
       });
+      Object.defineProperty(navigator, "wakeLock", {
+        configurable: true,
+        value: {
+          request: async (type: string) => {
+            const requestKey = "sise_test_wake_lock_requests";
+            sessionStorage.setItem(requestKey, String(Number(sessionStorage.getItem(requestKey) ?? "0") + 1));
+            let released = false;
+            const releaseListeners: Array<() => void> = [];
+            return {
+              get released() {
+                return released;
+              },
+              addEventListener: (_event: string, listener: () => void) => releaseListeners.push(listener),
+              release: async () => {
+                if (released) return;
+                released = true;
+                const releaseKey = "sise_test_wake_lock_releases";
+                sessionStorage.setItem(releaseKey, String(Number(sessionStorage.getItem(releaseKey) ?? "0") + 1));
+                releaseListeners.forEach((listener) => listener());
+              },
+              type,
+            };
+          },
+        },
+      });
     });
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
@@ -514,6 +539,8 @@ test.describe("compact landscape gameplay", () => {
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
+    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem("sise_test_wake_lock_requests") ?? "0")))
+      .toBeGreaterThanOrEqual(1);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
     await expect(gameSettings).toContainText("设置");
@@ -554,6 +581,19 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
     await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
     await expect(page.getByTestId("turn-alert-sound-vibration")).toHaveClass(/active/);
+    const keepScreenAwake = page.getByTestId("keep-screen-awake");
+    await expect(keepScreenAwake).toHaveAttribute("aria-checked", "true");
+    const initialWakeLockRequests = await page.evaluate(() =>
+      Number(sessionStorage.getItem("sise_test_wake_lock_requests") ?? "0"),
+    );
+    await keepScreenAwake.click();
+    await expect(keepScreenAwake).toHaveAttribute("aria-checked", "false");
+    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem("sise_test_wake_lock_releases") ?? "0")))
+      .toBeGreaterThanOrEqual(1);
+    await keepScreenAwake.click();
+    await expect(keepScreenAwake).toHaveAttribute("aria-checked", "true");
+    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem("sise_test_wake_lock_requests") ?? "0")))
+      .toBeGreaterThan(initialWakeLockRequests);
     const initialSeatIds = {
       left: await page.getByTestId("player-left").getAttribute("data-player-id"),
       right: await page.getByTestId("player-right").getAttribute("data-player-id"),
@@ -575,6 +615,7 @@ test.describe("compact landscape gameplay", () => {
       tableCards: "long",
       seatDirection: "clockwise",
       turnAlert: "sound-vibration",
+      keepScreenAwake: true,
     });
     await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
     await page.getByTestId("seat-direction-counterclockwise").click();

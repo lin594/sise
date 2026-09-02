@@ -141,6 +141,22 @@
             </button>
           </div>
         </div>
+        <button
+          class="setting-switch"
+          type="button"
+          role="switch"
+          data-testid="keep-screen-awake"
+          :aria-checked="props.modelValue.keepScreenAwake"
+          @click="setKeepScreenAwake(!props.modelValue.keepScreenAwake)"
+        >
+          <span>
+            <strong>牌局中屏幕常亮</strong>
+            <small>切到后台或牌局结束会自动释放</small>
+          </span>
+          <span class="switch-state" :class="{ active: props.modelValue.keepScreenAwake }">
+            {{ props.modelValue.keepScreenAwake ? "开启" : "关闭" }}
+          </span>
+        </button>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
@@ -210,6 +226,10 @@ function setSeatDirection(direction: SeatDirection): void {
 
 function setTurnAlert(turnAlert: TurnAlertMode): void {
   emit("update:modelValue", { ...props.modelValue, turnAlert });
+}
+
+function setKeepScreenAwake(keepScreenAwake: boolean): void {
+  emit("update:modelValue", { ...props.modelValue, keepScreenAwake });
 }
 
 function openRules(): void {
@@ -366,6 +386,7 @@ function confirmExit(): void {
 .mode-options button,
 .direction-options button,
 .alert-options button,
+.setting-switch,
 .rules-entry {
   width: 100%;
   min-height: 2.75rem;
@@ -373,6 +394,43 @@ function confirmExit(): void {
   border: 1px solid rgba(71, 85, 105, 0.78);
   background: rgba(15, 23, 42, 0.76);
   color: #e2e8f0;
+}
+
+.setting-switch {
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.setting-switch > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.setting-switch strong {
+  font-size: 0.88rem;
+}
+
+.switch-state {
+  flex: 0 0 auto;
+  min-width: 3.1rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 999px;
+  background: #334155;
+  color: #cbd5e1;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.switch-state.active {
+  background: #047857;
+  color: #ecfdf5;
 }
 
 .alert-options button {
