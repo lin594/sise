@@ -29,7 +29,14 @@
       >
         <div v-if="isCurrentTurn(topPlayer.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
-          <strong>{{ topPlayer.name }}</strong>
+          <div class="seat-identity">
+            <strong>{{ topPlayer.name }}</strong>
+            <span v-if="isDealer(topPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
+            <span v-if="isDealer(topPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
+              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
+              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+            </span>
+          </div>
           <div class="seat-tags">
             <span v-if="isCurrentTurn(topPlayer.clientId)" class="tag turn">当前回合</span>
             <span
@@ -93,7 +100,14 @@
       >
         <div v-if="isCurrentTurn(leftPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
-          <strong>{{ leftPlayer.name }}</strong>
+          <div class="seat-identity">
+            <strong>{{ leftPlayer.name }}</strong>
+            <span v-if="isDealer(leftPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
+            <span v-if="isDealer(leftPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
+              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
+              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+            </span>
+          </div>
           <div class="seat-tags">
             <span v-if="isCurrentTurn(leftPlayer.clientId)" class="tag turn">当前回合</span>
             <span
@@ -145,54 +159,39 @@
           >
             <div v-if="seatActionText(leftPlayer.clientId) || isCollectiveResponder(leftPlayer.clientId)" class="center-seat-action">{{ seatActionText(leftPlayer.clientId) || "待响" }}</div>
           </div>
-          <div class="center-core">
-            <div class="center-core-cell dealer-cell">
-              <span class="center-core-label">庄家 {{ dealerName }}</span>
-              <small v-if="dealerPickerName" class="center-core-subtle">抽牌者 {{ dealerPickerName }}</small>
-              <div v-if="dealerInfoCard" class="center-core-card">
+          <div class="center-stage">
+            <div
+              v-if="responseCard"
+              class="pending-inline response-focus"
+              :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
+              ref="responseLandingRef"
+              data-testid="pending-card"
+            >
+              <span class="response-caption">待响</span>
+              <Transition name="resp-move" mode="out-in">
                 <CardComp
                   v-if="props.tableCardMode === 'full'"
-                  :card="dealerInfoCard"
-                  size="md"
+                  :key="`resp-full-${responseCard.id}-${responseCard.source || 'upper'}`"
+                  :card="responseCard"
+                  size="lg"
                 />
-                <div v-else class="corner-card" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</div>
-              </div>
+                <div
+                  v-else
+                  :key="`resp-simple-${responseCard.id}-${responseCard.source || 'upper'}`"
+                  class="corner-card response-card-simple"
+                  :class="cardColorClass(responseCard)"
+                >
+                  {{ cardGlyph(responseCard) }}
+                </div>
+              </Transition>
             </div>
-            <div class="center-core-cell deck-cell">
-              <span class="center-core-label">牌堆</span>
-              <div class="deck-stack" :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`">
-                <span class="deck-stack-card"></span>
-                <span class="deck-stack-card"></span>
-                <span class="deck-stack-card"></span>
-                <strong class="deck-stack-count">{{ props.state?.deckCount ?? 0 }}</strong>
-              </div>
-            </div>
-            <div class="center-core-cell response-cell">
-              <span class="center-core-label">待响牌</span>
-              <div
-                v-if="responseCard"
-                class="pending-inline"
-                :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
-                ref="responseLandingRef"
-              >
-                <Transition name="resp-move" mode="out-in">
-                  <CardComp
-                    v-if="props.tableCardMode === 'full'"
-                    :key="`resp-full-${responseCard.id}-${responseCard.source || 'upper'}`"
-                    :card="responseCard"
-                    size="lg"
-                  />
-                  <div
-                    v-else
-                    :key="`resp-simple-${responseCard.id}-${responseCard.source || 'upper'}`"
-                    class="corner-card response-card-simple"
-                    :class="cardColorClass(responseCard)"
-                  >
-                    {{ cardGlyph(responseCard) }}
-                  </div>
-                </Transition>
-              </div>
-              <div v-else class="pending-placeholder">暂无待响牌</div>
+            <div
+              class="deck-badge"
+              ref="deckAnchorRef"
+              data-testid="deck-count"
+              :title="`牌堆剩余 ${props.state?.deckCount ?? 0} 张`"
+            >
+              <span>牌堆</span><strong>{{ props.state?.deckCount ?? 0 }}</strong>
             </div>
           </div>
           <div
@@ -213,7 +212,6 @@
         <div v-if="centerPointerDirection" class="center-pointer" :class="`pointer-${centerPointerDirection}`">
           <i class="center-pointer-head"></i>
         </div>
-        <div class="deck-anchor" ref="deckAnchorRef"></div>
       </section>
 
       <section
@@ -228,7 +226,14 @@
       >
         <div v-if="isCurrentTurn(rightPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
-          <strong>{{ rightPlayer.name }}</strong>
+          <div class="seat-identity">
+            <strong>{{ rightPlayer.name }}</strong>
+            <span v-if="isDealer(rightPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
+            <span v-if="isDealer(rightPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
+              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
+              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+            </span>
+          </div>
           <div class="seat-tags">
             <span v-if="isCurrentTurn(rightPlayer.clientId)" class="tag turn">当前回合</span>
             <span
@@ -329,7 +334,6 @@
       <Transition name="dealer-reveal">
         <div v-if="dealerReveal" :key="`dealer-${dealerReveal.id}`" class="dealer-reveal">
           <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
-          <strong>{{ dealerReveal.name }}</strong>
           <div v-if="dealerReveal.card" class="dealer-reveal-card">
             <CardComp
               v-if="props.tableCardMode === 'full'"
@@ -348,7 +352,7 @@
           class="dealer-flight"
           :style="dealerFlightStyle(dealerFlight)"
         >
-          庄家
+          庄
         </div>
       </Transition>
     </div>
@@ -362,7 +366,14 @@
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
-          <h3>{{ selfPlayer.name }}（你）</h3>
+          <div class="seat-identity">
+            <h3>{{ selfPlayer.name }}（你）</h3>
+            <span v-if="isDealer(selfPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
+            <span v-if="isDealer(selfPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
+              <CardComp v-if="props.tableCardMode === 'full'" :card="dealerInfoCard" size="sm" />
+              <span v-else class="dealer-card-simple" :class="cardColorClass(dealerInfoCard)">{{ cardGlyph(dealerInfoCard) }}</span>
+            </span>
+          </div>
           <p>手牌 {{ playerHandCount(selfPlayer) }} 张 · 牌组 {{ selfGroupBlocks.length }} 组 · 暗坎 {{ selfPlayer.declaredKongs }}</p>
         </div>
         <div class="seat-tags">
@@ -538,7 +549,7 @@ const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
-const dealerReveal = ref<{ id: number; label: string; name: string; card?: Card | null } | null>(null);
+const dealerReveal = ref<{ id: number; label: string; card?: Card | null } | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
@@ -986,22 +997,6 @@ const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>
     return "right";
   }
   return "down";
-});
-
-const dealerName = computed(() => {
-  const dealerId = String(props.state?.dealerId ?? "");
-  if (!dealerId) {
-    return "-";
-  }
-  return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
-});
-
-const dealerPickerName = computed(() => {
-  const pickerId = String(props.state?.dealerPickerId ?? "");
-  if (!pickerId) {
-    return "";
-  }
-  return props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
 });
 
 const dealerInfoCard = computed<Card | null>(() => {
@@ -1483,15 +1478,12 @@ function triggerActorFlash(actorId: string): void {
   }, 780);
 }
 
-function triggerDealerReveal(label: string, name: string, card?: Card | null, dealerId?: string) {
-  if (!name || name === "-") {
-    return;
-  }
+function triggerDealerReveal(label: string, card?: Card | null, dealerId?: string) {
   if (dealerTimer) {
     clearTimeout(dealerTimer);
     dealerTimer = null;
   }
-  dealerReveal.value = { id: ++dealerRevealSeq, label, name, card: card ?? null };
+  dealerReveal.value = { id: ++dealerRevealSeq, label, card: card ?? null };
   dealerTimer = setTimeout(() => {
     dealerReveal.value = null;
     dealerTimer = null;
@@ -1544,16 +1536,13 @@ watch(
   (action) => {
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
-      const pickerId = dealerPickMatch[1];
-      const name = props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
-      triggerDealerReveal("抽取定庄牌", name);
+      triggerDealerReveal("定庄中");
       return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
     if (dealerCardMatch) {
       const dealerId = dealerCardMatch[1];
-      const name = props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
-      triggerDealerReveal("定庄牌", name, dealerInfoCard.value, dealerId);
+      triggerDealerReveal("定庄牌", dealerInfoCard.value, dealerId);
       return;
     }
     const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
@@ -1785,6 +1774,57 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+}
+
+.seat-identity {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.2rem, 0.55vh, 0.4rem);
+}
+
+.seat-identity strong,
+.seat-identity h3 {
+  min-width: 0;
+}
+
+.dealer-badge {
+  flex: 0 0 auto;
+  width: clamp(1.35rem, 3.2vh, 1.8rem);
+  height: clamp(1.35rem, 3.2vh, 1.8rem);
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(245, 158, 11, 0.95);
+  background: linear-gradient(145deg, #fbbf24, #b45309);
+  color: #451a03;
+  font-size: clamp(0.7rem, 1.55vh, 0.9rem);
+  font-weight: 900;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.32);
+}
+
+.dealer-card-mark {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  max-height: clamp(1.9rem, 5.4vh, 3.15rem);
+  overflow: hidden;
+}
+
+.dealer-card-mark :deep(.card) {
+  transform: scale(0.72);
+}
+
+.dealer-card-simple {
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  padding: 0.12rem 0.28rem;
+  border-radius: 0.45rem;
+  display: inline-grid;
+  place-items: center;
+  color: #111827;
+  font-size: clamp(0.72rem, 1.65vh, 0.95rem);
+  font-weight: 900;
 }
 
 .seat-meta {
@@ -2178,36 +2218,11 @@ watch(
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.24) inset, 0 0 16px rgba(34, 197, 94, 0.16);
 }
 
-.center-core {
+.center-stage {
   grid-area: core;
+  position: relative;
   min-width: 0;
   min-height: 0;
-  border: 1px solid rgba(51, 65, 85, 0.68);
-  border-radius: clamp(0.45rem, 1vh, 0.8rem);
-  background: rgba(2, 6, 23, 0.32);
-  padding: clamp(0.24rem, 0.75vh, 0.48rem);
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(0.28rem, 0.8vh, 0.55rem);
-  align-items: stretch;
-}
-
-.center-core-cell {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 0.28rem;
-  text-align: center;
-}
-
-.center-core-subtle {
-  font-size: clamp(0.56rem, 1.1vh, 0.68rem);
-  color: #94a3b8;
-}
-
-.center-core-card {
   display: grid;
   place-items: center;
 }
@@ -2218,71 +2233,54 @@ watch(
   justify-content: center;
 }
 
+.response-focus {
+  position: relative;
+  min-width: clamp(3rem, 7vh, 4.5rem);
+  min-height: clamp(4rem, 9vh, 6rem);
+  filter: drop-shadow(0 9px 16px rgba(2, 6, 23, 0.32));
+}
+
+.response-caption {
+  position: absolute;
+  left: 50%;
+  bottom: -0.2rem;
+  z-index: 2;
+  transform: translate(-50%, 55%);
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  background: rgba(8, 47, 73, 0.88);
+  color: #e0f2fe;
+  padding: 0.05rem 0.38rem;
+  font-size: clamp(0.55rem, 1.15vh, 0.7rem);
+  white-space: nowrap;
+}
+
 .pending-inline.draw-pending-hidden > * {
   opacity: 0;
 }
 
-.center-core-label {
-  font-size: clamp(0.62rem, 1.15vh, 0.74rem);
-  color: #93c5fd;
-}
-
-.pending-placeholder {
-  min-height: clamp(3.4rem, 7vh, 4.4rem);
-  display: grid;
-  place-items: center;
-  padding: 0.35rem;
-  border-radius: 0.7rem;
-  border: 1px dashed rgba(71, 85, 105, 0.72);
-  color: #64748b;
-  font-size: clamp(0.62rem, 1.15vh, 0.74rem);
-}
-
-.deck-stack {
-  position: relative;
-  width: clamp(2.6rem, 5.6vh, 3.4rem);
-  height: clamp(3.4rem, 7vh, 4.4rem);
-  display: grid;
-  place-items: center;
-}
-
-.deck-stack-card {
+.deck-badge {
   position: absolute;
-  inset: auto;
-  width: clamp(2rem, 4.8vh, 2.7rem);
-  height: clamp(2.8rem, 6.1vh, 3.6rem);
-  border-radius: 0.5rem;
-  background: linear-gradient(180deg, #b91c1c, #7f1d1d);
-  border: 1px solid rgba(127, 29, 29, 0.9);
-  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.24);
-}
-
-.deck-stack-card:nth-child(1) {
-  transform: translate(-8px, -6px);
-}
-
-.deck-stack-card:nth-child(2) {
-  transform: translate(0, 0);
-}
-
-.deck-stack-card:nth-child(3) {
-  transform: translate(8px, 6px);
-}
-
-.deck-stack-count {
-  position: relative;
-  z-index: 1;
-  min-width: 1.7rem;
-  height: 1.7rem;
-  padding: 0 0.35rem;
+  right: 0;
+  bottom: 0;
+  min-width: 2.9rem;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.42rem;
   border-radius: 999px;
-  background: rgba(2, 6, 23, 0.84);
-  color: #fef2f2;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(15, 23, 42, 0.76);
+  color: #cbd5e1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(0.7rem, 1.6vh, 0.96rem);
-  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.28);
+  gap: 0.22rem;
+  font-size: clamp(0.52rem, 1.08vh, 0.68rem);
+  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.22);
+}
+
+.deck-badge strong {
+  color: #f8fafc;
+  font-size: 1.08em;
 }
 
 .resp-move-enter-active {
@@ -2586,17 +2584,6 @@ watch(
   display: none;
 }
 
-.deck-anchor {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1px;
-  height: 1px;
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  pointer-events: none;
-}
-
 .fx-layer {
   position: fixed;
   inset: 0;
@@ -2674,12 +2661,6 @@ watch(
 .dealer-reveal-label {
   color: #fbbf24;
   font-size: clamp(0.62rem, 1.45vh, 0.8rem);
-}
-
-.dealer-reveal strong {
-  color: #fef3c7;
-  font-size: clamp(0.84rem, 1.95vh, 1.08rem);
-  letter-spacing: 0.02em;
 }
 
 .dealer-flight {
@@ -3172,14 +3153,8 @@ watch(
     display: none;
   }
 
-  .center-core {
-    padding: 0.18rem;
-    gap: 0.18rem;
-  }
-
-  .center-core-subtle,
-  .pending-placeholder {
-    font-size: 0.56rem;
+  .dealer-card-mark :deep(.card) {
+    transform: scale(0.62);
   }
 }
 

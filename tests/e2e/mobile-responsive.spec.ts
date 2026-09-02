@@ -7,6 +7,16 @@ async function enterLobby(page: Page): Promise<void> {
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
+async function expectSimplifiedTableCenter(page: Page): Promise<void> {
+  await expect(page.getByTestId("deck-count")).toBeVisible();
+  await expect(page.getByTestId("dealer-badge")).toHaveCount(1);
+  await expect(page.getByTestId("dealer-card")).toHaveCount(1);
+  await expect(page.getByText(/抽牌者/)).toHaveCount(0);
+  await expect(page.getByText(/^庄家:/)).toHaveCount(0);
+  await expect(page.locator(".center-core-cell")).toHaveCount(0);
+  await expect(page.locator(".pending-placeholder")).toHaveCount(0);
+}
+
 test.describe("phone portrait landscape canvas", () => {
   test.use({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true });
 
@@ -116,6 +126,7 @@ test.describe("compact landscape gameplay", () => {
 
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
+    await expectSimplifiedTableCenter(page);
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
       const cards = Array.from(element.querySelectorAll<HTMLElement>(".hand-card"));
@@ -193,6 +204,7 @@ test.describe("desktop declaration", () => {
     await expect(page.getByTestId("declare-hand-preview").locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
+    await expectSimplifiedTableCenter(page);
   });
 });
 

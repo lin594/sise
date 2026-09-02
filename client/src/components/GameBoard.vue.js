@@ -427,20 +427,6 @@ const centerPointerDirection = computed(() => {
     }
     return "down";
 });
-const dealerName = computed(() => {
-    const dealerId = String(props.state?.dealerId ?? "");
-    if (!dealerId) {
-        return "-";
-    }
-    return props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
-});
-const dealerPickerName = computed(() => {
-    const pickerId = String(props.state?.dealerPickerId ?? "");
-    if (!pickerId) {
-        return "";
-    }
-    return props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
-});
 const dealerInfoCard = computed(() => {
     const card = props.state?.dealerCard;
     return card?.id ? card : null;
@@ -877,15 +863,12 @@ function triggerActorFlash(actorId) {
         flashTimer = null;
     }, 780);
 }
-function triggerDealerReveal(label, name, card, dealerId) {
-    if (!name || name === "-") {
-        return;
-    }
+function triggerDealerReveal(label, card, dealerId) {
     if (dealerTimer) {
         clearTimeout(dealerTimer);
         dealerTimer = null;
     }
-    dealerReveal.value = { id: ++dealerRevealSeq, label, name, card: card ?? null };
+    dealerReveal.value = { id: ++dealerRevealSeq, label, card: card ?? null };
     dealerTimer = setTimeout(() => {
         dealerReveal.value = null;
         dealerTimer = null;
@@ -933,16 +916,13 @@ onUnmounted(() => {
 watch(() => props.state?.lastAction, (action) => {
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
-        const pickerId = dealerPickMatch[1];
-        const name = props.players.find((p) => p.clientId === pickerId)?.name || pickerId;
-        triggerDealerReveal("抽取定庄牌", name);
+        triggerDealerReveal("定庄中");
         return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
     if (dealerCardMatch) {
         const dealerId = dealerCardMatch[1];
-        const name = props.players.find((p) => p.clientId === dealerId)?.name || dealerId;
-        triggerDealerReveal("定庄牌", name, dealerInfoCard.value, dealerId);
+        triggerDealerReveal("定庄牌", dealerInfoCard.value, dealerId);
         return;
     }
     const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
@@ -996,6 +976,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
@@ -1022,9 +1005,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
@@ -1050,7 +1031,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -1119,9 +1099,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-subtle']} */ ;
-/** @type {__VLS_StyleScopedClasses['pending-placeholder']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
@@ -1179,8 +1158,42 @@ if (__VLS_ctx.topPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "seat-identity" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.topPlayer.name);
+    if (__VLS_ctx.isDealer(__VLS_ctx.topPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-badge" },
+            'data-testid': "dealer-badge",
+        });
+    }
+    if (__VLS_ctx.isDealer(__VLS_ctx.topPlayer.clientId) && __VLS_ctx.dealerInfoCard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-card-mark" },
+            'data-testid': "dealer-card",
+        });
+        if (props.tableCardMode === 'full') {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }));
+            const __VLS_1 = __VLS_0({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "dealer-card-simple" },
+                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
+            });
+            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
@@ -1281,8 +1294,42 @@ if (__VLS_ctx.leftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "seat-identity" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.leftPlayer.name);
+    if (__VLS_ctx.isDealer(__VLS_ctx.leftPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-badge" },
+            'data-testid': "dealer-badge",
+        });
+    }
+    if (__VLS_ctx.isDealer(__VLS_ctx.leftPlayer.clientId) && __VLS_ctx.dealerInfoCard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-card-mark" },
+            'data-testid': "dealer-card",
+        });
+        if (props.tableCardMode === 'full') {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }));
+            const __VLS_4 = __VLS_3({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "dealer-card-simple" },
+                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
+            });
+            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
@@ -1370,106 +1417,44 @@ if (__VLS_ctx.leftPlayer) {
     }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "center-core" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "center-core-cell dealer-cell" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "center-core-label" },
-});
-(__VLS_ctx.dealerName);
-if (__VLS_ctx.dealerPickerName) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
-        ...{ class: "center-core-subtle" },
-    });
-    (__VLS_ctx.dealerPickerName);
-}
-if (__VLS_ctx.dealerInfoCard) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "center-core-card" },
-    });
-    if (props.tableCardMode === 'full') {
-        /** @type {[typeof CardComp, ]} */ ;
-        // @ts-ignore
-        const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-            card: (__VLS_ctx.dealerInfoCard),
-            size: "md",
-        }));
-        const __VLS_1 = __VLS_0({
-            card: (__VLS_ctx.dealerInfoCard),
-            size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_0));
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "corner-card" },
-            ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
-        });
-        (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
-    }
-}
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "center-core-cell deck-cell" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "center-core-label" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "deck-stack" },
-    title: (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "deck-stack-card" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "deck-stack-card" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "deck-stack-card" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
-    ...{ class: "deck-stack-count" },
-});
-(props.state?.deckCount ?? 0);
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "center-core-cell response-cell" },
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "center-core-label" },
+    ...{ class: "center-stage" },
 });
 if (__VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "pending-inline" },
+        ...{ class: "pending-inline response-focus" },
         ...{ class: ({ 'draw-pending-hidden': __VLS_ctx.isResponseCardDrawHidden }) },
         ref: "responseLandingRef",
+        'data-testid': "pending-card",
     });
     /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
-    const __VLS_3 = {}.Transition;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "response-caption" },
+    });
+    const __VLS_6 = {}.Transition;
     /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
     // @ts-ignore
-    const __VLS_4 = __VLS_asFunctionalComponent(__VLS_3, new __VLS_3({
+    const __VLS_7 = __VLS_asFunctionalComponent(__VLS_6, new __VLS_6({
         name: "resp-move",
         mode: "out-in",
     }));
-    const __VLS_5 = __VLS_4({
+    const __VLS_8 = __VLS_7({
         name: "resp-move",
         mode: "out-in",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_4));
-    __VLS_6.slots.default;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_7));
+    __VLS_9.slots.default;
     if (props.tableCardMode === 'full') {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_7 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_10 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`resp-full-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
             card: (__VLS_ctx.responseCard),
             size: "lg",
         }));
-        const __VLS_8 = __VLS_7({
+        const __VLS_11 = __VLS_10({
             key: (`resp-full-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
             card: (__VLS_ctx.responseCard),
             size: "lg",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_7));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_10));
     }
     else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1479,13 +1464,18 @@ if (__VLS_ctx.responseCard) {
         });
         (__VLS_ctx.cardGlyph(__VLS_ctx.responseCard));
     }
-    var __VLS_6;
+    var __VLS_9;
 }
-else {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "pending-placeholder" },
-    });
-}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "deck-badge" },
+    ref: "deckAnchorRef",
+    'data-testid': "deck-count",
+    title: (`牌堆剩余 ${props.state?.deckCount ?? 0} 张`),
+});
+/** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+(props.state?.deckCount ?? 0);
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-right" },
@@ -1519,11 +1509,6 @@ if (__VLS_ctx.centerPointerDirection) {
         ...{ class: "center-pointer-head" },
     });
 }
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "deck-anchor" },
-    ref: "deckAnchorRef",
-});
-/** @type {typeof __VLS_ctx.deckAnchorRef} */ ;
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ref: ((el) => __VLS_ctx.rightPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.rightPlayer.clientId, el)),
@@ -1543,8 +1528,42 @@ if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "seat-identity" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.rightPlayer.name);
+    if (__VLS_ctx.isDealer(__VLS_ctx.rightPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-badge" },
+            'data-testid': "dealer-badge",
+        });
+    }
+    if (__VLS_ctx.isDealer(__VLS_ctx.rightPlayer.clientId) && __VLS_ctx.dealerInfoCard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-card-mark" },
+            'data-testid': "dealer-card",
+        });
+        if (props.tableCardMode === 'full') {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_13 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }));
+            const __VLS_14 = __VLS_13({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_13));
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "dealer-card-simple" },
+                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
+            });
+            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
@@ -1696,32 +1715,32 @@ if (__VLS_ctx.rightPlayer) {
         });
     }
 }
-const __VLS_10 = {}.Transition;
+const __VLS_16 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_11 = __VLS_asFunctionalComponent(__VLS_10, new __VLS_10({
+const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({
     name: "deal-fade",
 }));
-const __VLS_12 = __VLS_11({
+const __VLS_18 = __VLS_17({
     name: "deal-fade",
-}, ...__VLS_functionalComponentArgsRest(__VLS_11));
-__VLS_13.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_17));
+__VLS_19.slots.default;
 if (__VLS_ctx.showDealAnimation) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "deal-overlay" },
     });
 }
-var __VLS_13;
-const __VLS_14 = {}.Transition;
+var __VLS_19;
+const __VLS_20 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_15 = __VLS_asFunctionalComponent(__VLS_14, new __VLS_14({
+const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({
     name: "dealer-reveal",
 }));
-const __VLS_16 = __VLS_15({
+const __VLS_22 = __VLS_21({
     name: "dealer-reveal",
-}, ...__VLS_functionalComponentArgsRest(__VLS_15));
-__VLS_17.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_21));
+__VLS_23.slots.default;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -1731,8 +1750,6 @@ if (__VLS_ctx.dealerReveal) {
         ...{ class: "dealer-reveal-label" },
     });
     (__VLS_ctx.dealerReveal.label);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (__VLS_ctx.dealerReveal.name);
     if (__VLS_ctx.dealerReveal.card) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "dealer-reveal-card" },
@@ -1740,14 +1757,14 @@ if (__VLS_ctx.dealerReveal) {
         if (props.tableCardMode === 'full') {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerReveal.card),
                 size: "md",
             }));
-            const __VLS_19 = __VLS_18({
+            const __VLS_25 = __VLS_24({
                 card: (__VLS_ctx.dealerReveal.card),
                 size: "md",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_24));
         }
         else {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1758,17 +1775,17 @@ if (__VLS_ctx.dealerReveal) {
         }
     }
 }
-var __VLS_17;
-const __VLS_21 = {}.Transition;
+var __VLS_23;
+const __VLS_27 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_22 = __VLS_asFunctionalComponent(__VLS_21, new __VLS_21({
+const __VLS_28 = __VLS_asFunctionalComponent(__VLS_27, new __VLS_27({
     name: "dealer-flight",
 }));
-const __VLS_23 = __VLS_22({
+const __VLS_29 = __VLS_28({
     name: "dealer-flight",
-}, ...__VLS_functionalComponentArgsRest(__VLS_22));
-__VLS_24.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_28));
+__VLS_30.slots.default;
 if (__VLS_ctx.dealerFlight) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
@@ -1776,7 +1793,7 @@ if (__VLS_ctx.dealerFlight) {
         ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
     });
 }
-var __VLS_24;
+var __VLS_30;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-info-card" },
@@ -1794,8 +1811,42 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "self-head" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "seat-identity" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     (__VLS_ctx.selfPlayer.name);
+    if (__VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-badge" },
+            'data-testid': "dealer-badge",
+        });
+    }
+    if (__VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId) && __VLS_ctx.dealerInfoCard) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "dealer-card-mark" },
+            'data-testid': "dealer-card",
+        });
+        if (props.tableCardMode === 'full') {
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }));
+            const __VLS_32 = __VLS_31({
+                card: (__VLS_ctx.dealerInfoCard),
+                size: "sm",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_31));
+        }
+        else {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "dealer-card-simple" },
+                ...{ class: (__VLS_ctx.cardColorClass(__VLS_ctx.dealerInfoCard)) },
+            });
+            (__VLS_ctx.cardGlyph(__VLS_ctx.dealerInfoCard));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
     (__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer));
     (__VLS_ctx.selfGroupBlocks.length);
@@ -1880,20 +1931,20 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_25 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_34 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             size: "xl",
         }));
-        const __VLS_26 = __VLS_25({
+        const __VLS_35 = __VLS_34({
             card: (card),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_25));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_34));
     }
 }
 if (props.embeddedActionPanel && props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_28 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_37 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -1905,7 +1956,7 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
-    const __VLS_29 = __VLS_28({
+    const __VLS_38 = __VLS_37({
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -1916,17 +1967,17 @@ if (props.embeddedActionPanel && props.state?.phase === 'playing') {
         currentPlayerName: (props.currentPlayerName ?? '-'),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
-    let __VLS_31;
-    let __VLS_32;
-    let __VLS_33;
-    const __VLS_34 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_37));
+    let __VLS_40;
+    let __VLS_41;
+    let __VLS_42;
+    const __VLS_43 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    const __VLS_35 = {
+    const __VLS_44 = {
         onSelectionChange: (__VLS_ctx.onSelectionChange)
     };
-    var __VLS_30;
+    var __VLS_39;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
@@ -1946,14 +1997,14 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_36 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             size: "md",
         }));
-        const __VLS_37 = __VLS_36({
+        const __VLS_46 = __VLS_45({
             card: (flight.card),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_36));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_45));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -1967,6 +2018,10 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -1990,6 +2045,10 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2011,28 +2070,13 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-label']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-subtle']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['corner-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-label']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-stack-count']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-cell']} */ ;
-/** @type {__VLS_StyleScopedClasses['center-core-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-stage']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-caption']} */ ;
 /** @type {__VLS_StyleScopedClasses['corner-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-card-simple']} */ ;
-/** @type {__VLS_StyleScopedClasses['pending-placeholder']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
@@ -2041,12 +2085,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-seat-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-anchor']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2087,6 +2134,10 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-simple']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
@@ -2148,8 +2199,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             seatCountdownPercent: seatCountdownPercent,
             compactCenterHint: compactCenterHint,
             centerPointerDirection: centerPointerDirection,
-            dealerName: dealerName,
-            dealerPickerName: dealerPickerName,
             dealerInfoCard: dealerInfoCard,
             isCollectiveResponder: isCollectiveResponder,
             seatActionText: seatActionText,

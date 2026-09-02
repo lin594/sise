@@ -20,7 +20,6 @@
         <span>{{ connected ? "已连接" : "同步中..." }}</span>
         <span>座位ID: {{ mySeatId || "-" }}</span>
         <span>房主: {{ state?.hostPlayerId || "-" }}</span>
-        <span>庄家: {{ dealerName }}</span>
         <div class="view-mode-toggle">
           <button class="ghost mini" :class="{ active: tableCardMode === 'simple' }" @click="tableCardMode = 'simple'">简化大字</button>
           <button class="ghost mini" :class="{ active: tableCardMode === 'full' }" @click="tableCardMode = 'full'">长条色牌</button>
@@ -358,7 +357,7 @@
           <ul class="rules-list">
             <li>流水表示牌从谁传给谁；被吃、碰、开、胡走的待响牌，会从原来的流水里移除。</li>
             <li>牌组区显示已经亮出的牌组，手牌区显示你还握在手里的牌。</li>
-            <li>中央区会显示庄家、定庄牌、牌堆剩余数量和当前待响牌。</li>
+            <li>庄家名字旁会显示“庄”和定庄牌；中央只突出当前待响牌，牌堆余量显示在角落。</li>
           </ul>
         </section>
       </div>
@@ -1320,14 +1319,6 @@ const currentPlayerName = computed(() => {
   }
   const player = players.value.find((x) => x.clientId === playerId);
   return player?.name || playerId;
-});
-
-const dealerName = computed(() => {
-  const dealerId = String(state.value?.dealerId ?? "");
-  if (!dealerId) {
-    return "-";
-  }
-  return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
 });
 
 const roundDealerCard = computed<Card | null>(() => {

@@ -802,13 +802,6 @@ const currentPlayerName = computed(() => {
     const player = players.value.find((x) => x.clientId === playerId);
     return player?.name || playerId;
 });
-const dealerName = computed(() => {
-    const dealerId = String(state.value?.dealerId ?? "");
-    if (!dealerId) {
-        return "-";
-    }
-    return players.value.find((p) => p.clientId === dealerId)?.name || dealerId;
-});
 const roundDealerCard = computed(() => {
     const card = state.value?.dealerCard ?? null;
     return card?.id ? card : null;
@@ -1131,8 +1124,6 @@ if (__VLS_ctx.hasLobbySession) {
     (__VLS_ctx.mySeatId || "-");
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.state?.hostPlayerId || "-");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.dealerName);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "view-mode-toggle" },
     });
@@ -2134,7 +2125,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             endSummary: endSummary,
             turnHint: turnHint,
             currentPlayerName: currentPlayerName,
-            dealerName: dealerName,
             roundDealerCard: roundDealerCard,
             enterLobby: enterLobby,
             randomizeNickname: randomizeNickname,
