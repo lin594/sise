@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
@@ -42,6 +42,10 @@ const tableRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
 const selfHandRef = ref(null);
+const handHasOverflow = ref(false);
+const handCanScrollBackward = ref(false);
+const handCanScrollForward = ref(false);
+let handResizeObserver = null;
 const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
 const selfOpenCompactRef = ref(null);
@@ -505,6 +509,44 @@ function selectDiscardCard(cardId) {
     }
     selectedDiscardCardId.value = cardId;
 }
+function updateHandScrollState() {
+    const hand = selfHandRef.value;
+    if (!hand) {
+        handHasOverflow.value = false;
+        handCanScrollBackward.value = false;
+        handCanScrollForward.value = false;
+        return;
+    }
+    const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
+    handHasOverflow.value = maxScrollLeft > 2;
+    handCanScrollBackward.value = hand.scrollLeft > 2;
+    handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
+}
+function scrollHand(direction) {
+    const hand = selfHandRef.value;
+    if (!hand) {
+        return;
+    }
+    const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
+    hand.scrollBy({
+        left: direction === "forward" ? distance : -distance,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    window.setTimeout(updateHandScrollState, 320);
+}
+function observeHandScroller(hand) {
+    handResizeObserver?.disconnect();
+    handResizeObserver = null;
+    if (!hand) {
+        updateHandScrollState();
+        return;
+    }
+    if (typeof ResizeObserver !== "undefined") {
+        handResizeObserver = new ResizeObserver(updateHandScrollState);
+        handResizeObserver.observe(hand);
+    }
+    void nextTick(updateHandScrollState);
+}
 function confirmDiscard() {
     const cardId = selectedDiscardCardId.value;
     if (!cardId || !canConfirmDiscard.value || discardingCardId.value) {
@@ -937,6 +979,8 @@ onMounted(() => {
     }
 });
 onUnmounted(() => {
+    handResizeObserver?.disconnect();
+    handResizeObserver = null;
     clearDealAnimationRuntime();
     clearDealerIntroTimer();
     if (dealerTimer) {
@@ -1004,7 +1048,9 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
         selectedDiscardCardId.value = null;
     }
+    void nextTick(updateHandScrollState);
 });
+watch(selfHandRef, observeHandScroller, { immediate: true });
 watch(canDiscard, (enabled) => {
     if (!enabled) {
         selectedDiscardCardId.value = null;
@@ -1085,9 +1131,17 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-area']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['can-scroll-forward']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['can-scroll-backward']} */ ;
+/** @type {__VLS_StyleScopedClasses['can-scroll-forward']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['playable']} */ ;
@@ -1156,6 +1210,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -2086,8 +2142,48 @@ if (__VLS_ctx.selfPlayer) {
     if (__VLS_ctx.canDiscard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
+    if (__VLS_ctx.handHasOverflow) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "hand-scroll-tools" },
+            'data-testid': "hand-scroll-tools",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            'aria-hidden': "true",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.selfPlayer))
+                        return;
+                    if (!(__VLS_ctx.handHasOverflow))
+                        return;
+                    __VLS_ctx.scrollHand('backward');
+                } },
+            type: "button",
+            'data-testid': "hand-scroll-prev",
+            'aria-label': "向左翻看手牌",
+            disabled: (!__VLS_ctx.handCanScrollBackward),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.selfPlayer))
+                        return;
+                    if (!(__VLS_ctx.handHasOverflow))
+                        return;
+                    __VLS_ctx.scrollHand('forward');
+                } },
+            type: "button",
+            'data-testid': "hand-scroll-next",
+            'aria-label': "向右翻看更多手牌",
+            disabled: (!__VLS_ctx.handCanScrollForward),
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onScroll: (__VLS_ctx.updateHandScrollState) },
         ...{ class: "cards hand" },
+        ...{ class: ({
+                'can-scroll-backward': __VLS_ctx.handCanScrollBackward,
+                'can-scroll-forward': __VLS_ctx.handCanScrollForward,
+            }) },
         ref: "selfHandRef",
     });
     /** @type {typeof __VLS_ctx.selfHandRef} */ ;
@@ -2372,6 +2468,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -2403,6 +2500,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             responseLandingRef: responseLandingRef,
             deckAnchorRef: deckAnchorRef,
             selfHandRef: selfHandRef,
+            handHasOverflow: handHasOverflow,
+            handCanScrollBackward: handCanScrollBackward,
+            handCanScrollForward: handCanScrollForward,
             selfZoneRef: selfZoneRef,
             selfOpenRef: selfOpenRef,
             selfGroupBlocks: selfGroupBlocks,
@@ -2435,6 +2535,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             isDealer: isDealer,
             canDiscardCard: canDiscardCard,
             selectDiscardCard: selectDiscardCard,
+            updateHandScrollState: updateHandScrollState,
+            scrollHand: scrollHand,
             confirmDiscard: confirmDiscard,
             onSubmitAction: onSubmitAction,
             onSelectionChange: onSelectionChange,

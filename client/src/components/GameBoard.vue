@@ -433,8 +433,33 @@
           <p class="discard-tip">
             手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 先选牌，再确认出牌</span>
           </p>
+          <div v-if="handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
+            <span aria-hidden="true">左右翻看</span>
+            <button
+              type="button"
+              data-testid="hand-scroll-prev"
+              aria-label="向左翻看手牌"
+              :disabled="!handCanScrollBackward"
+              @click="scrollHand('backward')"
+            >‹</button>
+            <button
+              type="button"
+              data-testid="hand-scroll-next"
+              aria-label="向右翻看更多手牌"
+              :disabled="!handCanScrollForward"
+              @click="scrollHand('forward')"
+            >›</button>
+          </div>
         </div>
-        <div class="cards hand" ref="selfHandRef">
+        <div
+          class="cards hand"
+          :class="{
+            'can-scroll-backward': handCanScrollBackward,
+            'can-scroll-forward': handCanScrollForward,
+          }"
+          ref="selfHandRef"
+          @scroll.passive="updateHandScrollState"
+        >
           <button
             v-for="card in displayPrivateHand"
             :key="`me-${card.id}`"
@@ -505,7 +530,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import type {
@@ -632,6 +657,10 @@ const tableRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
 const deckAnchorRef = ref<HTMLElement | null>(null);
 const selfHandRef = ref<HTMLElement | null>(null);
+const handHasOverflow = ref(false);
+const handCanScrollBackward = ref(false);
+const handCanScrollForward = ref(false);
+let handResizeObserver: ResizeObserver | null = null;
 const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
 const selfOpenCompactRef = ref<HTMLElement | null>(null);
@@ -1163,6 +1192,47 @@ function selectDiscardCard(cardId: string): void {
   selectedDiscardCardId.value = cardId;
 }
 
+function updateHandScrollState(): void {
+  const hand = selfHandRef.value;
+  if (!hand) {
+    handHasOverflow.value = false;
+    handCanScrollBackward.value = false;
+    handCanScrollForward.value = false;
+    return;
+  }
+  const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
+  handHasOverflow.value = maxScrollLeft > 2;
+  handCanScrollBackward.value = hand.scrollLeft > 2;
+  handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
+}
+
+function scrollHand(direction: "backward" | "forward"): void {
+  const hand = selfHandRef.value;
+  if (!hand) {
+    return;
+  }
+  const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
+  hand.scrollBy({
+    left: direction === "forward" ? distance : -distance,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+  });
+  window.setTimeout(updateHandScrollState, 320);
+}
+
+function observeHandScroller(hand: HTMLElement | null): void {
+  handResizeObserver?.disconnect();
+  handResizeObserver = null;
+  if (!hand) {
+    updateHandScrollState();
+    return;
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    handResizeObserver = new ResizeObserver(updateHandScrollState);
+    handResizeObserver.observe(hand);
+  }
+  void nextTick(updateHandScrollState);
+}
+
 function confirmDiscard(): void {
   const cardId = selectedDiscardCardId.value;
   if (!cardId || !canConfirmDiscard.value || discardingCardId.value) {
@@ -1629,6 +1699,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  handResizeObserver?.disconnect();
+  handResizeObserver = null;
   clearDealAnimationRuntime();
   clearDealerIntroTimer();
   if (dealerTimer) {
@@ -1703,8 +1775,11 @@ watch(
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
       selectedDiscardCardId.value = null;
     }
+    void nextTick(updateHandScrollState);
   },
 );
+
+watch(selfHandRef, observeHandScroller, { immediate: true });
 
 watch(canDiscard, (enabled) => {
   if (!enabled) {
@@ -2670,6 +2745,39 @@ watch(canDiscard, (enabled) => {
   gap: 0.45rem;
 }
 
+.hand-scroll-tools {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: #bae6fd;
+  font-size: 0.74rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.hand-scroll-tools button {
+  width: 2rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid rgba(125, 211, 252, 0.68);
+  border-radius: 0.5rem;
+  background: #075985;
+  color: #f0f9ff;
+  display: inline-grid;
+  place-items: center;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hand-scroll-tools button:disabled {
+  border-color: #334155;
+  background: #1e293b;
+  color: #64748b;
+  opacity: 0.72;
+}
+
 .self-area {
   background: #111827;
   border: 1px solid #334155;
@@ -2726,6 +2834,20 @@ watch(canDiscard, (enabled) => {
   overflow: auto;
   padding-right: 0;
   gap: clamp(2px, 0.3vw, 4px);
+}
+
+.hand.can-scroll-forward {
+  box-shadow: inset -18px 0 13px -12px rgba(125, 211, 252, 0.9);
+}
+
+.hand.can-scroll-backward.can-scroll-forward {
+  box-shadow:
+    inset 18px 0 13px -12px rgba(125, 211, 252, 0.9),
+    inset -18px 0 13px -12px rgba(125, 211, 252, 0.9);
+}
+
+.hand.can-scroll-backward:not(.can-scroll-forward) {
+  box-shadow: inset 18px 0 13px -12px rgba(125, 211, 252, 0.9);
 }
 
 .hand-card {
@@ -3324,6 +3446,18 @@ watch(canDiscard, (enabled) => {
 
   .discard-tip {
     font-size: clamp(0.62rem, 2.7vh, 0.74rem);
+  }
+
+  .hand-scroll-tools {
+    gap: 0.2rem;
+    font-size: clamp(0.62rem, 2.7vh, 0.72rem);
+  }
+
+  .hand-scroll-tools button {
+    width: clamp(1.75rem, 7.8vh, 2rem);
+    height: clamp(1.65rem, 7.2vh, 1.85rem);
+    border-radius: 0.8vh;
+    font-size: clamp(1.05rem, 4.8vh, 1.3rem);
   }
 
   .discard-token.mode-large {
