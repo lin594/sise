@@ -69,6 +69,7 @@ const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "")
 const nicknameHistory = ref(readNicknameHistory());
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
+const restoringStoredSession = ref(false);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref("practice_bots");
 const lobbyModes = [
@@ -91,14 +92,80 @@ const lobbyModes = [
         enabled: false,
     },
 ];
+function readBrowserStorage(key) {
+    return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+}
+function readStoredRoomSession() {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("new") === "1") {
+        return null;
+    }
+    const queryRoomId = query.get("roomId")?.trim() || "";
+    const cachedRoomId = readBrowserStorage("four_room_id");
+    const roomId = queryRoomId || cachedRoomId;
+    if (!roomId) {
+        return null;
+    }
+    const playerToken = readBrowserStorage(`four_player_token:${roomId}`) ||
+        (roomId === cachedRoomId ? readBrowserStorage("four_player_token") : "");
+    const name = entryName.value.trim() || readBrowserStorage("four_player_name");
+    if (!playerToken || !name) {
+        return null;
+    }
+    return { roomId, playerToken, name };
+}
+async function resumeStoredRoomSession() {
+    if (enteredFrontLobby.value || connected.value) {
+        return;
+    }
+    const storedSession = readStoredRoomSession();
+    if (!storedSession) {
+        return;
+    }
+    entryName.value = storedSession.name;
+    enteredFrontLobby.value = true;
+    enteringLobby.value = true;
+    restoringStoredSession.value = true;
+    globalError.value = "";
+    try {
+        const ok = await connect({
+            nameOverride: storedSession.name,
+            roomId: storedSession.roomId,
+            playerToken: storedSession.playerToken,
+            reconnecting: true,
+            preserveState: true,
+        });
+        if (!ok) {
+            retryConnection();
+        }
+    }
+    finally {
+        enteringLobby.value = false;
+        restoringStoredSession.value = false;
+    }
+}
+async function abandonSessionResume() {
+    restoringStoredSession.value = false;
+    enteringLobby.value = false;
+    globalError.value = "";
+    await leaveRoom();
+    enteredFrontLobby.value = false;
+}
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
 const hasLobbySession = computed(() => Boolean(connected.value || state.value || mySeatId.value));
+const isConnectingWithoutState = computed(() => !state.value &&
+    enteredFrontLobby.value &&
+    (restoringStoredSession.value ||
+        connectionState.value === "connecting" ||
+        connectionState.value === "reconnecting" ||
+        connectionState.value === "retry_wait" ||
+        connectionState.value === "offline"));
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
-const showSyncingScreen = computed(() => hasLobbySession.value && !state.value);
+const showSyncingScreen = computed(() => !state.value && (hasLobbySession.value || isConnectingWithoutState.value));
 const showModeLobby = computed(() => {
     if (showSyncingScreen.value) {
         return false;
@@ -427,6 +494,7 @@ onMounted(() => {
         nowMs.value = Date.now();
     }, 500);
     window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+    void resumeStoredRoomSession();
 });
 onUnmounted(() => {
     if (declareTick !== null) {
@@ -1038,6 +1106,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['resume-cancel']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-hero']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-field']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-input']} */ ;
@@ -1201,7 +1270,7 @@ if (!__VLS_ctx.showGameTools) {
         ...{ class: "top-slogan" },
     });
 }
-if (__VLS_ctx.hasLobbySession) {
+if (__VLS_ctx.hasLobbySession || __VLS_ctx.isConnectingWithoutState) {
     /** @type {[typeof ConnectionStatus, ]} */ ;
     // @ts-ignore
     const __VLS_0 = __VLS_asFunctionalComponent(ConnectionStatus, new ConnectionStatus({
@@ -1252,14 +1321,14 @@ if (__VLS_ctx.showGameTools) {
     };
     var __VLS_9;
 }
-if (!__VLS_ctx.hasLobbySession) {
+if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                if (!(!__VLS_ctx.hasLobbySession))
+                if (!(!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState))
                     return;
                 __VLS_ctx.showRules = true;
             } },
@@ -1435,13 +1504,30 @@ else if (__VLS_ctx.showSyncingScreen) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "sync-card" },
+        'data-testid': "resume-session-screen",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "sync-message" },
+        role: "status",
+        'aria-live': "polite",
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-kicker" },
     });
+    (__VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
+    (__VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-desc" },
+    });
+    (__VLS_ctx.connectionState === 'offline'
+        ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
+        : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.abandonSessionResume) },
+        ...{ class: "resume-cancel" },
+        type: "button",
+        'data-testid': "cancel-session-resume",
     });
 }
 else {
@@ -2021,8 +2107,10 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-shell']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['sync-message']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-kicker']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-desc']} */ ;
+/** @type {__VLS_StyleScopedClasses['resume-cancel']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
@@ -2134,11 +2222,13 @@ const __VLS_self = (await import('vue')).defineComponent({
             enteringLobby: enteringLobby,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
+            abandonSessionResume: abandonSessionResume,
             isWaiting: isWaiting,
             isPlaying: isPlaying,
             isEnded: isEnded,
             isHost: isHost,
             hasLobbySession: hasLobbySession,
+            isConnectingWithoutState: isConnectingWithoutState,
             showEntry: showEntry,
             showSyncingScreen: showSyncingScreen,
             showModeLobby: showModeLobby,

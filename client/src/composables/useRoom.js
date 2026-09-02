@@ -959,6 +959,9 @@ export function useRoom(playerName = "Player") {
                 (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
             const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
             playerToken.value = desiredToken;
+            if (preserveState && !activeRoomId.value) {
+                activeRoomId.value = initialRoomId;
+            }
             writeStored(tokenKey(initialRoomId), desiredToken);
             writeStored(NAME_KEY, desiredName);
             let joined;
@@ -1174,6 +1177,9 @@ export function useRoom(playerName = "Player") {
             return true;
         }
         catch (error) {
+            if (!isActiveConnection()) {
+                return false;
+            }
             const message = error instanceof Error ? error.message : "加入房间失败";
             pushLog(`ERROR ${message}`);
             connected.value = false;
@@ -1192,7 +1198,9 @@ export function useRoom(playerName = "Player") {
             }
         }
         finally {
-            connectInFlight = false;
+            if (isActiveConnection()) {
+                connectInFlight = false;
+            }
         }
         return false;
     }

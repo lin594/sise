@@ -26,7 +26,7 @@
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
       <ConnectionStatus
-        v-if="hasLobbySession"
+        v-if="hasLobbySession || isConnectingWithoutState"
         :state="connectionState"
         :attempt="reconnectAttempt"
         :show-connected="!showGameTools"
@@ -38,7 +38,7 @@
         @open-rules="showRules = true"
         @exit="handleLeaveRoom"
       />
-      <div class="meta" v-if="!hasLobbySession">
+      <div class="meta" v-if="!hasLobbySession && !isConnectingWithoutState">
         <span>首页</span>
         <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
@@ -86,10 +86,19 @@
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
-      <div class="sync-card">
-        <p class="entry-kicker">同步中</p>
-        <h2>正在进入大厅</h2>
-        <p class="entry-desc">房间连接已经建立，正在同步当前牌局状态。</p>
+      <div class="sync-card" data-testid="resume-session-screen">
+        <div class="sync-message" role="status" aria-live="polite">
+          <p class="entry-kicker">{{ connectionState === 'offline' ? '等待网络' : '恢复牌局' }}</p>
+          <h2>{{ connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌' }}</h2>
+          <p class="entry-desc">
+            {{ connectionState === 'offline'
+              ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
+              : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。' }}
+          </p>
+        </div>
+        <button class="resume-cancel" type="button" data-testid="cancel-session-resume" @click="abandonSessionResume">
+          放弃恢复，返回首页
+        </button>
       </div>
     </section>
 
@@ -507,6 +516,7 @@ const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "")
 const nicknameHistory = ref<string[]>(readNicknameHistory());
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
+const restoringStoredSession = ref(false);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
 const lobbyModes: LobbyMode[] = [
@@ -530,14 +540,95 @@ const lobbyModes: LobbyMode[] = [
   },
 ];
 
+type StoredRoomSession = {
+  roomId: string;
+  playerToken: string;
+  name: string;
+};
+
+function readBrowserStorage(key: string): string {
+  return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+}
+
+function readStoredRoomSession(): StoredRoomSession | null {
+  const query = new URLSearchParams(window.location.search);
+  if (query.get("new") === "1") {
+    return null;
+  }
+  const queryRoomId = query.get("roomId")?.trim() || "";
+  const cachedRoomId = readBrowserStorage("four_room_id");
+  const roomId = queryRoomId || cachedRoomId;
+  if (!roomId) {
+    return null;
+  }
+  const playerToken =
+    readBrowserStorage(`four_player_token:${roomId}`) ||
+    (roomId === cachedRoomId ? readBrowserStorage("four_player_token") : "");
+  const name = entryName.value.trim() || readBrowserStorage("four_player_name");
+  if (!playerToken || !name) {
+    return null;
+  }
+  return { roomId, playerToken, name };
+}
+
+async function resumeStoredRoomSession(): Promise<void> {
+  if (enteredFrontLobby.value || connected.value) {
+    return;
+  }
+  const storedSession = readStoredRoomSession();
+  if (!storedSession) {
+    return;
+  }
+  entryName.value = storedSession.name;
+  enteredFrontLobby.value = true;
+  enteringLobby.value = true;
+  restoringStoredSession.value = true;
+  globalError.value = "";
+  try {
+    const ok = await connect({
+      nameOverride: storedSession.name,
+      roomId: storedSession.roomId,
+      playerToken: storedSession.playerToken,
+      reconnecting: true,
+      preserveState: true,
+    });
+    if (!ok) {
+      retryConnection();
+    }
+  } finally {
+    enteringLobby.value = false;
+    restoringStoredSession.value = false;
+  }
+}
+
+async function abandonSessionResume(): Promise<void> {
+  restoringStoredSession.value = false;
+  enteringLobby.value = false;
+  globalError.value = "";
+  await leaveRoom();
+  enteredFrontLobby.value = false;
+}
+
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
 const hasLobbySession = computed(() => Boolean(connected.value || state.value || mySeatId.value));
+const isConnectingWithoutState = computed(
+  () =>
+    !state.value &&
+    enteredFrontLobby.value &&
+    (restoringStoredSession.value ||
+      connectionState.value === "connecting" ||
+      connectionState.value === "reconnecting" ||
+      connectionState.value === "retry_wait" ||
+      connectionState.value === "offline"),
+);
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
-const showSyncingScreen = computed(() => hasLobbySession.value && !state.value);
+const showSyncingScreen = computed(
+  () => !state.value && (hasLobbySession.value || isConnectingWithoutState.value),
+);
 const showModeLobby = computed(() => {
   if (showSyncingScreen.value) {
     return false;
@@ -928,6 +1019,7 @@ onMounted(() => {
     nowMs.value = Date.now();
   }, 500);
   window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+  void resumeStoredRoomSession();
 });
 
 onUnmounted(() => {
@@ -1753,6 +1845,29 @@ watch(
   color: #e2e8f0;
   display: grid;
   gap: 0.45rem;
+}
+
+.sync-message {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.resume-cancel {
+  width: fit-content;
+  min-height: 2.65rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #475569;
+  border-radius: 0.7rem;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.resume-cancel:focus-visible {
+  outline: 3px solid rgba(56, 189, 248, 0.42);
+  outline-offset: 2px;
 }
 
 .entry-hero {
