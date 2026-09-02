@@ -1,4 +1,4 @@
-﻿import { Room, Client } from "colyseus";
+﻿import { Room, Client } from "@colyseus/core";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -144,8 +144,9 @@ export function canUseDebugScenario(enabled: boolean, seatId: string | undefined
   return enabled && Boolean(seatId) && seatId === hostPlayerId;
 }
 
-export class FourColorGameRoom extends Room<GameState> {
+export class FourColorGameRoom extends Room<{ state: GameState }> {
   maxClients = 8;
+  autoDispose = false;
 
   private readonly minPlayersToStart = Math.max(1, Number(process.env.MIN_PLAYERS ?? 1));
   private readonly targetSeats = 4;
@@ -254,7 +255,6 @@ export class FourColorGameRoom extends Room<GameState> {
    * 副作用：创建 `GameState`、初始化 `stateOps`、绑定所有消息处理器。
    */
   onCreate(options: RoomCreateOptions = {}): void {
-    this.autoDispose = false;
     this.setState(new GameState());
     this.state.roomMode = options.roomMode === "friends" ? "friends" : "practice";
     this.hostKey = String(options.hostKey ?? "").trim();
@@ -2306,10 +2306,12 @@ export class FourColorGameRoom extends Room<GameState> {
   }
 
   private syncRoomMetadata(): void {
-    if (!(this as { listing?: unknown }).listing) {
+    // Flow unit tests exercise room methods without MatchMaker initialization.
+    // A real Colyseus room receives its private listing before onCreate().
+    if (!("_listing" in this)) {
       return;
     }
-    this.setMetadata({
+    void this.setMetadata({
       phase: this.state.phase,
       roomMode: this.state.roomMode,
       hostPlayerId: this.state.hostPlayerId,

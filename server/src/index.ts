@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import { randomBytes } from "node:crypto";
-import { Server, matchMaker } from "colyseus";
+import { Server, matchMaker } from "@colyseus/core";
 import { monitor } from "@colyseus/monitor";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
@@ -34,9 +34,8 @@ const gameServer = new Server({
 });
 
 matchMaker.controller.DEFAULT_CORS_HEADERS["Access-Control-Allow-Origin"] = "null";
-matchMaker.controller.getCorsHeaders = (req) => {
-  const rawOrigin = req.headers.origin;
-  const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+matchMaker.controller.getCorsHeaders = (headers) => {
+  const origin = headers.get("origin") ?? undefined;
   return buildCorsOriginHeaders(origin, originPolicy);
 };
 
@@ -198,7 +197,7 @@ app.get("/private-state", privateStateLimit, async (req, res) => {
   }
 });
 
-server.listen(port, "0.0.0.0", () => {
+await gameServer.listen(port, "0.0.0.0", undefined, () => {
   // eslint-disable-next-line no-console
   console.log(`[four-color] listening on :${port}`);
 });

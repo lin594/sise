@@ -8,7 +8,7 @@ services:
       context: ./server
       target: production
       args:
-        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}"
         NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
     restart: unless-stopped
     environment:
@@ -41,7 +41,7 @@ services:
       context: ./client
       target: production
       args:
-        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:20-alpine}"
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}"
         NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.27-alpine}"
         NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
         VITE_SERVER_URL: "${VITE_SERVER_URL:-}"

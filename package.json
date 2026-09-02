@@ -2,6 +2,9 @@
   "name": "four-color-root",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "build": "npm --prefix server run build && npm --prefix client run build",

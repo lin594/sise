@@ -1,5 +1,5 @@
 import { computed, onUnmounted, ref } from "vue";
-import { Client } from "colyseus.js";
+import { Client } from "@colyseus/sdk";
 import { sortHandCards } from "@/utils/cardSort";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
