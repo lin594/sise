@@ -11,6 +11,7 @@
     }"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
+    :data-connection-state="connectionState"
   >
     <header
       class="top"
@@ -24,19 +25,20 @@
         </div>
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
+      <ConnectionStatus
+        v-if="hasLobbySession"
+        :state="connectionState"
+        :attempt="reconnectAttempt"
+        :show-connected="!showGameTools"
+        @retry="retryConnection"
+      />
       <GameTools
         v-if="showGameTools"
         v-model="displayPreferences"
         @open-rules="showRules = true"
         @exit="handleLeaveRoom"
       />
-      <div class="meta" v-if="hasLobbySession && !showGameTools">
-        <span>{{ connected ? "已连接" : "同步中..." }}</span>
-        <span>座位ID: {{ mySeatId || "-" }}</span>
-        <span>房主: {{ state?.hostPlayerId || "-" }}</span>
-        <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
-      </div>
-      <div class="meta" v-else-if="!hasLobbySession">
+      <div class="meta" v-if="!hasLobbySession">
         <span>首页</span>
         <button class="ghost reset-btn" @click="showRules = true">查看规则</button>
       </div>
@@ -377,6 +379,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
+import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
@@ -471,6 +474,9 @@ function writeNicknameHistory(names: string[]) {
 const {
   connect,
   connected,
+  connectionState,
+  reconnectAttempt,
+  retryConnection,
   mySeatId,
   activeRoomId,
   state,
@@ -621,10 +627,15 @@ const openingDealSecondsLeft = computed(() => {
   return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
 const canAct = computed(
-  () => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled || x.deferred),
+  () =>
+    connected.value &&
+    !openingDealActive.value &&
+    isPlaying.value &&
+    availableActions.value.some((x) => x.enabled || x.deferred),
 );
 const canDiscard = computed(
   () =>
+    connected.value &&
     !openingDealActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
@@ -795,7 +806,7 @@ function actionText(action: "kai" | "peng" | "chi"): string {
 
 function candidateSourceText(source: ActionCandidate["source"]): string {
   if (source === "hand+pool") {
-    return "手牌+将/金条区";
+    return "手牌与已有明示牌";
   }
   return "手牌";
 }

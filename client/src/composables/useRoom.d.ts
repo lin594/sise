@@ -1,6 +1,17 @@
-import type { ActionRequest, ActionType, AvailableAction, Card, ParsedActionLog, PlayerState, RoomStateSnapshot, RoundResultPayload } from "@/types/game";
+import type { ActionRequest, ActionType, AvailableAction, Card, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
+type ConnectOptions = {
+    nameOverride?: string;
+    roomId?: string;
+    playerToken?: string;
+    hostKey?: string;
+    forceNew?: boolean;
+    reconnecting?: boolean;
+    preserveState?: boolean;
+};
 export declare function useRoom(playerName?: string): {
     connected: import("vue").Ref<boolean, boolean>;
+    connectionState: import("vue").Ref<RoomConnectionState, RoomConnectionState>;
+    reconnectAttempt: import("vue").Ref<number, number>;
     myId: import("vue").Ref<string, string>;
     mySeatId: import("vue").Ref<string, string>;
     playerToken: import("vue").Ref<string, string>;
@@ -634,13 +645,8 @@ export declare function useRoom(playerName?: string): {
         displayText: string;
         isSystem: boolean;
     }[]>;
-    connect: (options?: string | {
-        nameOverride?: string;
-        roomId?: string;
-        playerToken?: string;
-        hostKey?: string;
-        forceNew?: boolean;
-    }) => Promise<boolean>;
+    connect: (options?: string | ConnectOptions) => Promise<boolean>;
+    retryConnection: () => void;
     clearActionLogs: () => void;
     sendAction: (input: ActionRequest) => void;
     sendDiscardCard: (cardId: string) => void;
@@ -659,3 +665,4 @@ export declare function useRoom(playerName?: string): {
     updateBot: (seatIndex: number, strength: number) => void;
     removeSeat: (seatIndex: number) => void;
 };
+export {};

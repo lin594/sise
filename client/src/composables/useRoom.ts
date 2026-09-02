@@ -9,6 +9,7 @@ import type {
   ParsedActionLog,
   PlayerState,
   RoomStateSnapshot,
+  RoomConnectionState,
   RoundResultPayload,
   SessionTokenPayload,
 } from "@/types/game";
@@ -17,6 +18,18 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
+const PRIVATE_STATE_POLL_MS = 5000;
+const MAX_RECONNECT_DELAY_MS = 15000;
+
+type ConnectOptions = {
+  nameOverride?: string;
+  roomId?: string;
+  playerToken?: string;
+  hostKey?: string;
+  forceNew?: boolean;
+  reconnecting?: boolean;
+  preserveState?: boolean;
+};
 
 function generateLocalPlayerToken(): string {
   return `pt_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
@@ -370,6 +383,8 @@ export function useRoom(playerName = "Player") {
   const MAX_LOGS = 120;
 
   const connected = ref(false);
+  const connectionState = ref<RoomConnectionState>(navigator.onLine ? "idle" : "offline");
+  const reconnectAttempt = ref(0);
   const room = ref<Room | null>(null);
   const state = ref<RoomStateSnapshot | null>(null);
   const myId = ref("");
@@ -392,6 +407,7 @@ export function useRoom(playerName = "Player") {
   let roomStateSyncTimer: number | null = null;
   let missingHandSyncTimer: number | null = null;
   let reconnectTimer: number | null = null;
+  let restoredNoticeTimer: number | null = null;
   let privateStatePollTimer: number | null = null;
   let stateSyncFingerprint = "";
   let privateHandFingerprint = "";
@@ -401,7 +417,6 @@ export function useRoom(playerName = "Player") {
   let lastManualSyncAt = 0;
   let reconnectAttempts = 0;
   let suppressReconnect = false;
-  let missingPrivateReconnectAttempts = 0;
 
   function inferSeatId(snapshot: RoomStateSnapshot | null): string {
     if (!snapshot) {
@@ -443,6 +458,13 @@ export function useRoom(playerName = "Player") {
     if (reconnectTimer !== null) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+  }
+
+  function clearRestoredNoticeTimer() {
+    if (restoredNoticeTimer !== null) {
+      window.clearTimeout(restoredNoticeTimer);
+      restoredNoticeTimer = null;
     }
   }
 
@@ -497,7 +519,7 @@ export function useRoom(playerName = "Player") {
     }
   }
 
-  function scheduleReconnect(reason: string) {
+  function scheduleReconnect(reason: string, immediate = false) {
     if (suppressReconnect) {
       return;
     }
@@ -509,74 +531,104 @@ export function useRoom(playerName = "Player") {
     const name = localPlayerName.value.trim();
     if (!roomId || !token || !name) {
       connected.value = false;
+      connectionState.value = "failed";
       return;
     }
     connected.value = false;
-    joinError.value = "房间连接中断，正在尝试重连...";
-    const delay = Math.min(1200, 200 + reconnectAttempts * 200);
+    clearRestoredNoticeTimer();
+    if (!navigator.onLine) {
+      connectionState.value = "offline";
+      joinError.value = "网络已断开，联网后会自动恢复牌局。";
+      return;
+    }
+    const nextAttempt = reconnectAttempts + 1;
+    reconnectAttempt.value = nextAttempt;
+    connectionState.value = immediate ? "reconnecting" : "retry_wait";
+    joinError.value = `网络不稳定，正在恢复牌局（第 ${nextAttempt} 次）...`;
+    const delay = immediate ? 0 : Math.min(MAX_RECONNECT_DELAY_MS, 500 * 2 ** Math.min(reconnectAttempts, 5));
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = null;
+      if (suppressReconnect) {
+        return;
+      }
+      if (!navigator.onLine) {
+        connectionState.value = "offline";
+        joinError.value = "网络已断开，联网后会自动恢复牌局。";
+        return;
+      }
       reconnectAttempts += 1;
+      reconnectAttempt.value = reconnectAttempts;
+      connectionState.value = "reconnecting";
       void connect({
         nameOverride: name,
         roomId,
         playerToken: token,
+        reconnecting: true,
+        preserveState: true,
       }).then((ok) => {
         if (ok) {
-          reconnectAttempts = 0;
-          joinError.value = "";
           return;
         }
-        if (reconnectAttempts < 3) {
-          scheduleReconnect(`${reason}:retry`);
-        }
+        scheduleReconnect(`${reason}:retry`);
       });
     }, delay);
+  }
+
+  function retryConnection() {
+    if (suppressReconnect || connectInFlight) {
+      return;
+    }
+    clearReconnectTimer();
+    scheduleReconnect("manual_retry", true);
+  }
+
+  function handleBrowserOffline() {
+    if (suppressReconnect || !activeRoomId.value || !playerToken.value) {
+      return;
+    }
+    connected.value = false;
+    clearReconnectTimer();
+    clearRestoredNoticeTimer();
+    connectionState.value = "offline";
+    joinError.value = "网络已断开，联网后会自动恢复牌局。";
+  }
+
+  function handleBrowserOnline() {
+    if (suppressReconnect || connected.value || !activeRoomId.value || !playerToken.value) {
+      return;
+    }
+    retryConnection();
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    if (!connected.value) {
+      handleBrowserOnline();
+      return;
+    }
+    requestSyncState("page_visible");
+    void fetchPrivateState("page_visible");
   }
 
   function maybeRequestMissingPrivateHand(reason: string) {
     const phase = state.value?.phase;
     if (!room.value || !mySeatId.value || (phase !== "declaring" && phase !== "playing")) {
-      missingPrivateReconnectAttempts = 0;
       clearMissingHandSyncTimer();
       return;
     }
     if (privateHand.value.length > 0) {
-      missingPrivateReconnectAttempts = 0;
       clearMissingHandSyncTimer();
       return;
     }
     if (!connected.value || !canSendRoomMessage(room.value)) {
-      const roomId = activeRoomId.value.trim();
-      const token = playerToken.value.trim();
-      const name = localPlayerName.value.trim();
-      if (!connectInFlight && roomId && token && name) {
-        void connect({
-          nameOverride: name,
-          roomId,
-          playerToken: token,
-        });
-      }
       clearMissingHandSyncTimer();
+      scheduleReconnect(`missing_private_hand:${reason}`);
       return;
     }
-    missingPrivateReconnectAttempts += 1;
-    if (missingPrivateReconnectAttempts >= 1 && !connectInFlight) {
-      const roomId = activeRoomId.value.trim();
-      const token = playerToken.value.trim();
-      const name = localPlayerName.value.trim();
-      if (roomId && token && name) {
-        joinError.value = "正在恢复手牌同步...";
-        missingPrivateReconnectAttempts = 0;
-        void connect({
-          nameOverride: name,
-          roomId,
-          playerToken: token,
-        });
-        return;
-      }
-    }
     requestSyncState(reason);
+    void fetchPrivateState(reason);
   }
 
   function startMissingHandSyncTimer() {
@@ -613,8 +665,11 @@ export function useRoom(playerName = "Player") {
     try {
       const url = new URL(`${HTTP_URL}/private-state`);
       url.searchParams.set("roomId", roomId);
-      url.searchParams.set("playerToken", token);
-      const response = await fetch(url.toString(), { method: "GET" });
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
       if (!response.ok) {
         return;
       }
@@ -647,7 +702,6 @@ export function useRoom(playerName = "Player") {
         }
       }
       if (nextHand.length > 0) {
-        missingPrivateReconnectAttempts = 0;
         clearMissingHandSyncTimer();
         joinError.value = "";
       }
@@ -667,7 +721,7 @@ export function useRoom(playerName = "Player") {
         return;
       }
       void fetchPrivateState("poll");
-    }, 350);
+    }, PRIVATE_STATE_POLL_MS);
   }
 
   function resetClientRoomState(options?: { keepLogs?: boolean; keepJoinError?: boolean }) {
@@ -795,7 +849,6 @@ export function useRoom(playerName = "Player") {
       privateHand.value = snapshotPrivateHand;
       privateHandFingerprint = nextPrivateHandFingerprint;
       if (privateHand.value.length > 0) {
-        missingPrivateReconnectAttempts = 0;
         clearMissingHandSyncTimer();
       }
     }
@@ -947,32 +1000,47 @@ export function useRoom(playerName = "Player") {
     lastFingerprint = "";
   }
 
-  async function connect(
-    options?: string | {
-      nameOverride?: string;
-      roomId?: string;
-      playerToken?: string;
-      hostKey?: string;
-      forceNew?: boolean;
-    },
-  ): Promise<boolean> {
+  async function connect(options?: string | ConnectOptions): Promise<boolean> {
     if (connectInFlight) {
       return false;
     }
+    const query = new URLSearchParams(window.location.search);
+    const resolvedOptions: ConnectOptions =
+      typeof options === "string"
+        ? { nameOverride: options }
+        : {
+            nameOverride: options?.nameOverride,
+            roomId: options?.roomId,
+            playerToken: options?.playerToken,
+            hostKey: options?.hostKey,
+            forceNew: Boolean(options?.forceNew),
+            reconnecting: Boolean(options?.reconnecting),
+            preserveState: Boolean(options?.preserveState),
+          };
+    const forceNew = Boolean(resolvedOptions.forceNew || query.get("new") === "1");
+    const reconnecting = Boolean(resolvedOptions.reconnecting);
+    const preserveState = !forceNew && Boolean(resolvedOptions.preserveState || reconnecting);
+
     suppressReconnect = false;
     connectInFlight = true;
     clearReconnectTimer();
+    clearRestoredNoticeTimer();
+    connectionState.value = reconnecting ? "reconnecting" : "connecting";
     const connectionSeq = ++activeConnectionSeq;
     const isActiveConnection = () => activeConnectionSeq === connectionSeq;
     const client = new Client(WS_URL);
     try {
       clearRoomStateSyncTimer();
+      clearMissingHandSyncTimer();
+      clearPrivateStatePollTimer();
       const previousRoom = room.value;
       room.value = null;
       connected.value = false;
-      activeRoomId.value = "";
-      resetClientRoomState({ keepJoinError: true });
-      if (previousRoom) {
+      if (!preserveState) {
+        activeRoomId.value = "";
+        resetClientRoomState({ keepJoinError: true });
+      }
+      if (previousRoom && !preserveState) {
         try {
           suppressReconnect = true;
           await previousRoom.leave();
@@ -983,18 +1051,6 @@ export function useRoom(playerName = "Player") {
         }
       }
 
-      const query = new URLSearchParams(window.location.search);
-      const resolvedOptions =
-        typeof options === "string"
-          ? { nameOverride: options }
-          : {
-              nameOverride: options?.nameOverride,
-              roomId: options?.roomId,
-              playerToken: options?.playerToken,
-              hostKey: options?.hostKey,
-              forceNew: Boolean(options?.forceNew),
-            };
-      const forceNew = resolvedOptions.forceNew || query.get("new") === "1";
       if (forceNew) {
         clearStored(LEGACY_TOKEN_KEY);
         clearStored(NAME_KEY);
@@ -1023,7 +1079,10 @@ export function useRoom(playerName = "Player") {
           playerToken: desiredToken,
           hostKey: resolvedOptions.hostKey,
         });
-      } catch {
+      } catch (error) {
+        if (reconnecting) {
+          throw error;
+        }
         if (queryRoomId) {
           throw new Error("房间不存在或已关闭，请让房主重新分享邀请链接。");
         }
@@ -1043,8 +1102,21 @@ export function useRoom(playerName = "Player") {
       room.value = joined;
       myId.value = joined.sessionId;
       connected.value = true;
+      joinError.value = "";
       reconnectAttempts = 0;
+      reconnectAttempt.value = 0;
       activeRoomId.value = joined.roomId || initialRoomId;
+      if (reconnecting || preserveState) {
+        connectionState.value = "restored";
+        restoredNoticeTimer = window.setTimeout(() => {
+          restoredNoticeTimer = null;
+          if (connected.value && room.value === joined) {
+            connectionState.value = "connected";
+          }
+        }, 2500);
+      } else {
+        connectionState.value = "connected";
+      }
       if (joined.roomId) {
         writeStored(ROOM_KEY, joined.roomId);
         updateInviteUrl(joined.roomId);
@@ -1074,7 +1146,6 @@ export function useRoom(playerName = "Player") {
         privateHand.value = sortHandCards(asCardArray(payload));
         privateHandFingerprint = buildCardIdFingerprint(privateHand.value);
         if (privateHand.value.length > 0) {
-          missingPrivateReconnectAttempts = 0;
           clearMissingHandSyncTimer();
         }
       });
@@ -1155,6 +1226,12 @@ export function useRoom(playerName = "Player") {
         mySeatId.value = "";
         const reason = payload?.reason || "你已离开房间";
         connected.value = false;
+        connectionState.value = "idle";
+        reconnectAttempt.value = 0;
+        reconnectAttempts = 0;
+        clearRestoredNoticeTimer();
+        clearReconnectTimer();
+        clearPrivateStatePollTimer();
         room.value = null;
         activeRoomId.value = "";
         resetClientRoomState({ keepJoinError: true });
@@ -1176,6 +1253,7 @@ export function useRoom(playerName = "Player") {
         }
         clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
+        clearPrivateStatePollTimer();
         connected.value = false;
         scheduleReconnect("room_leave");
       });
@@ -1185,6 +1263,7 @@ export function useRoom(playerName = "Player") {
         }
         clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
+        clearPrivateStatePollTimer();
         joinError.value = message || "房间连接异常";
         connected.value = false;
         scheduleReconnect("room_error");
@@ -1207,20 +1286,22 @@ export function useRoom(playerName = "Player") {
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "加入房间失败";
-      joinError.value = message;
       pushLog(`ERROR ${message}`);
       connected.value = false;
       room.value = null;
-      activeRoomId.value = "";
-      resetClientRoomState({ keepJoinError: true, keepLogs: true });
-    } finally {
-      if (isActiveConnection()) {
-        connectInFlight = false;
-      } else if (activeConnectionSeq === connectionSeq) {
-        connectInFlight = false;
+      if (preserveState) {
+        connectionState.value = navigator.onLine ? "retry_wait" : "offline";
+        joinError.value = navigator.onLine
+          ? `暂时未能恢复牌局，系统会继续重试（第 ${Math.max(1, reconnectAttempt.value)} 次）。`
+          : "网络已断开，联网后会自动恢复牌局。";
       } else {
-        connectInFlight = false;
+        joinError.value = message;
+        connectionState.value = "failed";
+        activeRoomId.value = "";
+        resetClientRoomState({ keepJoinError: true, keepLogs: true });
       }
+    } finally {
+      connectInFlight = false;
     }
     return false;
   }
@@ -1294,9 +1375,13 @@ export function useRoom(playerName = "Player") {
     clearRoomStateSyncTimer();
     clearMissingHandSyncTimer();
     clearReconnectTimer();
+    clearRestoredNoticeTimer();
     clearPrivateStatePollTimer();
     room.value = null;
     connected.value = false;
+    connectionState.value = "idle";
+    reconnectAttempt.value = 0;
+    reconnectAttempts = 0;
     clearStored(ROOM_KEY);
     clearStored(LEGACY_TOKEN_KEY);
     if (departingRoomId) {
@@ -1334,11 +1419,19 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("remove_seat", { seatIndex });
   }
 
+  window.addEventListener("offline", handleBrowserOffline);
+  window.addEventListener("online", handleBrowserOnline);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
   onUnmounted(() => {
     clearRoomStateSyncTimer();
     clearMissingHandSyncTimer();
     clearReconnectTimer();
+    clearRestoredNoticeTimer();
     clearPrivateStatePollTimer();
+    window.removeEventListener("offline", handleBrowserOffline);
+    window.removeEventListener("online", handleBrowserOnline);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     suppressReconnect = true;
     room.value?.leave();
   });
@@ -1349,6 +1442,8 @@ export function useRoom(playerName = "Player") {
 
   return {
     connected,
+    connectionState,
+    reconnectAttempt,
     myId,
     mySeatId,
     playerToken,
@@ -1364,6 +1459,7 @@ export function useRoom(playerName = "Player") {
     declareError,
     actionLogs,
     connect,
+    retryConnection,
     clearActionLogs,
     sendAction,
     sendDiscardCard,

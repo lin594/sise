@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
+import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
@@ -61,7 +62,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
@@ -178,8 +179,12 @@ const openingDealSecondsLeft = computed(() => {
     }
     return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
-const canAct = computed(() => !openingDealActive.value && isPlaying.value && availableActions.value.some((x) => x.enabled || x.deferred));
-const canDiscard = computed(() => !openingDealActive.value &&
+const canAct = computed(() => connected.value &&
+    !openingDealActive.value &&
+    isPlaying.value &&
+    availableActions.value.some((x) => x.enabled || x.deferred));
+const canDiscard = computed(() => connected.value &&
+    !openingDealActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
     state.value?.responsePhase === "local_draw" &&
@@ -322,7 +327,7 @@ function actionText(action) {
 }
 function candidateSourceText(source) {
     if (source === "hand+pool") {
-        return "手牌+将/金条区";
+        return "手牌与已有明示牌";
     }
     return "手牌";
 }
@@ -1169,6 +1174,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
         }) },
     'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
+    'data-connection-state': (__VLS_ctx.connectionState),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
@@ -1195,62 +1201,64 @@ if (!__VLS_ctx.showGameTools) {
         ...{ class: "top-slogan" },
     });
 }
-if (__VLS_ctx.showGameTools) {
-    /** @type {[typeof GameTools, ]} */ ;
+if (__VLS_ctx.hasLobbySession) {
+    /** @type {[typeof ConnectionStatus, ]} */ ;
     // @ts-ignore
-    const __VLS_0 = __VLS_asFunctionalComponent(GameTools, new GameTools({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onExit': {} },
-        modelValue: (__VLS_ctx.displayPreferences),
+    const __VLS_0 = __VLS_asFunctionalComponent(ConnectionStatus, new ConnectionStatus({
+        ...{ 'onRetry': {} },
+        state: (__VLS_ctx.connectionState),
+        attempt: (__VLS_ctx.reconnectAttempt),
+        showConnected: (!__VLS_ctx.showGameTools),
     }));
     const __VLS_1 = __VLS_0({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onExit': {} },
-        modelValue: (__VLS_ctx.displayPreferences),
+        ...{ 'onRetry': {} },
+        state: (__VLS_ctx.connectionState),
+        attempt: (__VLS_ctx.reconnectAttempt),
+        showConnected: (!__VLS_ctx.showGameTools),
     }, ...__VLS_functionalComponentArgsRest(__VLS_0));
     let __VLS_3;
     let __VLS_4;
     let __VLS_5;
     const __VLS_6 = {
+        onRetry: (__VLS_ctx.retryConnection)
+    };
+    var __VLS_2;
+}
+if (__VLS_ctx.showGameTools) {
+    /** @type {[typeof GameTools, ]} */ ;
+    // @ts-ignore
+    const __VLS_7 = __VLS_asFunctionalComponent(GameTools, new GameTools({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.displayPreferences),
+    }));
+    const __VLS_8 = __VLS_7({
+        ...{ 'onOpenRules': {} },
+        ...{ 'onExit': {} },
+        modelValue: (__VLS_ctx.displayPreferences),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_7));
+    let __VLS_10;
+    let __VLS_11;
+    let __VLS_12;
+    const __VLS_13 = {
         onOpenRules: (...[$event]) => {
             if (!(__VLS_ctx.showGameTools))
                 return;
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_7 = {
+    const __VLS_14 = {
         onExit: (__VLS_ctx.handleLeaveRoom)
     };
-    var __VLS_2;
+    var __VLS_9;
 }
-if (__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "meta" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.connected ? "已连接" : "同步中...");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.mySeatId || "-");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.state?.hostPlayerId || "-");
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools))
-                    return;
-                __VLS_ctx.showRules = true;
-            } },
-        ...{ class: "ghost reset-btn" },
-    });
-}
-else if (!__VLS_ctx.hasLobbySession) {
+if (!__VLS_ctx.hasLobbySession) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
-                if (!!(__VLS_ctx.hasLobbySession && !__VLS_ctx.showGameTools))
-                    return;
                 if (!(!__VLS_ctx.hasLobbySession))
                     return;
                 __VLS_ctx.showRules = true;
@@ -1267,7 +1275,7 @@ if (__VLS_ctx.globalError) {
 if (__VLS_ctx.showEntry) {
     /** @type {[typeof LoginPage, ]} */ ;
     // @ts-ignore
-    const __VLS_8 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
+    const __VLS_15 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1278,7 +1286,7 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
     }));
-    const __VLS_9 = __VLS_8({
+    const __VLS_16 = __VLS_15({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onOpenRules': {} },
@@ -1288,43 +1296,43 @@ if (__VLS_ctx.showEntry) {
         entering: (__VLS_ctx.enteringLobby),
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         historyNames: (__VLS_ctx.nicknameHistory),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
-    let __VLS_11;
-    let __VLS_12;
-    let __VLS_13;
-    const __VLS_14 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_15));
+    let __VLS_18;
+    let __VLS_19;
+    let __VLS_20;
+    const __VLS_21 = {
         'onUpdate:nickname': (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    const __VLS_15 = {
+    const __VLS_22 = {
         onSubmit: (__VLS_ctx.enterLobby)
     };
-    const __VLS_16 = {
+    const __VLS_23 = {
         onOpenRules: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_17 = {
+    const __VLS_24 = {
         onRandomize: (__VLS_ctx.randomizeNickname)
     };
-    const __VLS_18 = {
+    const __VLS_25 = {
         onSelectHistory: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    var __VLS_10;
+    var __VLS_17;
 }
 else if (__VLS_ctx.showModeLobby) {
     /** @type {[typeof LobbyPage, ]} */ ;
     // @ts-ignore
-    const __VLS_19 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
+    const __VLS_26 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1349,7 +1357,7 @@ else if (__VLS_ctx.showModeLobby) {
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
     }));
-    const __VLS_20 = __VLS_19({
+    const __VLS_27 = __VLS_26({
         ...{ 'onOpenRules': {} },
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
@@ -1373,11 +1381,11 @@ else if (__VLS_ctx.showModeLobby) {
         roomId: (__VLS_ctx.activeRoomId),
         roomMode: (__VLS_ctx.state?.roomMode || ''),
         players: (__VLS_ctx.players),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_19));
-    let __VLS_22;
-    let __VLS_23;
-    let __VLS_24;
-    const __VLS_25 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_26));
+    let __VLS_29;
+    let __VLS_30;
+    let __VLS_31;
+    const __VLS_32 = {
         onOpenRules: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1386,10 +1394,10 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.showRules = true;
         }
     };
-    const __VLS_26 = {
+    const __VLS_33 = {
         onStart: (__VLS_ctx.startSelectedMode)
     };
-    const __VLS_27 = {
+    const __VLS_34 = {
         onSelectMode: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1398,13 +1406,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.selectedLobbyMode = $event;
         }
     };
-    const __VLS_28 = {
+    const __VLS_35 = {
         onCopyInvite: (__VLS_ctx.copyInviteLink)
     };
-    const __VLS_29 = {
+    const __VLS_36 = {
         onClaimSeat: (__VLS_ctx.claimSeat)
     };
-    const __VLS_30 = {
+    const __VLS_37 = {
         onAddBot: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -1413,13 +1421,13 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.addBot($event, 50);
         }
     };
-    const __VLS_31 = {
+    const __VLS_38 = {
         onUpdateBot: (__VLS_ctx.updateBot)
     };
-    const __VLS_32 = {
+    const __VLS_39 = {
         onRemoveSeat: (__VLS_ctx.removeSeat)
     };
-    var __VLS_21;
+    var __VLS_28;
 }
 else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -1439,7 +1447,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_33 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_40 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1462,7 +1470,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_34 = __VLS_33({
+    const __VLS_41 = __VLS_40({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onSelectionChange': {} },
@@ -1484,20 +1492,20 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
-    let __VLS_36;
-    let __VLS_37;
-    let __VLS_38;
-    const __VLS_39 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+    let __VLS_43;
+    let __VLS_44;
+    let __VLS_45;
+    const __VLS_46 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_40 = {
+    const __VLS_47 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_41 = {
+    const __VLS_48 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_35;
+    var __VLS_42;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1551,16 +1559,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_49 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_43 = __VLS_42({
+                const __VLS_50 = __VLS_49({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_42));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_49));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -1573,18 +1581,18 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_52 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
                     }));
-                    const __VLS_46 = __VLS_45({
+                    const __VLS_53 = __VLS_52({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_45));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_52));
                 }
             }
             else {
@@ -1606,7 +1614,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_48 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_55 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
@@ -1617,7 +1625,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         cardMode: (__VLS_ctx.resolvedOwnCardMode),
     }));
-    const __VLS_49 = __VLS_48({
+    const __VLS_56 = __VLS_55({
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
@@ -1627,14 +1635,14 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         compact: (__VLS_ctx.isCompactViewport),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         cardMode: (__VLS_ctx.resolvedOwnCardMode),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
-    let __VLS_51;
-    let __VLS_52;
-    let __VLS_53;
-    const __VLS_54 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+    let __VLS_58;
+    let __VLS_59;
+    let __VLS_60;
+    const __VLS_61 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    var __VLS_50;
+    var __VLS_57;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -1694,18 +1702,18 @@ if (__VLS_ctx.showEndPanel) {
         for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_62 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
                 mode: (__VLS_ctx.resolvedTableCardMode),
             }));
-            const __VLS_56 = __VLS_55({
+            const __VLS_63 = __VLS_62({
                 key: (`remain-${card.id}`),
                 card: (card),
                 size: "sm",
                 mode: (__VLS_ctx.resolvedTableCardMode),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_62));
         }
     }
     if (__VLS_ctx.settlementPlayers.length) {
@@ -1769,18 +1777,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.resolvedTableCardMode),
                         }));
-                        const __VLS_59 = __VLS_58({
+                        const __VLS_66 = __VLS_65({
                             key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.resolvedTableCardMode),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_65));
                     }
                 }
             }
@@ -1817,18 +1825,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((group.cards))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_61 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_68 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_62 = __VLS_61({
+                        const __VLS_69 = __VLS_68({
                             key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
                     }
                 }
             }
@@ -1839,18 +1847,18 @@ if (__VLS_ctx.showEndPanel) {
                 for (const [card] of __VLS_getVForSourceType((p.hand))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_64 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                     }));
-                    const __VLS_65 = __VLS_64({
+                    const __VLS_72 = __VLS_71({
                         key: (`settle-${p.clientId}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_64));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_71));
                 }
             }
             else {
@@ -2009,9 +2017,6 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-shell']} */ ;
@@ -2100,12 +2105,15 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             CardComp: CardComp,
+            ConnectionStatus: ConnectionStatus,
             DeclarationPanel: DeclarationPanel,
             GameBoard: GameBoard,
             GameTools: GameTools,
             LobbyPage: LobbyPage,
             LoginPage: LoginPage,
-            connected: connected,
+            connectionState: connectionState,
+            reconnectAttempt: reconnectAttempt,
+            retryConnection: retryConnection,
             mySeatId: mySeatId,
             activeRoomId: activeRoomId,
             state: state,

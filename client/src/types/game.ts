@@ -3,6 +3,15 @@ export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 export type CardDisplayMode = "large" | "adaptive" | "long";
 export type RenderedCardMode = Exclude<CardDisplayMode, "adaptive">;
 export type SeatDirection = "clockwise" | "counterclockwise";
+export type RoomConnectionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "retry_wait"
+  | "offline"
+  | "restored"
+  | "failed";
 
 export interface GameDisplayPreferences {
   ownCards: CardDisplayMode;

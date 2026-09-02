@@ -38,7 +38,10 @@ async function clickFirstVisible(locator: Locator): Promise<boolean> {
   const count = await locator.count();
   for (let index = 0; index < count; index += 1) {
     const item = locator.nth(index);
-    if ((await item.isVisible().catch(() => false)) && (await item.isEnabled().catch(() => false))) {
+    if (
+      (await item.isVisible({ timeout: 300 }).catch(() => false)) &&
+      (await item.isEnabled({ timeout: 300 }).catch(() => false))
+    ) {
       const clicked = await item.click({ force: true, timeout: 800 }).then(() => true, () => false);
       if (clicked) {
         return true;
@@ -64,7 +67,7 @@ async function playUntilSettlement(page: Page): Promise<void> {
     }
     if (await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) {
       const declareButton = page.getByTestId("confirm-declaration");
-      if (await declareButton.isEnabled().catch(() => false)) {
+      if (await declareButton.isEnabled({ timeout: 300 }).catch(() => false)) {
         await declareButton.click();
         await page.waitForTimeout(120);
         continue;
@@ -74,7 +77,10 @@ async function playUntilSettlement(page: Page): Promise<void> {
     let acted = false;
     for (const id of actionIds) {
       const action = page.getByTestId(id);
-      if ((await action.isVisible().catch(() => false)) && (await action.isEnabled().catch(() => false))) {
+      if (
+        (await action.isVisible({ timeout: 300 }).catch(() => false)) &&
+        (await action.isEnabled({ timeout: 300 }).catch(() => false))
+      ) {
         acted = await action.click({ force: true, timeout: 800 }).then(() => true, () => false);
         if (acted) {
           break;
@@ -88,7 +94,10 @@ async function playUntilSettlement(page: Page): Promise<void> {
     const handCards = page.locator("[data-testid^='hand-card-']");
     for (let index = 0; index < await handCards.count(); index += 1) {
       const card = handCards.nth(index);
-      if (!(await card.isVisible().catch(() => false)) || !(await card.isEnabled().catch(() => false))) {
+      if (
+        !(await card.isVisible({ timeout: 300 }).catch(() => false)) ||
+        !(await card.isEnabled({ timeout: 300 }).catch(() => false))
+      ) {
         continue;
       }
       const handBeforeSelection = await snapshotBoard(page);
