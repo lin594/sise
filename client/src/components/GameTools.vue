@@ -4,17 +4,18 @@
       <button
         class="tool-button"
         type="button"
-        aria-label="牌局设置"
-        title="牌局设置"
+        :aria-label="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
+        :title="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
         data-testid="game-settings"
         :aria-expanded="settingsOpen"
+        :disabled="decisionActive"
         @click="settingsOpen = !settingsOpen"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
           <path d="m19.2 13.4 1.3 1-.1 1.5-1.5 1.8-1.6-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.7-1.4.6h-2.5l-.7-1.5a7.8 7.8 0 0 1-2-.6l-1.4.9-1.3-.8-1.2-2.2.9-1.4a7.8 7.8 0 0 1-.2-2.1L4 11.7l.3-1.5 1.3-2 1.7.1a7.8 7.8 0 0 1 1.7-1.2l.1-1.7 1.4-.7H13l.9 1.4a7.8 7.8 0 0 1 1.9.8l1.5-.7 1.2.9 1 2.3-1 1.3c.2.9.3 1.8.1 2.7h.6Z" />
         </svg>
-        <span>设置</span>
+        <span>{{ decisionActive ? "先操作" : "设置" }}</span>
       </button>
       <button
         class="tool-button exit"
@@ -33,11 +34,17 @@
     </div>
 
     <Transition name="popover">
-      <section v-if="settingsOpen" class="settings-panel" data-testid="settings-panel">
+      <section
+        v-if="settingsOpen"
+        class="settings-panel"
+        data-testid="settings-panel"
+        role="dialog"
+        aria-labelledby="settings-panel-title"
+      >
         <header>
           <div>
             <small>牌局设置</small>
-            <strong>牌面显示</strong>
+            <strong id="settings-panel-title">牌面显示</strong>
           </div>
           <button type="button" aria-label="关闭设置" @click="settingsOpen = false">×</button>
         </header>
@@ -136,11 +143,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import type { CardDisplayMode, GameDisplayPreferences, SeatDirection } from "@/types/game";
 
 const props = defineProps<{
   modelValue: GameDisplayPreferences;
+  decisionActive?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -156,6 +164,15 @@ const cardModes: Array<{ value: CardDisplayMode; label: string; sample: string }
   { value: "adaptive", label: "自适应", sample: "自" },
   { value: "long", label: "长牌", sample: "帥" },
 ];
+
+watch(
+  () => props.decisionActive,
+  (active) => {
+    if (active) {
+      settingsOpen.value = false;
+    }
+  },
+);
 
 function setCardMode(key: "ownCards" | "tableCards", mode: CardDisplayMode): void {
   emit("update:modelValue", { ...props.modelValue, [key]: mode });
@@ -218,6 +235,14 @@ function confirmExit(): void {
   color: #fecaca;
 }
 
+.tool-button:disabled {
+  cursor: not-allowed;
+  border-color: rgba(250, 204, 21, 0.62);
+  background: #172033;
+  color: #fde68a;
+  opacity: 1;
+}
+
 .tool-button svg {
   width: 1.1rem;
   height: 1.1rem;
@@ -239,7 +264,7 @@ function confirmExit(): void {
   padding: 0.8rem;
   border-radius: 1rem;
   border: 1px solid rgba(71, 85, 105, 0.9);
-  background: rgba(8, 15, 29, 0.96);
+  background: #080f1d;
   color: #e2e8f0;
   box-shadow: 0 16px 36px rgba(2, 6, 23, 0.48);
   backdrop-filter: blur(14px);
@@ -261,7 +286,7 @@ function confirmExit(): void {
 
 .settings-panel small {
   color: #94a3b8;
-  font-size: 0.7rem;
+  font-size: 0.78rem;
 }
 
 .settings-panel header strong {
@@ -269,8 +294,10 @@ function confirmExit(): void {
 }
 
 .settings-panel header button {
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 42px;
+  min-height: 42px;
   border: 0;
   border-radius: 50%;
   background: rgba(30, 41, 59, 0.78);
@@ -291,7 +318,7 @@ function confirmExit(): void {
 }
 
 .preference-copy strong {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
 }
 
 .mode-options {
@@ -318,7 +345,7 @@ function confirmExit(): void {
   justify-content: center;
   gap: 0.24rem;
   padding: 0.35rem 0.2rem;
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   font-weight: 750;
 }
 
@@ -353,6 +380,10 @@ function confirmExit(): void {
 .direction-options button > span:last-child {
   display: grid;
   gap: 0.05rem;
+}
+
+.direction-options button > span:last-child small {
+  font-size: 0.78rem;
 }
 
 .direction-options button.active {

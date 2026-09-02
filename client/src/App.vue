@@ -35,6 +35,7 @@
       <GameTools
         v-if="showGameTools"
         v-model="displayPreferences"
+        :decision-active="settingsDecisionActive"
         @open-rules="showRules = true"
         @exit="handleLeaveRoom"
       />
@@ -795,6 +796,9 @@ const shouldShowDeclarePanel = computed(
     !declareDealIntroActive.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot),
+);
+const settingsDecisionActive = computed(
+  () => canAct.value || canDiscard.value,
 );
 const declareDealIntroActive = computed(
   () => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value,

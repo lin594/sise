@@ -113,12 +113,26 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
       return;
     }
     let acted = false;
-    for (const id of ["action-peng", "action-kai", "action-chi", "action-pass", "action-hu"]) {
+    for (const id of [
+      "action-deferred-pass",
+      "action-peng",
+      "action-kai",
+      "action-chi",
+      "action-pass",
+      "action-hu",
+    ]) {
       const action = page.getByTestId(id);
       if ((await action.isVisible().catch(() => false)) && (await action.isEnabled().catch(() => false))) {
         await action.click({ force: true });
         acted = true;
         break;
+      }
+    }
+    if (!acted) {
+      const fallbackAction = page.locator(".action-dock button:enabled").first();
+      if ((await fallbackAction.isVisible().catch(() => false)) && (await fallbackAction.isEnabled().catch(() => false))) {
+        await fallbackAction.click({ force: true });
+        acted = true;
       }
     }
     await page.waitForTimeout(acted ? 300 : 180);
@@ -195,6 +209,7 @@ test.describe("compact landscape gameplay", () => {
     await expectDedicatedGameHeader(page);
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
     await expect(page.getByRole("heading", { name: "声明亮鱼与暗坎" })).toBeVisible();
     const handPreview = page.getByTestId("declare-hand-preview");
@@ -371,59 +386,11 @@ test.describe("compact landscape gameplay", () => {
     expect(pageOverflow.width).toBeLessThanOrEqual(pageOverflow.viewportWidth);
     expect(pageOverflow.height).toBeLessThanOrEqual(pageOverflow.viewportHeight);
 
-    await page.getByTestId("game-settings").click();
-    await expect(page.getByTestId("settings-panel")).toBeVisible();
-    const settingsGeometry = await page.getByTestId("settings-panel").evaluate((panel) => {
-      const panelRect = panel.getBoundingClientRect();
-      const headerRect = document.querySelector<HTMLElement>('[data-testid="game-control-header"]')!.getBoundingClientRect();
-      return {
-        top: panelRect.top,
-        bottom: panelRect.bottom,
-        headerBottom: headerRect.bottom,
-        viewportHeight: innerHeight,
-        overflowY: getComputedStyle(panel).overflowY,
-      };
-    });
-    expect(settingsGeometry.top).toBeGreaterThanOrEqual(settingsGeometry.headerBottom);
-    expect(settingsGeometry.bottom).toBeLessThanOrEqual(settingsGeometry.viewportHeight);
-    expect(settingsGeometry.overflowY).toBe("auto");
-    await page.screenshot({ path: testInfo.outputPath("iphone-se-settings.png") });
-    await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
-    await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
-    await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
-    const initialSeatIds = {
-      left: await page.getByTestId("player-left").getAttribute("data-player-id"),
-      right: await page.getByTestId("player-right").getAttribute("data-player-id"),
-      top: await page.getByTestId("player-top").getAttribute("data-player-id"),
-    };
-    await expect(page.locator(".hand [data-card-mode='large']").first()).toBeVisible();
-    await page.getByTestId("card-mode-own-long").click();
-    await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
-    await page.getByTestId("card-mode-table-long").click();
-    await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
-      ownCards: "long",
-      tableCards: "long",
-      seatDirection: "counterclockwise",
-    });
-    await page.getByTestId("seat-direction-clockwise").click();
-    await expect(page.getByTestId("seat-direction-clockwise")).toHaveClass(/active/);
-    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.right!);
-    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.left!);
-    await expect(page.getByTestId("player-top")).toHaveAttribute("data-player-id", initialSeatIds.top!);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
-      seatDirection: "clockwise",
-    });
-    await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
-    await page.getByTestId("seat-direction-counterclockwise").click();
-    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.left!);
-    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
-    await page.screenshot({ path: testInfo.outputPath("iphone-se-counterclockwise.png") });
-    await page.getByTestId("card-mode-own-adaptive").click();
-    await page.getByTestId("card-mode-table-adaptive").click();
-    await page.getByTestId("settings-rules").click();
-    await expect(page.locator(".rules-panel")).toBeVisible();
-    await page.getByRole("button", { name: "关闭", exact: true }).click();
+    const gameSettings = page.getByTestId("game-settings");
+    await expect(gameSettings).toBeDisabled();
+    await expect(gameSettings).toContainText("先操作");
+    await expect(gameSettings).toHaveAttribute("aria-label", "请先完成当前操作，再打开设置");
+    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
 
     await page.getByTestId("game-exit").click();
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
@@ -442,6 +409,89 @@ test.describe("compact landscape gameplay", () => {
       queryRoomId: new URL(location.href).searchParams.get("roomId"),
     }), departingRoomId);
     expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
+  });
+
+  test("keeps settings readable and clears them when a turn needs attention", async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
+    const gameSettings = page.getByTestId("game-settings");
+    await expect(gameSettings).toBeEnabled();
+    await expect(gameSettings).toContainText("设置");
+    await gameSettings.click();
+
+    const settingsPanel = page.getByTestId("settings-panel");
+    await expect(settingsPanel).toBeVisible();
+    await page.waitForTimeout(200);
+    const settingsGeometry = await settingsPanel.evaluate((panel) => {
+      const panelRect = panel.getBoundingClientRect();
+      const headerRect = document.querySelector<HTMLElement>('[data-testid="game-control-header"]')!.getBoundingClientRect();
+      const closeButton = panel.querySelector<HTMLButtonElement>('button[aria-label="关闭设置"]')!;
+      const closeRect = closeButton.getBoundingClientRect();
+      const optionFontSizes = Array.from(panel.querySelectorAll<HTMLElement>(".mode-options button"))
+        .map((button) => Number.parseFloat(getComputedStyle(button).fontSize));
+      return {
+        top: panelRect.top,
+        bottom: panelRect.bottom,
+        headerBottom: headerRect.bottom,
+        viewportHeight: innerHeight,
+        overflowY: getComputedStyle(panel).overflowY,
+        backgroundColor: getComputedStyle(panel).backgroundColor,
+        closeWidth: Math.round(closeRect.width),
+        closeHeight: Math.round(closeRect.height),
+        minimumOptionFontSize: Math.min(...optionFontSizes),
+      };
+    });
+    expect(settingsGeometry.top).toBeGreaterThanOrEqual(settingsGeometry.headerBottom);
+    expect(settingsGeometry.bottom).toBeLessThanOrEqual(settingsGeometry.viewportHeight);
+    expect(settingsGeometry.overflowY).toBe("auto");
+    expect(settingsGeometry.backgroundColor).toBe("rgb(8, 15, 29)");
+    expect(settingsGeometry.closeWidth).toBeGreaterThanOrEqual(40);
+    expect(settingsGeometry.closeHeight).toBeGreaterThanOrEqual(40);
+    expect(settingsGeometry.minimumOptionFontSize).toBeGreaterThanOrEqual(13);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-settings.png") });
+
+    await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
+    await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
+    await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
+    const initialSeatIds = {
+      left: await page.getByTestId("player-left").getAttribute("data-player-id"),
+      right: await page.getByTestId("player-right").getAttribute("data-player-id"),
+      top: await page.getByTestId("player-top").getAttribute("data-player-id"),
+    };
+    await page.getByTestId("card-mode-own-long").click();
+    await expect(page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first()).toBeVisible();
+    await page.getByTestId("card-mode-table-long").click();
+    await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
+    await page.getByTestId("seat-direction-clockwise").click();
+    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.right!);
+    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.left!);
+    await expect(page.getByTestId("player-top")).toHaveAttribute("data-player-id", initialSeatIds.top!);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}"))).toMatchObject({
+      ownCards: "long",
+      tableCards: "long",
+      seatDirection: "clockwise",
+    });
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
+    await page.getByTestId("seat-direction-counterclockwise").click();
+    await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.left!);
+    await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-counterclockwise.png") });
+    await page.getByTestId("settings-rules").click();
+    await expect(page.locator(".rules-panel")).toBeVisible();
+    await page.getByRole("button", { name: "关闭", exact: true }).click();
+
+    await gameSettings.click();
+    await expect(settingsPanel).toBeVisible();
+    await confirmDeclaration.dispatchEvent("click");
+    await expect(gameSettings).toBeDisabled({ timeout: 30_000 });
+    await expect(settingsPanel).toHaveCount(0);
+    await expect(gameSettings).toContainText("先操作");
+    await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
   });
 });
 

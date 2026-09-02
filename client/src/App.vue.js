@@ -304,6 +304,7 @@ const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
     !declareDealIntroActive.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot));
+const settingsDecisionActive = computed(() => canAct.value || canDiscard.value);
 const declareDealIntroActive = computed(() => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value);
 let declareTick = null;
 const declareSecondsLeft = computed(() => {
@@ -1300,11 +1301,13 @@ if (__VLS_ctx.showGameTools) {
         ...{ 'onOpenRules': {} },
         ...{ 'onExit': {} },
         modelValue: (__VLS_ctx.displayPreferences),
+        decisionActive: (__VLS_ctx.settingsDecisionActive),
     }));
     const __VLS_8 = __VLS_7({
         ...{ 'onOpenRules': {} },
         ...{ 'onExit': {} },
         modelValue: (__VLS_ctx.displayPreferences),
+        decisionActive: (__VLS_ctx.settingsDecisionActive),
     }, ...__VLS_functionalComponentArgsRest(__VLS_7));
     let __VLS_10;
     let __VLS_11;
@@ -2260,6 +2263,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
+            settingsDecisionActive: settingsDecisionActive,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,
