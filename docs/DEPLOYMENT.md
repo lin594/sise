@@ -136,6 +136,11 @@ ENABLE_MONITOR=0
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
 - `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。
 - `ENABLE_MONITOR`：是否开放 Colyseus 管理监控页；生产环境默认 `0`，仅可信诊断环境临时设为 `1`。
+- `TRUST_PROXY_HOPS`：可信反向代理跳数；直接暴露端口保持 `0`，Traefik 单层代理使用 `1`，不能在不受控直连端口上开启。
+- `HTTP_RATE_LIMIT_WINDOW_MS`：HTTP 限流统计窗口，默认 60000ms。
+- `ROOM_CREATE_RATE_LIMIT`：同一客户端每窗口创建或重置房间次数，默认 10。
+- `ROOM_LOOKUP_RATE_LIMIT`：同一客户端每窗口查询练习房入口次数，默认 120。
+- `PRIVATE_STATE_RATE_LIMIT`：同一客户端每窗口恢复私有状态次数，默认 180；默认值允许同一家庭网络下多名玩家正常轮询。
 - `OP_TIMEOUT_MS`、`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS`、`DECLARE_TIMEOUT_MS`：操作和声明超时。
 - `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时。
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。
