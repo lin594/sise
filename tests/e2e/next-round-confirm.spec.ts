@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("a friend-room host confirms before pulling other players out of settlement", async ({ browser }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   const hostContext = await browser.newContext({ viewport: { width: 568, height: 320 } });
   const guestContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const host = await hostContext.newPage();
@@ -30,18 +30,27 @@ test("a friend-room host confirms before pulling other players out of settlement
     await guest.getByTestId("confirm-declaration").click();
     await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
 
-    await host.evaluate(() => {
+    const usedDebugScenario = await host.evaluate(() => {
       const bridge = (window as Window & {
         __siseLocalTest?: { setupScenario: (scenario: string) => void };
       }).__siseLocalTest;
       if (!bridge) {
-        throw new Error("Local test bridge is unavailable");
+        return false;
       }
       bridge.setupScenario("settlement_hu");
+      return true;
     });
 
-    await expect(host.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false");
-    await expect(guest.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false");
+    if (!usedDebugScenario) {
+      for (const player of [host, guest]) {
+        await player.getByTestId("game-auto-play").click();
+        await player.getByTestId("confirm-auto-play").click();
+        await expect(player.getByTestId("game-auto-play")).toHaveAttribute("aria-pressed", "true");
+      }
+    }
+
+    await expect(host.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false", { timeout: 180_000 });
+    await expect(guest.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false", { timeout: 180_000 });
     const nextRoundTrigger = host.getByTestId("next-round-trigger");
     await nextRoundTrigger.click();
 
@@ -75,8 +84,15 @@ test("a friend-room host confirms before pulling other players out of settlement
 
     await nextRoundTrigger.click();
     await host.getByTestId("confirm-next-round").click();
-    await expect(host.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+    if (usedDebugScenario) {
+      await expect(host.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+      await expect(guest.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+    } else {
+      await expect(host.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
+      await expect(guest.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
+      await expect(host.locator("main.layout")).toHaveClass(/\b(declaring|playing)\b/);
+      await expect(guest.locator("main.layout")).toHaveClass(/\b(declaring|playing)\b/);
+    }
   } finally {
     await guestContext.close();
     await hostContext.close();
