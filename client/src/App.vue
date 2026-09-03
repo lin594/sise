@@ -3831,7 +3831,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 }
 
 .layout.compact-viewport .rules-panel {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 0.55rem;
   padding: 0.65rem;
@@ -3846,6 +3846,16 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 .layout.compact-viewport .rules-section {
   padding: 0.65rem;
   border-radius: 12px;
+}
+
+.layout.compact-viewport .rules-list {
+  font-size: max(0.9rem, 15px);
+  line-height: 1.5;
+}
+
+.layout.compact-viewport .rules-chip {
+  min-height: 2.15rem;
+  font-size: max(0.84rem, 14px);
 }
 
 .layout.compact-viewport .hu-panel {
@@ -3939,7 +3949,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 }
 
 .layout.ultra-compact-viewport .rules-list {
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .layout.ultra-compact-viewport .settlement-fixed-head {

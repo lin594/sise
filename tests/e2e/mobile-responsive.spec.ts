@@ -768,6 +768,31 @@ test.describe("phone portrait landscape canvas", () => {
     await rulesEntry.click();
     const rulesDialog = page.getByRole("dialog", { name: "四色牌规则" });
     await expect(rulesDialog).toBeVisible();
+    await expect(settingsPanel).toHaveCount(0);
+    const rulesGeometry = await rulesDialog.evaluate((panel) => {
+      const listItems = Array.from(panel.querySelectorAll<HTMLElement>(".rules-list li"));
+      const chips = Array.from(panel.querySelectorAll<HTMLElement>(".rules-chip"));
+      const close = panel.querySelector<HTMLButtonElement>("[data-testid='close-rules']")!;
+      return {
+        columns: getComputedStyle(panel).gridTemplateColumns.split(" ").length,
+        noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
+        hasVerticalOverflow: panel.scrollHeight > panel.clientHeight,
+        minimumBodyFontSize: Math.min(...listItems.map((item) => Number.parseFloat(getComputedStyle(item).fontSize))),
+        minimumChipFontSize: Math.min(...chips.map((chip) => Number.parseFloat(getComputedStyle(chip).fontSize))),
+        closeWidth: close.offsetWidth,
+        closeHeight: close.offsetHeight,
+      };
+    });
+    expect(rulesGeometry).toMatchObject({
+      columns: 1,
+      noHorizontalOverflow: true,
+      hasVerticalOverflow: true,
+    });
+    expect(rulesGeometry.minimumBodyFontSize).toBeGreaterThanOrEqual(15);
+    expect(rulesGeometry.minimumChipFontSize).toBeGreaterThanOrEqual(14);
+    expect(rulesGeometry.closeWidth).toBeGreaterThanOrEqual(42);
+    expect(rulesGeometry.closeHeight).toBeGreaterThanOrEqual(42);
+    await page.screenshot({ path: testInfo.outputPath("rules-effective-viewport-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(rulesDialog).toHaveCount(0);
     await expect(settingsButton).toBeFocused();
