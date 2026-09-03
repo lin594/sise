@@ -169,6 +169,9 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       tablePlayer.exposedArea.clear();
       tablePlayer.exposedGroupSizes.clear();
       tablePlayer.exposedGroupKinds.clear();
+      // Keep this visual fixture deterministic even when the random opening
+      // hand produced a declared fish group before the scenario was applied.
+      tablePlayer.fishArea.clear();
     }
     const self = context.state.players.get(seatId)!;
     self.exposedArea.push(
