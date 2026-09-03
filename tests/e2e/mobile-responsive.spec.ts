@@ -542,9 +542,13 @@ test.describe("compact landscape gameplay", () => {
     expect(flowMetrics.every((flow) => flow.label?.startsWith("流水："))).toBe(true);
     expect(flowMetrics.every((flow) => flow.title?.includes(" → "))).toBe(true);
     expect(Math.min(...flowMetrics.map((flow) => flow.titleFontSize))).toBeGreaterThanOrEqual(12);
-    const pendingGeometry = await page.evaluate(() => {
-      const deck = document.querySelector<HTMLElement>('[data-testid="deck-stack"]')!.getBoundingClientRect();
-      const pending = document.querySelector<HTMLElement>('[data-testid="pending-card"]')!.getBoundingClientRect();
+    const pendingGeometry = await page.getByTestId("pending-card").evaluate((pendingElement) => {
+      const deckElement = document.querySelector<HTMLElement>('[data-testid="deck-stack"]');
+      if (!deckElement) {
+        throw new Error("Deck stack is missing while measuring the pending card");
+      }
+      const deck = deckElement.getBoundingClientRect();
+      const pending = pendingElement.getBoundingClientRect();
       return {
         deckLeft: deck.left,
         deckTop: deck.top,
