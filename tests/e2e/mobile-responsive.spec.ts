@@ -731,6 +731,10 @@ test.describe("phone portrait landscape canvas", () => {
     expect(settingsGeometry.toolHeight).toBeGreaterThanOrEqual(36);
     expect(settingsGeometry.minimumOptionFontSize).toBeGreaterThanOrEqual(14);
     expect(settingsGeometry.minimumHelperFontSize).toBeGreaterThanOrEqual(13);
+    const settingsScrollHint = page.getByTestId("settings-scroll-hint");
+    await expect(settingsScrollHint).toContainText("下滑查看更多设置");
+    await expect(settingsScrollHint).not.toHaveClass(/hidden/);
+    await expect(settingsScrollHint).toHaveCSS("opacity", "1");
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
 
     await page.keyboard.press("Shift+Tab");
@@ -758,6 +762,8 @@ test.describe("phone portrait landscape canvas", () => {
     expect(bottomGeometry.scrollTop).toBeGreaterThan(0);
     expect(bottomGeometry.rulesInsidePanel).toBe(true);
     expect(bottomGeometry.wakeLockInsidePanel).toBe(true);
+    await expect(settingsScrollHint).toHaveClass(/hidden/);
+    await expect(settingsScrollHint).toHaveCSS("opacity", "0");
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-bottom-320x568.png") });
     await rulesEntry.click();
     const rulesDialog = page.getByRole("dialog", { name: "四色牌规则" });

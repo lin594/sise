@@ -139,6 +139,7 @@
         tabindex="-1"
         @keydown.esc.stop.prevent="closeSettings()"
         @keydown.tab="trapSettingsFocus"
+        @scroll.passive="updateSettingsScrollState"
       >
         <header>
           <div>
@@ -259,6 +260,12 @@
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
+        <p
+          class="settings-scroll-hint"
+          :class="{ hidden: !settingsCanScrollForward }"
+          data-testid="settings-scroll-hint"
+          aria-hidden="true"
+        >↓ 下滑查看更多设置</p>
       </section>
     </Transition>
 
@@ -357,6 +364,8 @@ const historyOpen = ref(false);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
+const settingsCanScrollForward = ref(false);
+let settingsResizeObserver: ResizeObserver | null = null;
 const confirmingAutoPlay = ref(false);
 const autoPlayButtonRef = ref<HTMLButtonElement | null>(null);
 const autoPlayDialogRef = ref<HTMLElement | null>(null);
@@ -431,6 +440,7 @@ watch(
   (active) => {
     if (active) {
       removeSettingsOutsideListener();
+      stopObservingSettingsScroll();
       settingsOpen.value = false;
       historyOpen.value = false;
     }
@@ -445,6 +455,7 @@ async function toggleSettings(): Promise<void> {
   closeHistory(false);
   settingsOpen.value = true;
   await nextTick();
+  observeSettingsScroll();
   settingsPanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
 }
@@ -485,6 +496,7 @@ function closeSettings(restoreFocus = true): void {
     return;
   }
   removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
   settingsOpen.value = false;
   if (restoreFocus) {
     void nextTick(() => settingsButtonRef.value?.focus());
@@ -506,6 +518,32 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
 
 function removeSettingsOutsideListener(): void {
   document.removeEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+function updateSettingsScrollState(): void {
+  const panel = settingsPanelRef.value;
+  settingsCanScrollForward.value = Boolean(
+    panel && panel.scrollTop < panel.scrollHeight - panel.clientHeight - 2,
+  );
+}
+
+function stopObservingSettingsScroll(): void {
+  settingsResizeObserver?.disconnect();
+  settingsResizeObserver = null;
+  settingsCanScrollForward.value = false;
+}
+
+function observeSettingsScroll(): void {
+  stopObservingSettingsScroll();
+  const panel = settingsPanelRef.value;
+  if (!panel) {
+    return;
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    settingsResizeObserver = new ResizeObserver(updateSettingsScrollState);
+    settingsResizeObserver.observe(panel);
+  }
+  updateSettingsScrollState();
 }
 
 function trapSettingsFocus(event: KeyboardEvent): void {
@@ -559,6 +597,7 @@ function setKeepScreenAwake(keepScreenAwake: boolean): void {
 
 function openRules(): void {
   removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
   settingsOpen.value = false;
   historyOpen.value = false;
   emit("openRules");
@@ -569,6 +608,7 @@ async function requestAutoPlayChange(): Promise<void> {
     return;
   }
   removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
   settingsOpen.value = false;
   historyOpen.value = false;
   if (props.autoPlay) {
@@ -600,6 +640,7 @@ async function requestExit(): Promise<void> {
     ? document.activeElement
     : exitButtonRef.value;
   removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
   settingsOpen.value = false;
   historyOpen.value = false;
   confirmingExit.value = true;
@@ -647,7 +688,10 @@ function confirmExit(): void {
   emit("exit");
 }
 
-onBeforeUnmount(removeSettingsOutsideListener);
+onBeforeUnmount(() => {
+  removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
+});
 </script>
 
 <style scoped>
@@ -806,6 +850,28 @@ onBeforeUnmount(removeSettingsOutsideListener);
   background: rgba(30, 41, 59, 0.78);
   color: #cbd5e1;
   font-size: 1.25rem;
+}
+
+.settings-scroll-hint {
+  position: sticky;
+  bottom: -0.8rem;
+  z-index: 2;
+  min-height: 2.25rem;
+  margin: 0.55rem -0.8rem -0.8rem;
+  padding: 0.75rem 0.5rem 0.35rem;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(8, 15, 29, 0), #080f1d 38%);
+  color: #fde68a;
+  font-size: max(0.78rem, 13px);
+  font-weight: 850;
+  line-height: 1.15;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.settings-scroll-hint.hidden {
+  opacity: 0;
 }
 
 .history-description {
