@@ -91,6 +91,11 @@ const selectionMode = computed(() => props.selectionMode ?? null);
 const rawActionFeedback = computed(() => props.actionFeedback ?? null);
 const actionFeedback = computed(() => {
     const feedback = rawActionFeedback.value;
+    if (feedback?.decisionKey &&
+        props.decisionKey &&
+        feedback.decisionKey !== props.decisionKey) {
+        return null;
+    }
     if (!feedback || feedback.visible !== false) {
         return feedback;
     }

@@ -240,6 +240,13 @@ const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null)
 const rawActionFeedback = computed(() => props.actionFeedback ?? null);
 const actionFeedback = computed<ActionFeedback | null>(() => {
   const feedback = rawActionFeedback.value;
+  if (
+    feedback?.decisionKey &&
+    props.decisionKey &&
+    feedback.decisionKey !== props.decisionKey
+  ) {
+    return null;
+  }
   if (!feedback || feedback.visible !== false) {
     return feedback;
   }
