@@ -3732,6 +3732,14 @@ watch(canDiscard, (enabled) => {
   }
 }
 
+@media (max-width: 620px) and (max-height: 360px),
+  (max-width: 360px) and (max-height: 620px) {
+  .board {
+    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8rem, 22vw, 8.4rem);
+    gap: 2px;
+  }
+}
+
 @supports (-webkit-touch-callout: none) {
   @media (max-width: 960px), (max-height: 500px) {
     .hand {

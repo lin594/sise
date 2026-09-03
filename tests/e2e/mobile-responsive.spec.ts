@@ -787,6 +787,98 @@ test.describe("compact landscape gameplay", () => {
   });
 });
 
+test.describe("legacy small landscape gameplay", () => {
+  test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
+
+  test("keeps eight readable hand cards and every control inside the canvas", async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
+    const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
+      const rect = panel.getBoundingClientRect();
+      return {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        scrollHeight: panel.scrollHeight,
+        clientHeight: panel.clientHeight,
+      };
+    });
+    expect(declarationGeometry.width).toBeLessThanOrEqual(568);
+    expect(declarationGeometry.height).toBeLessThanOrEqual(320);
+    expect(declarationGeometry.scrollHeight).toBeGreaterThanOrEqual(declarationGeometry.clientHeight);
+    await confirmDeclaration.click();
+
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("bot-identity")).toHaveCount(3);
+    await reachDiscardConfirmation(page);
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+
+    const metrics = await page.evaluate(() => {
+      const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+      const board = document.querySelector<HTMLElement>("[data-testid='game-board']")!;
+      const self = document.querySelector<HTMLElement>(".self-info-card")!;
+      const hand = document.querySelector<HTMLElement>(".hand")!;
+      const dock = document.querySelector<HTMLElement>(".action-dock")!;
+      const handRect = hand.getBoundingClientRect();
+      const cardRects = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card")).map((card) => {
+        const rect = card.getBoundingClientRect();
+        const face = card.querySelector<HTMLElement>(".text-top");
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          fontSize: Number.parseFloat(face ? getComputedStyle(face).fontSize : "0"),
+        };
+      });
+      const visibleDockButtons = Array.from(dock.querySelectorAll<HTMLElement>("button")).filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      const rectOf = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+      };
+      return {
+        bodyWidth: document.body.scrollWidth,
+        bodyHeight: document.body.scrollHeight,
+        header: rectOf(header),
+        board: rectOf(board),
+        self: rectOf(self),
+        hand: rectOf(hand),
+        dock: rectOf(dock),
+        cardRows: new Set(cardRects.map((rect) => Math.round(rect.top))).size,
+        fullyVisibleCards: cardRects.filter(
+          (rect) => rect.left >= handRect.left && rect.right <= handRect.right + 0.5,
+        ).length,
+        minimumCardWidth: Math.min(...cardRects.map((rect) => rect.width)),
+        minimumCardHeight: Math.min(...cardRects.map((rect) => rect.height)),
+        minimumCardFontSize: Math.min(...cardRects.map((rect) => rect.fontSize)),
+        minimumDockButtonWidth: Math.min(...visibleDockButtons.map((button) => button.getBoundingClientRect().width)),
+        minimumDockButtonHeight: Math.min(...visibleDockButtons.map((button) => button.getBoundingClientRect().height)),
+      };
+    });
+
+    expect(metrics.bodyWidth).toBeLessThanOrEqual(568);
+    expect(metrics.bodyHeight).toBeLessThanOrEqual(320);
+    expect(metrics.board.top).toBeGreaterThanOrEqual(metrics.header.bottom);
+    expect(metrics.self.right).toBeLessThanOrEqual(metrics.hand.left);
+    expect(metrics.hand.right).toBeLessThanOrEqual(metrics.dock.left);
+    expect(metrics.cardRows).toBe(1);
+    expect(metrics.fullyVisibleCards).toBeGreaterThanOrEqual(8);
+    expect(metrics.minimumCardWidth).toBeGreaterThanOrEqual(40);
+    expect(metrics.minimumCardHeight).toBeGreaterThanOrEqual(52);
+    expect(metrics.minimumCardFontSize).toBeGreaterThanOrEqual(22);
+    expect(metrics.minimumDockButtonWidth).toBeGreaterThanOrEqual(40);
+    expect(metrics.minimumDockButtonHeight).toBeGreaterThanOrEqual(40);
+    await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game.png") });
+  });
+});
+
 test.describe("desktop declaration", () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
