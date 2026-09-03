@@ -3,10 +3,12 @@ import { canChi, canKai, canPeng, findKaiPlan, getChiPlans } from "../rules/acti
 import { explainHu, validateHu } from "../rules/hu.js";
 import type { Card } from "../rules/types.js";
 import {
+  BOT_DISPLAY_NAMES,
   buildDeclarationSelection,
   buildDefaultDeclarationPayload,
   buildRoundResultPlayers,
   canReturnLobby,
+  chooseBotDisplayName,
   dealInitialHands,
   makeUniqueHumanName,
 } from "../rooms/flow/match-runtime.js";
@@ -72,10 +74,27 @@ t("identity: player names remove invisible controls and preserve whole Unicode c
   assert.equal(emojiName.endsWith("🙂"), true);
 });
 
-t("identity: duplicate humans and reserved bot names receive readable suffixes", () => {
+t("identity: duplicate humans and legacy bot-style names receive readable suffixes", () => {
   assert.equal(makeUniqueHumanName("张阿姨", ["张阿姨", "张阿姨（2）"]), "张阿姨（3）");
   assert.equal(makeUniqueHumanName("Ａlice", ["alice"]), "Alice（2）");
   assert.equal(makeUniqueHumanName("机器人2", []), "机器人2（玩家）");
+});
+
+t("identity: bot display names are friendly, randomizable, and unique within a table", () => {
+  assert.equal(chooseBotDisplayName([], () => 0), BOT_DISPLAY_NAMES[0]);
+  assert.equal(chooseBotDisplayName([], () => 0.999999), BOT_DISPLAY_NAMES.at(-1));
+  assert.equal(
+    chooseBotDisplayName([BOT_DISPLAY_NAMES[0], BOT_DISPLAY_NAMES[1]], () => 0),
+    BOT_DISPLAY_NAMES[2],
+  );
+  assert.equal(
+    chooseBotDisplayName(BOT_DISPLAY_NAMES, () => Number.NaN),
+    "牌友1",
+  );
+  assert.equal(
+    chooseBotDisplayName([...BOT_DISPLAY_NAMES, "牌友1"], () => 0.5),
+    "牌友2",
+  );
 });
 
 t("identity: a legacy token still reclaims its active seat", () => {
@@ -373,7 +392,9 @@ t("lobby: fixed seats support host bots and atomic occupancy", () => {
   assert.equal(room.seatByToken.get("token-guest"), "seat_1");
   room.handleAddBot(host, { seatIndex: 2, strength: 83 });
   const bot = room.state.players.get("seat_2");
-  assert.equal(bot?.name, "机器人3");
+  assert.equal(BOT_DISPLAY_NAMES.some((name) => name === bot?.name), true);
+  assert.equal(bot?.name.startsWith("机器人"), false);
+  assert.equal(new Set([...room.state.players.values()].map((player) => player.name)).size, 3);
   assert.equal(bot?.isConfiguredBot, true);
   assert.equal(bot?.botStrength, 83);
   assert.deepEqual(room.playerOrder, ["seat_0", "seat_1", "seat_2"]);
@@ -385,7 +406,7 @@ t("lobby: fixed seats support host bots and atomic occupancy", () => {
   assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "seat_occupied"), true);
 });
 
-t("lobby: practice auto-fill uses compact bot names", () => {
+t("lobby: practice auto-fill uses unique friendly bot names", () => {
   const room = new FourColorGameRoom() as any;
   room.state = new GameState();
   room.targetSeats = 4;
@@ -401,10 +422,12 @@ t("lobby: practice auto-fill uses compact bot names", () => {
 
   room.ensureBotSeatsForStart();
 
-  assert.deepEqual(
-    room.playerOrder.map((seatId: string) => room.state.players.get(seatId)?.name),
-    ["玩家", "机器人2", "机器人3", "机器人4"],
-  );
+  const names = room.playerOrder.map((seatId: string) => room.state.players.get(seatId)?.name ?? "");
+  assert.equal(names[0], "玩家");
+  assert.equal(new Set(names).size, 4);
+  assert.equal(names.slice(1).every((botName: string) => BOT_DISPLAY_NAMES.some((name) => name === botName)), true);
+  assert.equal(names.slice(1).every((name: string) => !/^机器人\d+$/u.test(name)), true);
+  assert.equal(room.playerOrder.slice(1).every((seatId: string) => room.state.players.get(seatId)?.isConfiguredBot), true);
 });
 
 t("lobby: active disconnect keeps the human name while enabling temporary bot control", () => {
@@ -769,13 +792,14 @@ t("round_result: mutual payment label separates payer name from payment", () => 
   const state = new GameState();
   for (const [seat, name] of [
     ["A", "玩家1"],
-    ["B", "机器人2"],
-    ["C", "机器人3"],
-    ["D", "机器人4"],
+    ["B", "阿福"],
+    ["C", "小满"],
+    ["D", "平安"],
   ]) {
     const player = new PlayerState();
     player.clientId = seat;
     player.name = name;
+    player.isConfiguredBot = seat !== "A";
     state.players.set(seat, player);
   }
   const hands = new Map<string, Card[]>([
@@ -810,10 +834,11 @@ t("round_result: mutual payment label separates payer name from payment", () => 
   assert.ok(ownerResult);
   assert.equal(
     ownerResult!.scoreBreakdown.some(
-      (item) => item.label === "机器人2 付 金条开" && item.total === 18,
+      (item) => item.label === "阿福（机器人） 付 金条开" && item.total === 18,
     ),
     true,
   );
+  assert.equal(result.find((player) => player.clientId === "B")?.isConfiguredBot, true);
 });
 
 t("round_result: undeclared identical triplets settle as peng after declared hidden kans", () => {

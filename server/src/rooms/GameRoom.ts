@@ -18,7 +18,7 @@ import {
   dealInitialHands as dealInitialHandsFlow,
   decideStartGame,
   endRoundFlow,
-  formatBotName,
+  chooseBotDisplayName,
   makeUniqueHumanName,
   reclaimSeatStateFlow,
   resetRoundPlayers as resetRoundPlayersFlow,
@@ -627,7 +627,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         [...this.state.players.entries()]
           .filter(([seatId]) => seatId !== targetSeatId)
           .map(([, existingPlayer]) => existingPlayer.name),
-        this.targetSeats,
       );
       player = new PlayerState();
       player.clientId = targetSeatId;
@@ -684,7 +683,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const bot = new PlayerState();
     bot.clientId = seatId;
     bot.seatIndex = seatIndex;
-    bot.name = formatBotName(seatIndex);
+    bot.name = chooseBotDisplayName([...this.state.players.values()].map((player) => player.name));
     bot.isBot = true;
     bot.isConfiguredBot = true;
     bot.botStrength = this.normalizeBotStrength(payload?.strength);
@@ -992,7 +991,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       const bot = new PlayerState();
       bot.clientId = seatId;
       bot.seatIndex = seatIndex;
-      bot.name = formatBotName(seatIndex);
+      bot.name = chooseBotDisplayName([...this.state.players.values()].map((player) => player.name));
       bot.isBot = true;
       bot.isConfiguredBot = true;
       bot.botStrength = 50;

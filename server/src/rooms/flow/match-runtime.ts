@@ -234,8 +234,9 @@ export function ensureBotSeatsForStart(
     }
     const bot = new PlayerState();
     bot.clientId = seatId;
-    bot.name = formatBotName(playerOrder.length);
+    bot.name = chooseBotDisplayName([...state.players.values()].map((player) => player.name));
     bot.isBot = true;
+    bot.isConfiguredBot = true;
     bot.connected = false;
     state.players.set(seatId, bot);
     playerOrder.push(seatId);
@@ -256,12 +257,54 @@ export function ensureBotSeatsForStart(
   }
 }
 
-export function formatBotName(seatIndex: number): string {
-  return `机器人${Math.max(0, Math.trunc(seatIndex)) + 1}`;
-}
+export const BOT_DISPLAY_NAMES = [
+  "阿福",
+  "阿顺",
+  "常乐",
+  "小满",
+  "如意",
+  "平安",
+  "团圆",
+  "喜乐",
+  "康康",
+  "悠悠",
+  "旺旺",
+  "好彩",
+  "桂花",
+  "青松",
+  "春风",
+  "荷香",
+  "竹影",
+  "海棠",
+] as const;
 
 function comparablePlayerName(value: string): string {
   return normalizeName(value).toLocaleLowerCase("zh-CN");
+}
+
+export function chooseBotDisplayName(
+  unavailableNames: Iterable<string>,
+  random: () => number = Math.random,
+): string {
+  const unavailable = new Set(
+    [...unavailableNames].map((name) => comparablePlayerName(name)).filter(Boolean),
+  );
+  const sample = Number(random());
+  const normalizedSample = Number.isFinite(sample) ? Math.min(Math.max(sample, 0), 0.999999) : 0;
+  const start = Math.floor(normalizedSample * BOT_DISPLAY_NAMES.length);
+  for (let offset = 0; offset < BOT_DISPLAY_NAMES.length; offset += 1) {
+    const candidate = BOT_DISPLAY_NAMES[(start + offset) % BOT_DISPLAY_NAMES.length]!;
+    if (!unavailable.has(comparablePlayerName(candidate))) {
+      return candidate;
+    }
+  }
+  for (let index = 1; index < 10_000; index += 1) {
+    const candidate = `牌友${index}`;
+    if (!unavailable.has(comparablePlayerName(candidate))) {
+      return candidate;
+    }
+  }
+  return `牌友${Date.now()}`;
 }
 
 function appendNameSuffix(base: string, suffix: string): string {
@@ -271,20 +314,16 @@ function appendNameSuffix(base: string, suffix: string): string {
 }
 
 /**
- * 作用：为真人生成房间内稳定且可区分的显示名，并保留机器人座位名。
- * 关键输入/输出：输入用户昵称、当前占用名和座位数，输出不冲突且最长 24 字符的名字。
+ * 作用：为真人生成房间内稳定且可区分的显示名，并标明旧式“机器人N”真人昵称。
+ * 关键输入/输出：输入用户昵称和当前占用名，输出不冲突且最长 24 字符的名字。
  * 副作用：无。
  */
 export function makeUniqueHumanName(
   rawName: string,
   unavailableNames: Iterable<string>,
-  targetSeats = 4,
 ): string {
   let base = normalizeName(rawName) || "玩家";
-  const reservedBotNames = new Set(
-    Array.from({ length: Math.max(1, targetSeats) }, (_, seatIndex) => comparablePlayerName(formatBotName(seatIndex))),
-  );
-  if (reservedBotNames.has(comparablePlayerName(base))) {
+  if (/^机器人\d+$/u.test(base)) {
     base = appendNameSuffix(base, "（玩家）");
   }
 
@@ -680,6 +719,7 @@ export interface ScoreBreakdownItem {
 export interface RoundResultPlayer {
   clientId: string;
   name: string;
+  isConfiguredBot: boolean;
   hand: Card[];
   declaredKongs: number;
   huType?: "small" | "big" | null;
@@ -704,6 +744,7 @@ export interface RoundResultPlayer {
 interface RoundResultView {
   clientId: string;
   name: string;
+  isConfiguredBot: boolean;
   hand: Card[];
   declaredKongs: number;
   huType: "small" | "big" | null;
@@ -1444,7 +1485,10 @@ function buildSettlementLines(
     if (view.clientId === winnerId) {
       items.push(...winnerHuBreakdown.itemsForWinner);
     } else {
-      const winnerName = allViews.find((player) => player.clientId === winnerId)?.name ?? winnerId;
+      const winnerView = allViews.find((player) => player.clientId === winnerId);
+      const winnerName = winnerView
+        ? settlementDisplayName(winnerView)
+        : winnerId;
       items.push(
         ...winnerHuBreakdown.itemsForLoser.map((item) => ({
           ...item,
@@ -1468,7 +1512,7 @@ function buildSettlementLines(
             }
             items.push({
               key: `MutualGain:${owner.clientId}:${other.clientId}:${detail.key}:${index}`,
-              label: `${other.name} 付 ${detail.label}`,
+              label: `${settlementDisplayName(other)} 付 ${detail.label}`,
               count: 1,
               unit: detail.unit,
               total: detail.unit,
@@ -1477,7 +1521,7 @@ function buildSettlementLines(
         } else {
           items.push({
             key: `MutualLose:${owner.clientId}:${view.clientId}:${detail.key}:${index}`,
-            label: `${owner.name} ${detail.label}`,
+            label: `${settlementDisplayName(owner)} ${detail.label}`,
             count: 1,
             unit: -detail.unit,
             total: -detail.unit,
@@ -1489,6 +1533,10 @@ function buildSettlementLines(
 
   const total = items.reduce((sum, item) => sum + item.total, 0);
   return { items: sortSettlementBreakdown(items), total };
+}
+
+function settlementDisplayName(player: Pick<RoundResultView, "name" | "isConfiguredBot">): string {
+  return player.isConfiguredBot ? `${player.name}（机器人）` : player.name;
 }
 
 /**
@@ -1538,6 +1586,7 @@ export function buildRoundResultPlayers(
     views.push({
       clientId: seatId,
       name: player?.name ?? seatId,
+      isConfiguredBot: Boolean(player?.isConfiguredBot),
       hand: hand.map((card) => toPlainCard(card)),
       declaredKongs,
       huType: null,
@@ -1577,6 +1626,7 @@ export function buildRoundResultPlayers(
     return {
       clientId: view.clientId,
       name: view.name,
+      isConfiguredBot: view.isConfiguredBot,
       hand: view.hand,
       declaredKongs: view.declaredKongs,
       huType: view.huType,
