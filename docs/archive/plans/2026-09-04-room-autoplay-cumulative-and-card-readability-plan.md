@@ -1,5 +1,7 @@
 # 房间托管、累计积分与牌面可读性 Implementation Plan
 
+> 已实施并归档；当前规范以 `docs/README.md` 所列权威文档为准。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 修复暗砍被拆胡、重复操作与重复动画问题，并为好友房补齐主动托管、房主解散、累计积分以及适合老年玩家的长牌和明示区显示。
