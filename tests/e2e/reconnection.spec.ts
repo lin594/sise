@@ -1,13 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
+const BACKEND_HOST = new URL(BACKEND_URL).host;
+
 test.describe("牌局断线恢复", () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
   test("保留当前牌桌并在联网后自动恢复", async ({ context, page }, testInfo) => {
     test.setTimeout(90_000);
     let roomSocketCount = 0;
-    page.on("websocket", () => {
-      roomSocketCount += 1;
+    page.on("websocket", (socket) => {
+      if (new URL(socket.url()).host === BACKEND_HOST) {
+        roomSocketCount += 1;
+      }
     });
     await page.goto("/");
     await page.getByTestId("random-nickname").click();

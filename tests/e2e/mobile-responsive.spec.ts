@@ -17,21 +17,23 @@ async function enterLobby(page: Page, path = "/"): Promise<void> {
 }
 
 async function applyLocalDebugScenario(page: Page, scenario: string): Promise<void> {
-  await page.evaluate((nextScenario) => {
-    const bridge = (window as Window & {
-      __siseLocalTest?: { setupScenario: (scenario: string) => void };
-    }).__siseLocalTest;
-    if (!bridge) {
-      throw new Error("Local test bridge is unavailable");
-    }
-    bridge.setupScenario(nextScenario);
-  }, scenario);
   await expect.poll(() =>
-    page.evaluate(() =>
-      (window as Window & {
-        __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
-      }).__siseLocalTest?.getLastResult() ?? null,
-    ),
+    page.evaluate((nextScenario) => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: {
+          setupScenario: (scenario: string) => void;
+          getLastResult: () => { scenario: string; ok: boolean } | null;
+        };
+      }).__siseLocalTest;
+      if (!bridge) {
+        throw new Error("Local test bridge is unavailable");
+      }
+      const result = bridge.getLastResult();
+      if (result?.scenario !== nextScenario || !result.ok) {
+        bridge.setupScenario(nextScenario);
+      }
+      return result;
+    }, scenario),
   ).toMatchObject({ scenario, ok: true });
 }
 
@@ -1606,26 +1608,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await page.setViewportSize({ width: 568, height: 320 });
 
-    const setupScenario = async (scenario: string) => {
-      await page.evaluate((nextScenario) => {
-        const bridge = (window as Window & {
-          __siseLocalTest?: { setupScenario: (scenario: string) => void };
-        }).__siseLocalTest;
-        if (!bridge) {
-          throw new Error("Local test bridge is unavailable");
-        }
-        bridge.setupScenario(nextScenario);
-      }, scenario);
-      await expect.poll(() =>
-        page.evaluate(() =>
-          (window as Window & {
-            __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
-          }).__siseLocalTest?.getLastResult() ?? null,
-        ),
-      ).toMatchObject({ scenario, ok: true });
-    };
-
-    await setupScenario("waiting_other_turn");
+    await applyLocalDebugScenario(page, "waiting_other_turn");
     await expect.poll(async () => {
       const text = (await page.locator(".discard-tip").textContent()) ?? "";
       return /手牌（3张）/.test(text) && !text.includes("/");
@@ -1688,7 +1671,7 @@ test.describe("compact landscape gameplay", () => {
     });
     await page.screenshot({ path: testInfo.outputPath("desktop-waiting-dock.png") });
 
-    await setupScenario("local_draw_pass");
+    await applyLocalDebugScenario(page, "local_draw_pass");
     await expect(waiting).toHaveCount(0);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-pass")).toBeEnabled();
