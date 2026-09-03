@@ -53,7 +53,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await guest.setViewportSize({ width: 667, height: 375 });
     await guest.goto(inviteUrl);
     await expect(guest.getByRole("heading", { name: "输入昵称，加入好友房" })).toBeVisible();
-    await expect(guest.getByText("这是朋友发来的牌局邀请。输入昵称后进入房间，再选择一个空座位。")).toBeVisible();
+    await expect(guest.getByText("不用注册。输入牌桌上显示的名字，就能进入朋友的房间选座。")).toBeVisible();
     await expect(guest.getByTestId("login-submit")).toHaveText("加入好友房");
     await guest.screenshot({ path: testInfo.outputPath("friend-invite-entry-iphone-se.png") });
     await guest.getByTestId("nickname-input").fill("同名牌友");
