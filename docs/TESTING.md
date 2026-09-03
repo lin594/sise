@@ -13,7 +13,7 @@ npm --prefix client audit --omit=dev --registry=https://registry.npmjs.org
 ```
 
 - 服务端测试同时运行旧版规则回归、Node 测试套件和机器人完整牌局压力测试。
-- Playwright 启动的隔离测试服务提高房间创建限额，避免串行用例共享来源地址时误触生产限流；生产和 Docker 默认限额保持不变。
+- Playwright 启动的隔离测试服务提高房间创建限额，并缩短无浏览器连接房间的回收时间，避免串行用例共享来源地址或遗留机器人牌局相互干扰；生产和 Docker 默认值保持不变。
 - `npm run build` 构建服务端、客户端，并同步检查 TypeScript 与生成版客户端文件。
 - Playwright 默认启动本地前后端。若机器只有系统 Chrome，可以使用：
 
