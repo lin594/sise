@@ -445,7 +445,19 @@
         </div>
 
         <div class="end-actions">
-          <template v-if="isHost">
+          <template v-if="state?.roomMode === 'match'">
+            <button
+              class="primary"
+              type="button"
+              data-testid="quick-rematch"
+              :disabled="!settlementReady || quickRematchPending"
+              @click="rematchQuickTable"
+            >
+              {{ quickRematchPending ? "正在重新配桌…" : "再来一局（重新配桌）" }}
+            </button>
+            <p class="host-actions-hint">只为你寻找下一桌，不会让其他牌友离开当前结算。</p>
+          </template>
+          <template v-else-if="isHost">
             <button
               ref="nextRoundTriggerRef"
               class="primary"
@@ -1267,6 +1279,7 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref<HTMLButtonElement | null>(null);
 const returnLobbyDialogRef = ref<HTMLElement | null>(null);
 const returnLobbyCancelRef = ref<HTMLButtonElement | null>(null);
+const quickRematchPending = ref(false);
 const confirmingResumeAbandon = ref(false);
 const resumeAbandonDialogRef = ref<HTMLElement | null>(null);
 const resumeAbandonCancelRef = ref<HTMLButtonElement | null>(null);
@@ -1368,6 +1381,30 @@ async function requestNextRound(): Promise<void> {
   confirmingNextRound.value = true;
   await nextTick();
   nextRoundCancelRef.value?.focus();
+}
+
+async function rematchQuickTable(): Promise<void> {
+  if (!settlementReady.value || state.value?.roomMode !== "match" || quickRematchPending.value) {
+    return;
+  }
+  quickRematchPending.value = true;
+  globalError.value = "";
+  const nickname = entryName.value.trim() || generateRandomNickname();
+  try {
+    await leaveRoom();
+    const ok = await connect({
+      nameOverride: nickname,
+      forceNew: true,
+      matchmaking: true,
+    });
+    if (!ok) {
+      throw new Error(joinError.value || "暂时无法重新配桌，请稍后再试。");
+    }
+  } catch (error) {
+    globalError.value = error instanceof Error ? error.message : "暂时无法重新配桌，请稍后再试。";
+  } finally {
+    quickRematchPending.value = false;
+  }
 }
 
 function cancelNextRound(): void {

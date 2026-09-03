@@ -480,6 +480,7 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref(null);
 const returnLobbyDialogRef = ref(null);
 const returnLobbyCancelRef = ref(null);
+const quickRematchPending = ref(false);
 const confirmingResumeAbandon = ref(false);
 const resumeAbandonDialogRef = ref(null);
 const resumeAbandonCancelRef = ref(null);
@@ -560,6 +561,31 @@ async function requestNextRound() {
     confirmingNextRound.value = true;
     await nextTick();
     nextRoundCancelRef.value?.focus();
+}
+async function rematchQuickTable() {
+    if (!settlementReady.value || state.value?.roomMode !== "match" || quickRematchPending.value) {
+        return;
+    }
+    quickRematchPending.value = true;
+    globalError.value = "";
+    const nickname = entryName.value.trim() || generateRandomNickname();
+    try {
+        await leaveRoom();
+        const ok = await connect({
+            nameOverride: nickname,
+            forceNew: true,
+            matchmaking: true,
+        });
+        if (!ok) {
+            throw new Error(joinError.value || "暂时无法重新配桌，请稍后再试。");
+        }
+    }
+    catch (error) {
+        globalError.value = error instanceof Error ? error.message : "暂时无法重新配桌，请稍后再试。";
+    }
+    finally {
+        quickRematchPending.value = false;
+    }
 }
 function cancelNextRound() {
     if (!confirmingNextRound.value) {
@@ -3340,7 +3366,20 @@ if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "end-actions" },
     });
-    if (__VLS_ctx.isHost) {
+    if (__VLS_ctx.state?.roomMode === 'match') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.rematchQuickTable) },
+            ...{ class: "primary" },
+            type: "button",
+            'data-testid': "quick-rematch",
+            disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.quickRematchPending),
+        });
+        (__VLS_ctx.quickRematchPending ? "正在重新配桌…" : "再来一局（重新配桌）");
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "host-actions-hint" },
+        });
+    }
+    else if (__VLS_ctx.isHost) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestNextRound) },
             ref: "nextRoundTriggerRef",
@@ -3710,6 +3749,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
@@ -3857,6 +3898,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             returnLobbyTriggerRef: returnLobbyTriggerRef,
             returnLobbyDialogRef: returnLobbyDialogRef,
             returnLobbyCancelRef: returnLobbyCancelRef,
+            quickRematchPending: quickRematchPending,
             confirmingResumeAbandon: confirmingResumeAbandon,
             resumeAbandonDialogRef: resumeAbandonDialogRef,
             resumeAbandonCancelRef: resumeAbandonCancelRef,
@@ -3868,6 +3910,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             closeRules: closeRules,
             trapRulesFocus: trapRulesFocus,
             requestNextRound: requestNextRound,
+            rematchQuickTable: rematchQuickTable,
             cancelNextRound: cancelNextRound,
             confirmNextRound: confirmNextRound,
             trapNextRoundFocus: trapNextRoundFocus,
