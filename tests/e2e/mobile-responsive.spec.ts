@@ -372,6 +372,17 @@ test.describe("compact landscape gameplay", () => {
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
     await expect(gameHistory).toBeFocused();
+    await gameHistory.click();
+    const firstPlayableCard = page.locator(".hand-card.playable").first();
+    await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
+    const playableCardCenter = await firstPlayableCard.evaluate((card) => {
+      const rect = card.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    });
+    await page.mouse.click(playableCardCenter.x, playableCardCenter.y);
+    await expect(historyPanel).toHaveCount(0);
+    await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
+    await expect(gameHistory).toBeFocused();
     await expect.poll(async () => {
       const label = (await page.locator(".discard-tip").textContent()) ?? "";
       const match = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);
