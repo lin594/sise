@@ -1272,7 +1272,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.roomMode !== "match" || this.state.phase !== "waiting") {
       return;
     }
-    this.updateMatchOpen(true);
+    // A disconnected client no longer counts toward Colyseus maxClients, but
+    // its fixed seat is still reserved. Stop advertising a table whose four
+    // state seats are occupied, otherwise a fifth player can be matched here
+    // only to be rejected by onJoin.
+    this.updateMatchOpen(this.state.players.size < this.targetSeats);
     const connectedHumans = this.connectedMatchHumanCount();
     const hasDisconnectedHuman = this.hasDisconnectedMatchHuman();
     if (connectedHumans === 0 && !hasDisconnectedHuman) {
@@ -1297,7 +1301,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.hasDisconnectedMatchHuman()
     ) {
       if (this.state.roomMode === "match" && this.state.phase === "waiting") {
-        this.updateMatchOpen(true);
+        this.updateMatchOpen(this.state.players.size < this.targetSeats);
       }
       return;
     }
@@ -3067,7 +3071,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     void this.setMetadata({
       phase: this.state.phase,
       roomMode: this.state.roomMode,
-      matchOpen: this.state.roomMode === "match" && this.state.phase === "waiting",
+      matchOpen:
+        this.state.roomMode === "match" &&
+        this.state.phase === "waiting" &&
+        this.state.players.size < this.targetSeats,
       hostPlayerId: this.state.hostPlayerId,
       occupiedSeats: this.playerOrder.length,
     });

@@ -170,6 +170,20 @@ test("quick-match reconnect keeps the original authoritative deadline", () => {
   room.clearMatchStartTimer();
 });
 
+test("a full reserved quick-match table is removed from new matchmaking", () => {
+  const { room, metadata } = createMatchRoom();
+  addHuman(room, 0);
+  addHuman(room, 1);
+  addHuman(room, 2);
+  addHuman(room, 3, false);
+
+  room.onMatchRosterChanged();
+
+  assert.equal(metadata.at(-1)?.matchOpen, false);
+  assert.equal(room.state.players.size, 4);
+  room.clearMatchStartTimer();
+});
+
 test("quick-match lobby does not expose friend-room seat administration", () => {
   const { room } = createMatchRoom();
   addHuman(room, 0);
