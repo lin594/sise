@@ -375,6 +375,7 @@ const lobbyTitleRef = ref<HTMLHeadingElement | null>(null);
 const leaveDialogRef = ref<HTMLElement | null>(null);
 const leaveCancelButtonRef = ref<HTMLButtonElement | null>(null);
 let fillRequestTimer: number | null = null;
+let focusStartAfterFillRequested = false;
 const leaveRoomDescription = computed(() => {
   if (departureIntent.value === "dissolve") {
     return "这会结束本桌的累计积分，并让所有牌友立即返回模式选择。这个操作不能撤销。";
@@ -427,20 +428,25 @@ function signedScore(value: number): string {
 watch(
   () => [emptySeatCount.value, props.canStart, props.joinError] as const,
   async ([emptySeats, canStart, joinError]) => {
-    if (joinError && fillRequested.value) {
+    if (joinError && (fillRequested.value || focusStartAfterFillRequested)) {
+      focusStartAfterFillRequested = false;
       clearFillRequestState();
       return;
     }
-    if (!fillRequested.value || emptySeats !== 0 || !canStart) {
+    if (!focusStartAfterFillRequested || emptySeats !== 0 || !canStart) {
       return;
     }
-    clearFillRequestState();
     await nextTick();
     startButtonRef.value?.focus();
+    focusStartAfterFillRequested = false;
+    clearFillRequestState();
   },
 );
 
-onUnmounted(() => clearFillRequestState());
+onUnmounted(() => {
+  focusStartAfterFillRequested = false;
+  clearFillRequestState();
+});
 
 function botLevelForStrength(strength: number): (typeof botLevels)[number] {
   const normalized = Number.isFinite(strength) ? strength : 50;
@@ -466,6 +472,7 @@ function requestFillBots(): void {
     return;
   }
   fillRequested.value = true;
+  focusStartAfterFillRequested = true;
   emit("fill-bots");
   fillRequestTimer = window.setTimeout(() => {
     fillRequested.value = false;
