@@ -16,6 +16,10 @@ export class PlayerState extends Schema {
   @type("number") declaredKongs: number = 0;
   @type("boolean") declaredReady: boolean = false;
   @type("boolean") isBot: boolean = false;
+  // A connected human who explicitly asked the computer to act for them.
+  // Keep this separate from isBot so the UI and future identity system still
+  // treat the seat as belonging to the player.
+  @type("boolean") isAutoPlay: boolean = false;
   @type("boolean") isConfiguredBot: boolean = false;
   @type("number") botStrength: number = 50;
   @type("boolean") connected: boolean = true;

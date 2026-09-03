@@ -39,6 +39,7 @@ export interface PlayerState {
   declaredKongs: number;
   declaredReady: boolean;
   isBot: boolean;
+  isAutoPlay: boolean;
   isConfiguredBot: boolean;
   botStrength: number;
   connected: boolean;

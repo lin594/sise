@@ -7,6 +7,9 @@ const ACTOR_SECOND_ACTIONS = new Set([
   "OFFLINE",
   "RECONNECT_WAIT",
   "TAKEOVER",
+  "AUTOPLAY_ON",
+  "AUTOPLAY_OFF",
+  "AUTOPLAY_OFFLINE",
 ]);
 
 const IGNORED_ACTIONS = new Set(["NO_RESPONSE", "TURN_DRAW", "KONG_DRAW"]);
@@ -30,6 +33,9 @@ const ACTION_TEXT: Readonly<Record<string, string>> = {
   OFFLINE: "暂时离线",
   RECONNECT_WAIT: "断线，等待恢复",
   TAKEOVER: "断线超时，暂由机器人托管",
+  AUTOPLAY_ON: "开启托管",
+  AUTOPLAY_OFF: "取消托管",
+  AUTOPLAY_OFFLINE: "托管继续，暂时离线",
 };
 
 function isSeatId(value: string | undefined): value is string {

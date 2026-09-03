@@ -38,6 +38,24 @@
         <span>设置</span>
       </button>
       <button
+        ref="autoPlayButtonRef"
+        class="tool-button auto-play"
+        :class="{ active: props.autoPlay }"
+        type="button"
+        :aria-label="props.autoPlay ? '取消托管，恢复自己操作' : '开启托管，让机器人代为操作'"
+        :title="props.autoPlay ? '取消托管' : '开启托管'"
+        :aria-pressed="props.autoPlay"
+        :disabled="props.autoPlayPending"
+        data-testid="game-auto-play"
+        @click="requestAutoPlayChange"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 7h8a4 4 0 0 1 4 4v7H4v-7a4 4 0 0 1 4-4Z" />
+          <path d="M12 4v3M9 12h.01M15 12h.01M8 18v2M16 18v2" />
+        </svg>
+        <span>{{ props.autoPlay ? "取消托管" : "托管" }}</span>
+      </button>
+      <button
         ref="exitButtonRef"
         class="tool-button exit"
         type="button"
@@ -245,6 +263,30 @@
     </Transition>
 
     <Teleport to=".layout">
+      <div v-if="confirmingAutoPlay" class="exit-confirm-mask" @click.self="cancelAutoPlay">
+        <section
+          ref="autoPlayDialogRef"
+          class="exit-confirm auto-play-confirm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auto-play-confirm-title"
+          aria-describedby="auto-play-confirm-description"
+          tabindex="-1"
+          @keydown.esc.stop.prevent="cancelAutoPlay"
+          @keydown.tab="trapAutoPlayFocus"
+        >
+          <div class="exit-symbol auto-play-symbol" aria-hidden="true">机</div>
+          <h2 id="auto-play-confirm-title">让机器人替你操作？</h2>
+          <p id="auto-play-confirm-description">开启后机器人会自动选牌和出牌。顶部会一直显示“取消托管”，你可以随时拿回操作。</p>
+          <div class="exit-actions">
+            <button ref="cancelAutoPlayButtonRef" type="button" data-testid="cancel-auto-play" @click="cancelAutoPlay">暂不开启</button>
+            <button class="auto-play-accept" type="button" data-testid="confirm-auto-play" @click="confirmAutoPlay">开启托管</button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to=".layout">
       <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="cancelExit">
         <section
           ref="exitDialogRef"
@@ -288,12 +330,16 @@ const props = withDefaults(
     actionLogs?: ParsedActionLog[];
     players?: PlayerState[];
     mySeatId?: string;
+    autoPlay?: boolean;
+    autoPlayPending?: boolean;
   }>(),
   {
     decisionActive: false,
     actionLogs: () => [],
     players: () => [],
     mySeatId: "",
+    autoPlay: false,
+    autoPlayPending: false,
   },
 );
 
@@ -301,6 +347,7 @@ const emit = defineEmits<{
   "update:modelValue": [preferences: GameDisplayPreferences];
   openRules: [];
   exit: [];
+  setAutoPlay: [enabled: boolean];
 }>();
 
 const gameToolsRef = ref<HTMLElement | null>(null);
@@ -310,6 +357,10 @@ const historyOpen = ref(false);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
+const confirmingAutoPlay = ref(false);
+const autoPlayButtonRef = ref<HTMLButtonElement | null>(null);
+const autoPlayDialogRef = ref<HTMLElement | null>(null);
+const cancelAutoPlayButtonRef = ref<HTMLButtonElement | null>(null);
 const confirmingExit = ref(false);
 const exitButtonRef = ref<HTMLButtonElement | null>(null);
 const exitDialogRef = ref<HTMLElement | null>(null);
@@ -334,8 +385,8 @@ const historyItems = computed(() =>
       const identity = player?.isConfiguredBot
         ? "（机器人）"
         : player?.clientId === props.mySeatId
-          ? player.isBot ? "（你·托管中）" : "（你）"
-          : player?.isBot ? "（托管中）" : "";
+          ? player.isBot || player.isAutoPlay ? "（你·托管中）" : "（你）"
+          : player?.isBot || player?.isAutoPlay ? "（托管中）" : "";
       return {
         id: log.id,
         at: log.at,
@@ -513,6 +564,37 @@ function openRules(): void {
   emit("openRules");
 }
 
+async function requestAutoPlayChange(): Promise<void> {
+  if (props.autoPlayPending) {
+    return;
+  }
+  removeSettingsOutsideListener();
+  settingsOpen.value = false;
+  historyOpen.value = false;
+  if (props.autoPlay) {
+    emit("setAutoPlay", false);
+    return;
+  }
+  confirmingAutoPlay.value = true;
+  await nextTick();
+  cancelAutoPlayButtonRef.value?.focus();
+}
+
+async function cancelAutoPlay(): Promise<void> {
+  confirmingAutoPlay.value = false;
+  await nextTick();
+  autoPlayButtonRef.value?.focus();
+}
+
+function confirmAutoPlay(): void {
+  confirmingAutoPlay.value = false;
+  emit("setAutoPlay", true);
+}
+
+function trapAutoPlayFocus(event: KeyboardEvent): void {
+  trapPanelFocus(event, autoPlayDialogRef.value);
+}
+
 async function requestExit(): Promise<void> {
   exitReturnFocus = document.activeElement instanceof HTMLElement
     ? document.activeElement
@@ -610,6 +692,17 @@ onBeforeUnmount(removeSettingsOutsideListener);
 .tool-button.exit:hover {
   border-color: rgba(248, 113, 113, 0.82);
   color: #fecaca;
+}
+
+.tool-button.auto-play.active {
+  border-color: #fbbf24;
+  background: #713f12;
+  color: #fef3c7;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.22), 0 5px 16px rgba(2, 6, 23, 0.34);
+}
+
+.tool-button.auto-play:disabled {
+  opacity: 0.72;
 }
 
 .history-count {
@@ -1074,6 +1167,17 @@ onBeforeUnmount(removeSettingsOutsideListener);
 .exit-actions button.danger {
   border-color: #dc2626;
   background: #b91c1c;
+}
+
+.auto-play-symbol {
+  background: rgba(120, 53, 15, 0.58);
+  color: #fde68a;
+  font-weight: 900;
+}
+
+.exit-actions button.auto-play-accept {
+  border-color: #d97706;
+  background: #a16207;
 }
 
 @media (max-width: 960px), (max-height: 500px) {

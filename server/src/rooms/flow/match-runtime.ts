@@ -209,7 +209,11 @@ export function reclaimSeatStateFlow(
   player.name = name;
   player.connected = true;
   player.isBot = false;
-  ctx.botIds.delete(seatId);
+  if (player.isAutoPlay) {
+    ctx.botIds.add(seatId);
+  } else {
+    ctx.botIds.delete(seatId);
+  }
   ctx.seatBySession.set(sessionId, seatId);
   ctx.seatByToken.set(token, seatId);
   return true;
@@ -538,7 +542,7 @@ export function startDeclaringFlow(deps: StartDeclaringDeps): void {
     if (!player || player.declaredReady) {
       continue;
     }
-    if (player.isBot) {
+    if (player.isBot || player.isAutoPlay) {
       deps.submitDeclaration(seatId, true);
     }
   }
@@ -609,6 +613,7 @@ export function resetToLobby(context: LobbyResetContext): void {
     }
     player.declaredKongs = 0;
     player.declaredReady = false;
+    player.isAutoPlay = false;
     player.discardPile.clear();
     player.exposedArea.clear();
     player.exposedGroupSizes.clear();

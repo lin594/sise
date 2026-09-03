@@ -1100,7 +1100,7 @@ const isMyTurn = computed(
     String(props.state?.responsePhase ?? "") !== "collective" &&
     Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
-    !Boolean(currentPlayer.value?.isBot),
+    !Boolean(currentPlayer.value?.isBot || currentPlayer.value?.isAutoPlay),
 );
 
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
@@ -1334,6 +1334,9 @@ function statusText(player: PlayerState): string {
   if (player.isConfiguredBot) {
     return "机器人";
   }
+  if (player.isAutoPlay) {
+    return props.ultraCompact ? "托管中" : "机器人代打";
+  }
   if (player.isBot) {
     return props.ultraCompact ? "托管中" : "暂由机器人";
   }
@@ -1369,7 +1372,7 @@ function playerAccessibleSummary(player: PlayerState, groupCount: number): strin
 }
 
 function isTemporaryBotControl(player: PlayerState): boolean {
-  return player.isBot && !player.isConfiguredBot;
+  return player.isAutoPlay || (player.isBot && !player.isConfiguredBot);
 }
 
 function playerHandCount(player: PlayerState): number {

@@ -98,6 +98,8 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   await expect(header.getByTestId("game-history")).toBeVisible();
   await expect(header.getByTestId("game-history")).toContainText("记录");
   await expect(header.getByTestId("game-history")).toHaveAttribute("aria-label", /最近操作/);
+  await expect(header.getByTestId("game-auto-play")).toBeVisible();
+  await expect(header.getByTestId("game-auto-play")).toContainText(/托管/);
   await expect(header.getByRole("button", { name: "退出牌局" })).toContainText("退出");
   await expect(header.getByText(/座位ID|房主|已连接|同步中/)).toHaveCount(0);
 
@@ -1347,6 +1349,41 @@ test.describe("compact landscape gameplay", () => {
     await applyLocalDebugScenario(page, "dealer_reveal_self");
     await expect.poll(() => page.getByTestId("dealer-reveal-card").evaluate((card) => getComputedStyle(card).animationName))
       .toBe("none");
+  });
+
+  test("lets a human hand control to a bot and take it back", async ({ page }, testInfo) => {
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await page.setViewportSize({ width: 568, height: 320 });
+
+    const autoPlay = page.getByTestId("game-auto-play");
+    await expect(autoPlay).toHaveAttribute("aria-pressed", "false");
+    await expect(autoPlay).toContainText("托管");
+    await autoPlay.click();
+
+    const dialog = page.getByRole("dialog", { name: "让机器人替你操作？" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("你可以随时拿回操作");
+    await expect(page.getByTestId("cancel-auto-play")).toBeFocused();
+    await page.getByTestId("confirm-auto-play").click();
+
+    await expect(dialog).toHaveCount(0);
+    await expect(autoPlay).toHaveAttribute("aria-pressed", "true");
+    await expect(autoPlay).toContainText("取消托管");
+    await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText(/机器人代打|托管中/);
+    await expect(page.getByTestId("player-self")).toHaveAccessibleName(/机器人代打|托管中/);
+    await expect(page.locator("[data-testid^='hand-card-']:enabled")).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("voluntary-auto-play-568x320.png") });
+
+    await autoPlay.click();
+    await expect(autoPlay).toHaveAttribute("aria-pressed", "false");
+    await expect(autoPlay).toHaveText("托管");
+    await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText("真人在线");
   });
 
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {

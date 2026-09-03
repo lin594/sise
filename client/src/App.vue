@@ -41,7 +41,10 @@
         :action-logs="actionLogs"
         :players="players"
         :my-seat-id="mySeatId"
+        :auto-play="Boolean(mePlayer?.isAutoPlay)"
+        :auto-play-pending="isEnded && !Boolean(mePlayer?.isAutoPlay)"
         @open-rules="openRules"
+        @set-auto-play="setAutoPlay"
         @exit="handleLeaveRoom"
       />
       <div
@@ -687,6 +690,7 @@ const {
   startGame,
   nextRound,
   returnLobby,
+  setAutoPlay,
   leaveRoom,
   claimSeat,
   addBot,
@@ -953,7 +957,7 @@ const isMyTurn = computed(() => {
     return false;
   }
   const me = players.value.find((x) => x.clientId === mySeatId.value);
-  return !Boolean(me?.isBot);
+  return !Boolean(me?.isBot || me?.isAutoPlay);
 });
 
 const openingDealActive = computed(
@@ -971,6 +975,7 @@ const openingDealSecondsLeft = computed(() => {
 const pendingActionDecision = computed(
   () =>
     connected.value &&
+    !mePlayer.value?.isAutoPlay &&
     !openingDealActive.value &&
     isPlaying.value &&
     availableActions.value.some((x) => x.enabled || x.deferred),
@@ -994,6 +999,9 @@ const canAct = computed(() => pendingActionDecision.value && privateHandSynchron
 const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
 const interactionPausedMessage = computed(() => {
   if (connected.value) {
+    if (mePlayer.value?.isAutoPlay && (isDeclaring.value || isPlaying.value)) {
+      return "机器人正在替你操作，可在顶部取消托管";
+    }
     if (
       isPlaying.value &&
       (pendingActionDecision.value || pendingDiscardDecision.value) &&
@@ -1113,7 +1121,7 @@ const shouldShowDeclarePanel = computed(
     isDeclaring.value &&
     !declareDealIntroActive.value &&
     Boolean(mySeatId.value) &&
-    !Boolean(mePlayer.value?.isBot),
+    !Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay),
 );
 const settingsDecisionActive = computed(
   () => pendingActionDecision.value || pendingDiscardDecision.value,

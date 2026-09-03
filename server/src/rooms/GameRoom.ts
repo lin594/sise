@@ -315,7 +315,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.onMessage("declare_kongs", (client, value: number) => {
       const seatId = this.seatBySession.get(client.sessionId);
-      if (!seatId || this.state.phase !== "declaring") {
+      if (!seatId || this.botIds.has(seatId) || this.state.phase !== "declaring") {
         return;
       }
       this.submitDeclaration(seatId, { declaredKongs: value, fishCardIds: [] });
@@ -323,7 +323,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.onMessage("declare_setup", (client, payload: DeclareSetupPayload) => {
       const seatId = this.seatBySession.get(client.sessionId);
-      if (!seatId || this.state.phase !== "declaring") {
+      if (!seatId || this.botIds.has(seatId) || this.state.phase !== "declaring") {
         return;
       }
       this.submitDeclaration(seatId, payload ?? {});
@@ -331,6 +331,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.onMessage("request_more_time", (client, payload: { decisionKey?: unknown } | undefined) => {
       this.handleRequestMoreTime(client, payload);
+    });
+
+    this.onMessage("set_auto_play", (client, payload: { enabled?: unknown } | undefined) => {
+      this.handleSetAutoPlay(client, payload);
     });
 
     this.onMessage("action", (client, payload: ActionRequest) => {
@@ -472,6 +476,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
       player.isBot = false;
+      player.isAutoPlay = false;
       player.name = baseName;
       this.botIds.delete(seatId);
       this.state.lastAction = `OFFLINE ${seatId}`;
@@ -480,12 +485,21 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       player.isBot = false;
       player.botStrength = 50;
       player.name = baseName;
-      this.botIds.delete(seatId);
-      this.state.lastAction = `RECONNECT_WAIT ${seatId}`;
       if (consentedLeave) {
+        player.isAutoPlay = false;
+        this.botIds.delete(seatId);
         this.activateTemporaryTakeover(seatId);
         this.scheduleRoomIdleIfEmpty();
         return;
+      }
+      if (player.isAutoPlay) {
+        // Explicit auto play keeps the round moving even while the browser is
+        // inside its reconnect grace window.
+        this.botIds.add(seatId);
+        this.state.lastAction = `AUTOPLAY_OFFLINE ${seatId}`;
+      } else {
+        this.botIds.delete(seatId);
+        this.state.lastAction = `RECONNECT_WAIT ${seatId}`;
       }
       this.scheduleTemporaryTakeover(seatId);
     }
@@ -695,6 +709,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       player.seatIndex = seatIndex;
       player.name = name;
       player.isBot = false;
+      player.isAutoPlay = false;
       player.isConfiguredBot = false;
       player.botStrength = 50;
       player.connected = true;
@@ -706,6 +721,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     player.name = this.baseNameBySeat.get(targetSeatId) || requestedName;
     player.connected = true;
     player.isBot = false;
+    player.isAutoPlay = false;
     player.isConfiguredBot = false;
     this.botIds.delete(targetSeatId);
     this.configuredBotIds.delete(targetSeatId);
@@ -1479,6 +1495,66 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   /**
+   * 作用：开启或取消真人玩家主动托管，同时保留真人身份。
+   * 关键输入/输出：仅接受当前连接对应座位的布尔开关；无返回值。
+   * 副作用：更新 bot 调度集合、动作记录，并立即重排当前决策。
+   */
+  private handleSetAutoPlay(client: Client, payload?: { enabled?: unknown }): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    const player = seatId ? this.state.players.get(seatId) : undefined;
+    if (
+      !seatId ||
+      !player ||
+      !player.connected ||
+      player.isBot ||
+      player.isConfiguredBot ||
+      typeof payload?.enabled !== "boolean" ||
+      !(
+        this.state.phase === "declaring" ||
+        this.state.phase === "playing" ||
+        (this.state.phase === "ended" && player.isAutoPlay && payload.enabled === false)
+      )
+    ) {
+      return;
+    }
+
+    const enabled = payload.enabled;
+    if (player.isAutoPlay === enabled) {
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    this.clearBotTimer();
+    if (this.state.phase === "playing") {
+      this.clearCollectiveTimer();
+    }
+    const dealerIntroActive =
+      this.state.phase === "declaring" &&
+      /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(this.state.lastAction) &&
+      this.state.responseEndsAt > 0;
+    player.isAutoPlay = enabled;
+    player.isBot = false;
+    if (enabled) {
+      this.botIds.add(seatId);
+    } else {
+      this.botIds.delete(seatId);
+    }
+    if (!dealerIntroActive) {
+      this.state.lastAction = `${enabled ? "AUTOPLAY_ON" : "AUTOPLAY_OFF"} ${seatId}`;
+    }
+
+    if (enabled && this.state.phase === "declaring" && !dealerIntroActive && !player.declaredReady) {
+      this.submitDefaultDeclaration(seatId, true);
+      return;
+    }
+    if (dealerIntroActive) {
+      this.broadcastAvailableActions();
+      return;
+    }
+    this.tickBots();
+  }
+
+  /**
    * 作用：判断是否所有玩家都完成声明。
    * 关键输入/输出：无入参；输出布尔值。
    * 副作用：无。
@@ -1718,7 +1794,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
 
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId) {
+    if (!seatId || this.botIds.has(seatId)) {
       return;
     }
 
@@ -1804,7 +1880,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private handleDiscardCard(client: Client, payload: { cardId?: string } | string): void {
     const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId) {
+    if (!seatId || this.botIds.has(seatId)) {
       return;
     }
 
@@ -2569,6 +2645,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
           isBot: player.isBot,
+          isAutoPlay: player.isAutoPlay,
           isConfiguredBot: player.isConfiguredBot,
           botStrength: player.botStrength,
           connected: player.connected,

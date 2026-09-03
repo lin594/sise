@@ -221,6 +221,7 @@ function normalizePlayer(raw: any): PlayerState {
     declaredKongs: Number(raw?.declaredKongs ?? 0),
     declaredReady: Boolean(raw?.declaredReady),
     isBot: Boolean(raw?.isBot),
+    isAutoPlay: Boolean(raw?.isAutoPlay),
     isConfiguredBot: Boolean(raw?.isConfiguredBot),
     botStrength: Math.max(0, Math.min(100, Number(raw?.botStrength ?? 50))),
     connected: Boolean(raw?.connected),
@@ -871,6 +872,7 @@ export function useRoom(playerName = "Player") {
             player.declaredKongs ?? 0,
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
+            player.isAutoPlay ? 1 : 0,
             player.discardPile.map((card) => card.id).join(","),
             player.exposedArea.map((card) => card.id).join(","),
             player.exposedGroupKinds.join(","),
@@ -1577,6 +1579,10 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("return_lobby");
   }
 
+  function setAutoPlay(enabled: boolean) {
+    safeRoomSend("set_auto_play", { enabled });
+  }
+
   async function leaveRoom(): Promise<void> {
     const departingRoom = room.value;
     const departingRoomId = activeRoomId.value.trim();
@@ -1687,6 +1693,7 @@ export function useRoom(playerName = "Player") {
     startGame,
     nextRound,
     returnLobby,
+    setAutoPlay,
     leaveRoom,
     claimSeat,
     addBot,
