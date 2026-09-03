@@ -152,7 +152,8 @@
 - 身份与快照：`session_token`、`room_snapshot`、`lobby_presence`。
 - 私有数据：`private_hand`、`available_actions`。
 - 结果：`hu_result`、`round_result`。
-- 失败反馈：`join_error`、`lobby_error`、`declare_rejected`、`action_rejected`、`removed_from_room`。
+- 牌局操作回执：服务端接受 `action` 或 `discard_card` 后返回 `action_received`；拒绝时由 `action_rejected` 携带稳定原因码、当前 `decisionKey` 和玩家可读说明。回执只确认权威状态机已接收请求，不代替后续房间状态。
+- 其他失败反馈：`join_error`、`lobby_error`、`declare_rejected`、`removed_from_room`。
 - 测试反馈：`debug_applied`；仅在非生产环境设置 `ENABLE_DEBUG_SCENARIOS=1` 后存在，且非房主调用返回失败。
 
 动作协议只有 `pass`，没有单独的 `zhua`：`local_upper` 阶段的 `pass` 在产品语言中显示为“抓”。特殊牌本地阶段不提供 pass，单张吃牌也通过普通 `chi` 的单牌候选提交；`FORCE_TAKE` 仅是服务端兜底标记，前端统一显示为“吃”。

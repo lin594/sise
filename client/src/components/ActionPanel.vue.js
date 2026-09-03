@@ -89,7 +89,16 @@ const normalized = computed(() => {
 });
 const selectionMode = computed(() => props.selectionMode ?? null);
 const rawActionFeedback = computed(() => props.actionFeedback ?? null);
-const actionFeedback = computed(() => rawActionFeedback.value?.visible === false ? null : rawActionFeedback.value);
+const actionFeedback = computed(() => {
+    const feedback = rawActionFeedback.value;
+    if (!feedback || feedback.visible !== false) {
+        return feedback;
+    }
+    if (feedback.status === "received" && feedback.decisionKey === props.decisionKey) {
+        return { ...feedback, message: "操作已收到，等待牌局继续。", visible: true };
+    }
+    return null;
+});
 const submissionLocked = computed(() => Boolean(props.decisionKey) &&
     rawActionFeedback.value?.decisionKey === props.decisionKey &&
     (rawActionFeedback.value.status === "pending" || rawActionFeedback.value.status === "received"));
@@ -397,7 +406,7 @@ if (__VLS_ctx.pausedHint) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候");
 }
-else if (!__VLS_ctx.needsDecision) {
+else if (!__VLS_ctx.needsDecision && !__VLS_ctx.actionFeedback) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "waiting-state" },
         'data-testid': "action-waiting",
@@ -416,7 +425,7 @@ else if (!__VLS_ctx.needsDecision) {
     (__VLS_ctx.waitingHeadline);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
 }
-else {
+else if (__VLS_ctx.needsDecision) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "actions" },
         ...{ class: ({ 'discard-mode': __VLS_ctx.canDiscard }) },
@@ -426,7 +435,9 @@ else {
             ...{ onClick: (...[$event]) => {
                     if (!!(__VLS_ctx.pausedHint))
                         return;
-                    if (!!(!__VLS_ctx.needsDecision))
+                    if (!!(!__VLS_ctx.needsDecision && !__VLS_ctx.actionFeedback))
+                        return;
+                    if (!(__VLS_ctx.needsDecision))
                         return;
                     if (!(__VLS_ctx.canDiscard))
                         return;
@@ -446,7 +457,9 @@ else {
             ...{ onClick: (...[$event]) => {
                     if (!!(__VLS_ctx.pausedHint))
                         return;
-                    if (!!(!__VLS_ctx.needsDecision))
+                    if (!!(!__VLS_ctx.needsDecision && !__VLS_ctx.actionFeedback))
+                        return;
+                    if (!(__VLS_ctx.needsDecision))
                         return;
                     __VLS_ctx.onClick(item);
                 } },

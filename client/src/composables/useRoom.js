@@ -954,11 +954,6 @@ export function useRoom(playerName = "Player") {
             decisionKey: typeof raw.decisionKey === "string" ? raw.decisionKey.trim() : "",
         };
         decisionTimer.value = nextTimer;
-        if (actionFeedback.value?.decisionKey &&
-            nextTimer.decisionKey &&
-            actionFeedback.value.decisionKey !== nextTimer.decisionKey) {
-            clearActionFeedback();
-        }
     }
     function applySnapshot(next) {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
@@ -1323,6 +1318,10 @@ export function useRoom(playerName = "Player") {
                     return;
                 }
                 const decisionKey = String(payload?.decisionKey ?? "").trim();
+                const currentDecisionKey = decisionTimer.value.decisionKey;
+                if (decisionKey && currentDecisionKey && decisionKey !== currentDecisionKey) {
+                    return;
+                }
                 if (actionFeedback.value?.status === "pending" &&
                     actionFeedback.value.decisionKey &&
                     decisionKey &&
@@ -1340,11 +1339,15 @@ export function useRoom(playerName = "Player") {
                     return;
                 }
                 const reason = String(payload?.reason ?? "unknown");
+                const decisionKey = String(payload?.decisionKey ?? decisionTimer.value.decisionKey).trim();
+                if (decisionKey && decisionTimer.value.decisionKey && decisionKey !== decisionTimer.value.decisionKey) {
+                    return;
+                }
                 pushLog(`ACTION_REJECTED ${reason}`);
                 showActionFeedback({
                     status: "rejected",
                     message: String(payload?.message ?? "").trim() || "这次操作没有生效，请按当前提示重新选择。",
-                    decisionKey: String(payload?.decisionKey ?? decisionTimer.value.decisionKey).trim(),
+                    decisionKey,
                 }, ACTION_REJECTED_VISIBLE_MS);
             });
             joined.onMessage("hu_result", (payload) => {

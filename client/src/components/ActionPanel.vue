@@ -238,7 +238,16 @@ const normalized = computed(() => {
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 const rawActionFeedback = computed(() => props.actionFeedback ?? null);
-const actionFeedback = computed(() => rawActionFeedback.value?.visible === false ? null : rawActionFeedback.value);
+const actionFeedback = computed<ActionFeedback | null>(() => {
+  const feedback = rawActionFeedback.value;
+  if (!feedback || feedback.visible !== false) {
+    return feedback;
+  }
+  if (feedback.status === "received" && feedback.decisionKey === props.decisionKey) {
+    return { ...feedback, message: "操作已收到，等待牌局继续。", visible: true };
+  }
+  return null;
+});
 const submissionLocked = computed(
   () =>
     Boolean(props.decisionKey) &&
