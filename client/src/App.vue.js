@@ -433,6 +433,10 @@ const rulesCloseButtonRef = ref(null);
 const candidatePanelRef = ref(null);
 const candidateCancelButtonRef = ref(null);
 const settlementPanelRef = ref(null);
+const confirmingNextRound = ref(false);
+const nextRoundTriggerRef = ref(null);
+const nextRoundDialogRef = ref(null);
+const nextRoundCancelRef = ref(null);
 const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref(null);
 const returnLobbyDialogRef = ref(null);
@@ -445,6 +449,7 @@ watch(showEndPanel, (visible) => {
         void nextTick(() => settlementPanelRef.value?.focus());
         return;
     }
+    confirmingNextRound.value = false;
     confirmingReturnLobby.value = false;
 }, { immediate: true });
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -492,6 +497,52 @@ function trapRulesFocus(event) {
         last.focus();
     }
     else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+const hasOtherHumanAtSettlement = computed(() => players.value.some((player) => player.clientId !== mySeatId.value && !player.isConfiguredBot));
+async function requestNextRound() {
+    if (!settlementReady.value || !isHost.value) {
+        return;
+    }
+    if (state.value?.roomMode !== "friends" || !hasOtherHumanAtSettlement.value) {
+        nextRound();
+        return;
+    }
+    confirmingNextRound.value = true;
+    await nextTick();
+    nextRoundCancelRef.value?.focus();
+}
+function cancelNextRound() {
+    if (!confirmingNextRound.value) {
+        return;
+    }
+    confirmingNextRound.value = false;
+    void nextTick(() => nextRoundTriggerRef.value?.focus());
+}
+function confirmNextRound() {
+    confirmingNextRound.value = false;
+    nextRound();
+}
+function trapNextRoundFocus(event) {
+    const panel = nextRoundDialogRef.value;
+    if (!panel) {
+        return;
+    }
+    const focusable = Array.from(panel.querySelectorAll("button:not([disabled])"));
+    if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+    }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
         event.preventDefault();
         first.focus();
     }
@@ -1689,6 +1740,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['neutral']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
@@ -2903,10 +2955,14 @@ if (__VLS_ctx.showEndPanel) {
     });
     if (__VLS_ctx.isHost) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.nextRound) },
+            ...{ onClick: (__VLS_ctx.requestNextRound) },
+            ref: "nextRoundTriggerRef",
             ...{ class: "primary" },
+            type: "button",
+            'data-testid': "next-round-trigger",
             disabled: (!__VLS_ctx.settlementReady),
         });
+        /** @type {typeof __VLS_ctx.nextRoundTriggerRef} */ ;
         (__VLS_ctx.settlementReady ? "下一局（房主）" : "正在结算…");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestReturnLobby) },
@@ -2923,6 +2979,51 @@ if (__VLS_ctx.showEndPanel) {
             ...{ class: "host-actions-hint" },
         });
     }
+}
+if (__VLS_ctx.confirmingNextRound) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onClick: (__VLS_ctx.cancelNextRound) },
+        ...{ class: "table-return-mask" },
+        'data-testid': "next-round-mask",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ onKeydown: (__VLS_ctx.cancelNextRound) },
+        ...{ onKeydown: (__VLS_ctx.trapNextRoundFocus) },
+        ref: "nextRoundDialogRef",
+        ...{ class: "table-return-dialog" },
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-labelledby': "next-round-title",
+        'aria-describedby': "next-round-description",
+        tabindex: "-1",
+    });
+    /** @type {typeof __VLS_ctx.nextRoundDialogRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-symbol next-round" },
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
+        id: "next-round-title",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        id: "next-round-description",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.cancelNextRound) },
+        ref: "nextRoundCancelRef",
+        type: "button",
+        'data-testid': "cancel-next-round",
+    });
+    /** @type {typeof __VLS_ctx.nextRoundCancelRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.confirmNextRound) },
+        ...{ class: "primary" },
+        type: "button",
+        'data-testid': "confirm-next-round",
+    });
 }
 if (__VLS_ctx.confirmingReturnLobby) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3182,6 +3283,12 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
+/** @type {__VLS_StyleScopedClasses['next-round']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['danger']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
@@ -3233,7 +3340,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             decisionTimer: decisionTimer,
             sendDiscardCard: sendDiscardCard,
             requestMoreTime: requestMoreTime,
-            nextRound: nextRound,
             dissolveRoom: dissolveRoom,
             setScoringMode: setScoringMode,
             setLobbyReady: setLobbyReady,
@@ -3299,6 +3405,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             candidatePanelRef: candidatePanelRef,
             candidateCancelButtonRef: candidateCancelButtonRef,
             settlementPanelRef: settlementPanelRef,
+            confirmingNextRound: confirmingNextRound,
+            nextRoundTriggerRef: nextRoundTriggerRef,
+            nextRoundDialogRef: nextRoundDialogRef,
+            nextRoundCancelRef: nextRoundCancelRef,
             confirmingReturnLobby: confirmingReturnLobby,
             returnLobbyTriggerRef: returnLobbyTriggerRef,
             returnLobbyDialogRef: returnLobbyDialogRef,
@@ -3310,6 +3420,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             openRules: openRules,
             closeRules: closeRules,
             trapRulesFocus: trapRulesFocus,
+            requestNextRound: requestNextRound,
+            cancelNextRound: cancelNextRound,
+            confirmNextRound: confirmNextRound,
+            trapNextRoundFocus: trapNextRoundFocus,
             requestReturnLobby: requestReturnLobby,
             cancelReturnLobby: cancelReturnLobby,
             confirmReturnLobby: confirmReturnLobby,

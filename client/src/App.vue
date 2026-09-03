@@ -438,7 +438,14 @@
 
         <div class="end-actions">
           <template v-if="isHost">
-            <button class="primary" :disabled="!settlementReady" @click="nextRound">
+            <button
+              ref="nextRoundTriggerRef"
+              class="primary"
+              type="button"
+              data-testid="next-round-trigger"
+              :disabled="!settlementReady"
+              @click="requestNextRound"
+            >
               {{ settlementReady ? "下一局（房主）" : "正在结算…" }}
             </button>
             <button
@@ -455,6 +462,33 @@
           <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="confirmingNextRound"
+      class="table-return-mask"
+      data-testid="next-round-mask"
+      @click.self="cancelNextRound"
+    >
+      <section
+        ref="nextRoundDialogRef"
+        class="table-return-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="next-round-title"
+        aria-describedby="next-round-description"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="cancelNextRound"
+        @keydown.tab="trapNextRoundFocus"
+      >
+        <div class="table-return-symbol next-round" aria-hidden="true">续</div>
+        <h2 id="next-round-title">现在开始下一局？</h2>
+        <p id="next-round-description">其他牌友会立即离开本局结算并进入下一局。请先确认大家都已经看完分数。</p>
+        <div class="table-return-actions">
+          <button ref="nextRoundCancelRef" type="button" data-testid="cancel-next-round" @click="cancelNextRound">继续看结算</button>
+          <button class="primary" type="button" data-testid="confirm-next-round" @click="confirmNextRound">确认开始下一局</button>
+        </div>
+      </section>
     </div>
 
     <div
@@ -1144,6 +1178,10 @@ const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
 const candidatePanelRef = ref<HTMLElement | null>(null);
 const candidateCancelButtonRef = ref<HTMLButtonElement | null>(null);
 const settlementPanelRef = ref<HTMLElement | null>(null);
+const confirmingNextRound = ref(false);
+const nextRoundTriggerRef = ref<HTMLButtonElement | null>(null);
+const nextRoundDialogRef = ref<HTMLElement | null>(null);
+const nextRoundCancelRef = ref<HTMLButtonElement | null>(null);
 const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref<HTMLButtonElement | null>(null);
 const returnLobbyDialogRef = ref<HTMLElement | null>(null);
@@ -1158,6 +1196,7 @@ watch(
       void nextTick(() => settlementPanelRef.value?.focus());
       return;
     }
+    confirmingNextRound.value = false;
     confirmingReturnLobby.value = false;
   },
   { immediate: true },
@@ -1220,6 +1259,58 @@ function trapRulesFocus(event: KeyboardEvent): void {
     event.preventDefault();
     last.focus();
   } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+const hasOtherHumanAtSettlement = computed(() =>
+  players.value.some((player) => player.clientId !== mySeatId.value && !player.isConfiguredBot),
+);
+
+async function requestNextRound(): Promise<void> {
+  if (!settlementReady.value || !isHost.value) {
+    return;
+  }
+  if (state.value?.roomMode !== "friends" || !hasOtherHumanAtSettlement.value) {
+    nextRound();
+    return;
+  }
+  confirmingNextRound.value = true;
+  await nextTick();
+  nextRoundCancelRef.value?.focus();
+}
+
+function cancelNextRound(): void {
+  if (!confirmingNextRound.value) {
+    return;
+  }
+  confirmingNextRound.value = false;
+  void nextTick(() => nextRoundTriggerRef.value?.focus());
+}
+
+function confirmNextRound(): void {
+  confirmingNextRound.value = false;
+  nextRound();
+}
+
+function trapNextRoundFocus(event: KeyboardEvent): void {
+  const panel = nextRoundDialogRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(panel.querySelectorAll<HTMLElement>("button:not([disabled])"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
     event.preventDefault();
     first.focus();
   }
@@ -3576,6 +3667,12 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   background: rgba(127, 29, 29, 0.48);
   color: #fecaca;
   font-size: 1.45rem;
+}
+
+.table-return-symbol.next-round {
+  background: #14532d;
+  color: #dcfce7;
+  font-weight: 900;
 }
 
 .table-return-dialog h2,
