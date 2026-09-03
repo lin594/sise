@@ -585,7 +585,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 
 .tool-button {
   min-width: clamp(4.25rem, 9vw, 5.25rem);
-  height: clamp(2.15rem, 6.2vh, 2.55rem);
+  height: 2.55rem;
   padding: 0.35rem 0.62rem;
   border-radius: 0.72rem;
   border: 1px solid rgba(148, 163, 184, 0.38);
@@ -598,7 +598,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   justify-content: center;
   gap: 0.35rem;
   font-weight: 750;
-  font-size: clamp(0.76rem, 1.7vh, 0.9rem);
+  font-size: clamp(13px, 0.86rem, 0.9rem);
 }
 
 .tool-button:hover,
@@ -650,8 +650,8 @@ onBeforeUnmount(removeSettingsOutsideListener);
   position: absolute;
   top: calc(100% + 0.42rem);
   right: 0;
-  width: min(18rem, calc(100dvw - 1rem));
-  max-height: calc(100dvh - var(--game-header-height, 3rem) - 0.8rem);
+  width: min(18rem, calc(var(--effective-viewport-width, 100dvw) - 1rem));
+  max-height: calc(var(--effective-viewport-height, 100dvh) - var(--game-header-height, 3rem) - 0.8rem);
   overflow: auto;
   padding: 0.8rem;
   border-radius: 1rem;
@@ -671,7 +671,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .history-panel {
-  width: min(22rem, calc(100dvw - 1rem));
+  width: min(22rem, calc(var(--effective-viewport-width, 100dvw) - 1rem));
   padding: 0.8rem;
 }
 
@@ -694,12 +694,12 @@ onBeforeUnmount(removeSettingsOutsideListener);
 .settings-panel small,
 .history-panel small {
   color: #94a3b8;
-  font-size: 0.78rem;
+  font-size: max(0.78rem, 13px);
 }
 
 .settings-panel header strong,
 .history-panel header strong {
-  font-size: 1rem;
+  font-size: max(1rem, 16px);
 }
 
 .settings-panel header button,
@@ -718,7 +718,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 .history-description {
   margin: 0.45rem 0 0;
   color: #cbd5e1;
-  font-size: 0.8rem;
+  font-size: max(0.8rem, 14px);
   line-height: 1.45;
 }
 
@@ -746,7 +746,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 .history-list time {
   color: #93c5fd;
   font-variant-numeric: tabular-nums;
-  font-size: 0.76rem;
+  font-size: max(0.76rem, 13px);
 }
 
 .history-list p {
@@ -756,7 +756,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 0.4rem;
   align-items: baseline;
-  font-size: 0.88rem;
+  font-size: max(0.88rem, 14px);
   line-height: 1.35;
 }
 
@@ -814,7 +814,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .preference-copy strong {
-  font-size: 0.92rem;
+  font-size: max(0.92rem, 15px);
 }
 
 .mode-options {
@@ -859,7 +859,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .setting-switch strong {
-  font-size: 0.88rem;
+  font-size: max(0.88rem, 14px);
 }
 
 .switch-state {
@@ -870,7 +870,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   background: #334155;
   color: #cbd5e1;
   text-align: center;
-  font-size: 0.78rem;
+  font-size: max(0.78rem, 13px);
   font-weight: 800;
 }
 
@@ -885,7 +885,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   display: grid;
   place-items: center;
   gap: 0.08rem;
-  font-size: 0.76rem;
+  font-size: max(0.82rem, 14px);
   font-weight: 750;
 }
 
@@ -907,7 +907,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   justify-content: center;
   gap: 0.24rem;
   padding: 0.35rem 0.2rem;
-  font-size: 0.82rem;
+  font-size: max(0.82rem, 14px);
   font-weight: 750;
 }
 
@@ -930,6 +930,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.42rem;
+  font-size: max(0.82rem, 14px);
   text-align: left;
 }
 
@@ -945,7 +946,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .direction-options button > span:last-child small {
-  font-size: 0.78rem;
+  font-size: max(0.78rem, 13px);
 }
 
 .direction-options button.active {
@@ -987,6 +988,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  font-size: max(0.88rem, 14px);
   font-weight: 700;
 }
 
@@ -1077,13 +1079,13 @@ onBeforeUnmount(removeSettingsOutsideListener);
 @media (max-width: 960px), (max-height: 500px) {
   .settings-panel,
   .history-panel {
-    width: min(16rem, calc(100dvw - 0.5rem));
+    width: min(16rem, calc(var(--effective-viewport-width, 100dvw) - 0.5rem));
     padding: 0.6rem;
   }
 
   .tool-button {
     min-width: clamp(3.6rem, 9vw, 4.4rem);
-    height: clamp(2.05rem, 9.5vh, 2.4rem);
+    height: max(2.25rem, 36px);
     padding-inline: 0.42rem;
   }
 
@@ -1095,7 +1097,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
 
   .history-list p {
     display: block;
-    font-size: 0.82rem;
+    font-size: max(0.82rem, 14px);
   }
 
   .history-list p strong {

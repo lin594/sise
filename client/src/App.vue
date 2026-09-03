@@ -2225,7 +2225,9 @@ watch(
 
 <style scoped>
 .layout {
-  --game-header-height: clamp(2.5rem, 7dvh, 3rem);
+  --effective-viewport-width: 100dvw;
+  --effective-viewport-height: 100dvh;
+  --game-header-height: 3rem;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -2243,6 +2245,8 @@ watch(
 }
 
 .layout.rotated-phone-portrait {
+  --effective-viewport-width: 100dvh;
+  --effective-viewport-height: 100dvw;
   --safe-top: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-right, 0px);
@@ -3200,8 +3204,8 @@ watch(
 }
 
 .table-return-dialog {
-  width: min(23rem, calc(100dvw - 1.4rem));
-  max-height: calc(100dvh - 1.4rem);
+  width: min(23rem, calc(var(--effective-viewport-width, 100dvw) - 1.4rem));
+  max-height: calc(var(--effective-viewport-height, 100dvh) - 1.4rem);
   overflow: auto;
   padding: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.48);
@@ -3315,6 +3319,7 @@ watch(
 
 @media (max-width: 960px), (max-height: 500px) {
   .layout {
+    --game-header-height: max(2.5rem, 40px);
     gap: 0.7vh;
     padding: max(0.25rem, var(--safe-top)) max(0.25rem, var(--safe-right))
       max(0.25rem, var(--safe-bottom)) max(0.25rem, var(--safe-left));

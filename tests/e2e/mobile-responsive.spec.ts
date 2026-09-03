@@ -116,7 +116,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   expect(geometry.brandRight).toBeLessThanOrEqual(geometry.toolsLeft);
   expect(geometry.controlsInsideHeader).toBe(true);
   expect(geometry.minimumControlWidth).toBeGreaterThanOrEqual(40);
-  expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(32);
+  expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(36);
 }
 
 async function reachDiscardConfirmation(page: Page): Promise<void> {
@@ -381,6 +381,149 @@ test.describe("phone portrait landscape canvas", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(exitButton).toBeFocused();
+  });
+
+  test("keeps settings and history reachable inside the rotated effective viewport", async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    const layout = page.locator(".layout");
+    await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+
+    const settingsButton = page.getByTestId("game-settings");
+    await expect(settingsButton).toBeEnabled();
+    await settingsButton.click();
+    const settingsPanel = page.getByTestId("settings-panel");
+    await expect(settingsPanel).toBeVisible();
+    await expect(settingsPanel).toBeFocused();
+    await page.waitForTimeout(200);
+    const settingsGeometry = await page.evaluate(() => {
+      const layoutElement = document.querySelector<HTMLElement>(".layout")!;
+      const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+      const settingsButtonElement = document.querySelector<HTMLElement>("[data-testid='game-settings']")!;
+      const panel = document.querySelector<HTMLElement>("[data-testid='settings-panel']")!;
+      const panelRect = panel.getBoundingClientRect();
+      const closeButton = panel.querySelector<HTMLButtonElement>('button[aria-label="关闭设置"]')!;
+      const optionFontSizes = Array.from(
+        panel.querySelectorAll<HTMLElement>(".mode-options button, .direction-options button, .alert-options button"),
+      )
+        .map((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+      const helperFontSizes = Array.from(panel.querySelectorAll<HTMLElement>("small"))
+        .map((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+      return {
+        layoutContainsPanel: layoutElement.contains(panel),
+        panelInsideViewport:
+          panelRect.left >= -1 &&
+          panelRect.top >= -1 &&
+          panelRect.right <= innerWidth + 1 &&
+          panelRect.bottom <= innerHeight + 1,
+        panelOffsetWidth: panel.offsetWidth,
+        panelOffsetHeight: panel.offsetHeight,
+        availableLogicalHeight: layoutElement.offsetHeight - header.offsetHeight,
+        clientHeight: panel.clientHeight,
+        scrollHeight: panel.scrollHeight,
+        overflowY: getComputedStyle(panel).overflowY,
+        closeWidth: closeButton.offsetWidth,
+        closeHeight: closeButton.offsetHeight,
+        toolFontSize: Number.parseFloat(getComputedStyle(settingsButtonElement).fontSize),
+        toolHeight: settingsButtonElement.offsetHeight,
+        minimumOptionFontSize: Math.min(...optionFontSizes),
+        minimumHelperFontSize: Math.min(...helperFontSizes),
+      };
+    });
+    expect(settingsGeometry.layoutContainsPanel).toBe(true);
+    expect(settingsGeometry.panelInsideViewport).toBe(true);
+    expect(settingsGeometry.panelOffsetWidth).toBeLessThanOrEqual(568);
+    expect(settingsGeometry.panelOffsetHeight).toBeLessThan(settingsGeometry.availableLogicalHeight);
+    expect(settingsGeometry.scrollHeight).toBeGreaterThan(settingsGeometry.clientHeight);
+    expect(settingsGeometry.overflowY).toBe("auto");
+    expect(settingsGeometry.closeWidth).toBeGreaterThanOrEqual(42);
+    expect(settingsGeometry.closeHeight).toBeGreaterThanOrEqual(42);
+    expect(settingsGeometry.toolFontSize).toBeGreaterThanOrEqual(13);
+    expect(settingsGeometry.toolHeight).toBeGreaterThanOrEqual(36);
+    expect(settingsGeometry.minimumOptionFontSize).toBeGreaterThanOrEqual(14);
+    expect(settingsGeometry.minimumHelperFontSize).toBeGreaterThanOrEqual(13);
+    await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
+
+    await page.keyboard.press("Shift+Tab");
+    const rulesEntry = page.getByTestId("settings-rules");
+    await expect(rulesEntry).toBeFocused();
+    const bottomGeometry = await settingsPanel.evaluate((panel) => {
+      const panelRect = panel.getBoundingClientRect();
+      const rules = panel.querySelector<HTMLElement>("[data-testid='settings-rules']")!;
+      const wakeLock = panel.querySelector<HTMLElement>("[data-testid='keep-screen-awake']")!;
+      const isInside = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.left >= panelRect.left - 1 &&
+          rect.top >= panelRect.top - 1 &&
+          rect.right <= panelRect.right + 1 &&
+          rect.bottom <= panelRect.bottom + 1
+        );
+      };
+      return {
+        scrollTop: panel.scrollTop,
+        rulesInsidePanel: isInside(rules),
+        wakeLockInsidePanel: isInside(wakeLock),
+      };
+    });
+    expect(bottomGeometry.scrollTop).toBeGreaterThan(0);
+    expect(bottomGeometry.rulesInsidePanel).toBe(true);
+    expect(bottomGeometry.wakeLockInsidePanel).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-bottom-320x568.png") });
+    await rulesEntry.click();
+    const rulesDialog = page.getByRole("dialog", { name: "四色牌规则" });
+    await expect(rulesDialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(rulesDialog).toHaveCount(0);
+    await expect(settingsButton).toBeFocused();
+
+    const historyButton = page.getByTestId("game-history");
+    await historyButton.click();
+    const historyPanel = page.getByTestId("history-panel");
+    await expect(historyPanel).toBeVisible();
+    await expect(historyPanel).toBeFocused();
+    await page.waitForTimeout(200);
+    const historyGeometry = await historyPanel.evaluate((panel) => {
+      const rect = panel.getBoundingClientRect();
+      const copy = Array.from(
+        panel.querySelectorAll<HTMLElement>(".history-description, .history-list p, .history-empty small"),
+      );
+      const entries = Array.from(panel.querySelectorAll<HTMLElement>(".history-list p"));
+      const times = Array.from(panel.querySelectorAll<HTMLElement>(".history-list time"));
+      return {
+        insideViewport:
+          rect.left >= -1 &&
+          rect.top >= -1 &&
+          rect.right <= innerWidth + 1 &&
+          rect.bottom <= innerHeight + 1,
+        minimumCopyFontSize: Math.min(...copy.map((element) => Number.parseFloat(getComputedStyle(element).fontSize))),
+        minimumEntryFontSize: entries.length
+          ? Math.min(...entries.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)))
+          : null,
+        minimumTimeFontSize: times.length
+          ? Math.min(...times.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)))
+          : null,
+      };
+    });
+    expect(historyGeometry.insideViewport).toBe(true);
+    expect(historyGeometry.minimumCopyFontSize).toBeGreaterThanOrEqual(13);
+    if (historyGeometry.minimumEntryFontSize !== null) {
+      expect(historyGeometry.minimumEntryFontSize).toBeGreaterThanOrEqual(14);
+    }
+    if (historyGeometry.minimumTimeFontSize !== null) {
+      expect(historyGeometry.minimumTimeFontSize).toBeGreaterThanOrEqual(13);
+    }
+    await page.screenshot({ path: testInfo.outputPath("history-effective-viewport-320x568.png") });
+    await page.keyboard.press("Escape");
+    await expect(historyPanel).toHaveCount(0);
+    await expect(historyButton).toBeFocused();
   });
 });
 

@@ -163,6 +163,8 @@ server/src/rules/                     牌堆、动作候选、胡牌拆解
 server/src/schema/                    公开同步 Schema
 ```
 
+触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布，并通过 `--effective-viewport-width`、`--effective-viewport-height` 向下游组件提供唯一尺寸来源。根布局内的设置、记录和确认层必须使用这组变量或容器百分比，不能直接假定 `100dvw/100dvh` 与游戏坐标轴一致。
+
 ## 8. 当前边界
 
 - token 是房间级重连凭证，不是生产级账号体系。
