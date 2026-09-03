@@ -5,6 +5,10 @@ test.describe("牌局断线恢复", () => {
 
   test("保留当前牌桌并在联网后自动恢复", async ({ context, page }, testInfo) => {
     test.setTimeout(90_000);
+    let roomSocketCount = 0;
+    page.on("websocket", () => {
+      roomSocketCount += 1;
+    });
     await page.goto("/");
     await page.getByTestId("random-nickname").click();
     await page.getByTestId("login-submit").click();
@@ -54,6 +58,8 @@ test.describe("牌局断线恢复", () => {
     expect(beforeDisconnect.token).toMatch(/^pt_[0-9a-f]{48}$/);
     expect(beforeDisconnect.seatId).toBeTruthy();
     expect(beforeDisconnect.handIds.length).toBeGreaterThan(0);
+    const socketCountBeforeDisconnect = roomSocketCount;
+    expect(socketCountBeforeDisconnect).toBe(1);
 
     await context.setOffline(true);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "offline", { timeout: 10_000 });
@@ -83,6 +89,9 @@ test.describe("牌局断线恢复", () => {
     });
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
+    await expect.poll(() => roomSocketCount).toBe(socketCountBeforeDisconnect + 1);
+    await page.waitForTimeout(1_000);
+    expect(roomSocketCount).toBe(socketCountBeforeDisconnect + 1);
     const restoredPrivateState = await page.evaluate(() => {
       const handIds = Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='hand-card-']")).map(
         (card) => card.dataset.testid,

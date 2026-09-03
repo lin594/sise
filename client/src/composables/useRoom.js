@@ -1049,6 +1049,10 @@ export function useRoom(playerName = "Player") {
                     hostKey: resolvedOptions.hostKey,
                 });
             }
+            // This app restores stable seats with its room-scoped playerToken. The
+            // server intentionally does not use Colyseus allowReconnection(), so the
+            // SDK's independent retry loop can only race our authoritative recovery.
+            joined.reconnection.enabled = false;
             if (!isActiveConnection()) {
                 suppressReconnect = true;
                 await joined.leave().catch(() => undefined);
