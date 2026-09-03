@@ -124,6 +124,10 @@ test("leaving quick-match waiting clears its local room identity", async ({ page
   await enterModeLobby(page, "先走牌友");
   await page.getByTestId("mode-quick_match").click();
   await page.getByTestId("lobby-start").click();
+  await expect.poll(
+    () => page.evaluate(() => localStorage.getItem("four_room_id")),
+    { message: "quick-match room identity should be stored after joining" },
+  ).toBeTruthy();
   const roomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
   expect(roomId).toBeTruthy();
 
