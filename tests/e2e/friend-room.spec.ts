@@ -41,10 +41,12 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByText("把邀请链接发给朋友，或点击“补齐 3 位电脑”后开始。")).toBeVisible();
     await host.getByTestId("copy-invite").click();
     await expect(host.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
-    const copiedInviteUrl = await host.evaluate(async () =>
-      navigator.clipboard?.readText ? await navigator.clipboard.readText() : null,
-    );
-    if (copiedInviteUrl !== null) {
+    const clipboardSnapshot = await host.evaluate(async () => ({
+      secureContext: window.isSecureContext,
+      copiedInviteUrl: navigator.clipboard?.readText ? await navigator.clipboard.readText() : null,
+    }));
+    if (clipboardSnapshot.secureContext && clipboardSnapshot.copiedInviteUrl !== null) {
+      const copiedInviteUrl = clipboardSnapshot.copiedInviteUrl;
       expect(copiedInviteUrl).toBe(inviteUrl);
       expect(copiedInviteUrl).not.toContain("playerToken");
       expect(copiedInviteUrl).not.toContain("hostKey");
