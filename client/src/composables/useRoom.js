@@ -786,6 +786,18 @@ export function useRoom(playerName = "Player") {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
         const rawSnapshot = next;
         const normalized = normalizeSnapshot(next);
+        const previousSnapshot = state.value;
+        if (!normalized.dealerCard &&
+            normalized.dealerId &&
+            previousSnapshot?.dealerCard &&
+            previousSnapshot.dealerId === normalized.dealerId &&
+            (previousSnapshot.phase === "declaring" || previousSnapshot.phase === "playing") &&
+            (normalized.phase === "declaring" || normalized.phase === "playing" || normalized.phase === "ended")) {
+            // The explicit room snapshot carries the authoritative dealer card. The
+            // SDK Schema view can momentarily expose its pre-round empty child ref;
+            // never let that transient value erase a confirmed card mid-round.
+            normalized.dealerCard = previousSnapshot.dealerCard;
+        }
         const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
         const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
         if (!normalized.roomId && activeRoomId.value) {
