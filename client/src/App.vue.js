@@ -35,6 +35,7 @@ function readDisplayPreferences() {
                 tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
                 seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
                 turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
+                spokenTurnGuidance: parsed.spokenTurnGuidance === true,
                 reduceMotion: parsed.reduceMotion === true,
                 keepScreenAwake: parsed.keepScreenAwake !== false,
             };
@@ -49,6 +50,7 @@ function readDisplayPreferences() {
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
         seatDirection: "counterclockwise",
         turnAlert: "sound-vibration",
+        spokenTurnGuidance: false,
         reduceMotion: false,
         keepScreenAwake: true,
     };
@@ -614,18 +616,58 @@ watch(settingsDecisionActive, (active) => {
     }
 });
 const decisionAlertKey = computed(() => {
-    if (!settingsDecisionActive.value) {
+    const authoritativeDecisionKey = decisionTimer.value.decisionKey.trim();
+    if (!settingsDecisionActive.value || !authoritativeDecisionKey) {
         return "";
     }
     return [
         activeRoomId.value,
         state.value?.responsePhase ?? "",
-        decisionTimer.value.decisionKey || state.value?.responseEndsAt || 0,
+        authoritativeDecisionKey,
         canDiscard.value ? "discard" : "action",
     ].join("|");
 });
 const turnAlertMode = computed(() => displayPreferences.value.turnAlert);
-useTurnAlert({ active: settingsDecisionActive, decisionKey: decisionAlertKey, mode: turnAlertMode });
+const spokenTurnGuidanceSupported = typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+const spokenTurnGuidance = computed(() => displayPreferences.value.spokenTurnGuidance);
+const spokenDecisionMessage = computed(() => {
+    if (!settingsDecisionActive.value) {
+        return "";
+    }
+    if (canDiscard.value) {
+        return "轮到你出牌。先选一张手牌，再点出牌。";
+    }
+    const order = ["hu", "kai", "peng", "chi", "pass"];
+    const labels = order.flatMap((action) => {
+        const available = availableActions.value.some((item) => item.action === action && (item.enabled || item.deferred));
+        if (!available) {
+            return [];
+        }
+        const matchingAction = availableActions.value.find((item) => item.action === action && (item.enabled || item.deferred));
+        if (action === "pass" && (matchingAction?.deferred || state.value?.responsePhase === "local_upper")) {
+            return ["抓"];
+        }
+        return [{ hu: "胡", kai: "开", peng: "碰", chi: "吃", pass: "过" }[action]];
+    });
+    const canPass = availableActions.value.some((item) => item.action === "pass" && (item.enabled || item.deferred));
+    if (isPendingSpecialCard.value && !canPass) {
+        return "轮到你了。这张特殊牌不能过，请选择吃法。";
+    }
+    if (!labels.length) {
+        return "轮到你了，请选择下一步。";
+    }
+    const choices = labels.length === 1
+        ? labels[0]
+        : `${labels.slice(0, -1).join("、")}或${labels.at(-1)}`;
+    return `轮到你了。可选择${choices}。`;
+});
+useTurnAlert({
+    active: settingsDecisionActive,
+    decisionKey: decisionAlertKey,
+    mode: turnAlertMode,
+    spokenEnabled: spokenTurnGuidance,
+    spokenMessage: spokenDecisionMessage,
+});
 const wakeLockActive = computed(() => connected.value && (isDeclaring.value || isPlaying.value));
 const keepScreenAwake = computed(() => displayPreferences.value.keepScreenAwake);
 useScreenWakeLock(wakeLockActive, keepScreenAwake);
@@ -2051,6 +2093,7 @@ if (__VLS_ctx.showGameTools) {
         mySeatId: (__VLS_ctx.mySeatId),
         autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
         autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+        spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
     }));
     const __VLS_8 = __VLS_7({
         ...{ 'onOpenRules': {} },
@@ -2063,6 +2106,7 @@ if (__VLS_ctx.showGameTools) {
         mySeatId: (__VLS_ctx.mySeatId),
         autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
         autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+        spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
     }, ...__VLS_functionalComponentArgsRest(__VLS_7));
     let __VLS_10;
     let __VLS_11;

@@ -245,6 +245,26 @@
           class="setting-switch"
           type="button"
           role="switch"
+          data-testid="spoken-turn-guidance"
+          :disabled="!props.spokenTurnGuidanceSupported"
+          :aria-checked="props.spokenTurnGuidanceSupported && props.modelValue.spokenTurnGuidance"
+          @click="setSpokenTurnGuidance(!props.modelValue.spokenTurnGuidance)"
+        >
+          <span>
+            <strong>语音提示轮到我</strong>
+            <small>{{ props.spokenTurnGuidanceSupported ? "轮到你时读出下一步" : "此浏览器不支持语音" }}</small>
+          </span>
+          <span
+            class="switch-state"
+            :class="{ active: props.spokenTurnGuidanceSupported && props.modelValue.spokenTurnGuidance }"
+          >
+            {{ !props.spokenTurnGuidanceSupported ? "不可用" : props.modelValue.spokenTurnGuidance ? "开启" : "关闭" }}
+          </span>
+        </button>
+        <button
+          class="setting-switch"
+          type="button"
+          role="switch"
           data-testid="reduce-motion"
           :aria-checked="props.modelValue.reduceMotion"
           @click="setReduceMotion(!props.modelValue.reduceMotion)"
@@ -355,6 +375,7 @@ const props = withDefaults(
     mySeatId?: string;
     autoPlay?: boolean;
     autoPlayPending?: boolean;
+    spokenTurnGuidanceSupported?: boolean;
   }>(),
   {
     decisionActive: false,
@@ -363,6 +384,7 @@ const props = withDefaults(
     mySeatId: "",
     autoPlay: false,
     autoPlayPending: false,
+    spokenTurnGuidanceSupported: false,
   },
 );
 
@@ -605,6 +627,13 @@ function setSeatDirection(direction: SeatDirection): void {
 
 function setTurnAlert(turnAlert: TurnAlertMode): void {
   emit("update:modelValue", { ...props.modelValue, turnAlert });
+}
+
+function setSpokenTurnGuidance(spokenTurnGuidance: boolean): void {
+  if (!props.spokenTurnGuidanceSupported) {
+    return;
+  }
+  emit("update:modelValue", { ...props.modelValue, spokenTurnGuidance });
 }
 
 function setKeepScreenAwake(keepScreenAwake: boolean): void {
@@ -1029,6 +1058,14 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.6rem;
   text-align: left;
+}
+
+.setting-switch:disabled {
+  cursor: not-allowed;
+  border-color: rgba(100, 116, 139, 0.46);
+  background: rgba(15, 23, 42, 0.55);
+  color: #94a3b8;
+  opacity: 1;
 }
 
 .setting-switch > span:first-child {

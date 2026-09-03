@@ -11,6 +11,7 @@ export interface GameDisplayPreferences {
     tableCards: CardDisplayMode;
     seatDirection: SeatDirection;
     turnAlert: TurnAlertMode;
+    spokenTurnGuidance: boolean;
     reduceMotion: boolean;
     keepScreenAwake: boolean;
 }

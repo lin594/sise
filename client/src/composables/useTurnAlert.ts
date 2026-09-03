@@ -5,6 +5,8 @@ interface TurnAlertOptions {
   active: Readonly<Ref<boolean>>;
   decisionKey: Readonly<Ref<string>>;
   mode: Readonly<Ref<TurnAlertMode>>;
+  spokenEnabled: Readonly<Ref<boolean>>;
+  spokenMessage: Readonly<Ref<string>>;
 }
 
 type SafariWindow = Window & typeof globalThis & {
@@ -23,6 +25,74 @@ export function useTurnAlert(options: TurnAlertOptions): void {
   let originalTitle = "四色牌";
   let lastAlertKey = "";
   let lastSoundKey = "";
+  let lastSpokenKey = "";
+  let speechTimer: number | null = null;
+
+  const clearPendingSpeech = (): void => {
+    if (speechTimer === null) {
+      return;
+    }
+    window.clearTimeout(speechTimer);
+    speechTimer = null;
+  };
+
+  const cancelSpeech = (): void => {
+    clearPendingSpeech();
+    if (typeof window.speechSynthesis !== "undefined") {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // Native speech is optional; sound, vibration, and visual cues remain.
+      }
+    }
+  };
+
+  const speakCurrentDecision = (decisionKey: string): void => {
+    const message = options.spokenMessage.value.trim();
+    if (
+      !options.spokenEnabled.value ||
+      !decisionKey ||
+      !message ||
+      lastSpokenKey === decisionKey ||
+      typeof window.speechSynthesis === "undefined" ||
+      typeof window.SpeechSynthesisUtterance === "undefined"
+    ) {
+      return;
+    }
+    try {
+      cancelSpeech();
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = "zh-CN";
+      utterance.rate = 0.88;
+      utterance.pitch = 1;
+      utterance.volume = 0.95;
+      window.speechSynthesis.speak(utterance);
+      lastSpokenKey = decisionKey;
+    } catch {
+      // Some embedded browsers expose the API but reject speech at runtime.
+    }
+  };
+
+  const scheduleSpeech = (decisionKey: string): void => {
+    clearPendingSpeech();
+    if (
+      !options.active.value ||
+      !options.spokenEnabled.value ||
+      !decisionKey ||
+      lastSpokenKey === decisionKey
+    ) {
+      return;
+    }
+    // Public state, actions and the authoritative timer arrive as adjacent
+    // patches. Briefly settle them so one decision gets one useful sentence.
+    speechTimer = window.setTimeout(() => {
+      speechTimer = null;
+      if (!options.active.value || options.decisionKey.value !== decisionKey) {
+        return;
+      }
+      speakCurrentDecision(decisionKey);
+    }, 250);
+  };
 
   const ensureAudioContext = (): AudioContext | null => {
     if (options.mode.value === "off") {
@@ -110,7 +180,25 @@ export function useTurnAlert(options: TurnAlertOptions): void {
       }
       lastAlertKey = decisionKey;
       alertCurrentDecision(decisionKey);
+      scheduleSpeech(decisionKey);
     },
+  );
+
+  watch(
+    () => [
+      options.active.value,
+      options.decisionKey.value,
+      options.spokenEnabled.value,
+      options.spokenMessage.value,
+    ] as const,
+    ([active, decisionKey, spokenEnabled]) => {
+      if (!spokenEnabled || !active) {
+        cancelSpeech();
+        return;
+      }
+      scheduleSpeech(decisionKey);
+    },
+    { flush: "post" },
   );
 
   onMounted(() => {
@@ -122,6 +210,7 @@ export function useTurnAlert(options: TurnAlertOptions): void {
   onUnmounted(() => {
     window.removeEventListener("pointerdown", unlockAudio);
     window.removeEventListener("keydown", unlockAudio);
+    cancelSpeech();
     document.title = originalTitle;
     if (typeof navigator.vibrate === "function") {
       navigator.vibrate(0);

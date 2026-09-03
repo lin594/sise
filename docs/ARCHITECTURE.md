@@ -176,6 +176,7 @@
 ```text
 client/src/App.vue                    页面阶段、设置、声明与结算
 client/src/composables/useRoom.ts     连接、重连、消息和个人退出
+client/src/composables/useTurnAlert.ts 单次响铃、震动、标题和可选中文语音提醒
 client/src/components/GameBoard.vue  牌桌、座位、牌组、手牌与操作坞
 client/src/components/ActionPanel.vue 合法动作和弃牌确认
 server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
