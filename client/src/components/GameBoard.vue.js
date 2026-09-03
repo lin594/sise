@@ -55,6 +55,7 @@ const selfHandRef = ref(null);
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
+const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver = null;
 const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
@@ -372,6 +373,10 @@ const displayPrivateHand = computed(() => {
     const limit = shouldLimit ? Math.max(0, visibleHandCount.value || 0) : props.privateHand.length;
     return props.privateHand.slice(0, limit);
 });
+const handVisibleRangeLabel = computed(() => {
+    const { start, end, total } = handVisibleRange.value;
+    return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
+});
 const isResponseCardDrawHidden = computed(() => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value);
 const activeCandidates = computed(() => props.activeCandidates ?? []);
 const selectedCandidate = computed(() => {
@@ -608,12 +613,31 @@ function updateHandScrollState() {
         handHasOverflow.value = false;
         handCanScrollBackward.value = false;
         handCanScrollForward.value = false;
+        handVisibleRange.value = { start: 0, end: 0, total: 0 };
         return;
     }
     const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
     handHasOverflow.value = maxScrollLeft > 2;
     handCanScrollBackward.value = hand.scrollLeft > 2;
     handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
+    const cards = Array.from(hand.querySelectorAll("[data-card-id]"));
+    const handRect = hand.getBoundingClientRect();
+    let visibleIndexes = cards
+        .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+        .filter(({ rect }) => {
+        const center = rect.left + rect.width / 2;
+        return center >= handRect.left && center <= handRect.right;
+    })
+        .map(({ index }) => index);
+    if (!visibleIndexes.length) {
+        visibleIndexes = cards
+            .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+            .filter(({ rect }) => rect.right > handRect.left && rect.left < handRect.right)
+            .map(({ index }) => index);
+    }
+    handVisibleRange.value = visibleIndexes.length
+        ? { start: visibleIndexes[0] + 1, end: visibleIndexes.at(-1) + 1, total: cards.length }
+        : { start: 0, end: 0, total: cards.length };
 }
 function scrollHand(direction) {
     const hand = selfHandRef.value;
@@ -1196,6 +1220,7 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     }
     void nextTick(updateHandScrollState);
 });
+watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(updateHandScrollState));
 watch(selfHandRef, observeHandScroller, { immediate: true });
 watch(canDiscard, (enabled) => {
     if (!enabled) {
@@ -1442,6 +1467,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -2486,6 +2512,14 @@ if (__VLS_ctx.selfPlayer) {
             'aria-label': "向左翻看手牌",
             disabled: (!__VLS_ctx.handCanScrollBackward),
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "hand-visible-range" },
+            'data-testid': "hand-visible-range",
+            'aria-label': (__VLS_ctx.handVisibleRangeLabel),
+        });
+        (__VLS_ctx.handVisibleRange.start);
+        (__VLS_ctx.handVisibleRange.end);
+        (__VLS_ctx.handVisibleRange.total);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
@@ -2832,6 +2866,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
@@ -2870,6 +2905,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             handHasOverflow: handHasOverflow,
             handCanScrollBackward: handCanScrollBackward,
             handCanScrollForward: handCanScrollForward,
+            handVisibleRange: handVisibleRange,
             selfZoneRef: selfZoneRef,
             selfOpenRef: selfOpenRef,
             selfGroupBlocks: selfGroupBlocks,
@@ -2889,6 +2925,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
             selectedDiscardCardLabel: selectedDiscardCardLabel,
             displayPrivateHand: displayPrivateHand,
+            handVisibleRangeLabel: handVisibleRangeLabel,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,

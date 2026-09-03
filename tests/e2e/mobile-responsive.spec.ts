@@ -1,4 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
+  const text = (await locator.textContent())?.trim() ?? "";
+  const match = text.match(/^(\d+)–(\d+) \/ (\d+)$/);
+  if (!match) {
+    throw new Error(`Unexpected hand range: ${text}`);
+  }
+  return { start: Number(match[1]), end: Number(match[2]), total: Number(match[3]) };
+}
 
 async function enterLobby(page: Page, path = "/"): Promise<void> {
   await page.goto(path);
@@ -1025,12 +1034,21 @@ test.describe("compact landscape gameplay", () => {
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");
     const handScrollNext = page.getByTestId("hand-scroll-next");
+    const handVisibleRange = page.getByTestId("hand-visible-range");
     await expect(handScrollPrev).toHaveText("‹ 前翻");
     await expect(handScrollNext).toHaveText("后翻 ›");
     await expect(handScrollPrev).toHaveAttribute("aria-label", "向左翻看手牌");
     await expect(handScrollNext).toHaveAttribute("aria-label", "向右翻看更多手牌");
     await expect(handScrollPrev).toBeDisabled();
     await expect(handScrollNext).toBeEnabled();
+    const initialHandRange = await readVisibleHandRange(handVisibleRange);
+    expect(initialHandRange.start).toBe(1);
+    expect(initialHandRange.end).toBeGreaterThanOrEqual(9);
+    expect(initialHandRange.total).toBe(handMetrics.cardCount);
+    await expect(handVisibleRange).toHaveAttribute(
+      "aria-label",
+      `当前显示第 ${initialHandRange.start} 到 ${initialHandRange.end} 张，共 ${initialHandRange.total} 张`,
+    );
     const handScrollButtonSizes = await handScrollTools.locator("button").evaluateAll((buttons) =>
       buttons.map((button) => {
         const rect = button.getBoundingClientRect();
@@ -1045,12 +1063,15 @@ test.describe("compact landscape gameplay", () => {
     await handScrollNext.click();
     await expect.poll(() => page.locator(".hand").evaluate((hand) => hand.scrollLeft)).toBeGreaterThan(50);
     await expect(handScrollPrev).toBeEnabled();
+    await expect.poll(async () => (await readVisibleHandRange(handVisibleRange)).start).toBeGreaterThan(1);
     for (let attempt = 0; attempt < 6 && await handScrollNext.isEnabled(); attempt += 1) {
       await handScrollNext.click();
       await page.waitForTimeout(360);
     }
     await expect(handScrollNext).toBeDisabled();
     await expect(handScrollPrev).toBeEnabled();
+    const finalHandRange = await readVisibleHandRange(handVisibleRange);
+    expect(finalHandRange.end).toBe(finalHandRange.total);
     expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handIdsBeforePaging);
@@ -1061,6 +1082,7 @@ test.describe("compact landscape gameplay", () => {
     await expect.poll(() => page.locator(".hand").evaluate((hand) => hand.scrollLeft)).toBeLessThanOrEqual(2);
     await expect(handScrollPrev).toBeDisabled();
     await expect(handScrollNext).toBeEnabled();
+    expect((await readVisibleHandRange(handVisibleRange)).start).toBe(1);
     await expect(page.locator(".hand .card[role='img']").first()).toHaveAttribute("aria-label", /^(黄|红|绿|白|金条).+/);
     const redCardContrast = await page.locator(".hand .card").first().evaluate((source) => {
       const sample = source.cloneNode(true) as HTMLElement;
@@ -1826,9 +1848,17 @@ test.describe("legacy small landscape gameplay", () => {
     const declarationHandTools = page.getByTestId("declare-hand-scroll-tools");
     const declarationHandPrev = page.getByTestId("declare-hand-scroll-prev");
     const declarationHandNext = page.getByTestId("declare-hand-scroll-next");
+    const declarationHandRange = page.getByTestId("declare-hand-visible-range");
     await expect(declarationHandTools).toBeVisible();
     await expect(declarationHandPrev).toBeDisabled();
     await expect(declarationHandNext).toBeEnabled();
+    const initialDeclarationRange = await readVisibleHandRange(declarationHandRange);
+    expect(initialDeclarationRange.start).toBe(1);
+    expect(initialDeclarationRange.end).toBeLessThan(initialDeclarationRange.total);
+    await expect(declarationHandRange).toHaveAttribute(
+      "aria-label",
+      `当前显示第 ${initialDeclarationRange.start} 到 ${initialDeclarationRange.end} 张，共 ${initialDeclarationRange.total} 张`,
+    );
     const declarationHandBefore = await declarationHand.locator(".card").evaluateAll((cards) =>
       cards.map((card) => card.getAttribute("aria-label")),
     );
@@ -1890,6 +1920,8 @@ test.describe("legacy small landscape gameplay", () => {
     }
     await expect(declarationHandNext).toBeDisabled();
     await expect(declarationHandPrev).toBeEnabled();
+    const finalDeclarationRange = await readVisibleHandRange(declarationHandRange);
+    expect(finalDeclarationRange.end).toBe(finalDeclarationRange.total);
     expect(await declarationHand.locator(".card").evaluateAll((cards) =>
       cards.map((card) => card.getAttribute("aria-label")),
     )).toEqual(declarationHandBefore);
@@ -1906,6 +1938,7 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(declarationHandPrev).toBeDisabled();
     await expect(declarationHandNext).toBeEnabled();
     expect(await declarationHand.evaluate((hand) => hand.scrollLeft)).toBeLessThanOrEqual(2);
+    expect((await readVisibleHandRange(declarationHandRange)).start).toBe(1);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-declaration.png") });
     await confirmDeclaration.click();
 
@@ -1979,9 +2012,13 @@ test.describe("legacy small landscape gameplay", () => {
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");
     const handScrollNext = page.getByTestId("hand-scroll-next");
+    const handVisibleRange = page.getByTestId("hand-visible-range");
     await expect(handScrollTools).toBeVisible();
     await expect(handScrollPrev).toHaveText("‹ 前翻");
     await expect(handScrollNext).toHaveText("后翻 ›");
+    const legacyInitialRange = await readVisibleHandRange(handVisibleRange);
+    expect(legacyInitialRange.start).toBe(1);
+    expect(legacyInitialRange.end).toBeLessThan(legacyInitialRange.total);
     const handScrollSizes = await handScrollTools.locator("button").evaluateAll((buttons) =>
       buttons.map((button) => {
         const rect = button.getBoundingClientRect();

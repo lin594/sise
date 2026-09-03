@@ -76,6 +76,11 @@
                   :disabled="!handCanScrollBackward"
                   @click="scrollHandPreview('backward')"
                 >‹ 前翻</button>
+                <span
+                  class="declare-hand-visible-range"
+                  data-testid="declare-hand-visible-range"
+                  :aria-label="handVisibleRangeLabel"
+                >{{ handVisibleRange.start }}–{{ handVisibleRange.end }} / {{ handVisibleRange.total }}</span>
                 <button
                   type="button"
                   data-testid="declare-hand-scroll-next"
@@ -274,12 +279,18 @@ const handRailRef = ref<HTMLElement | null>(null);
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
+const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let primaryFocusPlaced = false;
 let moreTimeRetryTimer: number | null = null;
 let submitRetryTimer: number | null = null;
 let handResizeObserver: ResizeObserver | null = null;
 
 const SUBMIT_CONFIRM_WAIT_MS = 3500;
+
+const handVisibleRangeLabel = computed(() => {
+  const { start, end, total } = handVisibleRange.value;
+  return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
+});
 
 function clearMoreTimeRetryTimer(): void {
   if (moreTimeRetryTimer !== null) {
@@ -460,12 +471,32 @@ function updateHandScrollState(): void {
     handHasOverflow.value = false;
     handCanScrollBackward.value = false;
     handCanScrollForward.value = false;
+    handVisibleRange.value = { start: 0, end: 0, total: 0 };
     return;
   }
   const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
   handHasOverflow.value = maxScrollLeft > 2;
   handCanScrollBackward.value = rail.scrollLeft > 2;
   handCanScrollForward.value = rail.scrollLeft < maxScrollLeft - 2;
+
+  const cards = Array.from(rail.querySelectorAll<HTMLElement>(".hand-preview-card"));
+  const railRect = rail.getBoundingClientRect();
+  let visibleIndexes = cards
+    .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+    .filter(({ rect }) => {
+      const center = rect.left + rect.width / 2;
+      return center >= railRect.left && center <= railRect.right;
+    })
+    .map(({ index }) => index);
+  if (!visibleIndexes.length) {
+    visibleIndexes = cards
+      .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.right > railRect.left && rect.left < railRect.right)
+      .map(({ index }) => index);
+  }
+  handVisibleRange.value = visibleIndexes.length
+    ? { start: visibleIndexes[0]! + 1, end: visibleIndexes.at(-1)! + 1, total: cards.length }
+    : { start: 0, end: 0, total: cards.length };
 }
 
 function scrollHandPreview(direction: "backward" | "forward"): void {
@@ -871,6 +902,23 @@ onBeforeUnmount(() => {
   background: #e2e8f0;
   color: #64748b;
   opacity: 0.78;
+}
+
+.declare-hand-visible-range {
+  min-width: 4.7rem;
+  height: 2.25rem;
+  padding: 0 0.42rem;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .legend-item {
@@ -1287,6 +1335,13 @@ button:focus-visible {
   height: 34px;
   padding: 0 0.42rem;
   font-size: max(0.8125rem, 13px);
+}
+
+.declare-panel.compact .declare-hand-visible-range {
+  min-width: 4.25rem;
+  height: 34px;
+  padding: 0 0.28rem;
+  font-size: max(0.75rem, 12px);
 }
 
 .declare-panel.compact .hand-rail {

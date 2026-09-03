@@ -527,6 +527,11 @@
               :disabled="!handCanScrollBackward"
               @click="scrollHand('backward')"
             >‹ 前翻</button>
+            <span
+              class="hand-visible-range"
+              data-testid="hand-visible-range"
+              :aria-label="handVisibleRangeLabel"
+            >{{ handVisibleRange.start }}–{{ handVisibleRange.end }} / {{ handVisibleRange.total }}</span>
             <button
               type="button"
               data-testid="hand-scroll-next"
@@ -785,6 +790,7 @@ const selfHandRef = ref<HTMLElement | null>(null);
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
+const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver: ResizeObserver | null = null;
 const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
@@ -1144,6 +1150,10 @@ const displayPrivateHand = computed<Card[]>(() => {
   const limit = shouldLimit ? Math.max(0, visibleHandCount.value || 0) : props.privateHand.length;
   return props.privateHand.slice(0, limit);
 });
+const handVisibleRangeLabel = computed(() => {
+  const { start, end, total } = handVisibleRange.value;
+  return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
+});
 const isResponseCardDrawHidden = computed(
   () => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value,
 );
@@ -1419,12 +1429,32 @@ function updateHandScrollState(): void {
     handHasOverflow.value = false;
     handCanScrollBackward.value = false;
     handCanScrollForward.value = false;
+    handVisibleRange.value = { start: 0, end: 0, total: 0 };
     return;
   }
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
   handHasOverflow.value = maxScrollLeft > 2;
   handCanScrollBackward.value = hand.scrollLeft > 2;
   handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
+
+  const cards = Array.from(hand.querySelectorAll<HTMLElement>("[data-card-id]"));
+  const handRect = hand.getBoundingClientRect();
+  let visibleIndexes = cards
+    .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+    .filter(({ rect }) => {
+      const center = rect.left + rect.width / 2;
+      return center >= handRect.left && center <= handRect.right;
+    })
+    .map(({ index }) => index);
+  if (!visibleIndexes.length) {
+    visibleIndexes = cards
+      .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.right > handRect.left && rect.left < handRect.right)
+      .map(({ index }) => index);
+  }
+  handVisibleRange.value = visibleIndexes.length
+    ? { start: visibleIndexes[0]! + 1, end: visibleIndexes.at(-1)! + 1, total: cards.length }
+    : { start: 0, end: 0, total: cards.length };
 }
 
 function scrollHand(direction: "backward" | "forward"): void {
@@ -2056,6 +2086,11 @@ watch(
     }
     void nextTick(updateHandScrollState);
   },
+);
+
+watch(
+  () => displayPrivateHand.value.map((card) => card.id).join("|"),
+  () => void nextTick(updateHandScrollState),
 );
 
 watch(selfHandRef, observeHandScroller, { immediate: true });
@@ -3182,6 +3217,23 @@ watch(
   opacity: 0.72;
 }
 
+.hand-visible-range {
+  min-width: 4.7rem;
+  height: 2.25rem;
+  padding: 0 0.42rem;
+  border: 1px solid rgba(186, 230, 253, 0.5);
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fef3c7;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .self-area {
   background: #111827;
   border: 1px solid #334155;
@@ -4075,6 +4127,13 @@ watch(
     padding: 0 0.34rem;
     border-radius: 0.8vh;
     font-size: clamp(0.74rem, 3.1vh, 0.84rem);
+  }
+
+  .hand-visible-range {
+    min-width: 4.25rem;
+    height: 34px;
+    padding: 0 0.28rem;
+    font-size: max(0.75rem, 12px);
   }
 
   .discard-token.mode-large {
