@@ -20,6 +20,7 @@ export interface DebugScenarioContext {
   broadcastAvailableActions: () => void;
   startCollectivePolling: () => void;
   tickBots: () => void;
+  endRound: (lastAction: string, winnerId: string, groups: string[]) => void;
 }
 
 /**
@@ -129,6 +130,45 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.responseCard = new CardSchema();
     context.state.responsePhase = "collective";
     context.state.lastAction = `DEBUG: discard_public#${seq}`;
+  } else if (scenario === "settlement_hu") {
+    for (const id of context.playerOrder) {
+      const tablePlayer = context.state.players.get(id);
+      if (!tablePlayer) {
+        continue;
+      }
+      tablePlayer.declaredKongs = 0;
+      tablePlayer.exposedArea.clear();
+      tablePlayer.exposedGroupSizes.clear();
+      tablePlayer.exposedGroupKinds.clear();
+      tablePlayer.generalArea.clear();
+      tablePlayer.wildcardPool.clear();
+      tablePlayer.fishArea.clear();
+      tablePlayer.discardPile.clear();
+    }
+    add("s1", "yellow", "jiang");
+    add("s2", "yellow", "shi");
+    add("s3", "yellow", "xiang");
+    add("s4", "red", "ju");
+    add("s5", "red", "ma");
+    add("s6", "red", "pao");
+    add("s7", "green", "zu");
+    add("s8", "green", "zu");
+    add("s9", "green", "zu");
+    add("s10", "white", "ju");
+    add("s11", "white", "ma");
+    add("s12", "white", "pao");
+    add("s13", "gold", "bo");
+    context.setPendingResponse(null);
+    context.state.responseCard = new CardSchema();
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_draw";
+    context.state.currentPlayerId = seatId;
+    context.state.lastAction = `DEBUG: settlement_hu#${seq}`;
+    context.playerHands.set(seatId, hand);
+    context.updatePublicHandCounts();
+    context.syncAllPrivateHands();
+    context.endRound(`${seatId} HU`, seatId, ["FrameJMP"]);
+    return true;
   } else {
     return false;
   }

@@ -3120,6 +3120,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
         startCollectivePolling: () => this.startCollectivePolling(),
         tickBots: () => this.tickBots(),
+        endRound: (lastAction, winnerId, groups) => this.endRound(lastAction, winnerId, groups),
       },
       seatId,
       scenario,
