@@ -9,9 +9,11 @@
       'compact-landscape': isCompactViewport && isPlaying,
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
+      'reduce-motion': displayPreferences.reduceMotion,
     }"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
+    :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
     :data-connection-state="connectionState"
   >
     <header
@@ -668,6 +670,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
         tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
         seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
         turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
+        reduceMotion: parsed.reduceMotion === true,
         keepScreenAwake: parsed.keepScreenAwake !== false,
       };
     }
@@ -681,6 +684,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
     seatDirection: "counterclockwise",
     turnAlert: "sound-vibration",
+    reduceMotion: false,
     keepScreenAwake: true,
   };
 }
@@ -4075,5 +4079,39 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 .layout.ultra-compact-viewport .hu-panel > .end-actions {
   margin-top: 0.3rem;
   padding-top: 0.3rem;
+}
+
+.layout.reduce-motion :deep(*),
+.layout.reduce-motion :deep(*::before),
+.layout.reduce-motion :deep(*::after) {
+  animation-delay: 0ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+.layout.reduce-motion :deep(.fx-card),
+.layout.reduce-motion :deep(.dealer-flight) {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout :deep(*),
+  .layout :deep(*::before),
+  .layout :deep(*::after) {
+    animation-delay: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .layout :deep(.fx-card),
+  .layout :deep(.dealer-flight) {
+    display: none !important;
+  }
 }
 </style>

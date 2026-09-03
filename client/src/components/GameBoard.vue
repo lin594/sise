@@ -1467,9 +1467,13 @@ function scrollHand(direction: "backward" | "forward"): void {
   const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
   hand.scrollBy({
     left: direction === "forward" ? distance : -distance,
-    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    behavior: shouldReduceMotion(hand) ? "auto" : "smooth",
   });
   window.setTimeout(updateHandScrollState, 320);
+}
+
+function shouldReduceMotion(element: HTMLElement | null): boolean {
+  return Boolean(element?.closest(".reduce-motion")) || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function observeHandScroller(hand: HTMLElement | null): void {

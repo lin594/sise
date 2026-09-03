@@ -2168,6 +2168,7 @@ test.describe("display preference compatibility", () => {
       ownCards: "adaptive",
       tableCards: "long",
       seatDirection: "counterclockwise",
+      reduceMotion: false,
     });
   });
 });

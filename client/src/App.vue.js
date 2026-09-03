@@ -35,6 +35,7 @@ function readDisplayPreferences() {
                 tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
                 seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
                 turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
+                reduceMotion: parsed.reduceMotion === true,
                 keepScreenAwake: parsed.keepScreenAwake !== false,
             };
         }
@@ -48,6 +49,7 @@ function readDisplayPreferences() {
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
         seatDirection: "counterclockwise",
         turnAlert: "sound-vibration",
+        reduceMotion: false,
         keepScreenAwake: true,
     };
 }
@@ -1950,6 +1952,22 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['reduce-motion']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['reduce-motion']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['reduce-motion']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['reduce-motion']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
@@ -1962,9 +1980,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
             'compact-landscape': __VLS_ctx.isCompactViewport && __VLS_ctx.isPlaying,
             'rotated-phone-portrait': __VLS_ctx.isRotatedPhonePortrait,
             'game-tools-active': __VLS_ctx.showGameTools,
+            'reduce-motion': __VLS_ctx.displayPreferences.reduceMotion,
         }) },
     'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
+    'data-reduce-motion': (__VLS_ctx.displayPreferences.reduceMotion ? 'true' : 'false'),
     'data-connection-state': (__VLS_ctx.connectionState),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({

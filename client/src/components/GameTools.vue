@@ -245,6 +245,22 @@
           class="setting-switch"
           type="button"
           role="switch"
+          data-testid="reduce-motion"
+          :aria-checked="props.modelValue.reduceMotion"
+          @click="setReduceMotion(!props.modelValue.reduceMotion)"
+        >
+          <span>
+            <strong>减少动态效果</strong>
+            <small>关闭飞牌、翻转和循环闪动</small>
+          </span>
+          <span class="switch-state" :class="{ active: props.modelValue.reduceMotion }">
+            {{ props.modelValue.reduceMotion ? "开启" : "关闭" }}
+          </span>
+        </button>
+        <button
+          class="setting-switch"
+          type="button"
+          role="switch"
           data-testid="keep-screen-awake"
           :aria-checked="props.modelValue.keepScreenAwake"
           @click="setKeepScreenAwake(!props.modelValue.keepScreenAwake)"
@@ -593,6 +609,10 @@ function setTurnAlert(turnAlert: TurnAlertMode): void {
 
 function setKeepScreenAwake(keepScreenAwake: boolean): void {
   emit("update:modelValue", { ...props.modelValue, keepScreenAwake });
+}
+
+function setReduceMotion(reduceMotion: boolean): void {
+  emit("update:modelValue", { ...props.modelValue, reduceMotion });
 }
 
 function openRules(): void {

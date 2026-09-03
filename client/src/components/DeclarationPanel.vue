@@ -509,9 +509,13 @@ function scrollHandPreview(direction: "backward" | "forward"): void {
   const distance = Math.max(120, Math.round(rail.clientWidth * 0.72));
   rail.scrollBy({
     left: direction === "forward" ? distance : -distance,
-    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    behavior: shouldReduceMotion(rail) ? "auto" : "smooth",
   });
   window.setTimeout(updateHandScrollState, 320);
+}
+
+function shouldReduceMotion(element: HTMLElement | null): boolean {
+  return Boolean(element?.closest(".reduce-motion")) || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function observeHandScroller(rail: HTMLElement | null): void {

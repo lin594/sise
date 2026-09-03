@@ -21,6 +21,7 @@ export interface GameDisplayPreferences {
   tableCards: CardDisplayMode;
   seatDirection: SeatDirection;
   turnAlert: TurnAlertMode;
+  reduceMotion: boolean;
   keepScreenAwake: boolean;
 }
 
