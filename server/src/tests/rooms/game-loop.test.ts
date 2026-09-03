@@ -273,12 +273,55 @@ test("a delayed action from an older decision window is ignored", () => {
   room.collectiveResponderId = "B";
   room.responseDecisionWindowId = 12;
   room.seatBySession.set("session-B", "B");
-  const client = { sessionId: "session-B", send: () => undefined };
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-B",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
 
   room.handleAction(client, { action: "pass", decisionKey: "play:11" });
 
   assert.equal(room.pendingResponse.collectives.size, 0);
   assert.equal(room.collectiveResponderId, "B");
+  assert.deepEqual(
+    sent.find((message) => message.event === "action_rejected")?.payload,
+    {
+      reason: "stale_decision",
+      decisionKey: "play:12",
+      message: "牌局已经继续，操作已为你刷新。",
+    },
+  );
+});
+
+test("a valid action gets an authoritative receipt before the room advances", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("response", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.responseDecisionWindowId = 12;
+  room.seatBySession.set("session-B", "B");
+  room.advanceCollectivePolling = () => undefined;
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-B",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleAction(client, { action: "pass", decisionKey: "play:12" });
+
+  assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "pass", candidateId: undefined });
+  assert.deepEqual(
+    sent.find((message) => message.event === "action_received")?.payload,
+    {
+      action: "pass",
+      decisionKey: "play:12",
+      message: "操作已收到，正在继续牌局。",
+    },
+  );
 });
 
 test("a delayed discard from an older decision window cannot remove a card", () => {
@@ -295,12 +338,54 @@ test("a delayed discard from an older decision window cannot remove a card", () 
   room.awaitingDiscardOwnerId = "A";
   room.responseDecisionWindowId = 21;
   room.seatBySession.set("session-A", "A");
-  const client = { sessionId: "session-A", send: () => undefined };
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-A",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
 
   room.handleDiscardCard(client, { cardId: discard.id, decisionKey: "play:20" });
 
   assert.deepEqual(room.playerHands.get("A")?.map((card: Card) => card.id), [discard.id]);
   assert.equal(room.state.players.get("A")?.discardPile.length, 0);
+  assert.equal(
+    sent.find((message) => message.event === "action_rejected")?.payload?.message,
+    "牌局已经继续，操作已为你刷新。",
+  );
+});
+
+test("a valid discard gets an authoritative receipt", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  const discard = mkCard("discard", "yellow", "ma", "draw");
+  room.playerHands.set("A", [discard]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("draw", "green", "ju", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.state.currentPlayerId = "A";
+  room.awaitingDiscardOwnerId = "A";
+  room.responseDecisionWindowId = 21;
+  room.seatBySession.set("session-A", "A");
+  room.clearCollectiveTimer = () => undefined;
+  room.beginCollectiveFromDiscard = () => undefined;
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-A",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleDiscardCard(client, { cardId: discard.id, decisionKey: "play:21" });
+
+  assert.deepEqual(
+    sent.find((message) => message.event === "action_received")?.payload,
+    {
+      action: "discard",
+      decisionKey: "play:21",
+      message: "操作已收到，正在继续牌局。",
+    },
+  );
 });
 
 test("bots and disconnected players cannot request more decision time", () => {

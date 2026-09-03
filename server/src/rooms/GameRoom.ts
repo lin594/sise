@@ -1922,30 +1922,62 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return Boolean(item?.candidates?.some((candidate) => candidate.id === candidateId));
   }
 
-  private rejectAction(client: Client, reason: string): void {
-    client.send("action_rejected", { reason });
+  private actionRejectionMessage(reason: string): string {
+    const messages: Record<string, string> = {
+      stale_decision: "牌局已经继续，操作已为你刷新。",
+      candidate_required: "请先选择一组牌。",
+      invalid_candidate: "这组牌已经不能使用，请重新选择。",
+      invalid_action_payload: "操作内容无效，请重新选择。",
+      action_unavailable: "当前不能这样操作，操作已为你刷新。",
+      discard_unavailable: "这张牌现在不能打出，请重新选择。",
+    };
+    return messages[reason] ?? "这次操作没有生效，请按当前提示重新选择。";
+  }
+
+  private rejectAction(client: Client, reason: string, seatId?: string): void {
+    client.send("action_rejected", {
+      reason,
+      decisionKey: seatId ? this.buildDecisionTimerSnapshot(seatId).decisionKey : "",
+      message: this.actionRejectionMessage(reason),
+    });
     this.traceStep("action_rejected", reason);
   }
 
+  private acknowledgeAction(
+    client: Client,
+    seatId: string,
+    action: ActionType | "discard",
+    submittedDecisionKey?: string,
+  ): void {
+    client.send("action_received", {
+      action,
+      decisionKey: submittedDecisionKey || this.buildDecisionTimerSnapshot(seatId).decisionKey,
+      message: "操作已收到，正在继续牌局。",
+    });
+  }
+
   private handleAction(client: Client, payload: ActionRequest): void {
-    if (!this.pendingResponse || this.state.phase !== "playing") {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (!seatId || this.botIds.has(seatId)) {
       return;
     }
 
-    const seatId = this.seatBySession.get(client.sessionId);
-    if (!seatId || this.botIds.has(seatId)) {
+    if (!this.pendingResponse || this.state.phase !== "playing") {
+      this.rejectAction(client, "action_unavailable", seatId);
+      this.sendAvailableActionsToClient(client, seatId);
       return;
     }
 
     const pending = this.pendingResponse;
     const parsed = this.normalizeActionRequest(payload);
     if (!parsed) {
-      this.rejectAction(client, "invalid_action_payload");
+      this.rejectAction(client, "invalid_action_payload", seatId);
       return;
     }
     const { action, candidateId, decisionKey } = parsed;
     if (!this.acceptsDecisionKey(seatId, decisionKey)) {
       this.traceStep("action_stale", `seat=${seatId} decision=${decisionKey ?? "-"}`);
+      this.rejectAction(client, "stale_decision", seatId);
       this.sendAvailableActionsToClient(client, seatId);
       return;
     }
@@ -1973,11 +2005,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.isManualCandidateAction(action) &&
       (decision === "collective_accept" || decision === "local_chi");
     if (requireCandidate && !this.isCandidateValidForAction(actionItem, candidateId)) {
-      this.rejectAction(client, candidateId ? "invalid_candidate" : "candidate_required");
+      this.rejectAction(client, candidateId ? "invalid_candidate" : "candidate_required", seatId);
       return;
     }
 
     if (decision === "collective_accept") {
+      this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
       if (isCurrentResponder) {
         this.clearCollectiveTimer();
@@ -2001,20 +2034,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
     if (decision === "local_chi") {
+      this.acknowledgeAction(client, seatId, action, decisionKey);
       this.clearCollectiveTimer();
       this.executeEat(seatId, candidateId);
       return;
     }
     if (decision === "local_pass_upper") {
+      this.acknowledgeAction(client, seatId, action, decisionKey);
       this.clearCollectiveTimer();
       this.executeGrab(seatId);
       return;
     }
     if (decision === "local_pass_draw") {
+      this.acknowledgeAction(client, seatId, action, decisionKey);
       this.clearCollectiveTimer();
       this.executePassToNext(seatId);
       return;
     }
+    this.rejectAction(client, "action_unavailable", seatId);
+    this.sendAvailableActionsToClient(client, seatId);
   }
 
   /**
@@ -2033,6 +2071,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       : "";
     if (!this.acceptsDecisionKey(seatId, decisionKey || undefined)) {
       this.traceStep("discard_stale", `seat=${seatId} decision=${decisionKey || "-"}`);
+      this.rejectAction(client, "stale_decision", seatId);
       this.sendAvailableActionsToClient(client, seatId);
       return;
     }
@@ -2048,11 +2087,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         responsePhase: this.state.responsePhase,
       })
     ) {
+      this.rejectAction(client, "action_unavailable", seatId);
+      this.sendAvailableActionsToClient(client, seatId);
       return;
     }
 
     const cardId = normalizeDiscardCardId(payload);
     if (!cardId) {
+      this.rejectAction(client, "discard_unavailable", seatId);
       return;
     }
     this.traceStep("discard_request", `seat=${seatId} cardId=${cardId}`);
@@ -2060,9 +2102,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const discard = this.ops.discardCardById(seatId, cardId);
     if (!discard) {
       this.traceStep("discard_rejected", `seat=${seatId} cardId=${cardId}`);
+      this.rejectAction(client, "discard_unavailable", seatId);
       return;
     }
 
+    this.acknowledgeAction(client, seatId, "discard", decisionKey || undefined);
     this.clearCollectiveTimer();
     this.traceStep("discard_accept", `seat=${seatId} discard=${this.formatTraceCard(discard)}`);
     this.ops.pushDiscard(seatId, discard);
