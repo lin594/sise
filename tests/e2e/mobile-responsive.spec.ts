@@ -368,7 +368,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("history-entry").first()).toBeVisible();
     await expect(page.getByTestId("history-entry").first()).not.toContainText(/seat_|bot_|DISCARD|DEALER|PASS/);
     await expect(page.getByTestId("history-entry").first()).toContainText(
-      /[红黄绿白](?:帥|將|仕|士|相|象|俥|車|傌|馬|炮|包|兵|卒|公|侯|伯|子|男)/,
+      /(?:[红黄绿白](?:帥|將|仕|士|相|象|俥|車|傌|馬|炮|包|兵|卒)|金条(?:公|侯|伯|子|男))/,
     );
     const historyGeometry = await historyPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();

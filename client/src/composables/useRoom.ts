@@ -15,7 +15,7 @@ import type {
   SessionTokenPayload,
 } from "@/types/game";
 import { sortHandCards } from "@/utils/cardSort";
-import { getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText } from "@/utils/cardText";
 import { actionHistoryText, parseActionDescriptor } from "@/utils/actionHistory";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
@@ -403,7 +403,7 @@ function actionCardLabel(action: string, snapshot?: RoomStateSnapshot): string {
       ].includes(actionKey)
       ? snapshot.responseCard ?? snapshot.targetCard
       : null;
-  return card ? getCardLabelText(card) : "";
+  return card ? getCardAccessibleText(card) : "";
 }
 
 export function useRoom(playerName = "Player") {
