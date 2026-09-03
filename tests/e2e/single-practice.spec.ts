@@ -202,4 +202,31 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement.png") });
   await settlementList.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement-details.png") });
+
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+  const returnLobbyTrigger = page.getByTestId("return-lobby-trigger");
+  await returnLobbyTrigger.click();
+  const returnLobbyDialog = page.getByRole("dialog", { name: "让全桌返回大厅？" });
+  await expect(returnLobbyDialog).toBeVisible();
+  const returnDialogGeometry = await returnLobbyDialog.evaluate((dialog) => {
+    const rect = dialog.getBoundingClientRect();
+    return {
+      withinViewport:
+        rect.left >= 0 &&
+        rect.right <= window.innerWidth &&
+        rect.top >= 0 &&
+        rect.bottom <= window.innerHeight,
+    };
+  });
+  expect(returnDialogGeometry.withinViewport).toBe(true);
+  await expect(page.getByTestId("cancel-table-return")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByTestId("confirm-table-return")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("cancel-table-return")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(returnLobbyDialog).toHaveCount(0);
+  await expect(returnLobbyTrigger).toBeFocused();
+  await expect(settlementPanel).toBeVisible();
 });

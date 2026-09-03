@@ -382,13 +382,19 @@ const rulesCloseButtonRef = ref(null);
 const candidatePanelRef = ref(null);
 const candidateCancelButtonRef = ref(null);
 const settlementPanelRef = ref(null);
+const confirmingReturnLobby = ref(false);
+const returnLobbyTriggerRef = ref(null);
+const returnLobbyDialogRef = ref(null);
+const returnLobbyCancelRef = ref(null);
 let rulesReturnFocus = null;
 let candidateReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 watch(showEndPanel, (visible) => {
     if (visible) {
         void nextTick(() => settlementPanelRef.value?.focus());
+        return;
     }
+    confirmingReturnLobby.value = false;
 }, { immediate: true });
 const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
@@ -436,6 +442,47 @@ function trapRulesFocus(event) {
         last.focus();
     }
     else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+async function requestReturnLobby() {
+    if (!settlementReady.value || !isHost.value) {
+        return;
+    }
+    confirmingReturnLobby.value = true;
+    await nextTick();
+    returnLobbyCancelRef.value?.focus();
+}
+function cancelReturnLobby() {
+    if (!confirmingReturnLobby.value) {
+        return;
+    }
+    confirmingReturnLobby.value = false;
+    void nextTick(() => returnLobbyTriggerRef.value?.focus());
+}
+function confirmReturnLobby() {
+    confirmingReturnLobby.value = false;
+    returnLobby();
+}
+function trapReturnLobbyFocus(event) {
+    const panel = returnLobbyDialogRef.value;
+    if (!panel) {
+        return;
+    }
+    const focusable = Array.from(panel.querySelectorAll("button:not([disabled])"));
+    if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+    }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
         event.preventDefault();
         first.focus();
     }
@@ -1475,6 +1522,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['neutral']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
@@ -2447,16 +2500,65 @@ if (__VLS_ctx.showEndPanel) {
         });
         (__VLS_ctx.settlementReady ? "下一局（房主）" : "正在结算…");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.returnLobby) },
+            ...{ onClick: (__VLS_ctx.requestReturnLobby) },
+            ref: "returnLobbyTriggerRef",
             ...{ class: "ghost" },
+            type: "button",
+            'data-testid': "return-lobby-trigger",
             disabled: (!__VLS_ctx.settlementReady),
         });
+        /** @type {typeof __VLS_ctx.returnLobbyTriggerRef} */ ;
     }
     else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "host-actions-hint" },
         });
     }
+}
+if (__VLS_ctx.confirmingReturnLobby) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onClick: (__VLS_ctx.cancelReturnLobby) },
+        ...{ class: "table-return-mask" },
+        'data-testid': "table-return-mask",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ onKeydown: (__VLS_ctx.cancelReturnLobby) },
+        ...{ onKeydown: (__VLS_ctx.trapReturnLobbyFocus) },
+        ref: "returnLobbyDialogRef",
+        ...{ class: "table-return-dialog" },
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-labelledby': "table-return-title",
+        'aria-describedby': "table-return-description",
+        tabindex: "-1",
+    });
+    /** @type {typeof __VLS_ctx.returnLobbyDialogRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-symbol" },
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
+        id: "table-return-title",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        id: "table-return-description",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.cancelReturnLobby) },
+        ref: "returnLobbyCancelRef",
+        type: "button",
+        'data-testid': "cancel-table-return",
+    });
+    /** @type {typeof __VLS_ctx.returnLobbyCancelRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.confirmReturnLobby) },
+        ...{ class: "danger" },
+        type: "button",
+        'data-testid': "confirm-table-return",
+    });
 }
 if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2651,6 +2753,11 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
@@ -2699,7 +2806,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendDiscardCard: sendDiscardCard,
             requestMoreTime: requestMoreTime,
             nextRound: nextRound,
-            returnLobby: returnLobby,
             claimSeat: claimSeat,
             addBot: addBot,
             updateBot: updateBot,
@@ -2752,6 +2858,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             candidatePanelRef: candidatePanelRef,
             candidateCancelButtonRef: candidateCancelButtonRef,
             settlementPanelRef: settlementPanelRef,
+            confirmingReturnLobby: confirmingReturnLobby,
+            returnLobbyTriggerRef: returnLobbyTriggerRef,
+            returnLobbyDialogRef: returnLobbyDialogRef,
+            returnLobbyCancelRef: returnLobbyCancelRef,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
@@ -2759,6 +2869,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             openRules: openRules,
             closeRules: closeRules,
             trapRulesFocus: trapRulesFocus,
+            requestReturnLobby: requestReturnLobby,
+            cancelReturnLobby: cancelReturnLobby,
+            confirmReturnLobby: confirmReturnLobby,
+            trapReturnLobbyFocus: trapReturnLobbyFocus,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,

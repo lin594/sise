@@ -371,11 +371,47 @@
             <button class="primary" :disabled="!settlementReady" @click="nextRound">
               {{ settlementReady ? "下一局（房主）" : "正在结算…" }}
             </button>
-            <button class="ghost" :disabled="!settlementReady" @click="returnLobby">全桌返回大厅（房主）</button>
+            <button
+              ref="returnLobbyTriggerRef"
+              class="ghost"
+              type="button"
+              data-testid="return-lobby-trigger"
+              :disabled="!settlementReady"
+              @click="requestReturnLobby"
+            >
+              全桌返回大厅（房主）
+            </button>
           </template>
           <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="confirmingReturnLobby"
+      class="table-return-mask"
+      data-testid="table-return-mask"
+      @click.self="cancelReturnLobby"
+    >
+      <section
+        ref="returnLobbyDialogRef"
+        class="table-return-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="table-return-title"
+        aria-describedby="table-return-description"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="cancelReturnLobby"
+        @keydown.tab="trapReturnLobbyFocus"
+      >
+        <div class="table-return-symbol" aria-hidden="true">↩</div>
+        <h2 id="table-return-title">让全桌返回大厅？</h2>
+        <p id="table-return-description">所有玩家都会离开本局结算，回到房间准备页。只有房主能执行这项操作。</p>
+        <div class="table-return-actions">
+          <button ref="returnLobbyCancelRef" type="button" data-testid="cancel-table-return" @click="cancelReturnLobby">继续看结算</button>
+          <button class="danger" type="button" data-testid="confirm-table-return" @click="confirmReturnLobby">全桌返回大厅</button>
+        </div>
+      </section>
     </div>
 
     <div v-if="showRules" class="rules-mask" @click.self="closeRules()">
@@ -967,6 +1003,10 @@ const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
 const candidatePanelRef = ref<HTMLElement | null>(null);
 const candidateCancelButtonRef = ref<HTMLButtonElement | null>(null);
 const settlementPanelRef = ref<HTMLElement | null>(null);
+const confirmingReturnLobby = ref(false);
+const returnLobbyTriggerRef = ref<HTMLButtonElement | null>(null);
+const returnLobbyDialogRef = ref<HTMLElement | null>(null);
+const returnLobbyCancelRef = ref<HTMLButtonElement | null>(null);
 let rulesReturnFocus: HTMLElement | null = null;
 let candidateReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -975,7 +1015,9 @@ watch(
   (visible) => {
     if (visible) {
       void nextTick(() => settlementPanelRef.value?.focus());
+      return;
     }
+    confirmingReturnLobby.value = false;
   },
   { immediate: true },
 );
@@ -1038,6 +1080,50 @@ function trapRulesFocus(event: KeyboardEvent): void {
     event.preventDefault();
     last.focus();
   } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+async function requestReturnLobby(): Promise<void> {
+  if (!settlementReady.value || !isHost.value) {
+    return;
+  }
+  confirmingReturnLobby.value = true;
+  await nextTick();
+  returnLobbyCancelRef.value?.focus();
+}
+
+function cancelReturnLobby(): void {
+  if (!confirmingReturnLobby.value) {
+    return;
+  }
+  confirmingReturnLobby.value = false;
+  void nextTick(() => returnLobbyTriggerRef.value?.focus());
+}
+
+function confirmReturnLobby(): void {
+  confirmingReturnLobby.value = false;
+  returnLobby();
+}
+
+function trapReturnLobbyFocus(event: KeyboardEvent): void {
+  const panel = returnLobbyDialogRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(panel.querySelectorAll<HTMLElement>("button:not([disabled])"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
     event.preventDefault();
     first.focus();
   }
@@ -3065,6 +3151,80 @@ watch(
   margin-inline: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
   padding: 0.65rem clamp(0.9rem, 2vh, 1.2rem) clamp(0.9rem, 2vh, 1.2rem);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0), #f8fafc 30%);
+}
+
+.table-return-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right))
+    max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
+  background: rgba(2, 6, 23, 0.78);
+}
+
+.table-return-dialog {
+  width: min(23rem, calc(100dvw - 1.4rem));
+  max-height: calc(100dvh - 1.4rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.48);
+  border-radius: 1rem;
+  background: linear-gradient(160deg, #111827, #020617);
+  color: #f8fafc;
+  text-align: center;
+  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.62);
+}
+
+.table-return-symbol {
+  width: 2.8rem;
+  height: 2.8rem;
+  margin: 0 auto 0.55rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(127, 29, 29, 0.48);
+  color: #fecaca;
+  font-size: 1.45rem;
+}
+
+.table-return-dialog h2,
+.table-return-dialog p {
+  margin: 0;
+}
+
+.table-return-dialog h2 {
+  font-size: 1.2rem;
+}
+
+.table-return-dialog p {
+  margin-top: 0.5rem;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.table-return-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.table-return-actions button {
+  min-height: 48px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #475569;
+  border-radius: 0.72rem;
+  background: #1e293b;
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.table-return-actions button.danger {
+  border-color: #dc2626;
+  background: #b91c1c;
 }
 
 @keyframes settlement-winner-glow {
