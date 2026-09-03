@@ -28,8 +28,20 @@ function createMatchRoom() {
   room.clearRoomIdleTimer = () => undefined;
   room.broadcastAvailableActions = () => undefined;
   room.clients = [];
-  const metadata: Array<{ roomMode: string; matchOpen: boolean }> = [];
-  room.setMetadata = async (value: { roomMode: string; matchOpen: boolean }) => {
+  const metadata: Array<{
+    phase?: string;
+    roomMode: string;
+    matchOpen: boolean;
+    hostPlayerId?: string;
+    occupiedSeats?: number;
+  }> = [];
+  room.setMetadata = async (value: {
+    phase?: string;
+    roomMode: string;
+    matchOpen: boolean;
+    hostPlayerId?: string;
+    occupiedSeats?: number;
+  }) => {
     metadata.push(value);
   };
   return { room, metadata };
@@ -118,7 +130,10 @@ test("quick-match deadline fills standard bots and closes only matchmaking", () 
   assert.equal(bots.length, 3);
   assert.equal(bots.every((bot: PlayerState) => bot.botStrength === 50), true);
   assert.equal(room.state.matchStartsAt, 0);
-  assert.deepEqual(metadata.at(-1), { roomMode: "match", matchOpen: false });
+  assert.equal(metadata.at(-1)?.roomMode, "match");
+  assert.equal(metadata.at(-1)?.matchOpen, false);
+  assert.equal(metadata.at(-1)?.phase, "waiting");
+  assert.equal(metadata.at(-1)?.occupiedSeats, 1);
 });
 
 test("quick-match auto-start pauses for a disconnected reserved human", () => {
@@ -136,6 +151,23 @@ test("quick-match auto-start pauses for a disconnected reserved human", () => {
   assert.equal(room.state.players.size, 2);
   assert.equal(room.state.matchStartsAt, 0);
   assert.equal(metadata.some((entry) => entry.matchOpen === false), false);
+});
+
+test("quick-match reconnect keeps the original authoritative deadline", () => {
+  const { room } = createMatchRoom();
+  room.matchWaitMs = 12_000;
+  addHuman(room, 0);
+  room.onMatchRosterChanged();
+  const originalDeadline = room.state.matchStartsAt;
+
+  room.state.players.get("seat_0").connected = false;
+  room.onMatchRosterChanged();
+  assert.equal(room.state.matchStartsAt, originalDeadline);
+
+  room.state.players.get("seat_0").connected = true;
+  room.onMatchRosterChanged();
+  assert.equal(room.state.matchStartsAt, originalDeadline);
+  room.clearMatchStartTimer();
 });
 
 test("quick-match lobby does not expose friend-room seat administration", () => {

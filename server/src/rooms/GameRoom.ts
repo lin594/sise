@@ -1231,7 +1231,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private updateMatchOpen(matchOpen: boolean): void {
-    void this.setMetadata({ roomMode: "match", matchOpen });
+    void this.setMetadata({
+      phase: this.state.phase,
+      roomMode: "match",
+      matchOpen,
+      hostPlayerId: this.state.hostPlayerId,
+      occupiedSeats: this.playerOrder.length,
+    });
   }
 
   private clearMatchStartTimer(): void {
@@ -1243,20 +1249,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private scheduleMatchStart(delayMs: number): void {
-    const deadline = Date.now() + delayMs;
-    if (
-      this.matchStartTimer &&
-      this.state.matchStartsAt > 0 &&
-      this.state.matchStartsAt <= deadline
-    ) {
-      return;
+    const requestedDeadline = Date.now() + delayMs;
+    const deadline = this.state.matchStartsAt > 0
+      ? Math.min(this.state.matchStartsAt, requestedDeadline)
+      : requestedDeadline;
+    if (this.matchStartTimer) {
+      clearTimeout(this.matchStartTimer);
     }
-    this.clearMatchStartTimer();
     this.state.matchStartsAt = deadline;
     this.matchStartTimer = setTimeout(() => {
       this.matchStartTimer = null;
       this.attemptMatchStart();
-    }, delayMs);
+    }, Math.max(0, deadline - Date.now()));
   }
 
   /**
@@ -1270,8 +1274,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     this.updateMatchOpen(true);
     const connectedHumans = this.connectedMatchHumanCount();
-    if (connectedHumans === 0 || this.hasDisconnectedMatchHuman()) {
+    const hasDisconnectedHuman = this.hasDisconnectedMatchHuman();
+    if (connectedHumans === 0 && !hasDisconnectedHuman) {
       this.clearMatchStartTimer();
+      return;
+    }
+    // A refresh must not restart the visible countdown. Keep its authoritative
+    // deadline while a reserved seat is offline; when that seat reconnects (or
+    // expires), the same deadline is resumed and an elapsed one starts at once.
+    if (hasDisconnectedHuman) {
       return;
     }
     const roomIsFull = this.state.players.size >= this.targetSeats;
@@ -1279,7 +1290,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private attemptMatchStart(): void {
-    this.clearMatchStartTimer();
     if (
       this.state.roomMode !== "match" ||
       this.state.phase !== "waiting" ||
@@ -1291,6 +1301,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       return;
     }
+    this.clearMatchStartTimer();
     this.updateMatchOpen(false);
     this.ensureBotSeatsForStart();
     this.removeUnseatedClientsForGameStart();
