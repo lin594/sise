@@ -21,10 +21,10 @@
       </button>
       <button
         ref="settingsButtonRef"
-        class="tool-button"
+        class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
-        :title="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
+        :aria-label="decisionActive ? '完成当前操作后可打开设置' : '牌局设置'"
+        :title="decisionActive ? '完成当前操作后可打开设置' : '牌局设置'"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -35,7 +35,7 @@
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
           <path d="m19.2 13.4 1.3 1-.1 1.5-1.5 1.8-1.6-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.7-1.4.6h-2.5l-.7-1.5a7.8 7.8 0 0 1-2-.6l-1.4.9-1.3-.8-1.2-2.2.9-1.4a7.8 7.8 0 0 1-.2-2.1L4 11.7l.3-1.5 1.3-2 1.7.1a7.8 7.8 0 0 1 1.7-1.2l.1-1.7 1.4-.7H13l.9 1.4a7.8 7.8 0 0 1 1.9.8l1.5-.7 1.2.9 1 2.3-1 1.3c.2.9.3 1.8.1 2.7h.6Z" />
         </svg>
-        <span>{{ decisionActive ? "先操作" : "设置" }}</span>
+        <span>设置</span>
       </button>
       <button
         ref="exitButtonRef"
@@ -626,11 +626,11 @@ onBeforeUnmount(removeSettingsOutsideListener);
   line-height: 1;
 }
 
-.tool-button:disabled {
+.tool-button.settings:disabled {
   cursor: not-allowed;
-  border-color: rgba(250, 204, 21, 0.62);
-  background: #172033;
-  color: #fde68a;
+  border-color: rgba(100, 116, 139, 0.42);
+  background: rgba(15, 23, 42, 0.7);
+  color: #94a3b8;
   opacity: 1;
 }
 

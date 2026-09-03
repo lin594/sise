@@ -74,8 +74,8 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   await expect(header.getByRole("heading", { name: "四色牌" })).toBeVisible();
   const settingsButton = header.getByTestId("game-settings");
   await expect(settingsButton).toBeVisible();
-  await expect(settingsButton).toContainText(/设置|先操作/);
-  await expect(settingsButton).toHaveAttribute("aria-label", /牌局设置|请先完成当前操作，再打开设置/);
+  await expect(settingsButton).toContainText("设置");
+  await expect(settingsButton).toHaveAttribute("aria-label", /牌局设置|完成当前操作后可打开设置/);
   await expect(header.getByTestId("game-history")).toBeVisible();
   await expect(header.getByTestId("game-history")).toContainText("记录");
   await expect(header.getByTestId("game-history")).toHaveAttribute("aria-label", /最近操作/);
@@ -1081,8 +1081,9 @@ test.describe("compact landscape gameplay", () => {
     await expect(discardConfirm).toHaveText("出牌");
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeDisabled();
-    await expect(gameSettings).toContainText("先操作");
-    await expect(gameSettings).toHaveAttribute("aria-label", "请先完成当前操作，再打开设置");
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
+    await expect(gameSettings).toHaveAttribute("title", "完成当前操作后可打开设置");
     await expect(page.getByTestId("settings-panel")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-selected-card.png") });
     const discardButtonRect = await discardConfirm.evaluate((button) => {
@@ -1285,6 +1286,13 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
     await expect(waiting).toBeVisible();
     await expect(page.locator(".action-dock .btn")).toHaveCount(0);
+    const gameSettings = page.getByTestId("game-settings");
+    await expect(gameSettings).toBeEnabled();
+    const toolPositionsWhileWaiting = await page.locator("[data-testid='game-history'], [data-testid='game-settings'], [data-testid='game-exit']")
+      .evaluateAll((buttons) => buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
+      }));
     const desktopWaitingDock = await page.locator(".action-dock").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -1295,6 +1303,24 @@ test.describe("compact landscape gameplay", () => {
     await expect(waiting).toHaveCount(0);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-pass")).toBeEnabled();
+    await expect(gameSettings).toBeDisabled();
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
+    const decisionSettingsStyle = await gameSettings.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return { color: style.color, backgroundColor: style.backgroundColor, borderColor: style.borderColor };
+    });
+    expect(decisionSettingsStyle).toEqual({
+      color: "rgb(148, 163, 184)",
+      backgroundColor: "rgba(15, 23, 42, 0.7)",
+      borderColor: "rgba(100, 116, 139, 0.42)",
+    });
+    const toolPositionsDuringDecision = await page.locator("[data-testid='game-history'], [data-testid='game-settings'], [data-testid='game-exit']")
+      .evaluateAll((buttons) => buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
+      }));
+    expect(toolPositionsDuringDecision).toEqual(toolPositionsWhileWaiting);
     const decisionDock = await page.locator(".action-dock").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -1471,7 +1497,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(gameSettings).toBeDisabled({ timeout: 30_000 });
     await expect(rulesDialog).toHaveCount(0);
     await expect(settingsPanel).toHaveCount(0);
-    await expect(gameSettings).toContainText("先操作");
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
     await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
     await expect.poll(() => page.title()).toBe("轮到你了 · 四色牌");
