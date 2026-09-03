@@ -710,6 +710,7 @@ export declare function useRoom(playerName?: string): {
     startGame: () => void;
     nextRound: () => void;
     returnLobby: () => void;
+    dissolveRoom: () => void;
     setAutoPlay: (enabled: boolean) => void;
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => void;

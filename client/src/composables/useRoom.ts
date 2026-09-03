@@ -35,6 +35,7 @@ const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
   4104: "你已被移出房间。系统已停止自动恢复。",
   4105: "牌局已经开始，未入座的访问已结束。系统已停止自动恢复。",
   4106: "这是单人练习房，已有玩家在练习。请返回首页重新开始。",
+  4110: "房主已解散本桌，大家已返回模式选择。",
 };
 
 function terminalJoinFailureMessage(error: unknown): string | null {
@@ -859,6 +860,37 @@ export function useRoom(playerName = "Player") {
     }
   }
 
+  function returnToModeLobbyFromRoom(reason: string) {
+    const departingRoomId = activeRoomId.value.trim();
+    suppressReconnect = true;
+    activeConnectionSeq += 1;
+    connectInFlight = false;
+    clearRoomStateSyncTimer();
+    clearMissingHandSyncTimer();
+    clearReconnectTimer();
+    clearRestoredNoticeTimer();
+    clearPrivateStatePollTimer();
+    connected.value = false;
+    connectionState.value = "idle";
+    reconnectAttempt.value = 0;
+    reconnectAttempts = 0;
+    room.value = null;
+    if (departingRoomId) {
+      clearStored(tokenKey(departingRoomId));
+    }
+    clearStored(ROOM_KEY);
+    clearStored(LEGACY_TOKEN_KEY);
+    playerToken.value = "";
+    activeRoomId.value = "";
+    resetClientRoomState({ keepJoinError: true });
+    joinError.value = reason;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("roomId");
+    url.searchParams.delete("playerToken");
+    url.searchParams.delete("new");
+    window.history.replaceState(null, "", url.toString());
+  }
+
   function buildStateSyncFingerprint(snapshot: RoomStateSnapshot | null): string {
     if (!snapshot) {
       return "";
@@ -1406,26 +1438,14 @@ export function useRoom(playerName = "Player") {
         if (!isCurrentJoinedRoom()) {
           return;
         }
-        suppressReconnect = true;
-        clearStored(tokenKey(activeRoomId.value));
-        clearStored(ROOM_KEY);
-        playerToken.value = "";
-        mySeatId.value = "";
         const reason = payload?.reason || "你已离开房间";
-        connected.value = false;
-        connectionState.value = "idle";
-        reconnectAttempt.value = 0;
-        reconnectAttempts = 0;
-        clearRestoredNoticeTimer();
-        clearReconnectTimer();
-        clearPrivateStatePollTimer();
-        room.value = null;
-        activeRoomId.value = "";
-        resetClientRoomState({ keepJoinError: true });
-        joinError.value = reason;
-        const url = new URL(window.location.href);
-        url.searchParams.delete("roomId");
-        window.history.replaceState(null, "", url.toString());
+        returnToModeLobbyFromRoom(reason);
+      });
+      joined.onMessage("room_dissolved", (payload: { reason?: string }) => {
+        if (!isCurrentJoinedRoom()) {
+          return;
+        }
+        returnToModeLobbyFromRoom(payload?.reason || TERMINAL_ROOM_CLOSE_MESSAGES[4110]);
       });
       joined.onMessage("declare_rejected", (payload: { reason?: string }) => {
         if (!isCurrentJoinedRoom()) {
@@ -1436,6 +1456,10 @@ export function useRoom(playerName = "Player") {
       });
       joined.onLeave((code) => {
         if (!isActiveConnection() || room.value !== joined) {
+          return;
+        }
+        if (code === 4110) {
+          returnToModeLobbyFromRoom(TERMINAL_ROOM_CLOSE_MESSAGES[4110]);
           return;
         }
         const terminalMessage = TERMINAL_ROOM_CLOSE_MESSAGES[code];
@@ -1579,6 +1603,11 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("return_lobby");
   }
 
+  function dissolveRoom() {
+    joinError.value = "";
+    safeRoomSend("dissolve_room");
+  }
+
   function setAutoPlay(enabled: boolean) {
     safeRoomSend("set_auto_play", { enabled });
   }
@@ -1693,6 +1722,7 @@ export function useRoom(playerName = "Player") {
     startGame,
     nextRound,
     returnLobby,
+    dissolveRoom,
     setAutoPlay,
     leaveRoom,
     claimSeat,

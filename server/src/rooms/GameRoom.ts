@@ -293,6 +293,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.handleReturnLobby(client);
     });
 
+    this.onMessage("dissolve_room", (client) => {
+      void this.handleDissolveRoom(client);
+    });
+
     this.onMessage("claim_seat", (client, payload: { seatIndex?: number }) => {
       this.handleClaimSeat(client, payload);
     });
@@ -610,6 +614,31 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
     this.backToLobby();
+  }
+
+  /**
+   * 作用：由好友房房主在等待大厅解散整张桌，并阻止所有客户端重连。
+   * 关键输入/输出：输入发起客户端；成功时向全部连接发送终止原因。
+   * 副作用：清除房间 token，并用终止码关闭 Colyseus 房间。
+   */
+  private async handleDissolveRoom(client: Client): Promise<void> {
+    const seatId = this.seatBySession.get(client.sessionId);
+    if (this.state.roomMode !== "friends" || this.state.phase !== "waiting") {
+      this.sendLobbyError(client, "cannot_dissolve", "只能在好友房等待大厅解散本桌。");
+      return;
+    }
+    if (!seatId || seatId !== this.state.hostPlayerId) {
+      this.sendLobbyError(client, "not_host", "仅房主可解散整张桌。");
+      return;
+    }
+
+    const reason = "房主已解散本桌，大家已返回模式选择。";
+    this.state.lastAction = `ROOM_DISSOLVED ${seatId}`;
+    for (const target of this.clients) {
+      target.send("room_dissolved", { reason });
+    }
+    this.seatByToken.clear();
+    await this.disconnect(4110);
   }
 
   private seatIdForIndex(seatIndex: number): string {

@@ -115,6 +115,7 @@
       @update-bot="updateBot"
       @remove-seat="removeSeat"
       @leave-room="handleLeaveRoom"
+      @dissolve-room="dissolveRoom"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -690,6 +691,7 @@ const {
   startGame,
   nextRound,
   returnLobby,
+  dissolveRoom,
   setAutoPlay,
   leaveRoom,
   claimSeat,

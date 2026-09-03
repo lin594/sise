@@ -24,6 +24,16 @@
         >
           离开房间
         </button>
+        <button
+          v-if="roomMode === 'friends' && roomId && isHost"
+          ref="dissolveButtonRef"
+          class="danger head-action dissolve-room"
+          type="button"
+          data-testid="dissolve-room"
+          @click="requestDissolveRoom"
+        >
+          解散房间
+        </button>
       </div>
     </div>
 
@@ -186,7 +196,7 @@
 
     <Teleport to=".layout">
       <div
-        v-if="confirmingLeave"
+        v-if="departureIntent"
         class="waiting-leave-mask"
         data-testid="waiting-leave-mask"
         @click.self="cancelLeaveRoom"
@@ -202,12 +212,21 @@
           @keydown.esc.stop.prevent="cancelLeaveRoom"
           @keydown.tab="trapLeaveFocus"
         >
-          <div class="leave-symbol" aria-hidden="true">↩</div>
-          <h2 id="waiting-leave-title">离开当前好友房？</h2>
+          <div class="leave-symbol" :class="{ dissolve: departureIntent === 'dissolve' }" aria-hidden="true">
+            {{ departureIntent === "dissolve" ? "散" : "↩" }}
+          </div>
+          <h2 id="waiting-leave-title">{{ departureDialogTitle }}</h2>
           <p id="waiting-leave-description">{{ leaveRoomDescription }}</p>
           <div class="waiting-leave-actions">
             <button ref="leaveCancelButtonRef" type="button" data-testid="cancel-waiting-leave" @click="cancelLeaveRoom">继续等待</button>
-            <button class="danger" type="button" data-testid="confirm-waiting-leave" @click="confirmLeaveRoom">确认离开</button>
+            <button
+              class="danger"
+              type="button"
+              :data-testid="departureIntent === 'dissolve' ? 'confirm-dissolve-room' : 'confirm-waiting-leave'"
+              @click="confirmDeparture"
+            >
+              {{ departureIntent === "dissolve" ? "确认解散整桌" : "确认离开" }}
+            </button>
           </div>
         </section>
       </div>
@@ -274,16 +293,21 @@ const emit = defineEmits<{
   "update-bot": [seatIndex: number, strength: number];
   "remove-seat": [seatIndex: number];
   "leave-room": [];
+  "dissolve-room": [];
 }>();
-const confirmingLeave = ref(false);
+const departureIntent = ref<"leave" | "dissolve" | null>(null);
 const fillRequested = ref(false);
 const leaveButtonRef = ref<HTMLButtonElement | null>(null);
+const dissolveButtonRef = ref<HTMLButtonElement | null>(null);
 const startButtonRef = ref<HTMLButtonElement | null>(null);
 const lobbyTitleRef = ref<HTMLHeadingElement | null>(null);
 const leaveDialogRef = ref<HTMLElement | null>(null);
 const leaveCancelButtonRef = ref<HTMLButtonElement | null>(null);
 let fillRequestTimer: number | null = null;
 const leaveRoomDescription = computed(() => {
+  if (departureIntent.value === "dissolve") {
+    return "这会结束本桌的累计积分，并让所有牌友立即返回模式选择。这个操作不能撤销。";
+  }
   if (props.isHost) {
     return "如果还有真人，房主会自动转交；如果只剩你，房间会关闭。你将返回游戏模式大厅。";
   }
@@ -292,6 +316,9 @@ const leaveRoomDescription = computed(() => {
   }
   return "你还没有入座，将返回游戏模式大厅。";
 });
+const departureDialogTitle = computed(() =>
+  departureIntent.value === "dissolve" ? "解散整张好友桌？" : "离开当前好友房？",
+);
 const seatSlots = computed(() =>
   Array.from({ length: 4 }, (_, seatIndex) => ({
     seatIndex,
@@ -357,23 +384,37 @@ function requestFillBots(): void {
 }
 
 async function requestLeaveRoom(): Promise<void> {
-  confirmingLeave.value = true;
+  departureIntent.value = "leave";
+  await nextTick();
+  leaveCancelButtonRef.value?.focus();
+}
+
+async function requestDissolveRoom(): Promise<void> {
+  departureIntent.value = "dissolve";
   await nextTick();
   leaveCancelButtonRef.value?.focus();
 }
 
 async function cancelLeaveRoom(): Promise<void> {
-  if (!confirmingLeave.value) {
+  if (!departureIntent.value) {
     return;
   }
-  confirmingLeave.value = false;
+  const returnTarget = departureIntent.value === "dissolve" ? dissolveButtonRef.value : leaveButtonRef.value;
+  departureIntent.value = null;
   await nextTick();
-  leaveButtonRef.value?.focus();
+  returnTarget?.focus();
 }
 
-function confirmLeaveRoom(): void {
-  confirmingLeave.value = false;
-  emit("leave-room");
+function confirmDeparture(): void {
+  const intent = departureIntent.value;
+  departureIntent.value = null;
+  if (intent === "dissolve") {
+    emit("dissolve-room");
+    return;
+  }
+  if (intent === "leave") {
+    emit("leave-room");
+  }
 }
 
 function trapLeaveFocus(event: KeyboardEvent): void {
@@ -651,6 +692,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   color: #fecaca;
 }
 
+.dissolve-room {
+  border: 1px solid #dc2626;
+  font-weight: 850;
+}
+
 .danger {
   background: #7f1d1d;
   color: #fee2e2;
@@ -753,6 +799,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   background: rgba(127, 29, 29, 0.48);
   color: #fecaca;
   font-size: 1.45rem;
+}
+
+.leave-symbol.dissolve {
+  background: #991b1b;
+  color: #fff1f2;
+  font-weight: 900;
 }
 
 .waiting-leave-dialog h2,

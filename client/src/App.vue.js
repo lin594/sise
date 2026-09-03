@@ -75,7 +75,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
 const localTestPrivateHandReadyOverride = ref(null);
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
@@ -2051,6 +2051,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onUpdateBot': {} },
         ...{ 'onRemoveSeat': {} },
         ...{ 'onLeaveRoom': {} },
+        ...{ 'onDissolveRoom': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2080,6 +2081,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onUpdateBot': {} },
         ...{ 'onRemoveSeat': {} },
         ...{ 'onLeaveRoom': {} },
+        ...{ 'onDissolveRoom': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2143,6 +2145,9 @@ else if (__VLS_ctx.showModeLobby) {
     const __VLS_41 = {
         onLeaveRoom: (__VLS_ctx.handleLeaveRoom)
     };
+    const __VLS_42 = {
+        onDissolveRoom: (__VLS_ctx.dissolveRoom)
+    };
     var __VLS_28;
 }
 else if (__VLS_ctx.showSyncingScreen) {
@@ -2183,7 +2188,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_42 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_43 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2214,7 +2219,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_43 = __VLS_42({
+    const __VLS_44 = __VLS_43({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2244,64 +2249,64 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_42));
-    let __VLS_45;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_43));
     let __VLS_46;
     let __VLS_47;
-    const __VLS_48 = {
+    let __VLS_48;
+    const __VLS_49 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_49 = {
+    const __VLS_50 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_50 = {
+    const __VLS_51 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    const __VLS_51 = {
+    const __VLS_52 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_44;
+    var __VLS_45;
 }
 if (__VLS_ctx.inviteCopyFallbackUrl) {
     /** @type {[typeof InviteLinkFallbackDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_52 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
+    const __VLS_53 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
     }));
-    const __VLS_53 = __VLS_52({
+    const __VLS_54 = __VLS_53({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_52));
-    let __VLS_55;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_53));
     let __VLS_56;
     let __VLS_57;
-    const __VLS_58 = {
+    let __VLS_58;
+    const __VLS_59 = {
         onClose: (__VLS_ctx.closeInviteCopyFallback)
     };
-    var __VLS_54;
+    var __VLS_55;
 }
 if (__VLS_ctx.inviteQrUrl) {
-    const __VLS_59 = {}.FriendInviteQrDialog;
+    const __VLS_60 = {}.FriendInviteQrDialog;
     /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({
+    const __VLS_61 = __VLS_asFunctionalComponent(__VLS_60, new __VLS_60({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
     }));
-    const __VLS_61 = __VLS_60({
+    const __VLS_62 = __VLS_61({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
-    let __VLS_63;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
     let __VLS_64;
     let __VLS_65;
-    const __VLS_66 = {
+    let __VLS_66;
+    const __VLS_67 = {
         onClose: (__VLS_ctx.closeInviteQr)
     };
-    var __VLS_62;
+    var __VLS_63;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2385,16 +2390,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_68 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_68 = __VLS_67({
+                const __VLS_69 = __VLS_68({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_68));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -2407,18 +2412,18 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
                     }));
-                    const __VLS_71 = __VLS_70({
+                    const __VLS_72 = __VLS_71({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_70));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_71));
                 }
             }
             else {
@@ -2440,7 +2445,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_73 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_74 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2457,7 +2462,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }));
-    const __VLS_74 = __VLS_73({
+    const __VLS_75 = __VLS_74({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2473,17 +2478,17 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_73));
-    let __VLS_76;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_74));
     let __VLS_77;
     let __VLS_78;
-    const __VLS_79 = {
+    let __VLS_79;
+    const __VLS_80 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    const __VLS_80 = {
+    const __VLS_81 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    var __VLS_75;
+    var __VLS_76;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2645,18 +2650,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_81 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_82 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
                             }));
-                            const __VLS_82 = __VLS_81({
+                            const __VLS_83 = __VLS_82({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_81));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_82));
                         }
                     }
                 }
@@ -2693,18 +2698,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_84 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_85 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                             }));
-                            const __VLS_85 = __VLS_84({
+                            const __VLS_86 = __VLS_85({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_84));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_85));
                         }
                     }
                 }
@@ -2715,18 +2720,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_87 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_88 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_88 = __VLS_87({
+                        const __VLS_89 = __VLS_88({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_87));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_88));
                     }
                 }
                 else {
@@ -2790,18 +2795,18 @@ if (__VLS_ctx.showEndPanel) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_90 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_91 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_91 = __VLS_90({
+                const __VLS_92 = __VLS_91({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_90));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_91));
             }
         }
     }
@@ -3137,6 +3142,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendDiscardCard: sendDiscardCard,
             requestMoreTime: requestMoreTime,
             nextRound: nextRound,
+            dissolveRoom: dissolveRoom,
             setAutoPlay: setAutoPlay,
             claimSeat: claimSeat,
             addBot: addBot,
