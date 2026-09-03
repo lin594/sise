@@ -1,34 +1,20 @@
-const DEFAULT_BACKEND_PORT = "2567";
+import { BACKEND_DEFAULT_PORT, resolveBackendUrls, type BackendLocationInput } from "./backend-urls";
 
-function normalizedEnvValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+const browserLocation: BackendLocationInput = typeof window === "undefined"
+  ? { protocol: "http:", hostname: "localhost" }
+  : window.location;
+const resolvedBackendUrls = resolveBackendUrls({
+  protocol: browserLocation.protocol,
+  hostname: browserLocation.hostname,
+  httpUrl: import.meta.env?.VITE_SERVER_HTTP_URL,
+  wsUrl: import.meta.env?.VITE_SERVER_URL,
+});
 
-function browserHttpProtocol(): string {
-  return window.location.protocol || "http:";
-}
-
-function browserWsProtocol(): string {
-  return browserHttpProtocol() === "https:" ? "wss:" : "ws:";
-}
-
-function browserHostName(): string {
-  return window.location.hostname || "localhost";
-}
-
-function defaultHttpBase(): string {
-  return `${browserHttpProtocol()}//${browserHostName()}:${DEFAULT_BACKEND_PORT}`;
-}
-
-function defaultWsBase(): string {
-  return `${browserWsProtocol()}//${browserHostName()}:${DEFAULT_BACKEND_PORT}`;
-}
-
-export const BACKEND_HTTP_URL = normalizedEnvValue(import.meta.env.VITE_SERVER_HTTP_URL) || defaultHttpBase();
-export const BACKEND_WS_URL = normalizedEnvValue(import.meta.env.VITE_SERVER_URL) || defaultWsBase();
+export const BACKEND_HTTP_URL = resolvedBackendUrls.httpUrl;
+export const BACKEND_WS_URL = resolvedBackendUrls.wsUrl;
 
 export const BACKEND_CONFIG = {
-  port: DEFAULT_BACKEND_PORT,
+  port: BACKEND_DEFAULT_PORT,
   httpUrl: BACKEND_HTTP_URL,
   wsUrl: BACKEND_WS_URL,
 } as const;
