@@ -171,7 +171,8 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await restoredGuest.goto(inviteUrl);
     await expect(restoredGuest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(restoredGuest.getByTestId("player-self")).toHaveAttribute("data-player-id", guestIdentity.seatId);
-    await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）（你）");
+    await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）");
+    await expect(restoredGuest.getByTestId("player-self").locator(".self-seat-badge")).toHaveText("你");
     await host.setViewportSize({ width: 1280, height: 720 });
     await expect(guestSeatOnHost).toContainText("真人在线");
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);
