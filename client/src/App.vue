@@ -47,6 +47,7 @@
         :auto-play="Boolean(mePlayer?.isAutoPlay)"
         :auto-play-pending="isEnded && !Boolean(mePlayer?.isAutoPlay)"
         :spoken-turn-guidance-supported="spokenTurnGuidanceSupported"
+        :screen-wake-lock-supported="screenWakeLockSupported"
         @open-rules="openRules"
         @set-auto-play="setAutoPlay"
         @exit="handleLeaveRoom"
@@ -654,7 +655,7 @@ import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
-import { useScreenWakeLock } from "@/composables/useScreenWakeLock";
+import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
@@ -1759,6 +1760,7 @@ const decisionAlertKey = computed(() => {
 const turnAlertMode = computed(() => displayPreferences.value.turnAlert);
 const spokenTurnGuidanceSupported =
   typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+const screenWakeLockSupported = isScreenWakeLockSupported();
 const spokenTurnGuidance = computed(() => displayPreferences.value.spokenTurnGuidance);
 const spokenDecisionMessage = computed(() => {
   if (!settingsDecisionActive.value) {

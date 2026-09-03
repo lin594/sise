@@ -282,15 +282,19 @@
           type="button"
           role="switch"
           data-testid="keep-screen-awake"
-          :aria-checked="props.modelValue.keepScreenAwake"
+          :disabled="!props.screenWakeLockSupported"
+          :aria-checked="props.screenWakeLockSupported && props.modelValue.keepScreenAwake"
           @click="setKeepScreenAwake(!props.modelValue.keepScreenAwake)"
         >
           <span>
             <strong>牌局中屏幕常亮</strong>
-            <small>切到后台或牌局结束会自动释放</small>
+            <small>{{ props.screenWakeLockSupported ? "切到后台或牌局结束会自动释放" : "当前环境不支持屏幕常亮" }}</small>
           </span>
-          <span class="switch-state" :class="{ active: props.modelValue.keepScreenAwake }">
-            {{ props.modelValue.keepScreenAwake ? "开启" : "关闭" }}
+          <span
+            class="switch-state"
+            :class="{ active: props.screenWakeLockSupported && props.modelValue.keepScreenAwake }"
+          >
+            {{ !props.screenWakeLockSupported ? "不可用" : props.modelValue.keepScreenAwake ? "开启" : "关闭" }}
           </span>
         </button>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
@@ -376,6 +380,7 @@ const props = withDefaults(
     autoPlay?: boolean;
     autoPlayPending?: boolean;
     spokenTurnGuidanceSupported?: boolean;
+    screenWakeLockSupported?: boolean;
   }>(),
   {
     decisionActive: false,
@@ -385,6 +390,7 @@ const props = withDefaults(
     autoPlay: false,
     autoPlayPending: false,
     spokenTurnGuidanceSupported: false,
+    screenWakeLockSupported: false,
   },
 );
 
@@ -637,6 +643,9 @@ function setSpokenTurnGuidance(spokenTurnGuidance: boolean): void {
 }
 
 function setKeepScreenAwake(keepScreenAwake: boolean): void {
+  if (!props.screenWakeLockSupported) {
+    return;
+  }
   emit("update:modelValue", { ...props.modelValue, keepScreenAwake });
 }
 

@@ -12,6 +12,14 @@ type WakeLockNavigator = Navigator & {
   };
 };
 
+export function isScreenWakeLockSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    typeof (navigator as WakeLockNavigator).wakeLock?.request === "function"
+  );
+}
+
 /**
  * 作用：在前台牌局期间尽力阻止屏幕自动熄灭。
  * 关键输入/输出：监听牌局活跃状态和本地开关；无返回值。
@@ -42,7 +50,7 @@ export function useScreenWakeLock(active: Readonly<Ref<boolean>>, enabled: Reado
       return;
     }
     const wakeLock = (navigator as WakeLockNavigator).wakeLock;
-    if (!wakeLock || requestPending) {
+    if (!isScreenWakeLockSupported() || !wakeLock || requestPending) {
       return;
     }
 

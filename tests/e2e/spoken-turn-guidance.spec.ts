@@ -123,3 +123,20 @@ test("unsupported browsers explain why spoken guidance is unavailable", async ({
   await expect(voiceSetting).toContainText("此浏览器不支持语音");
   await expect(voiceSetting).toHaveAttribute("aria-checked", "false");
 });
+
+test("insecure or unsupported browsers do not pretend screen wake lock is active", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "isSecureContext", { configurable: true, value: false });
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: undefined });
+  });
+  await enterDeclaration(page, "/");
+  await page.getByTestId("game-settings").click();
+  const wakeLockSetting = page.getByTestId("keep-screen-awake");
+  await expect(wakeLockSetting).toBeAttached({ timeout: 5_000 });
+  await wakeLockSetting.scrollIntoViewIfNeeded();
+  await expect(wakeLockSetting).toBeDisabled();
+  await expect(wakeLockSetting).toContainText("当前环境不支持屏幕常亮");
+  await expect(wakeLockSetting).toContainText("不可用");
+  await expect(wakeLockSetting).toHaveAttribute("aria-checked", "false");
+});
