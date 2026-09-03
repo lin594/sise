@@ -1,4 +1,4 @@
-﻿import { Room, Client } from "@colyseus/core";
+﻿import { Room, Client, CloseCode } from "@colyseus/core";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -427,7 +427,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：输入离开客户端；输出无返回值。
    * 副作用：更新在线态与 botIds，必要时重置到 fresh lobby。
    */
-  onLeave(client: Client): void {
+  onLeave(client: Client, code?: number): void {
     const seatId = this.seatBySession.get(client.sessionId);
     this.pendingNameBySession.delete(client.sessionId);
     this.pendingTokenBySession.delete(client.sessionId);
@@ -444,7 +444,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     player.connected = false;
     const baseName = this.baseNameBySeat.get(seatId) ?? player.name;
+    const consentedLeave = code === CloseCode.CONSENTED;
     if (this.state.phase === "waiting") {
+      if (consentedLeave) {
+        const wasHost = this.state.hostPlayerId === seatId;
+        this.removeSeat(seatId, false);
+        if (wasHost) {
+          this.transferHostToLowestOnlineHuman();
+        }
+        this.state.lastAction = `SEAT_LEFT ${seatId}`;
+        this.broadcastAvailableActions();
+        this.scheduleRoomIdleIfEmpty();
+        return;
+      }
       player.isBot = false;
       player.name = baseName;
       this.botIds.delete(seatId);
@@ -456,11 +468,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       player.name = baseName;
       this.botIds.delete(seatId);
       this.state.lastAction = `RECONNECT_WAIT ${seatId}`;
+      if (consentedLeave) {
+        this.activateTemporaryTakeover(seatId);
+        this.scheduleRoomIdleIfEmpty();
+        return;
+      }
       this.scheduleTemporaryTakeover(seatId);
-    }
-
-    if (this.state.hostPlayerId === seatId) {
-      this.transferHostToLowestOnlineHuman();
     }
 
     if (this.state.phase === "playing" || this.state.phase === "declaring") {
@@ -891,38 +904,45 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private scheduleTemporaryTakeover(seatId: string): void {
     this.clearTakeoverTimer(seatId);
-    const activate = () => {
-      this.takeoverTimers.delete(seatId);
-      const player = this.state.players.get(seatId);
-      if (!player || player.connected || player.isConfiguredBot) {
-        return;
-      }
-      if (this.state.phase === "waiting") {
-        player.isBot = false;
-        this.botIds.delete(seatId);
-        this.scheduleSeatRelease(seatId);
-        this.broadcastAvailableActions();
-        return;
-      }
-      player.isBot = true;
-      player.botStrength = 50;
-      this.botIds.add(seatId);
-      this.state.lastAction = `TAKEOVER ${seatId}`;
-      if (this.state.phase === "declaring" && !player.declaredReady) {
-        this.submitDefaultDeclaration(seatId, true);
-        return;
-      }
-      if (this.state.phase === "playing" || this.state.phase === "declaring") {
-        this.tickBots();
-      } else {
-        this.broadcastAvailableActions();
-      }
-    };
     if (this.reconnectGraceMs === 0) {
-      activate();
+      this.activateTemporaryTakeover(seatId);
       return;
     }
-    this.takeoverTimers.set(seatId, setTimeout(activate, this.reconnectGraceMs));
+    this.takeoverTimers.set(seatId, setTimeout(() => {
+      this.takeoverTimers.delete(seatId);
+      this.activateTemporaryTakeover(seatId);
+    }, this.reconnectGraceMs));
+  }
+
+  private activateTemporaryTakeover(seatId: string): void {
+    this.clearTakeoverTimer(seatId);
+    const player = this.state.players.get(seatId);
+    if (!player || player.connected || player.isConfiguredBot) {
+      return;
+    }
+    if (this.state.phase === "waiting") {
+      player.isBot = false;
+      this.botIds.delete(seatId);
+      this.scheduleSeatRelease(seatId);
+      this.broadcastAvailableActions();
+      return;
+    }
+    player.isBot = true;
+    player.botStrength = 50;
+    this.botIds.add(seatId);
+    if (this.state.hostPlayerId === seatId) {
+      this.transferHostToLowestOnlineHuman();
+    }
+    this.state.lastAction = `TAKEOVER ${seatId}`;
+    if (this.state.phase === "declaring" && !player.declaredReady) {
+      this.submitDefaultDeclaration(seatId, true);
+      return;
+    }
+    if (this.state.phase === "playing" || this.state.phase === "declaring") {
+      this.tickBots();
+    } else {
+      this.broadcastAvailableActions();
+    }
   }
 
   private transferHostToLowestOnlineHuman(): void {

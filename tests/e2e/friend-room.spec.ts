@@ -173,6 +173,49 @@ test("host invites a friend, configures bots, and starts a shared game", async (
   }
 });
 
+test("a host refresh keeps ownership while a confirmed exit transfers it immediately", async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+
+  try {
+    await host.goto("/");
+    await host.getByTestId("nickname-input").fill("刷新房主");
+    await host.getByTestId("login-submit").click();
+    await host.getByTestId("mode-friends").click();
+    await host.getByTestId("lobby-start").click();
+    await expect(host.getByTestId("seat-0")).toContainText("房主 · 你");
+    const inviteUrl = host.url();
+
+    await guest.goto(inviteUrl);
+    await guest.getByTestId("nickname-input").fill("接任牌友");
+    await guest.getByTestId("login-submit").click();
+    await guest.getByTestId("claim-seat-1").click();
+    await expect(guest.getByTestId("seat-1")).toContainText("你");
+    await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
+
+    await host.reload();
+    await expect(host.getByTestId("seat-grid")).toBeVisible({ timeout: 20_000 });
+    await expect(host.getByTestId("seat-0")).toContainText("房主 · 你");
+    await expect(guest.getByTestId("seat-0")).toContainText("房主");
+    await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
+
+    await host.getByTestId("leave-waiting-room").click();
+    await host.getByTestId("confirm-waiting-leave").click();
+    await expect(host.getByText("游戏模式选择")).toBeVisible();
+    await expect(guest.getByTestId("seat-1")).toContainText("房主 · 你");
+    await expect(guest.getByTestId("fill-bots")).toHaveText("补齐 3 位电脑");
+
+    await guest.getByTestId("leave-waiting-room").click();
+    await guest.getByTestId("confirm-waiting-leave").click();
+    await expect(guest.getByText("游戏模式选择")).toBeVisible();
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+});
+
 test("legacy small waiting room keeps seats clear and allows a safe personal exit", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 568, height: 320 });
