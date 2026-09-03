@@ -1276,9 +1276,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     // its fixed seat is still reserved. Stop advertising a table whose four
     // state seats are occupied, otherwise a fifth player can be matched here
     // only to be rejected by onJoin.
-    this.updateMatchOpen(this.state.players.size < this.targetSeats);
     const connectedHumans = this.connectedMatchHumanCount();
     const hasDisconnectedHuman = this.hasDisconnectedMatchHuman();
+    this.updateMatchOpen(
+      this.state.players.size < this.targetSeats && !hasDisconnectedHuman,
+    );
     if (connectedHumans === 0 && !hasDisconnectedHuman) {
       this.clearMatchStartTimer();
       return;
@@ -1301,7 +1303,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.hasDisconnectedMatchHuman()
     ) {
       if (this.state.roomMode === "match" && this.state.phase === "waiting") {
-        this.updateMatchOpen(this.state.players.size < this.targetSeats);
+        this.updateMatchOpen(
+          this.state.players.size < this.targetSeats && !this.hasDisconnectedMatchHuman(),
+        );
       }
       return;
     }
@@ -3074,7 +3078,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       matchOpen:
         this.state.roomMode === "match" &&
         this.state.phase === "waiting" &&
-        this.state.players.size < this.targetSeats,
+        this.state.players.size < this.targetSeats &&
+        !this.hasDisconnectedMatchHuman(),
       hostPlayerId: this.state.hostPlayerId,
       occupiedSeats: this.playerOrder.length,
     });

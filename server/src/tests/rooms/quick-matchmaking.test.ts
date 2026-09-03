@@ -150,7 +150,7 @@ test("quick-match auto-start pauses for a disconnected reserved human", () => {
   assert.equal(bootstrapped, 0);
   assert.equal(room.state.players.size, 2);
   assert.equal(room.state.matchStartsAt, 0);
-  assert.equal(metadata.some((entry) => entry.matchOpen === false), false);
+  assert.equal(metadata.at(-1)?.matchOpen, false);
 });
 
 test("quick-match reconnect keeps the original authoritative deadline", () => {
