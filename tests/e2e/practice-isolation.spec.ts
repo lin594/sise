@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
+
 async function preparePracticeEntry(page: Page, name: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("nickname-input").fill(name);
@@ -9,8 +11,8 @@ async function preparePracticeEntry(page: Page, name: string): Promise<void> {
 
 test("compatibility practice entries always receive different rooms", async ({ request }) => {
   const [firstResponse, secondResponse] = await Promise.all([
-    request.get("http://127.0.0.1:2567/room-id"),
-    request.get("http://127.0.0.1:2567/room-id"),
+    request.get(`${BACKEND_URL}/room-id`),
+    request.get(`${BACKEND_URL}/room-id`),
   ]);
   expect(firstResponse.ok()).toBe(true);
   expect(secondResponse.ok()).toBe(true);
@@ -62,7 +64,7 @@ test("two simultaneous single-player sessions never see each other", async ({ br
 });
 
 test("an occupied practice room rejects a new identity but still restores its owner", async ({ browser, request }) => {
-  const createResponse = await request.post("http://127.0.0.1:2567/rooms", {
+  const createResponse = await request.post(`${BACKEND_URL}/rooms`, {
     data: { mode: "practice" },
   });
   expect(createResponse.ok()).toBe(true);
