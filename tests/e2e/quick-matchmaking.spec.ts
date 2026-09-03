@@ -99,9 +99,11 @@ test("quick match keeps its countdown through refresh and auto-starts on a rotat
     await page.getByTestId("mode-quick_match").click();
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
-    await expect(page.getByTestId("match-countdown")).toContainText("秒后");
+    await expect.poll(async () =>
+      Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]),
+    ).toBeGreaterThanOrEqual(8);
     const initialSeconds = Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]);
-    expect(initialSeconds).toBeGreaterThanOrEqual(8);
+    expect(initialSeconds).toBeLessThanOrEqual(12);
 
     await page.waitForTimeout(2_000);
     await page.reload();

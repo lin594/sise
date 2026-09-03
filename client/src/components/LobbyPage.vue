@@ -100,10 +100,10 @@
         </div>
         <b
           role="timer"
-          :aria-label="matchHasOfflineHuman ? '等待牌友恢复连接' : `还有 ${matchSecondsLeft} 秒自动开始`"
+          :aria-label="matchCountdownText"
           data-testid="match-countdown"
         >
-          {{ matchHasOfflineHuman ? "等待牌友恢复连接" : `${matchSecondsLeft} 秒后自动开始` }}
+          {{ matchCountdownText }}
         </b>
       </section>
 
@@ -439,6 +439,11 @@ const matchHumanCount = computed(
 const matchHasOfflineHuman = computed(
   () => props.players.some((player) => !player.isConfiguredBot && !player.connected),
 );
+const matchCountdownText = computed(() => {
+  if (matchHasOfflineHuman.value) return "等待牌友恢复连接";
+  if (props.matchSecondsLeft <= 0) return "正在准备配桌…";
+  return `${props.matchSecondsLeft} 秒后自动开始`;
+});
 const myLobbyReady = computed(
   () => props.players.find((player) => player.clientId === props.mySeatId)?.lobbyReady ?? false,
 );
