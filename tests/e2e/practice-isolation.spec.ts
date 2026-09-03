@@ -64,20 +64,23 @@ test("two simultaneous single-player sessions never see each other", async ({ br
 });
 
 test("an occupied practice room rejects a new identity but still restores its owner", async ({ browser, request }) => {
-  const createResponse = await request.post(`${BACKEND_URL}/rooms`, {
-    data: { mode: "practice" },
-  });
-  expect(createResponse.ok()).toBe(true);
-  const created = (await createResponse.json()) as { roomId?: string };
-  expect(created.roomId).toBeTruthy();
-
   const ownerContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const visitorContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const owner = await ownerContext.newPage();
   const visitor = await visitorContext.newPage();
-  const roomUrl = `/?roomId=${encodeURIComponent(created.roomId!)}`;
 
   try {
+    // Creating browser contexts is comparatively expensive on a loaded CI host.
+    // Prepare them first so the newly created room is joined immediately instead
+    // of consuming its entire idle grace before the first navigation starts.
+    const createResponse = await request.post(`${BACKEND_URL}/rooms`, {
+      data: { mode: "practice" },
+    });
+    expect(createResponse.ok()).toBe(true);
+    const created = (await createResponse.json()) as { roomId?: string };
+    expect(created.roomId).toBeTruthy();
+    const roomUrl = `/?roomId=${encodeURIComponent(created.roomId!)}`;
+
     await owner.goto(roomUrl);
     await owner.getByTestId("nickname-input").fill("练习主人");
     await owner.getByTestId("login-submit").click();
