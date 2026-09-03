@@ -12,6 +12,7 @@ export type RoomConnectionState =
   | "retry_wait"
   | "offline"
   | "restored"
+  | "closed"
   | "failed";
 
 export interface GameDisplayPreferences {

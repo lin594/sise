@@ -74,3 +74,30 @@ test("reconnecting inside the grace window cancels bot takeover", async () => {
   assert.equal(room.seatBySession.get("new-session"), "seat_0");
   assert.equal(sent.some((message) => message.event === "session_token"), true);
 });
+
+test("a replacement connection explicitly retires the previous live session", () => {
+  const { room } = createActiveHumanRoom(30);
+  const oldMessages: Array<{ event: string; payload: unknown }> = [];
+  const oldLeaves: Array<{ code?: number; reason?: string }> = [];
+  room.clients = [
+    {
+      sessionId: "old-session",
+      send: (event: string, payload: unknown) => oldMessages.push({ event, payload }),
+      leave: (code?: number, reason?: string) => oldLeaves.push({ code, reason }),
+    },
+  ];
+
+  room.onJoin(
+    {
+      sessionId: "new-session",
+      send: () => undefined,
+      leave: () => undefined,
+    },
+    { name: "张阿姨", playerToken: "token" },
+  );
+
+  assert.equal(oldMessages.some((message) => message.event === "session_replaced"), true);
+  assert.deepEqual(oldLeaves, [{ code: 4102, reason: "seat replaced by another session" }]);
+  assert.equal(room.seatBySession.has("old-session"), false);
+  assert.equal(room.seatBySession.get("new-session"), "seat_0");
+});

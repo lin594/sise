@@ -29,6 +29,7 @@
         v-if="hasLobbySession || isConnectingWithoutState"
         :state="connectionState"
         :attempt="reconnectAttempt"
+        :message="joinError"
         :show-connected="!showGameTools"
         @retry="retryConnection"
       />
@@ -97,16 +98,22 @@
     <section v-else-if="showSyncingScreen" class="sync-shell">
       <div class="sync-card" data-testid="resume-session-screen">
         <div class="sync-message" role="status" aria-live="polite">
-          <p class="entry-kicker">{{ connectionState === 'offline' ? '等待网络' : '恢复牌局' }}</p>
-          <h2>{{ connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌' }}</h2>
+          <p class="entry-kicker">
+            {{ connectionState === 'closed' ? '原牌局已关闭' : connectionState === 'offline' ? '等待网络' : '恢复牌局' }}
+          </p>
+          <h2>
+            {{ connectionState === 'closed' ? '无法回到原来的牌桌' : connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌' }}
+          </h2>
           <p class="entry-desc">
-            {{ connectionState === 'offline'
+            {{ connectionState === 'closed'
+              ? (joinError || '原牌局已经结束，系统不会继续重试。')
+              : connectionState === 'offline'
               ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
               : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。' }}
           </p>
         </div>
         <button class="resume-cancel" type="button" data-testid="cancel-session-resume" @click="abandonSessionResume">
-          放弃恢复，返回首页
+          {{ connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页' }}
         </button>
       </div>
     </section>
@@ -672,7 +679,8 @@ const isConnectingWithoutState = computed(
       connectionState.value === "connecting" ||
       connectionState.value === "reconnecting" ||
       connectionState.value === "retry_wait" ||
-      connectionState.value === "offline"),
+      connectionState.value === "offline" ||
+      connectionState.value === "closed"),
 );
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
 const showSyncingScreen = computed(
@@ -804,6 +812,9 @@ const interactionPausedMessage = computed(() => {
   }
   if (connectionState.value === "failed") {
     return "连接失败，请点上方立即重试";
+  }
+  if (connectionState.value === "closed") {
+    return joinError.value || "原牌局已经关闭，请退出后重新开始";
   }
   if (connectionState.value === "retry_wait") {
     return "暂时未连上，系统会继续重试";

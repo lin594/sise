@@ -27,10 +27,12 @@ const props = withDefaults(
     state: RoomConnectionState;
     attempt?: number;
     showConnected?: boolean;
+    message?: string;
   }>(),
   {
     attempt: 0,
     showConnected: false,
+    message: "",
   },
 );
 
@@ -42,7 +44,7 @@ const visible = computed(() => props.state !== "idle" && (props.state !== "conne
 const canRetry = computed(() => props.state === "retry_wait" || props.state === "failed");
 const tone = computed(() => {
   if (props.state === "connected" || props.state === "restored") return "good";
-  if (props.state === "offline" || props.state === "failed") return "danger";
+  if (props.state === "offline" || props.state === "closed" || props.state === "failed") return "danger";
   return "working";
 });
 const title = computed(() => {
@@ -57,6 +59,8 @@ const title = computed(() => {
       return "未连上 · 自动重试中";
     case "failed":
       return "连接失败";
+    case "closed":
+      return "已停止自动恢复";
     case "reconnecting":
       return props.attempt > 0 ? `正在恢复（第${props.attempt}次）` : "正在恢复牌局";
     default:
@@ -64,6 +68,7 @@ const title = computed(() => {
   }
 });
 const detail = computed(() => {
+  if (props.state === "closed") return props.message || "请返回首页重新开始";
   if (props.state === "restored") return "托管期间的最新牌局已同步";
   if (props.state === "offline") return "联网后自动恢复";
   if (props.state === "retry_wait") return "系统会继续重试";

@@ -1,5 +1,5 @@
-﻿import { computed, onUnmounted, ref } from "vue";
-import { Client, Room } from "@colyseus/sdk";
+﻿import { computed, onUnmounted, ref, shallowRef } from "vue";
+import { Client, ErrorCode, MatchMakeError, Room } from "@colyseus/sdk";
 import type {
   ActionCandidate,
   ActionRequest,
@@ -21,6 +21,31 @@ const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
+
+const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
+  4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
+  4101: "房间已经坐满，无法恢复原座位。系统已停止自动恢复。",
+  4102: "这个座位已在其他窗口恢复。本页面已停止重连，避免重复抢占座位。",
+  4103: "原座位已经不存在，无法继续恢复。系统已停止自动恢复。",
+  4104: "你已被移出房间。系统已停止自动恢复。",
+  4105: "牌局已经开始，未入座的访问已结束。系统已停止自动恢复。",
+};
+
+function terminalJoinFailureMessage(error: unknown): string | null {
+  const code =
+    error instanceof MatchMakeError
+      ? error.code
+      : Number((error as { code?: unknown } | null)?.code);
+  if (code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED) {
+    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/room[^\n]*(?:not found|expired|disposed)|invalid room/i.test(message)) {
+    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+  }
+  return null;
+}
 
 type ConnectOptions = {
   nameOverride?: string;
@@ -389,7 +414,10 @@ export function useRoom(playerName = "Player") {
   const connected = ref(false);
   const connectionState = ref<RoomConnectionState>(navigator.onLine ? "idle" : "offline");
   const reconnectAttempt = ref(0);
-  const room = ref<Room | null>(null);
+  // SDK room instances carry identity-sensitive listeners and transport state.
+  // A normal Vue ref proxies class instances, breaking `room.value === joined`
+  // guards and silently discarding current-connection messages.
+  const room = shallowRef<Room | null>(null);
   const state = ref<RoomStateSnapshot | null>(null);
   const myId = ref("");
   const mySeatId = ref("");
@@ -478,6 +506,21 @@ export function useRoom(playerName = "Player") {
       window.clearInterval(privateStatePollTimer);
       privateStatePollTimer = null;
     }
+  }
+
+  function stopTerminalRecovery(message: string) {
+    suppressReconnect = true;
+    clearRoomStateSyncTimer();
+    clearMissingHandSyncTimer();
+    clearReconnectTimer();
+    clearRestoredNoticeTimer();
+    clearPrivateStatePollTimer();
+    connected.value = false;
+    room.value = null;
+    reconnectAttempt.value = 0;
+    reconnectAttempts = 0;
+    connectionState.value = "closed";
+    joinError.value = message;
   }
 
   function getRoomSocketReadyState(targetRoom: unknown): number | null {
@@ -1217,6 +1260,12 @@ export function useRoom(playerName = "Player") {
         }
         pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
       });
+      joined.onMessage("session_replaced", (payload: { message?: string }) => {
+        if (!isCurrentJoinedRoom()) {
+          return;
+        }
+        stopTerminalRecovery(payload?.message || TERMINAL_ROOM_CLOSE_MESSAGES[4102]);
+      });
       joined.onMessage("join_error", (payload: { message: string }) => {
         if (!isCurrentJoinedRoom()) {
           return;
@@ -1262,8 +1311,13 @@ export function useRoom(playerName = "Player") {
         declareError.value = payload?.reason ?? "声明提交失败";
         pushLog(`DECLARE_REJECTED ${declareError.value}`);
       });
-      joined.onLeave(() => {
+      joined.onLeave((code) => {
         if (!isActiveConnection() || room.value !== joined) {
+          return;
+        }
+        const terminalMessage = TERMINAL_ROOM_CLOSE_MESSAGES[code];
+        if (terminalMessage) {
+          stopTerminalRecovery(terminalMessage);
           return;
         }
         clearRoomStateSyncTimer();
@@ -1272,8 +1326,13 @@ export function useRoom(playerName = "Player") {
         connected.value = false;
         scheduleReconnect("room_leave");
       });
-      joined.onError((_code, message) => {
+      joined.onError((code, message) => {
         if (!isActiveConnection() || room.value !== joined) {
+          return;
+        }
+        const terminalMessage = TERMINAL_ROOM_CLOSE_MESSAGES[code];
+        if (terminalMessage) {
+          stopTerminalRecovery(terminalMessage);
           return;
         }
         clearRoomStateSyncTimer();
@@ -1308,10 +1367,15 @@ export function useRoom(playerName = "Player") {
       connected.value = false;
       room.value = null;
       if (preserveState) {
-        connectionState.value = navigator.onLine ? "retry_wait" : "offline";
-        joinError.value = navigator.onLine
-          ? `暂时未能恢复牌局，系统会继续重试（第 ${Math.max(1, reconnectAttempt.value)} 次）。`
-          : "网络已断开，联网后会自动恢复牌局。";
+        const terminalMessage = terminalJoinFailureMessage(error);
+        if (terminalMessage) {
+          stopTerminalRecovery(terminalMessage);
+        } else {
+          connectionState.value = navigator.onLine ? "retry_wait" : "offline";
+          joinError.value = navigator.onLine
+            ? `暂时未能恢复牌局，系统会继续重试（第 ${Math.max(1, reconnectAttempt.value)} 次）。`
+            : "网络已断开，联网后会自动恢复牌局。";
+        }
       } else {
         joinError.value = message;
         connectionState.value = "failed";

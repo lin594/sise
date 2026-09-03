@@ -173,7 +173,8 @@ const isConnectingWithoutState = computed(() => !state.value &&
         connectionState.value === "connecting" ||
         connectionState.value === "reconnecting" ||
         connectionState.value === "retry_wait" ||
-        connectionState.value === "offline"));
+        connectionState.value === "offline" ||
+        connectionState.value === "closed"));
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
 const showSyncingScreen = computed(() => !state.value && (hasLobbySession.value || isConnectingWithoutState.value));
 const showModeLobby = computed(() => {
@@ -288,6 +289,9 @@ const interactionPausedMessage = computed(() => {
     }
     if (connectionState.value === "failed") {
         return "连接失败，请点上方立即重试";
+    }
+    if (connectionState.value === "closed") {
+        return joinError.value || "原牌局已经关闭，请退出后重新开始";
     }
     if (connectionState.value === "retry_wait") {
         return "暂时未连上，系统会继续重试";
@@ -1520,12 +1524,14 @@ if (__VLS_ctx.hasLobbySession || __VLS_ctx.isConnectingWithoutState) {
         ...{ 'onRetry': {} },
         state: (__VLS_ctx.connectionState),
         attempt: (__VLS_ctx.reconnectAttempt),
+        message: (__VLS_ctx.joinError),
         showConnected: (!__VLS_ctx.showGameTools),
     }));
     const __VLS_1 = __VLS_0({
         ...{ 'onRetry': {} },
         state: (__VLS_ctx.connectionState),
         attempt: (__VLS_ctx.reconnectAttempt),
+        message: (__VLS_ctx.joinError),
         showConnected: (!__VLS_ctx.showGameTools),
     }, ...__VLS_functionalComponentArgsRest(__VLS_0));
     let __VLS_3;
@@ -1753,21 +1759,24 @@ else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-kicker" },
     });
-    (__VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
+    (__VLS_ctx.connectionState === 'closed' ? '原牌局已关闭' : __VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
-    (__VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
+    (__VLS_ctx.connectionState === 'closed' ? '无法回到原来的牌桌' : __VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-desc" },
     });
-    (__VLS_ctx.connectionState === 'offline'
-        ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
-        : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
+    (__VLS_ctx.connectionState === 'closed'
+        ? (__VLS_ctx.joinError || '原牌局已经结束，系统不会继续重试。')
+        : __VLS_ctx.connectionState === 'offline'
+            ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
+            : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.abandonSessionResume) },
         ...{ class: "resume-cancel" },
         type: "button",
         'data-testid': "cancel-session-resume",
     });
+    (__VLS_ctx.connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页');
 }
 else {
     /** @type {[typeof GameBoard, ]} */ ;

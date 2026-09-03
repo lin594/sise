@@ -911,7 +911,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       this.seatBySession.delete(sessionId);
       const oldClient = this.clients.find((c) => c.sessionId === sessionId);
-      oldClient?.leave(4102);
+      oldClient?.send("session_replaced", {
+        message: "这个座位已在其他窗口恢复。本页面已停止重连，避免重复抢占座位。",
+      });
+      oldClient?.leave(4102, "seat replaced by another session");
     }
 
     const ok = reclaimSeatStateFlow(

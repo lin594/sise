@@ -27,6 +27,17 @@ test.describe("牌局断线恢复", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
+    await expect.poll(async () => {
+      const cards = page.locator("[data-testid^='hand-card-']");
+      const label = (await page.locator(".discard-tip").textContent()) ?? "";
+      const countMatch = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);
+      return Boolean(
+        countMatch &&
+        !countMatch[2] &&
+        Number(countMatch[1]) > 0 &&
+        (await cards.count()) === Number(countMatch[1]),
+      );
+    }, { timeout: 15_000 }).toBe(true);
 
     const beforeDisconnect = await page.evaluate(() => {
       const roomId = localStorage.getItem("four_room_id");
@@ -144,7 +155,13 @@ test.describe("牌局断线恢复", () => {
     });
   });
 
-  test("失效的历史房间可以放弃恢复并清除凭证", async ({ page }, testInfo) => {
+  test("失效的历史房间停止自动重试并可清除凭证", async ({ page }, testInfo) => {
+    let matchmakingRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("/matchmake/joinById/")) {
+        matchmakingRequests += 1;
+      }
+    });
     await page.addInitScript(() => {
       localStorage.setItem("four_room_id", "missing-room-for-resume");
       localStorage.setItem("four_player_token:missing-room-for-resume", "pt_stale_resume_token");
@@ -153,7 +170,15 @@ test.describe("牌局断线恢复", () => {
 
     await page.goto("/");
     await expect(page.getByTestId("resume-session-screen")).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator("header.top").getByText("首页")).toHaveCount(0);
+    await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "closed");
+    await expect(page.getByTestId("resume-session-screen")).toContainText("原牌局已关闭");
+    await expect(page.getByTestId("resume-session-screen")).toContainText("系统已停止自动恢复");
+    await expect(page.getByTestId("retry-connection")).toHaveCount(0);
+    await expect(page.locator("header.top").getByText("首页", { exact: true })).toHaveCount(0);
+    const requestCountAfterClosure = matchmakingRequests;
+    expect(requestCountAfterClosure).toBeGreaterThan(0);
+    await page.waitForTimeout(1_500);
+    expect(matchmakingRequests).toBe(requestCountAfterClosure);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-resume-screen.png") });
     await page.getByTestId("cancel-session-resume").click();
     await expect(page.getByTestId("nickname-input")).toBeVisible();
@@ -163,5 +188,56 @@ test.describe("牌局断线恢复", () => {
         token: localStorage.getItem("four_player_token:missing-room-for-resume"),
       })),
     ).toEqual({ roomId: null, token: null });
+  });
+
+  test("新窗口接管原座位后旧窗口停止抢回", async ({ context, page }) => {
+    test.setTimeout(90_000);
+    await page.goto("/");
+    await page.getByTestId("random-nickname").click();
+    await page.getByTestId("login-submit").click();
+    await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible({ timeout: 15_000 });
+    const originalSeatId = await page.getByTestId("player-self").getAttribute("data-player-id");
+    expect(originalSeatId).toBeTruthy();
+    const originalIdentity = await page.evaluate(() => {
+      const roomId = localStorage.getItem("four_room_id");
+      return {
+        roomId,
+        token: roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null,
+      };
+    });
+
+    const replacementPage = await context.newPage();
+    await replacementPage.goto("/");
+    await expect(replacementPage.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await expect(replacementPage.getByTestId("player-self")).toHaveAttribute("data-player-id", originalSeatId!);
+    const replacementIdentity = await replacementPage.evaluate(() => {
+      const roomId = localStorage.getItem("four_room_id");
+      return {
+        roomId,
+        token: roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null,
+      };
+    });
+    expect(replacementIdentity).toEqual(originalIdentity);
+
+    await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "closed", {
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("connection-status")).toContainText("已停止自动恢复");
+    await expect(page.getByTestId("connection-status")).toContainText("其他窗口恢复");
+    await expect(page.getByTestId("action-guidance")).toContainText("其他窗口恢复");
+
+    await page.waitForTimeout(2_000);
+    await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "closed");
+    await expect(replacementPage.locator("main.layout")).toHaveAttribute(
+      "data-connection-state",
+      /restored|connected/,
+    );
+    await expect(replacementPage.getByTestId("player-self")).toHaveAttribute("data-player-id", originalSeatId!);
   });
 });
