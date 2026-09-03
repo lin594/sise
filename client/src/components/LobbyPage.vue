@@ -52,15 +52,25 @@
           <strong>好友房 {{ roomId }}</strong>
           <p>{{ canShareInvite ? "通过系统分享给牌友；链接不会包含你的身份凭据。" : "复制邀请链接给朋友；链接不会包含你的身份凭据。" }}</p>
         </div>
-        <button
-          class="ghost invite-button"
-          type="button"
-          data-testid="copy-invite"
-          :disabled="invitePending"
-          @click="$emit('copy-invite')"
-        >
-          {{ invitePending ? (canShareInvite ? "正在打开…" : "正在复制…") : (canShareInvite ? "邀请牌友" : "复制邀请链接") }}
-        </button>
+        <div class="invite-actions">
+          <button
+            class="ghost invite-button"
+            type="button"
+            data-testid="copy-invite"
+            :disabled="invitePending"
+            @click="$emit('copy-invite')"
+          >
+            {{ invitePending ? (canShareInvite ? "正在打开…" : "正在复制…") : (canShareInvite ? "邀请牌友" : "复制链接") }}
+          </button>
+          <button
+            class="ghost invite-button show-qr-button"
+            type="button"
+            data-testid="show-invite-qr"
+            @click="$emit('show-invite-qr')"
+          >
+            出示二维码
+          </button>
+        </div>
       </div>
 
       <div v-if="roomId" class="seat-grid" data-testid="seat-grid">
@@ -257,6 +267,7 @@ const emit = defineEmits<{
   start: [];
   "select-mode": [modeId: string];
   "copy-invite": [];
+  "show-invite-qr": [];
   "claim-seat": [seatIndex: number];
   "add-bot": [seatIndex: number];
   "fill-bots": [];
@@ -415,6 +426,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .lobby-head,
 .lobby-head-actions,
 .invite-card,
+.invite-actions,
 .seat-head,
 .lobby-actions,
 .seat-actions {
@@ -441,6 +453,18 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .lobby-head-actions {
   flex: 0 0 auto;
+}
+
+.invite-actions {
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.show-qr-button {
+  border-color: rgba(125, 211, 252, 0.72);
+  background: #075985;
+  color: #f0f9ff;
+  font-weight: 850;
 }
 
 .lobby-kicker {
@@ -896,6 +920,10 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     padding: 0.5rem 0.7rem;
   }
 
+  .invite-actions {
+    gap: 0.35rem;
+  }
+
   .seat-card {
     min-height: 96px;
   }
@@ -981,6 +1009,16 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .invite-card) {
   padding: 0.1rem 0.35rem;
+}
+
+:global(.layout.legacy-compact-viewport .friend-waiting-room .invite-actions) {
+  gap: 0.25rem;
+}
+
+:global(.layout.legacy-compact-viewport .friend-waiting-room .invite-button) {
+  min-height: 42px;
+  padding-inline: 0.5rem;
+  font-size: 0.76rem;
 }
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-actions) {

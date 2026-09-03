@@ -105,6 +105,7 @@
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
+      @show-invite-qr="showInviteQr"
       @claim-seat="claimSeat"
       @add-bot="addBot($event, 50)"
       @fill-bots="fillBots"
@@ -174,6 +175,13 @@
       v-if="inviteCopyFallbackUrl"
       :url="inviteCopyFallbackUrl"
       @close="closeInviteCopyFallback"
+    />
+
+    <FriendInviteQrDialog
+      v-if="inviteQrUrl"
+      :url="inviteQrUrl"
+      :room-id="inviteQrRoomId"
+      @close="closeInviteQr"
     />
 
     <div v-if="isPlaying && selectionMode" class="candidate-mask" @click.self="clearSelection(true)">
@@ -537,7 +545,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
@@ -565,6 +573,10 @@ import type {
   TurnAlertMode,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
+
+const FriendInviteQrDialog = defineAsyncComponent(
+  () => import("@/components/FriendInviteQrDialog.vue"),
+);
 
 type SettlementGroupBlock = {
   id: string;
@@ -1063,10 +1075,13 @@ const resolvedTableCardMode = computed<RenderedCardMode>(() =>
 const globalError = ref("");
 const globalNotice = ref("");
 const inviteCopyFallbackUrl = ref("");
+const inviteQrUrl = ref("");
+const inviteQrRoomId = ref("");
 const canShareInvite = typeof navigator.share === "function";
 const inviteActionPending = ref(false);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
+let inviteQrReturnFocus: HTMLElement | null = null;
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
@@ -2198,15 +2213,22 @@ async function startFriendLobby() {
   }
 }
 
+function buildInviteUrl(): string {
+  if (!activeRoomId.value) {
+    return "";
+  }
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set("roomId", activeRoomId.value);
+  return url.toString();
+}
+
 async function copyInviteLink() {
   if (!activeRoomId.value || inviteActionPending.value) {
     return;
   }
   inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   inviteActionPending.value = true;
-  const url = new URL(window.location.origin + window.location.pathname);
-  url.searchParams.set("roomId", activeRoomId.value);
-  const inviteUrl = url.toString();
+  const inviteUrl = buildInviteUrl();
   let restoreFocus = true;
   try {
     if (canShareInvite && navigator.share) {
@@ -2273,6 +2295,29 @@ async function copyInviteLink() {
   }
 }
 
+function showInviteQr(): void {
+  const inviteUrl = buildInviteUrl();
+  if (!inviteUrl || !activeRoomId.value) {
+    return;
+  }
+  inviteQrReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  inviteQrRoomId.value = activeRoomId.value;
+  inviteQrUrl.value = inviteUrl;
+}
+
+function closeInviteQr(restoreFocus = true): void {
+  if (!inviteQrUrl.value) {
+    return;
+  }
+  const returnTarget = inviteQrReturnFocus;
+  inviteQrUrl.value = "";
+  inviteQrRoomId.value = "";
+  inviteQrReturnFocus = null;
+  if (restoreFocus) {
+    void nextTick(() => returnTarget?.isConnected && returnTarget.focus());
+  }
+}
+
 function closeInviteCopyFallback(restoreFocus = true): void {
   if (!inviteCopyFallbackUrl.value) {
     return;
@@ -2310,9 +2355,16 @@ watch(
     }
     if (phase !== "waiting") {
       closeInviteCopyFallback(false);
+      closeInviteQr(false);
     }
   },
 );
+
+watch(activeRoomId, (roomId, previousRoomId) => {
+  if (roomId !== previousRoomId) {
+    closeInviteQr(false);
+  }
+});
 
 </script>
 

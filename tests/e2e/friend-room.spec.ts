@@ -173,6 +173,154 @@ test("host invites a friend, configures bots, and starts a shared game", async (
   }
 });
 
+test.describe("friend room invitation QR", () => {
+  test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
+
+test("is local, readable, and safe on a legacy phone", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("二维码房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+  await expect.poll(() => page.url()).toContain("roomId=");
+
+  const inviteUrl = page.url();
+  const roomId = new URL(inviteUrl).searchParams.get("roomId");
+  expect(roomId).toBeTruthy();
+  expect(inviteUrl).not.toContain("playerToken");
+  expect(inviteUrl).not.toContain("hostKey");
+
+  const trigger = page.getByTestId("show-invite-qr");
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+
+  const dialog = page.getByRole("dialog", { name: "扫码加入好友房" });
+  const qr = page.getByTestId("friend-invite-qr");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(`好友房 ${roomId}`);
+  await expect(dialog).toContainText("二维码只含加入地址和房间号，不含你的身份凭据");
+  await expect(qr).toHaveAttribute("data-qr-content", inviteUrl);
+  await expect(qr).toHaveAttribute("aria-label", new RegExp(`好友房 ${roomId} 邀请二维码`));
+  await expect(page.getByTestId("close-friend-invite-qr")).toBeFocused();
+
+  await expect.poll(async () => qr.evaluate((canvas: HTMLCanvasElement) => ({
+    width: canvas.width,
+    height: canvas.height,
+    imageLength: canvas.toDataURL("image/png").length,
+  }))).toMatchObject({ width: 320, height: 320 });
+  const qrPixels = await qr.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL("image/png").length);
+  expect(qrPixels).toBeGreaterThan(2_000);
+
+  const invitationGeometry = () => page.evaluate(() => {
+    const dialogRect = document.querySelector<HTMLElement>(".invite-qr-dialog")!.getBoundingClientRect();
+    const qrRect = document.querySelector<HTMLElement>("[data-testid='friend-invite-qr']")!.getBoundingClientRect();
+    const closeRect = document.querySelector<HTMLElement>("[data-testid='close-friend-invite-qr']")!.getBoundingClientRect();
+    return {
+      dialogInside:
+        dialogRect.left >= 0 && dialogRect.top >= 0 && dialogRect.right <= innerWidth && dialogRect.bottom <= innerHeight,
+      qrSquareDifference: Math.abs(qrRect.width - qrRect.height),
+      qrWidth: qrRect.width,
+      closeWidth: closeRect.width,
+      closeHeight: closeRect.height,
+      closeInside:
+        closeRect.left >= dialogRect.left &&
+        closeRect.right <= dialogRect.right &&
+        closeRect.top >= dialogRect.top &&
+        closeRect.bottom <= dialogRect.bottom &&
+        closeRect.left >= 0 &&
+        closeRect.right <= innerWidth &&
+        closeRect.top >= 0 &&
+        closeRect.bottom <= innerHeight,
+    };
+  });
+  const geometry = await invitationGeometry();
+  expect(geometry.dialogInside).toBe(true);
+  expect(geometry.qrSquareDifference).toBeLessThanOrEqual(1);
+  expect(geometry.qrWidth).toBeGreaterThanOrEqual(145);
+  expect(geometry.closeHeight).toBeGreaterThanOrEqual(44);
+  expect(geometry.closeInside).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("friend-invite-qr-568.png") });
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("close-friend-invite-qr")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByTestId("close-friend-invite-qr")).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect(page.locator(".layout")).toHaveAttribute("data-effective-viewport", "568x320");
+  await trigger.click();
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId("close-friend-invite-qr")).toBeFocused();
+  const rotatedGeometry = await invitationGeometry();
+  expect(rotatedGeometry.dialogInside).toBe(true);
+  expect(rotatedGeometry.qrSquareDifference).toBeLessThanOrEqual(1);
+  expect(rotatedGeometry.qrWidth).toBeGreaterThanOrEqual(145);
+  expect(Math.min(rotatedGeometry.closeWidth, rotatedGeometry.closeHeight)).toBeGreaterThanOrEqual(44);
+  expect(Math.max(rotatedGeometry.closeWidth, rotatedGeometry.closeHeight)).toBeGreaterThanOrEqual(120);
+  expect(rotatedGeometry.closeInside).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("friend-invite-qr-rotated-320x568.png") });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await page.setViewportSize({ width: 667, height: 375 });
+  await trigger.click();
+  const iphoneGeometry = await invitationGeometry();
+  expect(iphoneGeometry.dialogInside).toBe(true);
+  expect(iphoneGeometry.qrWidth).toBeGreaterThanOrEqual(145);
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await trigger.click();
+  const desktopGeometry = await invitationGeometry();
+  expect(desktopGeometry.dialogInside).toBe(true);
+  expect(desktopGeometry.qrWidth).toBeGreaterThanOrEqual(280);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("falls back to a selectable local link when canvas generation fails", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value: () => null,
+    });
+  });
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("二维码回退测试");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+  await expect.poll(() => page.url()).toContain("roomId=");
+
+  const inviteUrl = page.url();
+  await page.getByTestId("show-invite-qr").click();
+  const fallback = page.getByTestId("friend-invite-qr-fallback-url");
+  await expect(fallback).toBeVisible();
+  await expect(fallback).toHaveValue(inviteUrl);
+  await expect(fallback).toBeFocused();
+  const selection = await fallback.evaluate((field: HTMLTextAreaElement) => ({
+    start: field.selectionStart,
+    end: field.selectionEnd,
+    length: field.value.length,
+  }));
+  expect(selection.start).toBe(0);
+  expect(selection.end).toBe(selection.length);
+  await expect(page.getByRole("dialog", { name: "扫码加入好友房" })).toContainText(
+    "二维码生成失败，请长按并复制下面的链接",
+  );
+});
+
+});
+
 test("a host refresh keeps ownership while a confirmed exit transfers it immediately", async ({ browser }) => {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
