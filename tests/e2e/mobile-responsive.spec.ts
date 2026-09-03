@@ -1034,7 +1034,9 @@ test.describe("compact landscape gameplay", () => {
 
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");
+    const selectedCardLabel = String(await selectedCard.getAttribute("aria-label")).split("，")[0];
     expect(selectedCardTestId).toBeTruthy();
+    expect(selectedCardLabel).toMatch(/^(?:[红黄绿白][帥將仕士相象俥車傌馬炮包兵卒]|金条[公侯伯子男])$/);
     let releasePrivateState = () => undefined;
     let markPrivateStateCaptured = () => undefined;
     let privateStateIntercepted = false;
@@ -1078,7 +1080,9 @@ test.describe("compact landscape gameplay", () => {
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
-    await expect(discardConfirm).toHaveText("出牌");
+    await expect(page.getByTestId("action-guidance")).toContainText(`已选${selectedCardLabel}，再点按钮确认`);
+    await expect(discardConfirm).toHaveText(`打出${selectedCardLabel}`);
+    await expect(discardConfirm).toHaveAttribute("aria-label", `打出${selectedCardLabel}`);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeDisabled();
     await expect(gameSettings).toHaveText("设置");

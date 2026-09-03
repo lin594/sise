@@ -57,9 +57,10 @@
         data-testid="discard-confirm"
         :class="{ enabled: hasDiscardSelection && !discardPending }"
         :disabled="!hasDiscardSelection || discardPending"
+        :aria-label="discardButtonText"
         @click="emit('confirmDiscard')"
       >
-        {{ hasDiscardSelection ? (discardPending ? "出牌中…" : "出牌") : "先选牌" }}
+        {{ discardButtonText }}
       </button>
       <button
         v-for="item in canDiscard ? [] : normalized"
@@ -97,6 +98,7 @@ const props = withDefaults(
     selectedCandidateId?: string | null;
     canDiscard?: boolean;
     hasDiscardSelection?: boolean;
+    selectedDiscardCardLabel?: string;
     discardPending?: boolean;
     secondsLeft?: number | null;
     untimed?: boolean;
@@ -114,6 +116,7 @@ const props = withDefaults(
     selectedCandidateId: null,
     canDiscard: false,
     hasDiscardSelection: false,
+    selectedDiscardCardLabel: "",
     discardPending: false,
     secondsLeft: null,
     untimed: false,
@@ -218,6 +221,18 @@ const normalized = computed(() => {
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const selectedDiscardLabel = computed(() => props.selectedDiscardCardLabel.trim());
+const discardButtonText = computed(() => {
+  if (!props.hasDiscardSelection) {
+    return "先选牌";
+  }
+  if (!selectedDiscardLabel.value) {
+    return props.discardPending ? "出牌中…" : "出牌";
+  }
+  return props.discardPending
+    ? `正在打出${selectedDiscardLabel.value}`
+    : `打出${selectedDiscardLabel.value}`;
+});
 const isEarlyCollectiveChoice = computed(
   () => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn,
 );
@@ -250,7 +265,12 @@ const panelHint = computed(() => {
     return props.pausedHint;
   }
   if (props.canDiscard) {
-    return props.hasDiscardSelection ? "已选好，请点出牌" : "请先选择一张手牌";
+    if (!props.hasDiscardSelection) {
+      return "请先选择一张手牌";
+    }
+    return selectedDiscardLabel.value
+      ? `已选${selectedDiscardLabel.value}，再点按钮确认`
+      : "已选好，请点出牌";
   }
   if (!props.canAct) {
     return `${props.currentPlayerName}操作中`;
@@ -560,6 +580,7 @@ function onClick(item: PanelAction): void {
 
 .discard-action {
   width: min(100%, 10rem);
+  white-space: nowrap;
 }
 
 .btn {

@@ -556,6 +556,7 @@
       :can-act="canAct"
       :can-discard="canDiscard"
       :has-discard-selection="Boolean(selectedDiscardCardId)"
+      :selected-discard-card-label="selectedDiscardCardLabel"
       :discard-pending="Boolean(discardingCardId)"
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
@@ -1078,6 +1079,14 @@ const canConfirmDiscard = computed(() => {
   }
   const card = props.privateHand.find((item) => item.id === selectedId);
   return Boolean(card && canDiscardCard(card));
+});
+const selectedDiscardCardLabel = computed(() => {
+  const selectedId = selectedDiscardCardId.value;
+  if (!selectedId) {
+    return "";
+  }
+  const card = props.privateHand.find((item) => item.id === selectedId);
+  return card ? getCardAccessibleText(card) : "";
 });
 const displayPrivateHand = computed<Card[]>(() => {
   if (props.state?.phase === "waiting") {

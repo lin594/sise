@@ -355,6 +355,14 @@ const canConfirmDiscard = computed(() => {
     const card = props.privateHand.find((item) => item.id === selectedId);
     return Boolean(card && canDiscardCard(card));
 });
+const selectedDiscardCardLabel = computed(() => {
+    const selectedId = selectedDiscardCardId.value;
+    if (!selectedId) {
+        return "";
+    }
+    const card = props.privateHand.find((item) => item.id === selectedId);
+    return card ? getCardAccessibleText(card) : "";
+});
 const displayPrivateHand = computed(() => {
     if (props.state?.phase === "waiting") {
         return [];
@@ -2382,6 +2390,7 @@ if (props.state?.phase === 'playing') {
         canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+        selectedDiscardCardLabel: (__VLS_ctx.selectedDiscardCardLabel),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
@@ -2405,6 +2414,7 @@ if (props.state?.phase === 'playing') {
         canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+        selectedDiscardCardLabel: (__VLS_ctx.selectedDiscardCardLabel),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
@@ -2669,6 +2679,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
+            selectedDiscardCardLabel: selectedDiscardCardLabel,
             displayPrivateHand: displayPrivateHand,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,

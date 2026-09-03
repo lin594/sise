@@ -9,6 +9,7 @@ const props = withDefaults(defineProps(), {
     selectedCandidateId: null,
     canDiscard: false,
     hasDiscardSelection: false,
+    selectedDiscardCardLabel: "",
     discardPending: false,
     secondsLeft: null,
     untimed: false,
@@ -88,6 +89,18 @@ const normalized = computed(() => {
 const selectionMode = computed(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const selectedDiscardLabel = computed(() => props.selectedDiscardCardLabel.trim());
+const discardButtonText = computed(() => {
+    if (!props.hasDiscardSelection) {
+        return "先选牌";
+    }
+    if (!selectedDiscardLabel.value) {
+        return props.discardPending ? "出牌中…" : "出牌";
+    }
+    return props.discardPending
+        ? `正在打出${selectedDiscardLabel.value}`
+        : `打出${selectedDiscardLabel.value}`;
+});
 const isEarlyCollectiveChoice = computed(() => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn);
 const waitingHeadline = computed(() => {
     const playerName = props.currentPlayerName.trim();
@@ -112,7 +125,12 @@ const panelHint = computed(() => {
         return props.pausedHint;
     }
     if (props.canDiscard) {
-        return props.hasDiscardSelection ? "已选好，请点出牌" : "请先选择一张手牌";
+        if (!props.hasDiscardSelection) {
+            return "请先选择一张手牌";
+        }
+        return selectedDiscardLabel.value
+            ? `已选${selectedDiscardLabel.value}，再点按钮确认`
+            : "已选好，请点出牌";
     }
     if (!props.canAct) {
         return `${props.currentPlayerName}操作中`;
@@ -226,6 +244,7 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     selectedCandidateId: null,
     canDiscard: false,
     hasDiscardSelection: false,
+    selectedDiscardCardLabel: "",
     discardPending: false,
     secondsLeft: null,
     untimed: false,
@@ -391,8 +410,9 @@ else {
             'data-testid': "discard-confirm",
             ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending }) },
             disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending),
+            'aria-label': (__VLS_ctx.discardButtonText),
         });
-        (__VLS_ctx.hasDiscardSelection ? (__VLS_ctx.discardPending ? "出牌中…" : "出牌") : "先选牌");
+        (__VLS_ctx.discardButtonText);
     }
     for (const [item] of __VLS_getVForSourceType((__VLS_ctx.canDiscard ? [] : __VLS_ctx.normalized))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
@@ -444,6 +464,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectionMode: selectionMode,
             panelLocked: panelLocked,
             needsDecision: needsDecision,
+            discardButtonText: discardButtonText,
             isEarlyCollectiveChoice: isEarlyCollectiveChoice,
             waitingHeadline: waitingHeadline,
             waitingAnnouncement: waitingAnnouncement,
