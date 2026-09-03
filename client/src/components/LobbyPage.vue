@@ -14,6 +14,16 @@
         <p class="lobby-rule-tip">{{ subtitle }}</p>
       </div>
       <div class="lobby-head-actions">
+        <div
+          v-if="modes.length && guestProfileSummary"
+          class="guest-profile-summary"
+          data-testid="guest-profile-summary"
+          role="status"
+          aria-live="polite"
+        >
+          <strong>本机临时档案</strong>
+          <span>{{ guestProfileSummary }}</span>
+        </div>
         <button v-if="roomId" class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
         <button
           v-if="(roomMode === 'friends' || roomMode === 'match') && roomId"
@@ -364,6 +374,7 @@ const props = defineProps<{
   invitePending: boolean;
   scoringMode: ScoringMode;
   completedRounds: number;
+  guestProfileSummary: string;
 }>();
 
 const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
@@ -647,6 +658,29 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .lobby-head-actions {
   flex: 0 0 auto;
+}
+
+.guest-profile-summary {
+  min-width: 11.5rem;
+  padding: 0.48rem 0.72rem;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 0.72rem;
+  background: rgba(7, 89, 133, 0.34);
+  display: grid;
+  gap: 0.1rem;
+  color: #e0f2fe;
+  text-align: left;
+}
+
+.guest-profile-summary strong {
+  color: #fef08a;
+  font-size: 0.78rem;
+}
+
+.guest-profile-summary span {
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .invite-actions {
@@ -1244,6 +1278,22 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .lobby-head-actions {
     gap: 0.35rem;
+  }
+
+  .mode-selection .guest-profile-summary {
+    min-width: 0;
+    padding: 0.3rem 0.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .mode-selection .guest-profile-summary strong {
+    font-size: 0.82rem;
+  }
+
+  .mode-selection .guest-profile-summary span {
+    font-size: 0.9rem;
   }
 
   .head-action {

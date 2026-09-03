@@ -111,6 +111,7 @@
       :match-seconds-left="matchSecondsLeft"
       :scoring-mode="state?.scoringMode || 'single'"
       :completed-rounds="state?.completedRounds || 0"
+      :guest-profile-summary="guestProfileSummary"
       :players="players"
       :can-share-invite="canShareInvite"
       :invite-pending="inviteActionPending"
@@ -655,6 +656,7 @@ import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
+import { useGuestProfile } from "@/composables/useGuestProfile";
 import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
@@ -763,6 +765,15 @@ function writeNicknameHistory(names: string[]) {
 }
 
 const {
+  profile: guestProfile,
+  refresh: refreshGuestProfile,
+  refreshAfterSettlement: refreshGuestProfileAfterSettlement,
+  updateNickname: updateGuestProfileNickname,
+} = useGuestProfile();
+
+void refreshGuestProfile();
+
+const {
   connect,
   connected,
   connectionState,
@@ -803,6 +814,14 @@ const {
   updateBot,
   removeSeat,
 } = useRoom("玩家");
+
+const guestProfileSummary = computed(() => {
+  const current = guestProfile.value;
+  if (!current) return "";
+  return current.roundsPlayed > 0
+    ? `已玩 ${current.roundsPlayed} 局 · 胡 ${current.huWins} 局`
+    : "还没有完成牌局";
+});
 
 type LocalTestBridgeWindow = Window & {
   __siseLocalTest?: {
@@ -2681,6 +2700,7 @@ async function enterLobby() {
   const mergedHistory = [nickname, ...nicknameHistory.value.filter((item) => item !== nickname)].slice(0, 8);
   nicknameHistory.value = mergedHistory;
   writeNicknameHistory(mergedHistory);
+  void updateGuestProfileNickname(nickname);
   enteredFrontLobby.value = true;
   const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
   if (!invitedRoomId) {
@@ -2991,6 +3011,16 @@ watch(activeRoomId, (roomId, previousRoomId) => {
     closeInviteQr(false);
   }
 });
+
+let lastGuestProfileRoundKey = "";
+watch(
+  () => `${activeRoomId.value}:${roundResult.value?.roundNumber ?? 0}`,
+  (roundKey) => {
+    if (!roundResult.value || roundKey === lastGuestProfileRoundKey) return;
+    lastGuestProfileRoundKey = roundKey;
+    refreshGuestProfileAfterSettlement();
+  },
+);
 
 </script>
 

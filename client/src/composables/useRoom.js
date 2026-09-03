@@ -6,6 +6,7 @@ import { actionHistoryText, parseActionDescriptor } from "@/utils/actionHistory"
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
@@ -1226,6 +1227,7 @@ export function useRoom(playerName = "Player") {
             const cachedToken = (initialRoomId && readStored(tokenKey(initialRoomId))) ||
                 (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
             const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
+            const profileToken = ensureGuestProfileToken();
             playerToken.value = desiredToken;
             if (preserveState && !activeRoomId.value) {
                 activeRoomId.value = initialRoomId;
@@ -1240,12 +1242,14 @@ export function useRoom(playerName = "Player") {
                     ? await client.joinOrCreate("four-color", {
                         name: desiredName,
                         playerToken: desiredToken,
+                        profileToken,
                         roomMode: "match",
                         matchOpen: true,
                     })
                     : await client.joinById(initialRoomId, {
                         name: desiredName,
                         playerToken: desiredToken,
+                        profileToken,
                         hostKey: resolvedOptions.hostKey,
                     });
             }
@@ -1267,6 +1271,7 @@ export function useRoom(playerName = "Player") {
                 joined = await client.joinById(fallbackRoomId, {
                     name: desiredName,
                     playerToken: desiredToken,
+                    profileToken,
                     hostKey: resolvedOptions.hostKey,
                 });
             }
