@@ -330,6 +330,64 @@ test.describe("rotated legacy friend waiting room", () => {
   });
 });
 
+test("opens the phone system share sheet for a friend invitation", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        sessionStorage.setItem("sise_test_shared_invite", JSON.stringify(data));
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("分享房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+
+  const inviteButton = page.getByTestId("copy-invite");
+  await expect(inviteButton).toHaveText("邀请牌友");
+  await inviteButton.click();
+  await expect(page.getByTestId("global-notice")).toHaveText("邀请已分享，等待牌友加入");
+  await expect(inviteButton).toBeFocused();
+  const shared = await page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem("sise_test_shared_invite") ?? "{}") as ShareData,
+  );
+  expect(shared.title).toBe("四色牌好友房");
+  expect(shared.text).toContain("加入好友房");
+  expect(shared.url).toContain("roomId=");
+  expect(shared.url).not.toContain("playerToken");
+  expect(shared.url).not.toContain("hostKey");
+});
+
+test("keeps the friend room unchanged when system sharing is cancelled", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async () => {
+        throw new DOMException("cancelled", "AbortError");
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("取消分享房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+
+  const inviteButton = page.getByTestId("copy-invite");
+  await inviteButton.click();
+  await expect(inviteButton).toBeEnabled();
+  await expect(inviteButton).toBeFocused();
+  await expect(page.getByTestId("global-notice")).toHaveCount(0);
+  await expect(page.getByTestId("invite-copy-fallback-url")).toHaveCount(0);
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+});
+
 test("copies an invite link on an insecure LAN deployment", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "isSecureContext", {
@@ -352,6 +410,12 @@ test("copies an invite link on an insecure LAN deployment", async ({ page }) => 
 
 test("offers an accessible in-app fallback when invite copying is blocked", async ({ page }) => {
   await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async () => {
+        throw new DOMException("share unavailable", "NotAllowedError");
+      },
+    });
     Object.defineProperty(window, "isSecureContext", {
       configurable: true,
       value: false,

@@ -50,9 +50,17 @@
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
-          <p>复制邀请链接给朋友；链接不会包含你的身份凭据。</p>
+          <p>{{ canShareInvite ? "通过系统分享给牌友；链接不会包含你的身份凭据。" : "复制邀请链接给朋友；链接不会包含你的身份凭据。" }}</p>
         </div>
-        <button class="ghost" type="button" data-testid="copy-invite" @click="$emit('copy-invite')">复制邀请链接</button>
+        <button
+          class="ghost invite-button"
+          type="button"
+          data-testid="copy-invite"
+          :disabled="invitePending"
+          @click="$emit('copy-invite')"
+        >
+          {{ invitePending ? (canShareInvite ? "正在打开…" : "正在复制…") : (canShareInvite ? "邀请牌友" : "复制邀请链接") }}
+        </button>
       </div>
 
       <div v-if="roomId" class="seat-grid" data-testid="seat-grid">
@@ -234,6 +242,8 @@ const props = defineProps<{
   roomId: string;
   roomMode: "practice" | "friends" | "";
   players: LobbyPlayer[];
+  canShareInvite: boolean;
+  invitePending: boolean;
 }>();
 
 const seatNames = ["首席", "二席", "三席", "四席"];
@@ -663,6 +673,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .fill-bots:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.invite-button:disabled {
   cursor: wait;
   opacity: 0.72;
 }

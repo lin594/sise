@@ -100,6 +100,8 @@
       :room-id="activeRoomId"
       :room-mode="state?.roomMode || ''"
       :players="players"
+      :can-share-invite="canShareInvite"
+      :invite-pending="inviteActionPending"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
@@ -1064,6 +1066,8 @@ const resolvedTableCardMode = computed<RenderedCardMode>(() =>
 const globalError = ref("");
 const globalNotice = ref("");
 const inviteCopyFallbackUrl = ref("");
+const canShareInvite = typeof navigator.share === "function";
+const inviteActionPending = ref(false);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
 const showRules = ref(false);
@@ -2198,51 +2202,77 @@ async function startFriendLobby() {
 }
 
 async function copyInviteLink() {
-  if (!activeRoomId.value) {
+  if (!activeRoomId.value || inviteActionPending.value) {
     return;
   }
   inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  inviteActionPending.value = true;
   const url = new URL(window.location.origin + window.location.pathname);
   url.searchParams.set("roomId", activeRoomId.value);
   const inviteUrl = url.toString();
-  let copied = false;
-  if (window.isSecureContext && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      copied = true;
-    } catch {
-      copied = false;
+  let restoreFocus = true;
+  try {
+    if (canShareInvite && navigator.share) {
+      try {
+        await navigator.share({
+          title: "四色牌好友房",
+          text: `加入好友房 ${activeRoomId.value}，一起玩四色牌`,
+          url: inviteUrl,
+        });
+        globalError.value = "";
+        showGlobalNotice("邀请已分享，等待牌友加入");
+        return;
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {
+          return;
+        }
+      }
     }
-  }
-  if (!copied) {
-    const textarea = document.createElement("textarea");
-    textarea.value = inviteUrl;
-    textarea.readOnly = true;
-    textarea.style.position = "fixed";
-    textarea.style.inset = "0 auto auto -9999px";
-    textarea.style.fontSize = "16px";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    textarea.setSelectionRange(0, inviteUrl.length);
-    try {
-      copied = document.execCommand("copy");
-    } catch {
-      copied = false;
-    } finally {
-      textarea.remove();
+
+    let copied = false;
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        copied = true;
+      } catch {
+        copied = false;
+      }
     }
-  }
-  if (copied) {
-    globalError.value = "";
-    showGlobalNotice("邀请链接已复制，可以发给朋友了");
-    const returnTarget = inviteCopyReturnFocus;
-    inviteCopyReturnFocus = null;
-    await nextTick();
-    returnTarget?.isConnected && returnTarget.focus();
-  } else {
-    globalError.value = "";
-    inviteCopyFallbackUrl.value = inviteUrl;
+    if (!copied) {
+      const textarea = document.createElement("textarea");
+      textarea.value = inviteUrl;
+      textarea.readOnly = true;
+      textarea.style.position = "fixed";
+      textarea.style.inset = "0 auto auto -9999px";
+      textarea.style.fontSize = "16px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, inviteUrl.length);
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      } finally {
+        textarea.remove();
+      }
+    }
+    if (copied) {
+      globalError.value = "";
+      showGlobalNotice("邀请链接已复制，可以发给朋友了");
+    } else {
+      globalError.value = "";
+      inviteCopyFallbackUrl.value = inviteUrl;
+      restoreFocus = false;
+    }
+  } finally {
+    inviteActionPending.value = false;
+    if (restoreFocus) {
+      const returnTarget = inviteCopyReturnFocus;
+      inviteCopyReturnFocus = null;
+      await nextTick();
+      returnTarget?.isConnected && returnTarget.focus();
+    }
   }
 }
 
