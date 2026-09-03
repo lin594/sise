@@ -663,6 +663,7 @@ function observeHandScroller(hand) {
     if (typeof ResizeObserver !== "undefined") {
         handResizeObserver = new ResizeObserver(updateHandScrollState);
         handResizeObserver.observe(hand);
+        hand.querySelectorAll("[data-card-id]").forEach((card) => handResizeObserver?.observe(card));
     }
     void nextTick(updateHandScrollState);
 }
@@ -1222,7 +1223,7 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     }
     void nextTick(updateHandScrollState);
 });
-watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(updateHandScrollState));
+watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(() => observeHandScroller(selfHandRef.value)));
 watch(() => props.ownCardMode, () => void nextTick(updateHandScrollState));
 watch(selfHandRef, observeHandScroller, { immediate: true });
 watch(canDiscard, (enabled) => {

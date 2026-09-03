@@ -1482,6 +1482,7 @@ function observeHandScroller(hand: HTMLElement | null): void {
   if (typeof ResizeObserver !== "undefined") {
     handResizeObserver = new ResizeObserver(updateHandScrollState);
     handResizeObserver.observe(hand);
+    hand.querySelectorAll<HTMLElement>("[data-card-id]").forEach((card) => handResizeObserver?.observe(card));
   }
   void nextTick(updateHandScrollState);
 }
@@ -2092,7 +2093,7 @@ watch(
 
 watch(
   () => displayPrivateHand.value.map((card) => card.id).join("|"),
-  () => void nextTick(updateHandScrollState),
+  () => void nextTick(() => observeHandScroller(selfHandRef.value)),
 );
 
 watch(

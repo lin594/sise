@@ -524,6 +524,7 @@ function observeHandScroller(rail: HTMLElement | null): void {
   if (typeof ResizeObserver !== "undefined") {
     handResizeObserver = new ResizeObserver(updateHandScrollState);
     handResizeObserver.observe(rail);
+    rail.querySelectorAll<HTMLElement>(".hand-preview-card").forEach((card) => handResizeObserver?.observe(card));
   }
   void nextTick(updateHandScrollState);
 }
@@ -538,7 +539,7 @@ watch(
       if (handRailRef.value) {
         handRailRef.value.scrollLeft = 0;
       }
-      updateHandScrollState();
+      observeHandScroller(handRailRef.value);
     });
   },
   { immediate: true },
