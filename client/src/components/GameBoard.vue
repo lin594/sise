@@ -36,7 +36,7 @@
         :aria-label="playerAccessibleSummary(topPlayer, topGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(topPlayer.clientId),
-          dealer: isDealer(topPlayer.clientId),
+          dealer: showDealerSeatMarker(topPlayer.clientId),
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
@@ -56,9 +56,11 @@
               data-testid="opponent-hand-count"
               :data-player-id="topPlayer.clientId"
             >{{ playerHandCount(topPlayer) }}张</span>
-            <span v-if="isDealer(topPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
-            <span v-if="isDealer(topPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+            <span v-if="showDealerSeatMarker(topPlayer.clientId)" class="dealer-seat-lockup">
+              <span class="dealer-badge" data-testid="dealer-badge">庄</span>
+              <span class="dealer-card-mark" data-testid="dealer-card">
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+              </span>
             </span>
           </div>
           <div class="seat-tags">
@@ -128,7 +130,7 @@
         :aria-label="playerAccessibleSummary(leftPlayer, leftGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(leftPlayer.clientId),
-          dealer: isDealer(leftPlayer.clientId),
+          dealer: showDealerSeatMarker(leftPlayer.clientId),
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
@@ -148,9 +150,11 @@
               data-testid="opponent-hand-count"
               :data-player-id="leftPlayer.clientId"
             >{{ playerHandCount(leftPlayer) }}张</span>
-            <span v-if="isDealer(leftPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
-            <span v-if="isDealer(leftPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+            <span v-if="showDealerSeatMarker(leftPlayer.clientId)" class="dealer-seat-lockup">
+              <span class="dealer-badge" data-testid="dealer-badge">庄</span>
+              <span class="dealer-card-mark" data-testid="dealer-card">
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+              </span>
             </span>
           </div>
           <div class="seat-tags">
@@ -276,7 +280,7 @@
         :aria-label="playerAccessibleSummary(rightPlayer, rightGroupBlocks.length)"
         :class="{
           active: isCurrentTurn(rightPlayer.clientId),
-          dealer: isDealer(rightPlayer.clientId),
+          dealer: showDealerSeatMarker(rightPlayer.clientId),
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
@@ -296,9 +300,11 @@
               data-testid="opponent-hand-count"
               :data-player-id="rightPlayer.clientId"
             >{{ playerHandCount(rightPlayer) }}张</span>
-            <span v-if="isDealer(rightPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
-            <span v-if="isDealer(rightPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+            <span v-if="showDealerSeatMarker(rightPlayer.clientId)" class="dealer-seat-lockup">
+              <span class="dealer-badge" data-testid="dealer-badge">庄</span>
+              <span class="dealer-card-mark" data-testid="dealer-card">
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+              </span>
             </span>
           </div>
           <div class="seat-tags">
@@ -415,10 +421,38 @@
       </Transition>
 
       <Transition name="dealer-reveal">
-        <div v-if="dealerReveal" :key="`dealer-${dealerReveal.id}`" class="dealer-reveal">
-          <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
-          <div v-if="dealerReveal.card" class="dealer-reveal-card">
-            <CardComp :card="dealerReveal.card" :mode="props.tableCardMode" size="md" />
+        <div
+          v-if="dealerReveal"
+          :key="`dealer-${dealerReveal.id}`"
+          class="dealer-reveal"
+          :class="`stage-${dealerReveal.stage}`"
+          data-testid="dealer-ceremony"
+          role="status"
+          aria-live="polite"
+          :aria-label="dealerRevealAccessibleText"
+        >
+          <div class="dealer-reveal-panel">
+            <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
+            <div class="dealer-reveal-tile">
+              <div
+                v-if="dealerReveal.stage === 'picking'"
+                class="dealer-reveal-back"
+                data-testid="dealer-reveal-back"
+                data-card-back="red-four-color"
+                aria-hidden="true"
+              >
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <div v-else-if="dealerCeremonyCard" class="dealer-reveal-card" data-testid="dealer-reveal-card">
+                <CardComp :card="dealerCeremonyCard" :mode="props.tableCardMode" size="xl" />
+              </div>
+            </div>
+            <strong v-if="dealerCeremonyCard" class="dealer-reveal-card-name">
+              {{ getCardAccessibleText(dealerCeremonyCard) }}
+            </strong>
+            <small v-if="dealerReveal.dealerName" class="dealer-reveal-result">
+              {{ dealerReveal.dealerName }}坐庄
+            </small>
           </div>
         </div>
       </Transition>
@@ -442,7 +476,7 @@
       :data-player-id="selfPlayer.clientId"
       role="group"
       :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
-      :class="{ active: isMyTurn, dealer: isDealer(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
+      :class="{ active: isMyTurn, dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
@@ -457,9 +491,11 @@
               aria-label="机器人"
               title="机器人"
             >电脑</span>
-            <span v-if="isDealer(selfPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
-            <span v-if="isDealer(selfPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
-              <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+            <span v-if="showDealerSeatMarker(selfPlayer.clientId)" class="dealer-seat-lockup" data-testid="self-dealer-lockup">
+              <span class="dealer-badge" data-testid="dealer-badge">庄</span>
+              <span class="dealer-card-mark" data-testid="dealer-card">
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+              </span>
             </span>
           </div>
           <p v-if="seatMetaText(selfGroupBlocks.length, selfPlayer.declaredKongs)" data-testid="self-seat-meta">
@@ -641,6 +677,15 @@ type DealerFlight = {
   ey: number;
 };
 
+type DealerReveal = {
+  id: number;
+  stage: "picking" | "revealed";
+  label: string;
+  card: Card | null;
+  dealerId: string;
+  dealerName: string;
+};
+
 const props = defineProps<{
   state: any;
   players: PlayerState[];
@@ -681,8 +726,7 @@ const nowMs = ref(Date.now());
 function isOpeningDealIntroState(): boolean {
   return (
     props.state?.phase === "declaring" &&
-    /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
-    Number(props.state?.responseEndsAt ?? 0) > nowMs.value
+    /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(String(props.state?.lastAction ?? ""))
   );
 }
 
@@ -726,7 +770,7 @@ const lastLocalDiscardAt = ref(0);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
-const dealerReveal = ref<{ id: number; label: string; card?: Card | null } | null>(null);
+const dealerReveal = ref<DealerReveal | null>(null);
 const dealerFlight = ref<DealerFlight | null>(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
@@ -1237,6 +1281,34 @@ const dealerInfoCard = computed<Card | null>(() => {
   const card = props.state?.dealerCard;
   return card?.id ? (card as Card) : null;
 });
+
+const dealerSeatMarkerReady = computed(
+  () => !/^DEALER_(?:PICK|CARD)\b/.test(String(props.state?.lastAction ?? "")),
+);
+
+// Colyseus may notify lastAction before the dealerCard fields from the same
+// patch have reached Vue. Keep the visible face bound to the authoritative
+// state so a reveal can never freeze the previous round's card.
+const dealerCeremonyCard = computed<Card | null>(() => {
+  const reveal = dealerReveal.value;
+  if (!reveal || reveal.stage !== "revealed") {
+    return null;
+  }
+  return dealerInfoCard.value ?? reveal.card;
+});
+
+const dealerRevealAccessibleText = computed(() => {
+  const reveal = dealerReveal.value;
+  const card = dealerCeremonyCard.value;
+  if (!reveal || reveal.stage === "picking" || !card) {
+    return "正在翻定庄牌";
+  }
+  return `定庄牌为${getCardAccessibleText(card)}，${reveal.dealerName || "庄家"}坐庄`;
+});
+
+function showDealerSeatMarker(playerId: string): boolean {
+  return dealerSeatMarkerReady.value && isDealer(playerId) && Boolean(dealerInfoCard.value);
+}
 
 function isCollectiveResponder(playerId: string): boolean {
   void playerId;
@@ -1813,19 +1885,41 @@ function triggerActorFlash(actorId: string): void {
   }, 780);
 }
 
-function triggerDealerReveal(label: string, card?: Card | null, dealerId?: string) {
+function clearDealerReveal(): void {
   if (dealerTimer) {
     clearTimeout(dealerTimer);
     dealerTimer = null;
   }
-  dealerReveal.value = { id: ++dealerRevealSeq, label, card: card ?? null };
+  dealerReveal.value = null;
+}
+
+function triggerDealerReveal(
+  stage: DealerReveal["stage"],
+  label: string,
+  card?: Card | null,
+  dealerId = "",
+): void {
+  if (dealerTimer) {
+    clearTimeout(dealerTimer);
+    dealerTimer = null;
+  }
+  const continuingReveal = stage === "revealed" && dealerReveal.value?.stage === "picking";
+  const id = continuingReveal ? dealerReveal.value!.id : ++dealerRevealSeq;
+  const dealerName = dealerId
+    ? props.players.find((player) => player.clientId === dealerId)?.name || "庄家"
+    : "";
+  dealerReveal.value = {
+    id,
+    stage,
+    label,
+    card: card ?? null,
+    dealerId,
+    dealerName,
+  };
   dealerTimer = setTimeout(() => {
     dealerReveal.value = null;
     dealerTimer = null;
-  }, 1400);
-  if (dealerId) {
-    triggerDealerFlight(dealerId);
-  }
+  }, 2400);
 }
 
 onMounted(() => {
@@ -1873,17 +1967,19 @@ watch(
   (action) => {
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
-      triggerDealerReveal("定庄中");
+      triggerDealerReveal("picking", "正在翻定庄牌");
       return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
     if (dealerCardMatch) {
       const dealerId = dealerCardMatch[1];
-      triggerDealerReveal("定庄牌", dealerInfoCard.value, dealerId);
+      triggerDealerReveal("revealed", "定庄牌揭晓", dealerInfoCard.value, dealerId);
       return;
     }
     const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
     if (dealerMatch && props.state?.phase === "declaring") {
+      clearDealerReveal();
+      triggerDealerFlight(dealerMatch[1]);
       triggerDealAnimation();
       return;
     }
@@ -2150,10 +2246,13 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .seat-identity {
   min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   gap: clamp(0.2rem, 0.55vh, 0.4rem);
@@ -2216,16 +2315,24 @@ watch(
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.32);
 }
 
+.dealer-seat-lockup {
+  flex: 0 0 auto;
+  min-width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.16rem, 0.42vh, 0.3rem);
+  overflow: visible;
+}
+
 .dealer-card-mark {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  max-height: clamp(1.9rem, 5.4vh, 3.15rem);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .dealer-card-mark :deep(.card) {
-  transform: scale(0.72);
+  transform: none;
 }
 
 .dealer-card-simple {
@@ -2887,6 +2994,23 @@ watch(
   gap: 8px;
 }
 
+.self-head > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.self-info-card .seat-identity {
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.self-info-card .seat-identity h3 {
+  width: 100%;
+}
+
 .self-head h3,
 .self-head p {
   margin: 0;
@@ -3253,25 +3377,128 @@ watch(
 
 .dealer-reveal {
   position: absolute;
+  inset: 0;
   z-index: 10;
-  left: 50%;
-  top: 18%;
-  transform: translateX(-50%);
-  min-width: clamp(9rem, 24vw, 15rem);
-  border-radius: 999px;
-  border: 1px solid rgba(245, 158, 11, 0.85);
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-  box-shadow: 0 0 22px rgba(245, 158, 11, 0.32);
-  padding: clamp(0.38rem, 0.95vh, 0.62rem) clamp(0.65rem, 1.5vw, 1rem);
   display: grid;
-  justify-items: center;
-  gap: 2px;
+  place-items: center;
+  padding: clamp(0.4rem, 1.2vh, 0.8rem);
+  background: radial-gradient(circle at center, rgba(120, 53, 15, 0.28), rgba(2, 6, 23, 0.76) 72%);
   pointer-events: none;
+}
+
+.dealer-reveal-panel {
+  position: relative;
+  isolation: isolate;
+  min-width: clamp(9.5rem, 26vw, 15rem);
+  min-height: clamp(8rem, 26vh, 11.5rem);
+  border: 2px solid rgba(251, 191, 36, 0.92);
+  border-radius: clamp(1rem, 2.8vh, 1.6rem);
+  background: linear-gradient(160deg, rgba(30, 41, 59, 0.98), rgba(7, 15, 29, 0.98));
+  box-shadow:
+    0 0 0 4px rgba(120, 53, 15, 0.34),
+    0 0 36px rgba(251, 191, 36, 0.38),
+    0 18px 40px rgba(2, 6, 23, 0.58);
+  padding: clamp(0.55rem, 1.4vh, 0.9rem) clamp(0.8rem, 2vw, 1.25rem);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  align-items: center;
+  gap: clamp(0.16rem, 0.5vh, 0.34rem);
+  animation: dealer-panel-arrive 0.32s ease-out both;
+}
+
+.dealer-reveal-panel::before,
+.dealer-reveal-panel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.dealer-reveal-panel::before {
+  width: 72%;
+  aspect-ratio: 1;
+}
+
+.dealer-reveal-panel::after {
+  width: 54%;
+  aspect-ratio: 1;
 }
 
 .dealer-reveal-label {
   color: #fbbf24;
-  font-size: clamp(0.62rem, 1.45vh, 0.8rem);
+  font-size: clamp(0.82rem, 1.9vh, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.38);
+}
+
+.dealer-reveal-tile {
+  min-height: clamp(4.9rem, 14vh, 6.6rem);
+  display: grid;
+  place-items: center;
+  perspective: 500px;
+}
+
+.dealer-reveal-back {
+  position: relative;
+  width: clamp(2.05rem, 5.4vh, 2.8rem);
+  height: clamp(4.8rem, 13vh, 6.2rem);
+  overflow: hidden;
+  border: 2px solid #fecaca;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30% 70%, rgba(69, 10, 10, 0.24)),
+    #dc2626;
+  box-shadow:
+    inset 0 0 0 3px rgba(127, 29, 29, 0.72),
+    0 8px 18px rgba(2, 6, 23, 0.52),
+    0 0 20px rgba(248, 113, 113, 0.24);
+  animation: dealer-card-wait 0.82s ease-in-out infinite alternate;
+}
+
+.dealer-reveal-back span {
+  position: absolute;
+  left: 50%;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: rgba(254, 202, 202, 0.82);
+  transform: translateX(-50%);
+}
+
+.dealer-reveal-back span:nth-child(1) { top: 22%; }
+.dealer-reveal-back span:nth-child(2) { top: 39%; }
+.dealer-reveal-back span:nth-child(3) { top: 56%; }
+.dealer-reveal-back span:nth-child(4) { top: 73%; }
+
+.dealer-reveal-card {
+  min-width: clamp(2.8rem, 7vh, 4.2rem);
+  min-height: clamp(4.9rem, 14vh, 6.6rem);
+  display: grid;
+  place-items: center;
+  animation: dealer-card-turn 0.62s cubic-bezier(0.2, 0.76, 0.22, 1) both;
+}
+
+.dealer-reveal-card :deep(.card) {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 10px 22px rgba(2, 6, 23, 0.52);
+}
+
+.dealer-reveal-card-name {
+  color: #fff7ed;
+  font-size: clamp(1rem, 2.4vh, 1.3rem);
+  line-height: 1.1;
+}
+
+.dealer-reveal-result {
+  color: #fde68a;
+  font-size: clamp(0.86rem, 2vh, 1.05rem);
+  font-weight: 850;
 }
 
 .dealer-flight {
@@ -3306,13 +3533,12 @@ watch(
 
 .dealer-reveal-enter-active,
 .dealer-reveal-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.22s ease;
 }
 
 .dealer-reveal-enter-from,
 .dealer-reveal-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-8px) scale(0.92);
 }
 
 .dealer-flight-enter-active,
@@ -3347,6 +3573,43 @@ watch(
   }
   50% {
     box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.8) inset, 0 0 18px rgba(34, 197, 94, 0.25);
+  }
+}
+
+@keyframes dealer-panel-arrive {
+  0% {
+    transform: translateY(-8px) scale(0.92);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes dealer-card-wait {
+  0% {
+    transform: translateY(1px) rotate(-1deg);
+    filter: brightness(0.92);
+  }
+  100% {
+    transform: translateY(-3px) rotate(1deg);
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes dealer-card-turn {
+  0% {
+    transform: rotateY(88deg) scale(0.86);
+    opacity: 0;
+  }
+  55% {
+    transform: rotateY(-8deg) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateY(0) scale(1);
+    opacity: 1;
   }
 }
 
@@ -3805,7 +4068,22 @@ watch(
   }
 
   .dealer-card-mark :deep(.card) {
-    transform: scale(0.78);
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dealer-reveal,
+  .dealer-reveal-panel,
+  .dealer-reveal-back,
+  .dealer-reveal-card,
+  .dealer-flight {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .dealer-flight {
+    display: none;
   }
 }
 

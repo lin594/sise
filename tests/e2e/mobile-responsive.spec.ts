@@ -7,6 +7,25 @@ async function enterLobby(page: Page, path = "/"): Promise<void> {
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
+async function applyLocalDebugScenario(page: Page, scenario: string): Promise<void> {
+  await page.evaluate((nextScenario) => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+    }).__siseLocalTest;
+    if (!bridge) {
+      throw new Error("Local test bridge is unavailable");
+    }
+    bridge.setupScenario(nextScenario);
+  }, scenario);
+  await expect.poll(() =>
+    page.evaluate(() =>
+      (window as Window & {
+        __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
+      }).__siseLocalTest?.getLastResult() ?? null,
+    ),
+  ).toMatchObject({ scenario, ok: true });
+}
+
 async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByTestId("deck-count")).toBeVisible();
   await expect(page.getByTestId("deck-stack")).toHaveAttribute("aria-label", /牌堆剩余 \d+ 张/);
@@ -1208,6 +1227,126 @@ test.describe("compact landscape gameplay", () => {
       queryRoomId: new URL(location.href).searchParams.get("roomId"),
     }), departingRoomId);
     expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
+  });
+
+  test("keeps the self dealer card visible and reveals it before the dealer mark lands", async ({ page }, testInfo) => {
+    await page.goto("/?e2eDebug=1");
+    await page.getByTestId("nickname-input").fill("风棋童与老牌友");
+    await page.getByTestId("login-submit").click();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await page.setViewportSize({ width: 568, height: 320 });
+
+    await applyLocalDebugScenario(page, "dealer_pick_intro");
+    const ceremony = page.getByTestId("dealer-ceremony");
+    await expect(page.getByRole("dialog", { name: "声明亮鱼与暗坎" })).toHaveCount(0);
+    await expect(ceremony).toBeVisible();
+    await expect(ceremony).toHaveAccessibleName("正在翻定庄牌");
+    await expect(page.getByTestId("dealer-reveal-back")).toHaveAttribute("data-card-back", "red-four-color");
+    await expect(page.getByTestId("dealer-reveal-card")).toHaveCount(0);
+    await expect(page.getByTestId("dealer-badge")).toHaveCount(0);
+    await expect(page.getByTestId("dealer-card")).toHaveCount(0);
+    const backGeometry = await page.getByTestId("dealer-reveal-back").evaluate((back) => {
+      const rect = back.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        radius: getComputedStyle(back).borderRadius,
+        background: getComputedStyle(back).backgroundColor,
+      };
+    });
+    expect(backGeometry.height / backGeometry.width).toBeGreaterThanOrEqual(2);
+    expect(backGeometry.radius).toBe("999px");
+    expect(backGeometry.background).toBe("rgb(220, 38, 38)");
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: testInfo.outputPath("dealer-pick-back-568x320.png") });
+
+    await applyLocalDebugScenario(page, "dealer_reveal_self");
+    await expect(ceremony).toBeVisible();
+    await expect(ceremony).toHaveAccessibleName(/定庄牌为红相，.+坐庄/);
+    await expect(page.getByTestId("dealer-reveal-back")).toHaveCount(0);
+    await expect(page.getByTestId("dealer-reveal-card").getByRole("img", { name: "红相" })).toBeVisible();
+    await expect(ceremony).toContainText("红相");
+    await expect(ceremony).toContainText(/.+坐庄/);
+    await expect(page.getByTestId("dealer-badge")).toHaveCount(0);
+    await page.waitForTimeout(650);
+    await page.screenshot({ path: testInfo.outputPath("dealer-card-revealed-568x320.png") });
+
+    await applyLocalDebugScenario(page, "dealer_settled_self");
+    await expect(ceremony).toHaveCount(0);
+    const selfSeat = page.getByTestId("player-self");
+    const selfDealer = selfSeat.getByTestId("self-dealer-lockup");
+    await expect(selfDealer).toBeVisible();
+    await expect(selfDealer.getByTestId("dealer-badge")).toHaveText("庄");
+    await expect(selfDealer.getByTestId("dealer-card").getByRole("img", { name: "红相" })).toBeVisible();
+    await expect(page.locator(".player-card [data-testid='dealer-card']")).toHaveCount(0);
+
+    const expectSelfDealerContained = async () => {
+      const geometry = await page.evaluate(() => {
+        const seat = document.querySelector<HTMLElement>("[data-testid='player-self']")!.getBoundingClientRect();
+        const lockup = document.querySelector<HTMLElement>("[data-testid='self-dealer-lockup']")!.getBoundingClientRect();
+        const card = document.querySelector<HTMLElement>("[data-testid='self-dealer-lockup'] [data-testid='dealer-card']")!.getBoundingClientRect();
+        const identityElement = document.querySelector<HTMLElement>("[data-testid='player-self'] .seat-identity")!;
+        const identity = identityElement.getBoundingClientRect();
+        const identityStyle = getComputedStyle(identityElement);
+        return {
+          contained:
+            lockup.left >= seat.left - 0.5 &&
+            lockup.right <= seat.right + 0.5 &&
+            lockup.top >= seat.top - 0.5 &&
+            lockup.bottom <= seat.bottom + 0.5 &&
+            card.left >= seat.left - 0.5 &&
+            card.right <= seat.right + 0.5 &&
+            card.top >= seat.top - 0.5 &&
+            card.bottom <= seat.bottom + 0.5,
+          cardWidth: card.width,
+          cardHeight: card.height,
+          seat: { left: seat.left, top: seat.top, right: seat.right, bottom: seat.bottom },
+          identity: { left: identity.left, top: identity.top, right: identity.right, bottom: identity.bottom },
+          identityStyle: {
+            display: identityStyle.display,
+            width: identityStyle.width,
+            gridTemplateColumns: identityStyle.gridTemplateColumns,
+            overflow: identityStyle.overflow,
+          },
+          lockup: { left: lockup.left, top: lockup.top, right: lockup.right, bottom: lockup.bottom },
+          card: { left: card.left, top: card.top, right: card.right, bottom: card.bottom },
+        };
+      });
+      expect(geometry.contained, `dealer lockup must remain inside the self seat: ${JSON.stringify(geometry)}`).toBe(true);
+      // Portrait phones rotate the fixed landscape canvas, so viewport-space
+      // width and height swap. Assert the visible short/long edges instead.
+      expect(Math.min(geometry.cardWidth, geometry.cardHeight)).toBeGreaterThanOrEqual(16);
+      expect(Math.max(geometry.cardWidth, geometry.cardHeight)).toBeGreaterThanOrEqual(24);
+    };
+
+    await expectSelfDealerContained();
+    await page.screenshot({ path: testInfo.outputPath("self-dealer-card-568x320.png") });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await expectSelfDealerContained();
+
+    await page.setViewportSize({ width: 667, height: 375 });
+    await expectSelfDealerContained();
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expectSelfDealerContained();
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await applyLocalDebugScenario(page, "dealer_pick_intro");
+    await expect(ceremony).toBeVisible();
+    await expect.poll(() => page.getByTestId("dealer-reveal-back").evaluate((back) => getComputedStyle(back).animationName))
+      .toBe("none");
+    await applyLocalDebugScenario(page, "dealer_reveal_self");
+    await expect.poll(() => page.getByTestId("dealer-reveal-card").evaluate((card) => getComputedStyle(card).animationName))
+      .toBe("none");
   });
 
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {

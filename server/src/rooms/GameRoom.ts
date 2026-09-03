@@ -200,7 +200,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
-  private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 1200));
+  private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 2000));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
   private readonly declareTimeoutMs = Math.max(
     1000,
@@ -351,6 +351,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         const ok = canUseDebugScenario(this.debugScenariosEnabled, seatId, this.state.hostPlayerId)
           ? this.applyDebugScenario(seatId!, scenario)
           : false;
+        // Make the debug acknowledgement a real synchronization barrier. The
+        // Schema patch and this message otherwise travel independently, so a
+        // browser test can observe the new lastAction with the previous card.
+        if (ok) {
+          this.syncClientState(client);
+        }
         client.send("debug_applied", {
           scenario,
           ok,
@@ -1182,6 +1188,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.declareIntroTimer = registerTimer(totalIntroMs, () => {
       this.declareIntroTimer = null;
       this.state.responseEndsAt = 0;
+      this.state.lastAction = `DECLARING ${this.declareTimeoutMs}ms`;
       this.startDeclaringPhase();
       this.declareIntroStageTimers = [];
     });
@@ -3226,6 +3233,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         },
         getPendingResponse: () => this.pendingResponse,
         toSchemaCard: (card, isResponseCard, source) => this.ops.toSchemaCard(card, isResponseCard, source),
+        setDealerCard: (card) => {
+          this.dealerCard = { ...card };
+          // Mutate the existing nested Schema so connected clients receive a
+          // field patch even when a debug scenario replaces an already
+          // published dealer card. Replacing the Schema object can leave an
+          // older card visible until another full state sync.
+          this.state.dealerCard.id = card.id;
+          this.state.dealerCard.color = card.color;
+          this.state.dealerCard.type = card.type;
+          this.state.dealerCard.source = card.source ?? "upper";
+          this.state.dealerCard.isResponseCard = false;
+        },
         setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         clearAwaitingDiscardOwner: () => {
           this.awaitingDiscardOwnerId = null;

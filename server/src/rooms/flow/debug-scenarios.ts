@@ -12,6 +12,7 @@ export interface DebugScenarioContext {
   setPendingResponse: (value: PendingResponseSnapshot | null) => void;
   getPendingResponse: () => PendingResponseSnapshot | null;
   toSchemaCard: (card: Card, isResponseCard: boolean, source: "upper" | "draw") => CardSchema;
+  setDealerCard: (card: Card) => void;
   setResponseCard: (card: Card, source: "upper" | "draw") => void;
   clearAwaitingDiscardOwner: () => void;
   updatePublicHandCounts: () => void;
@@ -135,6 +136,33 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = waitingSeatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: waiting_other_turn#${seq}`;
+  } else if (
+    scenario === "dealer_pick_intro" ||
+    scenario === "dealer_reveal_self" ||
+    scenario === "dealer_settled_self"
+  ) {
+    add(`dealer-hand-${seq}`, "yellow", "ma");
+    const dealerCard: Card = {
+      id: `dealer-card-${seq}`,
+      color: "red",
+      type: "xiang",
+      source: "upper",
+    };
+    context.setPendingResponse(null);
+    context.state.responseCard = new CardSchema();
+    context.state.phase = "declaring";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.state.dealerId = seatId;
+    context.state.dealerPickerId = context.getNextPlayerId(seatId);
+    context.setDealerCard(dealerCard);
+    context.state.responseEndsAt = Date.now() + 10_000;
+    context.state.lastAction = scenario === "dealer_pick_intro"
+      ? `DEALER_PICK ${context.state.dealerPickerId}`
+      : scenario === "dealer_reveal_self"
+        ? `DEALER_CARD ${seatId}`
+        : `DEALER ${seatId}`;
   } else if (scenario === "hu_fail_case") {
     context.publicGeneralPool.length = 0;
     for (const id of context.playerOrder) {
@@ -226,8 +254,17 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   context.syncAllPrivateHands();
   context.broadcastAvailableActions();
 
-  if (scenario === "discard_public" || scenario === "waiting_other_turn") {
+  if (
+    scenario === "discard_public" ||
+    scenario === "waiting_other_turn"
+  ) {
     context.resetCollectivePolling();
+    return true;
+  }
+  if (scenario.startsWith("dealer_")) {
+    // Polling was already cleared before this scenario established its
+    // ceremony deadline. resetCollectivePolling() also zeroes responseEndsAt,
+    // which would allow the declaration dialog to cover the reveal.
     return true;
   }
   if (scenario === "collective_no_actions" || scenario === "early_collective_choice" || scenario === "hu_fail_case") {

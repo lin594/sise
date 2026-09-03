@@ -549,7 +549,12 @@ useTurnAlert({ active: settingsDecisionActive, decisionKey: decisionAlertKey, mo
 const wakeLockActive = computed(() => connected.value && (isDeclaring.value || isPlaying.value));
 const keepScreenAwake = computed(() => displayPreferences.value.keepScreenAwake);
 useScreenWakeLock(wakeLockActive, keepScreenAwake);
-const declareDealIntroActive = computed(() => isDeclaring.value && Number(state.value?.responseEndsAt ?? 0) > nowMs.value);
+const declareDealIntroActive = computed(
+// The server advances lastAction to DECLARING when the intro ends. Do not
+// compare clocks: an inaccurate phone clock could expose the declaration
+// dialog over the ceremony.
+() => isDeclaring.value &&
+    /^DEALER(?:_PICK|_CARD)?\s+\S+/.test(String(state.value?.lastAction ?? "")));
 let declareTick = null;
 const declareSecondsLeft = computed(() => {
     if (declareDealIntroActive.value) {
