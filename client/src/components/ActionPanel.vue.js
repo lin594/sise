@@ -88,6 +88,16 @@ const normalized = computed(() => {
 const selectionMode = computed(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const waitingHeadline = computed(() => {
+    const playerName = props.currentPlayerName.trim();
+    const conciseName = playerName.replace(/（(?:机器人|电脑)）$/u, "");
+    return conciseName && conciseName !== "-" ? `${conciseName}正在操作` : "等待其他玩家";
+});
+const waitingAnnouncement = computed(() => {
+    const playerName = props.currentPlayerName.trim();
+    const headline = playerName && playerName !== "-" ? `${playerName}正在操作` : "等待其他玩家";
+    return `${headline}。轮到你时会提醒`;
+});
 const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
     : null);
@@ -226,6 +236,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
@@ -255,6 +267,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-state']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
@@ -274,48 +289,50 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     'aria-live': "polite",
 });
 (__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.untimed ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : "");
-__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "hint" },
-    ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint) }) },
-    'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
-    'data-testid': "action-guidance",
-});
-if (__VLS_ctx.pausedHint) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "decision-line" },
+if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "hint" },
+        ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint) }) },
+        'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
+        'data-testid': "action-guidance",
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-}
-else if (__VLS_ctx.needsDecision) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "decision-line" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (__VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
-    if (__VLS_ctx.untimed) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
-            ...{ class: "untimed-label" },
+    if (__VLS_ctx.pausedHint) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "decision-line" },
         });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     }
-    else if (__VLS_ctx.secondsLeft !== null) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
-        (__VLS_ctx.secondsLeft);
+    else if (__VLS_ctx.needsDecision) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "decision-line" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
+        if (__VLS_ctx.untimed) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
+                ...{ class: "untimed-label" },
+            });
+        }
+        else if (__VLS_ctx.secondsLeft !== null) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
+            (__VLS_ctx.secondsLeft);
+        }
     }
-}
-__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-    ...{ class: "instruction" },
-});
-(__VLS_ctx.panelHint);
-if (__VLS_ctx.needsDecision && __VLS_ctx.canRequestMoreTime) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.requestMoreTime) },
-        type: "button",
-        ...{ class: "more-time-button" },
-        'data-testid': "request-more-time",
-        disabled: (__VLS_ctx.moreTimeRequested),
-        'aria-label': (`需要更多时间，增加${__VLS_ctx.moreTimeSeconds}秒`),
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "instruction" },
     });
-    (__VLS_ctx.moreTimeRequested ? "正在加时…" : `需要更多时间 +${__VLS_ctx.moreTimeSeconds}秒`);
+    (__VLS_ctx.panelHint);
+    if (__VLS_ctx.needsDecision && __VLS_ctx.canRequestMoreTime) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.requestMoreTime) },
+            type: "button",
+            ...{ class: "more-time-button" },
+            'data-testid': "request-more-time",
+            disabled: (__VLS_ctx.moreTimeRequested),
+            'aria-label': (`需要更多时间，增加${__VLS_ctx.moreTimeSeconds}秒`),
+        });
+        (__VLS_ctx.moreTimeRequested ? "正在加时…" : `需要更多时间 +${__VLS_ctx.moreTimeSeconds}秒`);
+    }
 }
 if (__VLS_ctx.pausedHint) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -329,6 +346,25 @@ if (__VLS_ctx.pausedHint) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候");
 }
+else if (!__VLS_ctx.needsDecision) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "waiting-state" },
+        'data-testid': "action-waiting",
+        role: "status",
+        'aria-live': "polite",
+        'aria-label': (__VLS_ctx.waitingAnnouncement),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "waiting-symbol" },
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "waiting-copy" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.waitingHeadline);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
+}
 else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "actions" },
@@ -338,6 +374,8 @@ else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!!(__VLS_ctx.pausedHint))
+                        return;
+                    if (!!(!__VLS_ctx.needsDecision))
                         return;
                     if (!(__VLS_ctx.canDiscard))
                         return;
@@ -355,6 +393,8 @@ else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!!(__VLS_ctx.pausedHint))
+                        return;
+                    if (!!(!__VLS_ctx.needsDecision))
                         return;
                     __VLS_ctx.onClick(item);
                 } },
@@ -380,6 +420,9 @@ else {
 /** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused-state']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused-symbol']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-state']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-symbol']} */ ;
+/** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-action']} */ ;
@@ -396,6 +439,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectionMode: selectionMode,
             panelLocked: panelLocked,
             needsDecision: needsDecision,
+            waitingHeadline: waitingHeadline,
+            waitingAnnouncement: waitingAnnouncement,
             secondsLeft: secondsLeft,
             isUrgent: isUrgent,
             panelHint: panelHint,

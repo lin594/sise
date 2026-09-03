@@ -4,6 +4,7 @@
       {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `该你操作了。${untimed ? "练习不限时。" : ""}${panelHint}` : "" }}
     </span>
     <div
+      v-if="pausedHint || needsDecision"
       class="hint"
       :class="{ active: needsDecision, urgent: isUrgent, paused: Boolean(pausedHint) }"
       :data-urgent="isUrgent ? 'true' : 'false'"
@@ -33,6 +34,20 @@
     <div v-if="pausedHint" class="paused-state" data-testid="action-paused">
       <span class="paused-symbol" aria-hidden="true">↻</span>
       <strong>{{ pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候" }}</strong>
+    </div>
+    <div
+      v-else-if="!needsDecision"
+      class="waiting-state"
+      data-testid="action-waiting"
+      role="status"
+      aria-live="polite"
+      :aria-label="waitingAnnouncement"
+    >
+      <span class="waiting-symbol" aria-hidden="true">···</span>
+      <span class="waiting-copy">
+        <strong>{{ waitingHeadline }}</strong>
+        <small>轮到你时会提醒</small>
+      </span>
     </div>
     <div v-else class="actions" :class="{ 'discard-mode': canDiscard }">
       <button
@@ -203,6 +218,16 @@ const normalized = computed(() => {
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const waitingHeadline = computed(() => {
+  const playerName = props.currentPlayerName.trim();
+  const conciseName = playerName.replace(/（(?:机器人|电脑)）$/u, "");
+  return conciseName && conciseName !== "-" ? `${conciseName}正在操作` : "等待其他玩家";
+});
+const waitingAnnouncement = computed(() => {
+  const playerName = props.currentPlayerName.trim();
+  const headline = playerName && playerName !== "-" ? `${playerName}正在操作` : "等待其他玩家";
+  return `${headline}。轮到你时会提醒`;
+});
 const secondsLeft = computed<number | null>(() =>
   typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
@@ -407,6 +432,47 @@ function onClick(item: PanelAction): void {
   font-size: 1.15em;
 }
 
+.waiting-state {
+  min-height: clamp(3.4rem, 9vh, 5rem);
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #334155;
+  border-radius: clamp(0.45rem, 0.9vh, 0.8rem);
+  background: #111c2e;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.waiting-symbol {
+  flex: 0 0 auto;
+  color: #7dd3fc;
+  font-size: clamp(1.05rem, 2.5vh, 1.35rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.waiting-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.waiting-copy strong {
+  color: #f8fafc;
+  font-size: clamp(0.94rem, 2.15vh, 1.12rem);
+  line-height: 1.16;
+}
+
+.waiting-copy small {
+  color: #bae6fd;
+  font-size: clamp(0.76rem, 1.65vh, 0.9rem);
+  line-height: 1.2;
+}
+
 .decision-line {
   display: flex;
   align-items: center;
@@ -568,6 +634,20 @@ function onClick(item: PanelAction): void {
     min-height: 40px;
     padding: 0.12rem 0.45rem;
     font-size: 0.72rem;
+  }
+
+  .waiting-state {
+    min-height: clamp(52px, 15vh, 64px);
+    padding: 0.3rem 0.4rem;
+    gap: 0.38rem;
+  }
+
+  .waiting-copy strong {
+    font-size: clamp(0.94rem, 4.1vh, 1.08rem);
+  }
+
+  .waiting-copy small {
+    font-size: clamp(0.75rem, 3.2vh, 0.84rem);
   }
 
   .decision-line {

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function enterLobby(page: Page): Promise<void> {
-  await page.goto("/");
+async function enterLobby(page: Page, path = "/"): Promise<void> {
+  await page.goto(path);
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await expect(page.getByText("游戏模式选择")).toBeVisible();
@@ -1203,6 +1203,106 @@ test.describe("compact landscape gameplay", () => {
       queryRoomId: new URL(location.href).searchParams.get("roomId"),
     }), departingRoomId);
     expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
+  });
+
+  test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {
+    await enterLobby(page, "/?e2eDebug=1");
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await page.setViewportSize({ width: 568, height: 320 });
+
+    const setupScenario = async (scenario: string) => {
+      await page.evaluate((nextScenario) => {
+        const bridge = (window as Window & {
+          __siseLocalTest?: { setupScenario: (scenario: string) => void };
+        }).__siseLocalTest;
+        if (!bridge) {
+          throw new Error("Local test bridge is unavailable");
+        }
+        bridge.setupScenario(nextScenario);
+      }, scenario);
+      await expect.poll(() =>
+        page.evaluate(() =>
+          (window as Window & {
+            __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
+          }).__siseLocalTest?.getLastResult() ?? null,
+        ),
+      ).toMatchObject({ scenario, ok: true });
+    };
+
+    await setupScenario("waiting_other_turn");
+    await expect.poll(async () => {
+      const text = (await page.locator(".discard-tip").textContent()) ?? "";
+      return /手牌（3张）/.test(text) && !text.includes("/");
+    }).toBe(true);
+    const waiting = page.getByTestId("action-waiting");
+    await expect(waiting).toBeVisible();
+    await expect(waiting).toContainText(/.+正在操作/);
+    await expect(waiting).toContainText("轮到你时会提醒");
+    await expect(waiting).toHaveAccessibleName(/.+（机器人）正在操作。轮到你时会提醒/);
+    await expect(page.locator(".action-dock .btn")).toHaveCount(0);
+    await expect(page.getByTestId("action-guidance")).toHaveCount(0);
+
+    const waitingGeometry = await waiting.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
+      const headline = element.querySelector<HTMLElement>("strong")!;
+      const help = element.querySelector<HTMLElement>("small")!;
+      return {
+        insideDock:
+          rect.left >= dock.left && rect.right <= dock.right && rect.top >= dock.top && rect.bottom <= dock.bottom,
+        headlineFontSize: Number.parseFloat(getComputedStyle(headline).fontSize),
+        helpFontSize: Number.parseFloat(getComputedStyle(help).fontSize),
+        tabIndex: element.getAttribute("tabindex"),
+        dock: { x: dock.x, y: dock.y, width: dock.width, height: dock.height },
+      };
+    });
+    expect(waitingGeometry.insideDock).toBe(true);
+    expect(waitingGeometry.headlineFontSize).toBeGreaterThanOrEqual(15);
+    expect(waitingGeometry.helpFontSize).toBeGreaterThanOrEqual(12);
+    expect(waitingGeometry.tabIndex).toBeNull();
+    await page.screenshot({ path: testInfo.outputPath("legacy-phone-waiting-dock.png") });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await expect(waiting).toBeVisible();
+    const rotatedWaitingGeometry = await waiting.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        insidePhysicalViewport:
+          rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
+      };
+    });
+    expect(rotatedWaitingGeometry.insidePhysicalViewport).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("rotated-phone-waiting-dock.png") });
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
+    await expect(waiting).toBeVisible();
+    await expect(page.locator(".action-dock .btn")).toHaveCount(0);
+    const desktopWaitingDock = await page.locator(".action-dock").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    await page.screenshot({ path: testInfo.outputPath("desktop-waiting-dock.png") });
+
+    await setupScenario("local_draw_pass");
+    await expect(waiting).toHaveCount(0);
+    await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(page.getByTestId("action-pass")).toBeEnabled();
+    const decisionDock = await page.locator(".action-dock").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    expect(decisionDock.x).toBeCloseTo(desktopWaitingDock.x, 0);
+    expect(decisionDock.y).toBeCloseTo(desktopWaitingDock.y, 0);
+    expect(decisionDock.width).toBeCloseTo(desktopWaitingDock.width, 0);
+    expect(decisionDock.height).toBeCloseTo(desktopWaitingDock.height, 0);
   });
 
   test("keeps settings readable and clears them when a turn needs attention", async ({ page }, testInfo) => {

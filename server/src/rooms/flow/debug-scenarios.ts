@@ -87,6 +87,20 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = context.getPendingResponse()!.ownerId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
+  } else if (scenario === "waiting_other_turn") {
+    add("wait1", "yellow", "ju");
+    add("wait2", "red", "ma");
+    add("wait3", "green", "pao");
+    const waitingSeatId = context.getNextPlayerId(seatId);
+    context.setPendingResponse(
+      createPendingResponse(waitingSeatId, { id: "wait-draw", color: "white", type: "xiang" }, "draw"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_draw";
+    context.state.currentPlayerId = waitingSeatId;
+    context.state.currentTurnPlayerId = waitingSeatId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: waiting_other_turn#${seq}`;
   } else if (scenario === "hu_fail_case") {
     context.publicGeneralPool.length = 0;
     for (const id of context.playerOrder) {
@@ -178,7 +192,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   context.syncAllPrivateHands();
   context.broadcastAvailableActions();
 
-  if (scenario === "discard_public") {
+  if (scenario === "discard_public" || scenario === "waiting_other_turn") {
     context.resetCollectivePolling();
     return true;
   }

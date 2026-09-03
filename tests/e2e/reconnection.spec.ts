@@ -80,6 +80,7 @@ test.describe("牌局断线恢复", () => {
     await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
     await expect(page.getByTestId("action-guidance")).toContainText("联网后自动恢复");
     await expect(page.getByTestId("action-paused")).toContainText("无需操作，请稍候");
+    await expect(page.getByTestId("action-waiting")).toHaveCount(0);
     await expect(page.getByTestId("player-self")).toContainText("网络已断开，联网后自动恢复");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-offline.png") });
 
