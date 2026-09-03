@@ -1117,6 +1117,29 @@ test.describe("compact landscape gameplay", () => {
     await expect(handScrollNext).toBeEnabled();
     expect((await readVisibleHandRange(handVisibleRange)).start).toBe(1);
     await expect(page.locator(".hand .card[role='img']").first()).toHaveAttribute("aria-label", /^(黄|红|绿|白|金条).+/);
+    const handColorSeals = page.locator(".hand .card .color-seal");
+    await expect(handColorSeals.first()).toBeVisible();
+    const handColorSealTexts = await handColorSeals.allTextContents();
+    expect(handColorSealTexts).toHaveLength(handMetrics.cardCount);
+    expect(handColorSealTexts.every((text) => /^[黄红绿白金]$/.test(text.trim()))).toBe(true);
+    const colorSealGeometry = await page.locator(".hand .card").first().evaluate((card) => {
+      const seal = card.querySelector<HTMLElement>(".color-seal")!;
+      const glyph = card.querySelector<HTMLElement>(".text-top")!;
+      const sealRect = seal.getBoundingClientRect();
+      const glyphRange = document.createRange();
+      glyphRange.selectNodeContents(glyph);
+      const glyphRect = glyphRange.getBoundingClientRect();
+      const overlapWidth = Math.max(0, Math.min(sealRect.right, glyphRect.right) - Math.max(sealRect.left, glyphRect.left));
+      const overlapHeight = Math.max(0, Math.min(sealRect.bottom, glyphRect.bottom) - Math.max(sealRect.top, glyphRect.top));
+      return {
+        sealText: seal.textContent?.trim() ?? "",
+        sealFontSize: Number.parseFloat(getComputedStyle(seal).fontSize),
+        overlapArea: overlapWidth * overlapHeight,
+      };
+    });
+    expect(colorSealGeometry.sealText).toMatch(/^[黄红绿白金]$/);
+    expect(colorSealGeometry.sealFontSize).toBeGreaterThanOrEqual(10);
+    expect(colorSealGeometry.overlapArea).toBeLessThanOrEqual(1);
     const redCardContrast = await page.locator(".hand .card").first().evaluate((source) => {
       const sample = source.cloneNode(true) as HTMLElement;
       sample.classList.remove("color-yellow", "color-red", "color-green", "color-white", "color-gold");

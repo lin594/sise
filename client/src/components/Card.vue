@@ -6,6 +6,7 @@
     role="img"
     :aria-label="accessibleLabel"
   >
+    <span class="color-seal" aria-hidden="true">{{ colorSeal }}</span>
     <span class="text text-top">{{ label }}</span>
     <span v-if="modeClass === 'long'" class="text text-bottom">{{ label }}</span>
   </div>
@@ -23,6 +24,13 @@ const props = defineProps<{
 }>();
 
 const label = computed(() => getCardFaceText(props.card));
+const colorSeal = computed(() => ({
+  yellow: "黄",
+  red: "红",
+  green: "绿",
+  white: "白",
+  gold: "金",
+}[props.card.color] ?? ""));
 const accessibleLabel = computed(() => getCardAccessibleText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
@@ -49,15 +57,71 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .mode-large {
-  grid-template-rows: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 0;
 }
 
 .mode-large .text-top {
+  grid-row: 2;
   align-self: center;
   padding-top: 0;
   font-size: 1.32em;
   font-weight: 900;
+}
+
+.color-seal {
+  position: relative;
+  z-index: 1;
+  grid-row: 1;
+  justify-self: start;
+  min-width: 13px;
+  height: 13px;
+  margin: 1px 0 0 2px;
+  padding: 0 2px;
+  border: 1px solid rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 253, 247, 0.92);
+  color: #111827;
+  display: grid;
+  place-items: center;
+  font-family: "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
+  pointer-events: none;
+}
+
+.mode-long .color-seal {
+  grid-row: 2;
+  margin-top: 0;
+}
+
+.mode-long {
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.mode-long .text-top {
+  grid-row: 1;
+}
+
+.mode-long .text-bottom {
+  grid-row: 3;
+}
+
+.size-xs .color-seal {
+  min-width: 9px;
+  height: 9px;
+  margin-left: 1px;
+  padding: 0 1px;
+  border-width: 0.5px;
+  font-size: 6px;
+}
+
+.size-xl .color-seal {
+  min-width: 15px;
+  height: 15px;
+  font-size: 10px;
 }
 
 .size-xs.mode-long {

@@ -2,6 +2,13 @@ import { computed } from "vue";
 import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
 const props = defineProps();
 const label = computed(() => getCardFaceText(props.card));
+const colorSeal = computed(() => ({
+    yellow: "黄",
+    red: "红",
+    green: "绿",
+    white: "白",
+    gold: "金",
+}[props.card.color] ?? ""));
 const accessibleLabel = computed(() => getCardAccessibleText(props.card));
 const colorClass = computed(() => `color-${props.card.color}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
@@ -12,6 +19,15 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xs']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xs']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-sm']} */ ;
@@ -21,9 +37,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['size-lg']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -33,6 +51,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     role: "img",
     'aria-label': (__VLS_ctx.accessibleLabel),
 });
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "color-seal" },
+    'aria-hidden': "true",
+});
+(__VLS_ctx.colorSeal);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text text-top" },
 });
@@ -44,6 +67,7 @@ if (__VLS_ctx.modeClass === 'long') {
     (__VLS_ctx.label);
 }
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
@@ -53,6 +77,7 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             label: label,
+            colorSeal: colorSeal,
             accessibleLabel: accessibleLabel,
             colorClass: colorClass,
             isResponseCard: isResponseCard,
