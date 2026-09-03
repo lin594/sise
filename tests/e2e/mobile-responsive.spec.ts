@@ -686,6 +686,17 @@ test.describe("compact landscape gameplay", () => {
 
     const settingsPanel = page.getByTestId("settings-panel");
     await expect(settingsPanel).toBeVisible();
+    await expect(settingsPanel).toHaveAttribute("aria-modal", "true");
+    await expect(settingsPanel).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(settingsPanel).toHaveCount(0);
+    await expect(gameSettings).toBeFocused();
+    await gameSettings.click();
+    await expect(settingsPanel).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByTestId("settings-rules")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "关闭设置" })).toBeFocused();
     await page.waitForTimeout(200);
     const settingsGeometry = await settingsPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();

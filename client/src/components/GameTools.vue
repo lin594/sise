@@ -1,15 +1,17 @@
 <template>
-  <div class="game-tools" data-testid="game-tools">
+  <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
       <button
+        ref="settingsButtonRef"
         class="tool-button"
         type="button"
         :aria-label="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
         :title="decisionActive ? '请先完成当前操作，再打开设置' : '牌局设置'"
         data-testid="game-settings"
+        aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
         :disabled="decisionActive"
-        @click="settingsOpen = !settingsOpen"
+        @click="toggleSettings"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
@@ -37,17 +39,23 @@
     <Transition name="popover">
       <section
         v-if="settingsOpen"
+        id="game-settings-panel"
+        ref="settingsPanelRef"
         class="settings-panel"
         data-testid="settings-panel"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="settings-panel-title"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="closeSettings()"
+        @keydown.tab="trapSettingsFocus"
       >
         <header>
           <div>
             <small>牌局设置</small>
             <strong id="settings-panel-title">牌面显示</strong>
           </div>
-          <button type="button" aria-label="关闭设置" @click="settingsOpen = false">×</button>
+          <button type="button" aria-label="关闭设置" @click="closeSettings()">×</button>
         </header>
         <div class="preference-group">
           <div class="preference-copy">
@@ -191,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import type { CardDisplayMode, GameDisplayPreferences, SeatDirection, TurnAlertMode } from "@/types/game";
 
 const props = defineProps<{
@@ -205,6 +213,9 @@ const emit = defineEmits<{
   exit: [];
 }>();
 
+const gameToolsRef = ref<HTMLElement | null>(null);
+const settingsButtonRef = ref<HTMLButtonElement | null>(null);
+const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
 const confirmingExit = ref(false);
 const exitButtonRef = ref<HTMLButtonElement | null>(null);
@@ -226,10 +237,71 @@ watch(
   () => props.decisionActive,
   (active) => {
     if (active) {
+      removeSettingsOutsideListener();
       settingsOpen.value = false;
     }
   },
 );
+
+async function toggleSettings(): Promise<void> {
+  if (settingsOpen.value) {
+    closeSettings();
+    return;
+  }
+  settingsOpen.value = true;
+  await nextTick();
+  settingsPanelRef.value?.focus();
+  document.addEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+function closeSettings(restoreFocus = true): void {
+  if (!settingsOpen.value) {
+    return;
+  }
+  removeSettingsOutsideListener();
+  settingsOpen.value = false;
+  if (restoreFocus) {
+    void nextTick(() => settingsButtonRef.value?.focus());
+  }
+}
+
+function handleSettingsOutsidePointer(event: PointerEvent): void {
+  const target = event.target;
+  if (!(target instanceof Node) || gameToolsRef.value?.contains(target)) {
+    return;
+  }
+  closeSettings();
+}
+
+function removeSettingsOutsideListener(): void {
+  document.removeEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+function trapSettingsFocus(event: KeyboardEvent): void {
+  const panel = settingsPanelRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((element) => !element.hasAttribute("hidden"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function setCardMode(key: "ownCards" | "tableCards", mode: CardDisplayMode): void {
   emit("update:modelValue", { ...props.modelValue, [key]: mode });
@@ -248,6 +320,7 @@ function setKeepScreenAwake(keepScreenAwake: boolean): void {
 }
 
 function openRules(): void {
+  removeSettingsOutsideListener();
   settingsOpen.value = false;
   emit("openRules");
 }
@@ -256,6 +329,7 @@ async function requestExit(): Promise<void> {
   exitReturnFocus = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : exitButtonRef.value;
+  removeSettingsOutsideListener();
   settingsOpen.value = false;
   confirmingExit.value = true;
   await nextTick();
@@ -301,6 +375,8 @@ function confirmExit(): void {
   exitReturnFocus = null;
   emit("exit");
 }
+
+onBeforeUnmount(removeSettingsOutsideListener);
 </script>
 
 <style scoped>
