@@ -3,6 +3,7 @@
     v-if="visible"
     class="connection-status"
     :class="tone"
+    :data-state="state"
     role="status"
     aria-live="polite"
     data-testid="connection-status"
@@ -52,7 +53,7 @@ const title = computed(() => {
     case "connected":
       return "网络正常";
     case "restored":
-      return "牌局已恢复";
+      return "已恢复 · 请核对手牌";
     case "offline":
       return "断网 · 自动恢复中";
     case "retry_wait":
@@ -69,7 +70,7 @@ const title = computed(() => {
 });
 const detail = computed(() => {
   if (props.state === "closed") return props.message || "请返回首页重新开始";
-  if (props.state === "restored") return "托管期间的最新牌局已同步";
+  if (props.state === "restored") return "离线期间系统可能代你操作，可查看记录";
   if (props.state === "offline") return "联网后自动恢复";
   if (props.state === "retry_wait") return "系统会继续重试";
   return "";
@@ -128,12 +129,17 @@ const detail = computed(() => {
 }
 
 .status-copy strong {
-  font-size: clamp(0.72rem, 1.65vh, 0.88rem);
+  font-size: clamp(0.78rem, 1.65vh, 0.9rem);
 }
 
 .status-copy small {
   color: #cbd5e1;
-  font-size: clamp(0.58rem, 1.3vh, 0.7rem);
+  font-size: clamp(0.7rem, 1.3vh, 0.76rem);
+}
+
+.connection-status.good .status-copy strong {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 button {
@@ -144,7 +150,7 @@ button {
   border-radius: 0.52rem;
   background: #075985;
   color: #f0f9ff;
-  font-size: clamp(0.66rem, 1.45vh, 0.78rem);
+  font-size: clamp(0.75rem, 1.45vh, 0.8rem);
   font-weight: 800;
 }
 

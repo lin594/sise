@@ -10,6 +10,7 @@ const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
+const RESTORED_NOTICE_MS = 6000;
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
     4101: "房间已经坐满，无法恢复原座位。系统已停止自动恢复。",
@@ -1138,7 +1139,7 @@ export function useRoom(playerName = "Player") {
                     if (connected.value && room.value === joined) {
                         connectionState.value = "connected";
                     }
-                }, 2500);
+                }, RESTORED_NOTICE_MS);
             }
             else {
                 connectionState.value = "connected";

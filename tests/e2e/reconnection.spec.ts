@@ -87,11 +87,41 @@ test.describe("牌局断线恢复", () => {
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", /restored|connected/, {
       timeout: 20_000,
     });
+    await page.setViewportSize({ width: 568, height: 320 });
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
     await expect.poll(() => roomSocketCount).toBe(socketCountBeforeDisconnect + 1);
     await page.waitForTimeout(1_000);
     expect(roomSocketCount).toBe(socketCountBeforeDisconnect + 1);
+    const restoredStatus = page.getByTestId("connection-status");
+    await expect(restoredStatus).toHaveAttribute("data-state", "restored");
+    await expect(restoredStatus).toContainText("已恢复 · 请核对手牌");
+    const restoredStatusGeometry = await restoredStatus.evaluate((status) => {
+      const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+      const brand = header.querySelector<HTMLElement>(".top-brand")!;
+      const tools = header.querySelector<HTMLElement>("[data-testid='game-tools']")!;
+      const title = status.querySelector<HTMLElement>("strong")!;
+      const statusRect = status.getBoundingClientRect();
+      const headerRect = header.getBoundingClientRect();
+      const brandRect = brand.getBoundingClientRect();
+      const toolsRect = tools.getBoundingClientRect();
+      return {
+        insideHeader:
+          statusRect.left >= headerRect.left &&
+          statusRect.right <= headerRect.right &&
+          statusRect.top >= headerRect.top &&
+          statusRect.bottom <= headerRect.bottom,
+        clearOfBrand: statusRect.left >= brandRect.right,
+        clearOfTools: statusRect.right <= toolsRect.left,
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        titleUnclipped: title.scrollWidth <= title.clientWidth,
+      };
+    });
+    expect(restoredStatusGeometry.insideHeader).toBe(true);
+    expect(restoredStatusGeometry.clearOfBrand).toBe(true);
+    expect(restoredStatusGeometry.clearOfTools).toBe(true);
+    expect(restoredStatusGeometry.titleFontSize).toBeGreaterThanOrEqual(12);
+    expect(restoredStatusGeometry.titleUnclipped).toBe(true);
     const restoredPrivateState = await page.evaluate(() => {
       const handIds = Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='hand-card-']")).map(
         (card) => card.dataset.testid,
@@ -106,6 +136,9 @@ test.describe("牌局断线恢复", () => {
     expect(restoredPrivateState.handIds.length).toBeGreaterThan(0);
     expect(new Set(restoredPrivateState.handIds).size).toBe(restoredPrivateState.handIds.length);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-restored.png") });
+    await page.waitForTimeout(2_100);
+    await expect(restoredStatus).toContainText("已恢复 · 请核对手牌");
+    await expect(restoredStatus).toHaveCount(0, { timeout: 5_000 });
 
     const afterRecovery = await page.evaluate(() => {
       const roomId = localStorage.getItem("four_room_id");
