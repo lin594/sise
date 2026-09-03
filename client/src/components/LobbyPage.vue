@@ -53,23 +53,33 @@
 
         <template v-if="slot.player">
           <p class="player-name">{{ slot.player.name }}</p>
-          <small v-if="slot.player.isConfiguredBot">机器人 · 强度 {{ slot.player.botStrength }}</small>
+          <small v-if="slot.player.isConfiguredBot">机器人 · {{ botLevelForStrength(slot.player.botStrength).label }}</small>
           <small v-else>{{ slot.player.connected ? "真人在线" : "真人离线（座位暂留）" }}</small>
 
           <template v-if="slot.player.isConfiguredBot && isHost">
-            <label class="strength-row">
-              <span>休闲</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                :value="slot.player.botStrength"
-                :data-testid="`bot-strength-${slot.seatIndex}`"
-                @input="$emit('update-bot', slot.seatIndex, Number(($event.target as HTMLInputElement).value))"
-              />
-              <span>高手</span>
-            </label>
+            <div
+              class="bot-level-group"
+              role="group"
+              :aria-label="`${slot.player.name}的机器人难度`"
+              :data-testid="`bot-levels-${slot.seatIndex}`"
+            >
+              <span>选择难度</span>
+              <div class="bot-level-options">
+                <button
+                  v-for="level in botLevels"
+                  :key="level.id"
+                  type="button"
+                  class="bot-level-button"
+                  :class="{ active: botLevelForStrength(slot.player.botStrength).id === level.id }"
+                  :aria-pressed="botLevelForStrength(slot.player.botStrength).id === level.id"
+                  :aria-label="`将${slot.player.name}设为${level.label}难度`"
+                  :data-testid="`bot-level-${slot.seatIndex}-${level.id}`"
+                  @click="$emit('update-bot', slot.seatIndex, level.strength)"
+                >
+                  {{ level.label }}
+                </button>
+              </div>
+            </div>
             <button class="danger mini" @click="$emit('remove-seat', slot.seatIndex)">移除机器人</button>
           </template>
           <button
@@ -154,12 +164,28 @@ const props = defineProps<{
 }>();
 
 const seatNames = ["首席", "二席", "三席", "四席"];
+const botLevels = [
+  { id: "easy", label: "轻松", strength: 20 },
+  { id: "standard", label: "标准", strength: 50 },
+  { id: "expert", label: "高手", strength: 85 },
+] as const;
 const seatSlots = computed(() =>
   Array.from({ length: 4 }, (_, seatIndex) => ({
     seatIndex,
     player: props.players.find((player) => player.seatIndex === seatIndex) ?? null,
   })),
 );
+
+function botLevelForStrength(strength: number): (typeof botLevels)[number] {
+  const normalized = Number.isFinite(strength) ? strength : 50;
+  if (normalized < 35) {
+    return botLevels[0];
+  }
+  if (normalized < 70) {
+    return botLevels[1];
+  }
+  return botLevels[2];
+}
 
 defineEmits<{
   "open-rules": [];
@@ -175,7 +201,7 @@ defineEmits<{
 
 <style scoped>
 .lobby { background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:14px; color:#e2e8f0; display:grid; gap:1rem; min-height:0; overflow:auto; overscroll-behavior:contain; }
-.lobby-head,.invite-card,.seat-head,.lobby-actions,.seat-actions,.strength-row { display:flex; align-items:center; gap:.75rem; }
+.lobby-head,.invite-card,.seat-head,.lobby-actions,.seat-actions { display:flex; align-items:center; gap:.75rem; }
 .lobby-head,.invite-card,.seat-head { justify-content:space-between; }
 .lobby-kicker { margin:0; color:#fbbf24; font-size:.78rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 .lobby-head h2 { margin:0; font-size:clamp(1.2rem,2.8vh,1.6rem); }
@@ -191,8 +217,12 @@ defineEmits<{
 .seat-card.empty { border-style:dashed; }
 .seat-head span { color:#fbbf24; font-size:.75rem; }
 .seat-actions { margin-top:auto; flex-wrap:wrap; }
-.strength-row { font-size:.7rem; }
-.strength-row input { flex:1; min-width:100px; }
+.bot-level-group { display:grid; gap:.3rem; }
+.bot-level-group > span { color:#bfdbfe; font-size:.72rem; font-weight:750; }
+.bot-level-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; }
+.bot-level-button { min-width:0; min-height:44px; padding:.4rem .25rem; border:1px solid #475569; border-radius:9px; background:#172033; color:#e2e8f0; font-weight:800; cursor:pointer; }
+.bot-level-button.active { border-color:#38bdf8; background:#075985; color:#f0f9ff; box-shadow:0 0 0 1px rgba(56,189,248,.28); }
+.bot-level-button:focus-visible { outline:3px solid #facc15; outline-offset:2px; }
 .primary,.ghost,.danger { border:none; border-radius:8px; padding:10px 14px; cursor:pointer; min-height:48px; }
 .primary { background:#2563eb; color:#fff; }
 .primary:disabled { opacity:.4; cursor:not-allowed; }

@@ -64,15 +64,37 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByText("你已入座；等待房主开始，也可以换到其他空座位。")).toBeVisible();
     await expect(host.getByTestId("seat-1")).toContainText("真人在线");
 
+    await host.setViewportSize({ width: 667, height: 375 });
     await host.getByTestId("claim-seat-3").click();
     await expect(host.getByTestId("seat-3")).toContainText("房主");
     await expect(host.getByTestId("seat-3")).toContainText("你");
 
     await host.getByTestId("add-bot-0").click();
     await host.getByTestId("add-bot-2").click();
-    await expect(host.getByTestId("seat-2")).toContainText("强度 50");
-    await host.getByTestId("bot-strength-2").fill("85");
-    await expect(host.getByTestId("seat-2")).toContainText("强度 85");
+    await expect(host.getByTestId("seat-2")).toContainText("机器人 · 标准");
+    await expect(host.getByTestId("bot-level-2-standard")).toHaveAttribute("aria-pressed", "true");
+    await host.getByTestId("bot-level-2-expert").click();
+    await expect(host.getByTestId("seat-2")).toContainText("机器人 · 高手");
+    await expect(host.getByTestId("bot-level-2-expert")).toHaveAttribute("aria-pressed", "true");
+    await expect(host.getByTestId("bot-level-2-standard")).toHaveAttribute("aria-pressed", "false");
+    await expect(host.locator("input[type='range']")).toHaveCount(0);
+    const botLevelMetrics = await host.getByTestId("bot-levels-2").evaluate((group) => {
+      const seat = group.closest<HTMLElement>(".seat-card")!.getBoundingClientRect();
+      const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>("button")).map((button) =>
+        button.getBoundingClientRect(),
+      );
+      return {
+        count: buttons.length,
+        minimumWidth: Math.min(...buttons.map((rect) => rect.width)),
+        minimumHeight: Math.min(...buttons.map((rect) => rect.height)),
+        insideSeat: buttons.every((rect) => rect.left >= seat.left && rect.right <= seat.right),
+      };
+    });
+    expect(botLevelMetrics.count).toBe(3);
+    expect(botLevelMetrics.minimumWidth).toBeGreaterThanOrEqual(48);
+    expect(botLevelMetrics.minimumHeight).toBeGreaterThanOrEqual(42);
+    expect(botLevelMetrics.insideSeat).toBe(true);
+    await host.screenshot({ path: testInfo.outputPath("friend-bot-levels-iphone-se.png") });
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
 
     await host.getByTestId("lobby-start").click();
@@ -105,7 +127,6 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     expect(botNames.every((name) => !/^机器人\d+$/.test(name))).toBe(true);
 
     await guest.close();
-    await host.setViewportSize({ width: 667, height: 375 });
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);
     await expect(guestSeatOnHost.locator(".tag.status.temporary-control")).toBeVisible();
     await expect(guestSeatOnHost.locator(".tag.status.temporary-control")).toHaveText("托管中");
