@@ -761,6 +761,7 @@ type LocalTestBridgeWindow = Window & {
       ts: number;
       actions?: AvailableAction[];
     } | null;
+    submitAction: (request: ActionRequest) => void;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
   };
 };
@@ -776,6 +777,7 @@ function installLocalTestBridge(): void {
   (window as LocalTestBridgeWindow).__siseLocalTest = {
     setupScenario: (scenario) => debugSetup(scenario),
     getLastResult: () => debugApplied.value,
+    submitAction: (request) => sendAction(request),
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
     },

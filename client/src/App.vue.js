@@ -86,6 +86,7 @@ function installLocalTestBridge() {
     window.__siseLocalTest = {
         setupScenario: (scenario) => debugSetup(scenario),
         getLastResult: () => debugApplied.value,
+        submitAction: (request) => sendAction(request),
         setPrivateHandReadyOverride: (ready) => {
             localTestPrivateHandReadyOverride.value = ready;
         },
