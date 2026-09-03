@@ -27,7 +27,9 @@
 - `publicDiscardPile`、`responseCard`、`targetCard`、`dealerCard`
 - `deckCount`、`lastAction`
 
-`PlayerState` 公开名字、固定座位索引、连接/机器人状态、主动托管状态、机器人强度、手牌数量、声明状态、弃牌、明示牌组、鱼和结算分数。对手只能看到 `handCount`，看不到实际手牌。`isAutoPlay` 表示在线真人主动托管，始终与配置机器人身份 `isConfiguredBot`、临时断线控制 `isBot` 分离；运行时只把该座位加入机器人调度集合。
+`PlayerState` 公开名字、固定座位索引、连接/机器人状态、主动托管状态、机器人强度、手牌数量、声明状态、弃牌、明示牌组、鱼和本桌累计分。对手只能看到 `handCount`，看不到实际手牌。`isAutoPlay` 表示在线真人主动托管，始终与配置机器人身份 `isConfiguredBot`、临时断线控制 `isBot` 分离；运行时只把该座位加入机器人调度集合。
+
+`GameState.scoringMode` 保存好友房的 `single` / `cumulative` 计分方式，`completedRounds` 是本桌已经完成的结算次数。服务端只允许好友房房主在等待阶段且首局结算前发送 `set_scoring_mode`。每局 `round_result` 生成后由唯一的终局入口把本局总分原子地并入各座位 `cumulativeScore`，同时写入 `roundNumber`；重复到达终局路径不能重复累计。整桌返回大厅只清理本局运行态，不清理好友房累计分；解散房间才结束这份临时榜单。
 
 `generalArea` 与 `wildcardPool` 是历史兼容字段；`wildcardPool` 不作为万能牌替代参与组牌。当前单张将或金条的收取统一写入一张牌的 `exposedArea` 牌组，不创建新的特殊牌展示区。
 
@@ -131,6 +133,7 @@
 | `discard_card` | 提交已确认的弃牌 ID |
 | `request_more_time` | 携带当前 `decisionKey` 申请一次服务端权威加时 |
 | `set_auto_play` | 在线真人开启或取消当前座位的主动托管 |
+| `set_scoring_mode` | 好友房房主在首局开始前选择单局或本桌累计计分 |
 | `dissolve_room` | 好友房房主在等待阶段解散整桌 |
 | `sync_state` | 请求重新发送快照、私有手牌和动作 |
 | `claim_seat` | 好友房领取空座 |
