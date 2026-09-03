@@ -1,6 +1,6 @@
 # 部署与运行
 
-当前版本支持单人练习、快速配桌和好友同桌。服务端使用内存房间状态，重启容器会结束现有牌局与匹配队列；Redis 容器目前只是部署预留。
+当前版本支持单人练习、快速配桌和好友同桌。服务端使用内存房间状态，重启容器会结束现有牌局与匹配队列；免注册访客的聚合档案保存在 Redis 命名卷中。
 
 ## 1. 环境要求
 
@@ -45,7 +45,7 @@ docker compose up --build -d
 
 - Web：`http://localhost:3000`
 - HTTP / WebSocket 服务：`http://localhost:2567`
-- Redis：只在 Compose 内部网络可达，不映射宿主机端口；当前应用尚未读写
+- Redis：只在 Compose 内部网络可达，不映射宿主机端口；使用 AOF 和 `guest-profile-data` 命名卷保存访客档案
 
 普通 Compose 默认只允许 `http://localhost:3000` 和 `http://127.0.0.1:3000` 作为浏览器来源。使用局域网主机名或 IP 访问时，必须在 `.env` 写入实际前端来源，例如：
 
@@ -155,6 +155,7 @@ ENABLE_MONITOR=0
 - `HTTP_RATE_LIMIT_WINDOW_MS`：HTTP 限流统计窗口，默认 60000ms。
 - `ROOM_CREATE_RATE_LIMIT`：同一客户端每窗口通过新版或兼容入口创建、重置房间的合计次数，默认 10。
 - `PRIVATE_STATE_RATE_LIMIT`：同一客户端每窗口恢复私有状态次数，默认 180；默认值允许同一家庭网络下多名玩家正常轮询。
+- `GUEST_PROFILE_RATE_LIMIT`：同一客户端每窗口读取或更新本机档案的合计次数，默认 60。
 - `OP_TIMEOUT_MS`：真人响应和出牌默认超时，默认 30000ms；`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS` 未设置时继承该值。
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。
 - `TIME_EXTENSION_MS`：好友房真人每个声明或牌局决策窗口可主动增加的时间，默认 20000ms，服务端限制在 5000–60000ms；单人练习的在线真人不限时，不使用该值。
@@ -164,7 +165,7 @@ ENABLE_MONITOR=0
 - `ROOM_LOG`、`HU_LOG`、`ROOM_TRACE`、`ROOM_TRACE_CARDS`：日志与追踪开关。
 - `ROOM_STATE_LOG_MODE`：`compact | all | off`。
 - `ENABLE_DEBUG_SCENARIOS`：仅供本地自动化构造牌局；默认 `0`。只有非生产环境显式设为 `1` 才注册 `debug_setup`，且仅房主可调用；`NODE_ENV=production` 时即使误设为 `1` 也会硬禁用。
-- `REDIS_URL`：仅部署预留，当前不用于房间持久化。
+- `REDIS_URL`：访客档案 Redis 地址；未配置、启动连接失败或运行中不可用时自动降级为当前进程内存，牌局不受影响。它不保存进行中的房间或牌局状态。
 
 ### 前端与镜像
 
@@ -179,5 +180,6 @@ ENABLE_MONITOR=0
 - 前端无法连接：检查两个 `VITE_SERVER_*` 构建参数、TLS 协议和反向代理的 WebSocket 转发。
 - 手机无法打开开发服务：确认同一局域网、防火墙及 5173/2567 端口。
 - 重启后牌局消失：这是当前内存状态模型的预期行为。
+- 重启后本机档案消失：检查 `REDIS_URL`、Redis 日志和 `guest-profile-data` 命名卷；普通重建不要执行删除 volume 的命令。
 - 页面还是旧版：核对远端 commit，重新执行带 `--build` 的 compose 命令，并清理浏览器缓存后复查。
 - `npm ci` 报 Node 引擎不兼容：检查 `.env` 是否仍覆盖为 `node:20-alpine`，并确认构建日志中的 Node 主版本为 22 或更高。

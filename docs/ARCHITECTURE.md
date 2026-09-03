@@ -6,7 +6,7 @@
 - 服务端：Colyseus Core 0.18 + Schema 5 + TypeScript，使用 Express 提供少量 HTTP 辅助接口。
 - 实时通信：Colyseus 房间状态补丁与自定义 WebSocket 消息。
 - 运行模式：单人练习、公开快速配桌和好友同桌私有房。
-- 数据保存：牌局状态只在当前服务端进程内存中；Redis 服务和 `REDIS_URL` 是部署预留，尚未参与持久化。
+- 数据保存：牌局与匹配状态只在当前服务端进程内存中；免注册访客的聚合档案写入 Redis，开发环境或 Redis 故障时降级到进程内存。
 
 规则裁决全部在服务端。客户端只渲染公开状态、本人的私有手牌和服务端签发的合法动作，不能自行决定胡、吃、碰、开或弃牌是否成功。
 
@@ -47,6 +47,8 @@
 
 私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。好友邀请访客尚未选座时只同步公开大厅状态；客户端接收 `lobby_presence` 并保持本地座位为空，不启动私有状态请求。收到 `session_token` 确认入座后才立即补拉并进入周期轮询，避免未入座 token 产生必然失败的 404。
 
+本机访客档案使用独立的 `profileToken`，不能复用房间 `playerToken`。客户端只通过加入参数或 `Authorization: Bearer` 传递它；服务端仅在私有座位映射中临时绑定，不写入 Schema、邀请地址或普通日志。Redis 键使用凭证的 SHA-256 摘要。每个权威 `round_result` 以 `roomId + roundNumber + profile hash` 幂等记一局，只累计真人的已玩局数、胡牌数和本局总分；配置机器人忽略，真人临时托管仍归原档案。统计写入失败不得阻断或重复广播牌局结算。
+
 决策倒计同样由服务端权威管理。`available_actions`、本人房间快照和 `/private-state` 会携带 `decisionTimer`，包含是否不限时、加时权限、加时量、当前总时长、准确截止时间和一次性决策指纹。单人练习只对当前在线真人关闭声明与操作超时；机器人及断线托管继续计时。新客户端发送 `action`、`discard_card` 和 `request_more_time` 时都回传该指纹；服务端忽略不属于当前窗口的迟到请求并重发当前可用动作，避免重复点击或慢网络消息作用于下一个玩家、下一次操作或下一局。未携带指纹的旧客户端仍按原协议兼容。公开 Schema 补丁不含该私有字段，客户端收到不带它的公开补丁时必须保留最近一次私有结果。
 
 集体待响仍使用服务端权威队列，但允许尚未轮到、尚未响应的真人预先提交选择。预选只写入当前 `pending.collectives`，不移动游标、不清除当前响应者计时器；轮询随后跳过已预选座位，最终仍由同一 `pickCollectiveWinner` 按“胡优先，再按座次开/碰”决定结果。本家预吃和抓沿用延迟选择：集体阶段先登记过，只有无人胡、开、碰时才进入本地阶段执行。
@@ -68,6 +70,7 @@
 - `sessionId` 属于一次连接，断线后会改变。
 - `seatId` 是 `seat_0` 至 `seat_3` 的固定逻辑座位，回合和规则始终按 seatId 运转。
 - 第一次加入时确定 `playerToken + seatId`；客户端按房间保存 token，重连时用它恢复原座。新 token 使用系统加密随机源生成 192 位随机值；服务端仍接受旧格式，避免升级后把已有玩家踢出原座。
+- `profileToken` 是当前浏览器的免注册档案凭证，跨房间但不代表正式账号；它只关联昵称与聚合战绩，清除浏览器数据后不可恢复。
 - 同一 `playerToken + seatId` 同时只允许一个活动会话。新窗口或新设备恢复座位时，服务端先向旧连接发送 `session_replaced`，再用 4102 关闭码结束旧连接；旧客户端必须停止重连，不能与新会话反复抢座。
 - 昵称在首次入座时完成 Unicode 归一化、去除不可见控制字符并成为该座位的稳定显示名；同房真人同名会自动追加“（2）”等后缀。预先配置的机器人创建时从友好昵称池随机选择一个未被本桌占用的名称，此后该座位名称保持稳定；重连请求不能借机改名。
 - 昵称页进入未连接的玩法大厅时只更新本机 `sise_entry_name` 与历史列表，不创建房间或签发 token。玩家可以从玩法大厅返回修改昵称；只有选择单人练习、好友同桌或打开邀请链接后才发起房间连接，因此返回修改不需要执行离房流程。
@@ -172,18 +175,22 @@
 | `GET /room-id` | 兼容旧客户端：创建一个新的独立单人练习房，响应禁止缓存 |
 | `POST /reset-room` | 兼容旧客户端：创建一个新的独立单人练习房 |
 | `GET /private-state` | 按 Bearer 房间 token 恢复本人私有状态，响应禁止缓存 |
+| `GET /guest-profile` | 按 Bearer 档案凭证读取或创建本机临时档案，响应禁止缓存 |
+| `PUT /guest-profile` | 按 Bearer 档案凭证更新规范化昵称，响应禁止缓存 |
 
-项目没有公开房间列表、账号鉴权 API 或跨进程房间恢复。快速配桌使用 Colyseus 自带 `/matchmake` 链路，不新增 HTTP 辅助接口。
+项目没有公开房间列表、正式账号鉴权 API 或跨进程房间恢复。快速配桌使用 Colyseus 自带 `/matchmake` 链路，不新增 HTTP 辅助接口。
 
 ## 7. 代码职责
 
 ```text
 client/src/App.vue                    页面阶段、设置、声明与结算
+client/src/composables/useGuestProfile.ts 本机档案凭证、读取与结算后刷新
 client/src/composables/useRoom.ts     连接、重连、消息和个人退出
 client/src/composables/useTurnAlert.ts 单次响铃、震动、标题和可选中文语音提醒
 client/src/components/GameBoard.vue  牌桌、座位、牌组、手牌与操作坞
 client/src/components/ActionPanel.vue 合法动作和弃牌确认
 server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
+server/src/profiles/                  访客档案领域、Redis 持久化与内存降级
 server/src/rooms/GameRoom.ts          房间生命周期、座位和消息路由
 server/src/rooms/flow/                牌局状态机、动作执行与结算
 server/src/rules/                     牌堆、动作候选、胡牌拆解
@@ -194,9 +201,9 @@ server/src/schema/                    公开同步 Schema
 
 ## 8. 当前边界
 
-- token 是房间级重连凭证，不是生产级账号体系。
-- token 具备原座和私有手牌访问能力，必须视为秘密；公网部署必须使用 HTTPS/WSS，邀请链接和日志均不得携带 token。
+- 房间 token 与档案 token 都不是生产级账号体系。
+- 两类 token 都必须视为秘密；房间 token 可恢复原座并读取私有手牌，档案 token 可读取与更新聚合档案。公网部署必须使用 HTTPS/WSS，邀请链接和日志均不得携带 token。
 - 来源限制和基础内存限流只提供轻量边界保护，不代替正式账号鉴权、跨进程限流或专业抗拒绝服务能力。
 - 房间状态无法在服务端进程重启后恢复。
-- 公开房间列表、账号级邀请码和跨进程匹配状态尚未实现；当前快速配桌只在单个服务进程内聚合玩家。
+- 正式账号、跨设备档案找回、公开房间列表、账号级邀请码和跨进程匹配状态尚未实现；当前快速配桌只在单个服务进程内聚合玩家。
 - 未最终确定的规则不得由旧 SRS 推断，统一记录在 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)。
