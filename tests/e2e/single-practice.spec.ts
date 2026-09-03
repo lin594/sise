@@ -125,12 +125,7 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   await expect(page.getByText("游戏模式选择")).toBeVisible();
   await page.getByTestId("lobby-start").click();
 
-  await expect(
-    page
-      .getByTestId("game-board")
-      .or(page.getByText(/声明(?:鱼和|亮鱼与)暗坎/))
-      .or(page.getByText("房间准备中")),
-  ).toBeVisible();
+  await expect(page.getByTestId("game-board")).toBeVisible();
 
   await assertOpeningDealDoesNotRevealFullHand(page);
 
