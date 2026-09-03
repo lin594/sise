@@ -7,6 +7,22 @@ test("host invites a friend, configures bots, and starts a shared game", async (
   await hostContext.grantPermissions(["clipboard-read", "clipboard-write"]);
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
+  await host.addInitScript(() => {
+    let copiedInvite = "";
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          copiedInvite = value;
+        },
+        readText: async () => copiedInvite,
+      },
+    });
+  });
 
   try {
     await host.goto("/");
@@ -672,9 +688,17 @@ test("keeps the friend room unchanged when system sharing is cancelled", async (
 
 test("copies an invite link on an insecure LAN deployment", async ({ page }) => {
   await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: undefined,
+    });
     Object.defineProperty(window, "isSecureContext", {
       configurable: true,
       value: false,
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: (command: string) => command === "copy",
     });
   });
 
