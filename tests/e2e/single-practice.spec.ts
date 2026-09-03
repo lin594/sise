@@ -36,6 +36,51 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   }
 }
 
+test("opening deal sends exactly one card flight per dealt card", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("只看一次发牌");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+
+  await page.evaluate(() => {
+    const trackingWindow = window as Window & {
+      __siseDealFlightCount?: number;
+      __siseDealFlightObserver?: MutationObserver;
+    };
+    trackingWindow.__siseDealFlightCount = 0;
+    trackingWindow.__siseDealFlightObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) {
+            continue;
+          }
+          if (node.matches(".fx-card.deal")) {
+            trackingWindow.__siseDealFlightCount! += 1;
+          }
+          trackingWindow.__siseDealFlightCount! += node.querySelectorAll(".fx-card.deal").length;
+        }
+      }
+    });
+    trackingWindow.__siseDealFlightObserver.observe(document.body, { childList: true, subtree: true });
+  });
+
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await expect.poll(
+    () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
+    { timeout: 8_000 },
+  ).toBe(81);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => {
+    const trackingWindow = window as Window & {
+      __siseDealFlightCount?: number;
+      __siseDealFlightObserver?: MutationObserver;
+    };
+    trackingWindow.__siseDealFlightObserver?.disconnect();
+    return trackingWindow.__siseDealFlightCount ?? 0;
+  })).toBe(81);
+});
+
 async function finishRoundThroughDebugHu(page: Page): Promise<void> {
   const declaration = page.getByTestId("confirm-declaration");
   await expect(declaration).toBeEnabled({ timeout: 20_000 });
