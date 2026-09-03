@@ -876,7 +876,7 @@ export function useRoom(playerName = "Player") {
         url.searchParams.delete("roomId");
         url.searchParams.delete("playerToken");
         url.searchParams.delete("new");
-        window.history.replaceState(null, "", url.toString());
+        window.history.replaceState(window.history.state, "", url.toString());
     }
     function buildStateSyncFingerprint(snapshot) {
         if (!snapshot) {
@@ -1095,7 +1095,7 @@ export function useRoom(playerName = "Player") {
         url.searchParams.set("roomId", roomId);
         url.searchParams.delete("playerToken");
         url.searchParams.delete("new");
-        window.history.replaceState(null, "", url.toString());
+        window.history.replaceState(window.history.state, "", url.toString());
     }
     async function createCompatibilityPracticeRoomId() {
         const response = await fetch(`${HTTP_URL}/room-id`, { method: "GET" });
@@ -1664,7 +1664,7 @@ export function useRoom(playerName = "Player") {
         url.searchParams.delete("roomId");
         url.searchParams.delete("playerToken");
         url.searchParams.delete("new");
-        window.history.replaceState(null, "", url.toString());
+        window.history.replaceState(window.history.state, "", url.toString());
         if (departingRoom) {
             await departingRoom.leave().catch(() => undefined);
         }

@@ -208,6 +208,7 @@ const showModeLobby = computed(() => {
     return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
 const showGameTools = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
+const roomNavigationProtected = computed(() => hasLobbySession.value || isConnectingWithoutState.value);
 const canPressStartGame = computed(() => Boolean(connected.value) &&
     Boolean(state.value) &&
     Boolean(mySeatId.value) &&
@@ -424,6 +425,8 @@ const resolvedOwnCardMode = computed(() => resolveCardDisplayMode(displayPrefere
 const resolvedTableCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.tableCards));
 const globalError = ref("");
 const globalNotice = ref("");
+const gameToolsRef = ref(null);
+const lobbyPageRef = ref(null);
 const inviteCopyFallbackUrl = ref("");
 const inviteQrUrl = ref("");
 const inviteQrRoomId = ref("");
@@ -446,6 +449,14 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref(null);
 const returnLobbyDialogRef = ref(null);
 const returnLobbyCancelRef = ref(null);
+const confirmingResumeAbandon = ref(false);
+const resumeAbandonDialogRef = ref(null);
+const resumeAbandonCancelRef = ref(null);
+const ROOM_HISTORY_GUARD_KEY = "__siseRoomGuard";
+let roomNavigationGuardMounted = false;
+let roomNavigationGuardArmed = false;
+let roomNavigationGuardReleasing = false;
+let roomNavigationReleaseTimer = null;
 let rulesReturnFocus = null;
 let candidateReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -592,6 +603,180 @@ function trapReturnLobbyFocus(event) {
         event.preventDefault();
         first.focus();
     }
+}
+async function requestResumeAbandon() {
+    confirmingResumeAbandon.value = true;
+    await nextTick();
+    resumeAbandonCancelRef.value?.focus();
+}
+function cancelResumeAbandon() {
+    if (!confirmingResumeAbandon.value) {
+        return;
+    }
+    confirmingResumeAbandon.value = false;
+    void nextTick(() => document.querySelector("[data-testid='cancel-session-resume']")?.focus());
+}
+async function confirmResumeAbandon() {
+    confirmingResumeAbandon.value = false;
+    await abandonSessionResume();
+}
+function trapResumeAbandonFocus(event) {
+    const panel = resumeAbandonDialogRef.value;
+    if (!panel) {
+        return;
+    }
+    const focusable = Array.from(panel.querySelectorAll("button:not([disabled])"));
+    if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+    }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+function historyStateWithoutRoomGuard() {
+    const current = window.history.state;
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+        return current;
+    }
+    const clean = { ...current };
+    delete clean[ROOM_HISTORY_GUARD_KEY];
+    return Object.keys(clean).length ? clean : null;
+}
+function isCurrentRoomHistoryGuard() {
+    const current = window.history.state;
+    return Boolean(current &&
+        typeof current === "object" &&
+        !Array.isArray(current) &&
+        current[ROOM_HISTORY_GUARD_KEY] === true);
+}
+function cleanRoomUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("roomId");
+    url.searchParams.delete("playerToken");
+    url.searchParams.delete("new");
+    return url.toString();
+}
+function sanitizeCurrentHistoryEntry() {
+    window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl());
+}
+function armRoomNavigationGuard() {
+    if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
+        return;
+    }
+    if (isCurrentRoomHistoryGuard()) {
+        roomNavigationGuardArmed = true;
+        return;
+    }
+    const current = window.history.state;
+    const base = current && typeof current === "object" && !Array.isArray(current)
+        ? current
+        : {};
+    window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
+    roomNavigationGuardArmed = true;
+}
+function finishRoomNavigationGuardRelease() {
+    roomNavigationGuardReleasing = false;
+    if (roomNavigationReleaseTimer !== null) {
+        window.clearTimeout(roomNavigationReleaseTimer);
+        roomNavigationReleaseTimer = null;
+    }
+    sanitizeCurrentHistoryEntry();
+}
+function releaseRoomNavigationGuard() {
+    const shouldStepBack = roomNavigationGuardArmed && isCurrentRoomHistoryGuard();
+    roomNavigationGuardArmed = false;
+    confirmingResumeAbandon.value = false;
+    if (!shouldStepBack) {
+        sanitizeCurrentHistoryEntry();
+        return;
+    }
+    sanitizeCurrentHistoryEntry();
+    roomNavigationGuardReleasing = true;
+    window.history.back();
+    if (roomNavigationReleaseTimer !== null) {
+        window.clearTimeout(roomNavigationReleaseTimer);
+    }
+    roomNavigationReleaseTimer = window.setTimeout(finishRoomNavigationGuardRelease, 500);
+}
+function closeTopmostRoomLayerForBack() {
+    if (confirmingResumeAbandon.value) {
+        cancelResumeAbandon();
+        return true;
+    }
+    if (inviteQrUrl.value) {
+        closeInviteQr();
+        return true;
+    }
+    if (inviteCopyFallbackUrl.value) {
+        closeInviteCopyFallback();
+        return true;
+    }
+    if (showRules.value) {
+        closeRules();
+        return true;
+    }
+    if (selectionMode.value) {
+        clearSelection(true);
+        return true;
+    }
+    if (confirmingNextRound.value) {
+        cancelNextRound();
+        return true;
+    }
+    if (confirmingReturnLobby.value) {
+        cancelReturnLobby();
+        return true;
+    }
+    if (gameToolsRef.value?.handleNavigationBack()) {
+        return true;
+    }
+    if (lobbyPageRef.value?.handleNavigationBack()) {
+        return true;
+    }
+    return false;
+}
+async function requestRoomExitFromBrowserBack() {
+    await nextTick();
+    if (closeTopmostRoomLayerForBack()) {
+        return;
+    }
+    if (showGameTools.value && gameToolsRef.value) {
+        await gameToolsRef.value.requestExit();
+        return;
+    }
+    if (showModeLobby.value && lobbyPageRef.value) {
+        await lobbyPageRef.value.requestLeaveRoom();
+        return;
+    }
+    if (showSyncingScreen.value || roomNavigationProtected.value) {
+        await requestResumeAbandon();
+    }
+}
+function handleRoomNavigationPopState() {
+    if (roomNavigationGuardReleasing) {
+        finishRoomNavigationGuardRelease();
+        return;
+    }
+    if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
+        roomNavigationGuardArmed = false;
+        return;
+    }
+    const current = window.history.state;
+    const base = current && typeof current === "object" && !Array.isArray(current)
+        ? current
+        : {};
+    window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
+    roomNavigationGuardArmed = true;
+    void requestRoomExitFromBrowserBack();
 }
 function closeRulesForDecision() {
     if (showRules.value) {
@@ -914,7 +1099,26 @@ watch(() => availableActions.value, () => {
         selectedCandidateId.value = null;
     }
 }, { deep: true });
+watch(() => [
+    roomNavigationProtected.value,
+    activeRoomId.value,
+    state.value?.phase ?? "",
+    connectionState.value,
+], ([protectedNow]) => {
+    if (!roomNavigationGuardMounted) {
+        return;
+    }
+    if (protectedNow) {
+        armRoomNavigationGuard();
+    }
+    else {
+        releaseRoomNavigationGuard();
+    }
+}, { flush: "post" });
 onMounted(() => {
+    roomNavigationGuardMounted = true;
+    window.addEventListener("popstate", handleRoomNavigationPopState);
+    armRoomNavigationGuard();
     installLocalTestBridge();
     if (!entryName.value) {
         entryName.value = nicknameHistory.value[0] || generateRandomNickname();
@@ -926,6 +1130,12 @@ onMounted(() => {
     void resumeStoredRoomSession();
 });
 onUnmounted(() => {
+    roomNavigationGuardMounted = false;
+    window.removeEventListener("popstate", handleRoomNavigationPopState);
+    if (roomNavigationReleaseTimer !== null) {
+        window.clearTimeout(roomNavigationReleaseTimer);
+        roomNavigationReleaseTimer = null;
+    }
     removeLocalTestBridge();
     if (declareTick !== null) {
         window.clearInterval(declareTick);
@@ -2086,6 +2296,7 @@ if (__VLS_ctx.showGameTools) {
         ...{ 'onOpenRules': {} },
         ...{ 'onSetAutoPlay': {} },
         ...{ 'onExit': {} },
+        ref: "gameToolsRef",
         modelValue: (__VLS_ctx.displayPreferences),
         decisionActive: (__VLS_ctx.settingsDecisionActive),
         actionLogs: (__VLS_ctx.actionLogs),
@@ -2099,6 +2310,7 @@ if (__VLS_ctx.showGameTools) {
         ...{ 'onOpenRules': {} },
         ...{ 'onSetAutoPlay': {} },
         ...{ 'onExit': {} },
+        ref: "gameToolsRef",
         modelValue: (__VLS_ctx.displayPreferences),
         decisionActive: (__VLS_ctx.settingsDecisionActive),
         actionLogs: (__VLS_ctx.actionLogs),
@@ -2120,6 +2332,8 @@ if (__VLS_ctx.showGameTools) {
     const __VLS_15 = {
         onExit: (__VLS_ctx.handleLeaveRoom)
     };
+    /** @type {typeof __VLS_ctx.gameToolsRef} */ ;
+    var __VLS_16 = {};
     var __VLS_9;
 }
 if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
@@ -2169,7 +2383,7 @@ else if (__VLS_ctx.globalNotice) {
 if (__VLS_ctx.showEntry) {
     /** @type {[typeof LoginPage, ]} */ ;
     // @ts-ignore
-    const __VLS_16 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
+    const __VLS_18 = __VLS_asFunctionalComponent(LoginPage, new LoginPage({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onRandomize': {} },
@@ -2180,7 +2394,7 @@ if (__VLS_ctx.showEntry) {
         friendInvite: (__VLS_ctx.hasFriendInvite),
         historyNames: (__VLS_ctx.nicknameHistory),
     }));
-    const __VLS_17 = __VLS_16({
+    const __VLS_19 = __VLS_18({
         ...{ 'onUpdate:nickname': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onRandomize': {} },
@@ -2190,36 +2404,36 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         friendInvite: (__VLS_ctx.hasFriendInvite),
         historyNames: (__VLS_ctx.nicknameHistory),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_16));
-    let __VLS_19;
-    let __VLS_20;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_18));
     let __VLS_21;
-    const __VLS_22 = {
+    let __VLS_22;
+    let __VLS_23;
+    const __VLS_24 = {
         'onUpdate:nickname': (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    const __VLS_23 = {
+    const __VLS_25 = {
         onSubmit: (__VLS_ctx.enterLobby)
     };
-    const __VLS_24 = {
+    const __VLS_26 = {
         onRandomize: (__VLS_ctx.randomizeNickname)
     };
-    const __VLS_25 = {
+    const __VLS_27 = {
         onSelectHistory: (...[$event]) => {
             if (!(__VLS_ctx.showEntry))
                 return;
             __VLS_ctx.entryName = $event;
         }
     };
-    var __VLS_18;
+    var __VLS_20;
 }
 else if (__VLS_ctx.showModeLobby) {
     /** @type {[typeof LobbyPage, ]} */ ;
     // @ts-ignore
-    const __VLS_26 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
+    const __VLS_28 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
         ...{ 'onCopyInvite': {} },
@@ -2233,6 +2447,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onDissolveRoom': {} },
         ...{ 'onSetScoringMode': {} },
         ...{ 'onSetLobbyReady': {} },
+        ref: "lobbyPageRef",
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2253,7 +2468,7 @@ else if (__VLS_ctx.showModeLobby) {
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
     }));
-    const __VLS_27 = __VLS_26({
+    const __VLS_29 = __VLS_28({
         ...{ 'onStart': {} },
         ...{ 'onSelectMode': {} },
         ...{ 'onCopyInvite': {} },
@@ -2267,6 +2482,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onDissolveRoom': {} },
         ...{ 'onSetScoringMode': {} },
         ...{ 'onSetLobbyReady': {} },
+        ref: "lobbyPageRef",
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2286,14 +2502,14 @@ else if (__VLS_ctx.showModeLobby) {
         players: (__VLS_ctx.players),
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_26));
-    let __VLS_29;
-    let __VLS_30;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_28));
     let __VLS_31;
-    const __VLS_32 = {
+    let __VLS_32;
+    let __VLS_33;
+    const __VLS_34 = {
         onStart: (__VLS_ctx.startSelectedMode)
     };
-    const __VLS_33 = {
+    const __VLS_35 = {
         onSelectMode: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -2302,16 +2518,16 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.selectedLobbyMode = $event;
         }
     };
-    const __VLS_34 = {
+    const __VLS_36 = {
         onCopyInvite: (__VLS_ctx.copyInviteLink)
     };
-    const __VLS_35 = {
+    const __VLS_37 = {
         onShowInviteQr: (__VLS_ctx.showInviteQr)
     };
-    const __VLS_36 = {
+    const __VLS_38 = {
         onClaimSeat: (__VLS_ctx.claimSeat)
     };
-    const __VLS_37 = {
+    const __VLS_39 = {
         onAddBot: (...[$event]) => {
             if (!!(__VLS_ctx.showEntry))
                 return;
@@ -2320,28 +2536,30 @@ else if (__VLS_ctx.showModeLobby) {
             __VLS_ctx.addBot($event, 50);
         }
     };
-    const __VLS_38 = {
+    const __VLS_40 = {
         onFillBots: (__VLS_ctx.fillBots)
     };
-    const __VLS_39 = {
+    const __VLS_41 = {
         onUpdateBot: (__VLS_ctx.updateBot)
     };
-    const __VLS_40 = {
+    const __VLS_42 = {
         onRemoveSeat: (__VLS_ctx.removeSeat)
     };
-    const __VLS_41 = {
+    const __VLS_43 = {
         onLeaveRoom: (__VLS_ctx.handleLeaveRoom)
     };
-    const __VLS_42 = {
+    const __VLS_44 = {
         onDissolveRoom: (__VLS_ctx.dissolveRoom)
     };
-    const __VLS_43 = {
+    const __VLS_45 = {
         onSetScoringMode: (__VLS_ctx.setScoringMode)
     };
-    const __VLS_44 = {
+    const __VLS_46 = {
         onSetLobbyReady: (__VLS_ctx.setLobbyReady)
     };
-    var __VLS_28;
+    /** @type {typeof __VLS_ctx.lobbyPageRef} */ ;
+    var __VLS_47 = {};
+    var __VLS_30;
 }
 else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
@@ -2381,7 +2599,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_45 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_49 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2413,7 +2631,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_46 = __VLS_45({
+    const __VLS_50 = __VLS_49({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2444,64 +2662,64 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_45));
-    let __VLS_48;
-    let __VLS_49;
-    let __VLS_50;
-    const __VLS_51 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_49));
+    let __VLS_52;
+    let __VLS_53;
+    let __VLS_54;
+    const __VLS_55 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_52 = {
+    const __VLS_56 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_53 = {
+    const __VLS_57 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    const __VLS_54 = {
+    const __VLS_58 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_47;
+    var __VLS_51;
 }
 if (__VLS_ctx.inviteCopyFallbackUrl) {
     /** @type {[typeof InviteLinkFallbackDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_55 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
+    const __VLS_59 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
     }));
-    const __VLS_56 = __VLS_55({
+    const __VLS_60 = __VLS_59({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_55));
-    let __VLS_58;
-    let __VLS_59;
-    let __VLS_60;
-    const __VLS_61 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_59));
+    let __VLS_62;
+    let __VLS_63;
+    let __VLS_64;
+    const __VLS_65 = {
         onClose: (__VLS_ctx.closeInviteCopyFallback)
     };
-    var __VLS_57;
+    var __VLS_61;
 }
 if (__VLS_ctx.inviteQrUrl) {
-    const __VLS_62 = {}.FriendInviteQrDialog;
+    const __VLS_66 = {}.FriendInviteQrDialog;
     /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_63 = __VLS_asFunctionalComponent(__VLS_62, new __VLS_62({
+    const __VLS_67 = __VLS_asFunctionalComponent(__VLS_66, new __VLS_66({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
     }));
-    const __VLS_64 = __VLS_63({
+    const __VLS_68 = __VLS_67({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_63));
-    let __VLS_66;
-    let __VLS_67;
-    let __VLS_68;
-    const __VLS_69 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+    let __VLS_70;
+    let __VLS_71;
+    let __VLS_72;
+    const __VLS_73 = {
         onClose: (__VLS_ctx.closeInviteQr)
     };
-    var __VLS_65;
+    var __VLS_69;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2585,16 +2803,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_74 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_71 = __VLS_70({
+                const __VLS_75 = __VLS_74({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_70));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_74));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -2607,18 +2825,18 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_73 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_77 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
                     }));
-                    const __VLS_74 = __VLS_73({
+                    const __VLS_78 = __VLS_77({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_73));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_77));
                 }
             }
             else {
@@ -2640,7 +2858,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_76 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_80 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2658,7 +2876,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }));
-    const __VLS_77 = __VLS_76({
+    const __VLS_81 = __VLS_80({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2675,17 +2893,17 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_76));
-    let __VLS_79;
-    let __VLS_80;
-    let __VLS_81;
-    const __VLS_82 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_80));
+    let __VLS_83;
+    let __VLS_84;
+    let __VLS_85;
+    const __VLS_86 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    const __VLS_83 = {
+    const __VLS_87 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    var __VLS_78;
+    var __VLS_82;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2874,18 +3092,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_84 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_88 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
                             }));
-                            const __VLS_85 = __VLS_84({
+                            const __VLS_89 = __VLS_88({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_84));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_88));
                         }
                     }
                 }
@@ -2922,18 +3140,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_87 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_91 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                             }));
-                            const __VLS_88 = __VLS_87({
+                            const __VLS_92 = __VLS_91({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_87));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_91));
                         }
                     }
                 }
@@ -2944,18 +3162,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_90 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_94 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_91 = __VLS_90({
+                        const __VLS_95 = __VLS_94({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_90));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_94));
                     }
                 }
                 else {
@@ -3019,18 +3237,18 @@ if (__VLS_ctx.showEndPanel) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_93 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_97 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_94 = __VLS_93({
+                const __VLS_98 = __VLS_97({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_93));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_97));
             }
         }
     }
@@ -3152,6 +3370,51 @@ if (__VLS_ctx.confirmingReturnLobby) {
         ...{ class: "danger" },
         type: "button",
         'data-testid': "confirm-table-return",
+    });
+}
+if (__VLS_ctx.confirmingResumeAbandon) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onClick: (__VLS_ctx.cancelResumeAbandon) },
+        ...{ class: "table-return-mask" },
+        'data-testid': "resume-abandon-mask",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ onKeydown: (__VLS_ctx.cancelResumeAbandon) },
+        ...{ onKeydown: (__VLS_ctx.trapResumeAbandonFocus) },
+        ref: "resumeAbandonDialogRef",
+        ...{ class: "table-return-dialog" },
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-labelledby': "resume-abandon-title",
+        'aria-describedby': "resume-abandon-description",
+        tabindex: "-1",
+    });
+    /** @type {typeof __VLS_ctx.resumeAbandonDialogRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-symbol" },
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
+        id: "resume-abandon-title",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        id: "resume-abandon-description",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-return-actions" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.cancelResumeAbandon) },
+        ref: "resumeAbandonCancelRef",
+        type: "button",
+        'data-testid': "cancel-resume-abandon",
+    });
+    /** @type {typeof __VLS_ctx.resumeAbandonCancelRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.confirmResumeAbandon) },
+        ...{ class: "danger" },
+        type: "button",
+        'data-testid': "confirm-resume-abandon",
     });
 }
 if (__VLS_ctx.showRules) {
@@ -3375,6 +3638,11 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['danger']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-return-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
@@ -3396,6 +3664,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+// @ts-ignore
+var __VLS_17 = __VLS_16, __VLS_48 = __VLS_47;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -3480,6 +3750,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             resolvedTableCardMode: resolvedTableCardMode,
             globalError: globalError,
             globalNotice: globalNotice,
+            gameToolsRef: gameToolsRef,
+            lobbyPageRef: lobbyPageRef,
             inviteCopyFallbackUrl: inviteCopyFallbackUrl,
             inviteQrUrl: inviteQrUrl,
             inviteQrRoomId: inviteQrRoomId,
@@ -3499,6 +3771,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             returnLobbyTriggerRef: returnLobbyTriggerRef,
             returnLobbyDialogRef: returnLobbyDialogRef,
             returnLobbyCancelRef: returnLobbyCancelRef,
+            confirmingResumeAbandon: confirmingResumeAbandon,
+            resumeAbandonDialogRef: resumeAbandonDialogRef,
+            resumeAbandonCancelRef: resumeAbandonCancelRef,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
             shouldShowDeclarePanel: shouldShowDeclarePanel,
@@ -3514,6 +3789,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             cancelReturnLobby: cancelReturnLobby,
             confirmReturnLobby: confirmReturnLobby,
             trapReturnLobbyFocus: trapReturnLobbyFocus,
+            cancelResumeAbandon: cancelResumeAbandon,
+            confirmResumeAbandon: confirmResumeAbandon,
+            trapResumeAbandonFocus: trapResumeAbandonFocus,
+            spokenTurnGuidanceSupported: spokenTurnGuidanceSupported,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,

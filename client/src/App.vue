@@ -37,6 +37,7 @@
         @retry="retryConnection"
       />
       <GameTools
+        ref="gameToolsRef"
         v-if="showGameTools"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
@@ -90,6 +91,7 @@
     />
 
     <LobbyPage
+      ref="lobbyPageRef"
       v-else-if="showModeLobby"
       :kicker="isWaiting ? '房间页' : '大厅页'"
       :title="lobbyTitle"
@@ -523,6 +525,33 @@
       </section>
     </div>
 
+    <div
+      v-if="confirmingResumeAbandon"
+      class="table-return-mask"
+      data-testid="resume-abandon-mask"
+      @click.self="cancelResumeAbandon"
+    >
+      <section
+        ref="resumeAbandonDialogRef"
+        class="table-return-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resume-abandon-title"
+        aria-describedby="resume-abandon-description"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="cancelResumeAbandon"
+        @keydown.tab="trapResumeAbandonFocus"
+      >
+        <div class="table-return-symbol" aria-hidden="true">↩</div>
+        <h2 id="resume-abandon-title">放弃恢复原牌局？</h2>
+        <p id="resume-abandon-description">系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。</p>
+        <div class="table-return-actions">
+          <button ref="resumeAbandonCancelRef" type="button" data-testid="cancel-resume-abandon" @click="cancelResumeAbandon">继续恢复</button>
+          <button class="danger" type="button" data-testid="confirm-resume-abandon" @click="confirmResumeAbandon">放弃并返回首页</button>
+        </div>
+      </section>
+    </div>
+
     <div v-if="showRules" class="rules-mask" @click.self="closeRules()">
       <div
         ref="rulesPanelRef"
@@ -921,6 +950,7 @@ const showModeLobby = computed(() => {
   return isWaiting.value || (enteredFrontLobby.value && !state.value);
 });
 const showGameTools = computed(() => isDeclaring.value || isPlaying.value || isEnded.value);
+const roomNavigationProtected = computed(() => hasLobbySession.value || isConnectingWithoutState.value);
 const canPressStartGame = computed(
   () =>
     Boolean(connected.value) &&
@@ -1176,6 +1206,14 @@ const resolvedTableCardMode = computed<RenderedCardMode>(() =>
 );
 const globalError = ref("");
 const globalNotice = ref("");
+const gameToolsRef = ref<{
+  handleNavigationBack: () => boolean;
+  requestExit: () => Promise<void>;
+} | null>(null);
+const lobbyPageRef = ref<{
+  handleNavigationBack: () => boolean;
+  requestLeaveRoom: () => Promise<void>;
+} | null>(null);
 const inviteCopyFallbackUrl = ref("");
 const inviteQrUrl = ref("");
 const inviteQrRoomId = ref("");
@@ -1198,6 +1236,14 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref<HTMLButtonElement | null>(null);
 const returnLobbyDialogRef = ref<HTMLElement | null>(null);
 const returnLobbyCancelRef = ref<HTMLButtonElement | null>(null);
+const confirmingResumeAbandon = ref(false);
+const resumeAbandonDialogRef = ref<HTMLElement | null>(null);
+const resumeAbandonCancelRef = ref<HTMLButtonElement | null>(null);
+const ROOM_HISTORY_GUARD_KEY = "__siseRoomGuard";
+let roomNavigationGuardMounted = false;
+let roomNavigationGuardArmed = false;
+let roomNavigationGuardReleasing = false;
+let roomNavigationReleaseTimer: number | null = null;
 let rulesReturnFocus: HTMLElement | null = null;
 let candidateReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
@@ -1370,6 +1416,195 @@ function trapReturnLobbyFocus(event: KeyboardEvent): void {
     event.preventDefault();
     first.focus();
   }
+}
+
+async function requestResumeAbandon(): Promise<void> {
+  confirmingResumeAbandon.value = true;
+  await nextTick();
+  resumeAbandonCancelRef.value?.focus();
+}
+
+function cancelResumeAbandon(): void {
+  if (!confirmingResumeAbandon.value) {
+    return;
+  }
+  confirmingResumeAbandon.value = false;
+  void nextTick(() => document.querySelector<HTMLElement>("[data-testid='cancel-session-resume']")?.focus());
+}
+
+async function confirmResumeAbandon(): Promise<void> {
+  confirmingResumeAbandon.value = false;
+  await abandonSessionResume();
+}
+
+function trapResumeAbandonFocus(event: KeyboardEvent): void {
+  const panel = resumeAbandonDialogRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(panel.querySelectorAll<HTMLElement>("button:not([disabled])"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function historyStateWithoutRoomGuard(): unknown {
+  const current = window.history.state;
+  if (!current || typeof current !== "object" || Array.isArray(current)) {
+    return current;
+  }
+  const clean = { ...(current as Record<string, unknown>) };
+  delete clean[ROOM_HISTORY_GUARD_KEY];
+  return Object.keys(clean).length ? clean : null;
+}
+
+function isCurrentRoomHistoryGuard(): boolean {
+  const current = window.history.state;
+  return Boolean(
+    current &&
+      typeof current === "object" &&
+      !Array.isArray(current) &&
+      (current as Record<string, unknown>)[ROOM_HISTORY_GUARD_KEY] === true,
+  );
+}
+
+function cleanRoomUrl(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("roomId");
+  url.searchParams.delete("playerToken");
+  url.searchParams.delete("new");
+  return url.toString();
+}
+
+function sanitizeCurrentHistoryEntry(): void {
+  window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl());
+}
+
+function armRoomNavigationGuard(): void {
+  if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
+    return;
+  }
+  if (isCurrentRoomHistoryGuard()) {
+    roomNavigationGuardArmed = true;
+    return;
+  }
+  const current = window.history.state;
+  const base = current && typeof current === "object" && !Array.isArray(current)
+    ? current as Record<string, unknown>
+    : {};
+  window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
+  roomNavigationGuardArmed = true;
+}
+
+function finishRoomNavigationGuardRelease(): void {
+  roomNavigationGuardReleasing = false;
+  if (roomNavigationReleaseTimer !== null) {
+    window.clearTimeout(roomNavigationReleaseTimer);
+    roomNavigationReleaseTimer = null;
+  }
+  sanitizeCurrentHistoryEntry();
+}
+
+function releaseRoomNavigationGuard(): void {
+  const shouldStepBack = roomNavigationGuardArmed && isCurrentRoomHistoryGuard();
+  roomNavigationGuardArmed = false;
+  confirmingResumeAbandon.value = false;
+  if (!shouldStepBack) {
+    sanitizeCurrentHistoryEntry();
+    return;
+  }
+  sanitizeCurrentHistoryEntry();
+  roomNavigationGuardReleasing = true;
+  window.history.back();
+  if (roomNavigationReleaseTimer !== null) {
+    window.clearTimeout(roomNavigationReleaseTimer);
+  }
+  roomNavigationReleaseTimer = window.setTimeout(finishRoomNavigationGuardRelease, 500);
+}
+
+function closeTopmostRoomLayerForBack(): boolean {
+  if (confirmingResumeAbandon.value) {
+    cancelResumeAbandon();
+    return true;
+  }
+  if (inviteQrUrl.value) {
+    closeInviteQr();
+    return true;
+  }
+  if (inviteCopyFallbackUrl.value) {
+    closeInviteCopyFallback();
+    return true;
+  }
+  if (showRules.value) {
+    closeRules();
+    return true;
+  }
+  if (selectionMode.value) {
+    clearSelection(true);
+    return true;
+  }
+  if (confirmingNextRound.value) {
+    cancelNextRound();
+    return true;
+  }
+  if (confirmingReturnLobby.value) {
+    cancelReturnLobby();
+    return true;
+  }
+  if (gameToolsRef.value?.handleNavigationBack()) {
+    return true;
+  }
+  if (lobbyPageRef.value?.handleNavigationBack()) {
+    return true;
+  }
+  return false;
+}
+
+async function requestRoomExitFromBrowserBack(): Promise<void> {
+  await nextTick();
+  if (closeTopmostRoomLayerForBack()) {
+    return;
+  }
+  if (showGameTools.value && gameToolsRef.value) {
+    await gameToolsRef.value.requestExit();
+    return;
+  }
+  if (showModeLobby.value && lobbyPageRef.value) {
+    await lobbyPageRef.value.requestLeaveRoom();
+    return;
+  }
+  if (showSyncingScreen.value || roomNavigationProtected.value) {
+    await requestResumeAbandon();
+  }
+}
+
+function handleRoomNavigationPopState(): void {
+  if (roomNavigationGuardReleasing) {
+    finishRoomNavigationGuardRelease();
+    return;
+  }
+  if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
+    roomNavigationGuardArmed = false;
+    return;
+  }
+  const current = window.history.state;
+  const base = current && typeof current === "object" && !Array.isArray(current)
+    ? current as Record<string, unknown>
+    : {};
+  window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
+  roomNavigationGuardArmed = true;
+  void requestRoomExitFromBrowserBack();
 }
 
 function closeRulesForDecision(): void {
@@ -1744,7 +1979,30 @@ watch(
   { deep: true },
 );
 
+watch(
+  () => [
+    roomNavigationProtected.value,
+    activeRoomId.value,
+    state.value?.phase ?? "",
+    connectionState.value,
+  ] as const,
+  ([protectedNow]) => {
+    if (!roomNavigationGuardMounted) {
+      return;
+    }
+    if (protectedNow) {
+      armRoomNavigationGuard();
+    } else {
+      releaseRoomNavigationGuard();
+    }
+  },
+  { flush: "post" },
+);
+
 onMounted(() => {
+  roomNavigationGuardMounted = true;
+  window.addEventListener("popstate", handleRoomNavigationPopState);
+  armRoomNavigationGuard();
   installLocalTestBridge();
   if (!entryName.value) {
     entryName.value = nicknameHistory.value[0] || generateRandomNickname();
@@ -1757,6 +2015,12 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  roomNavigationGuardMounted = false;
+  window.removeEventListener("popstate", handleRoomNavigationPopState);
+  if (roomNavigationReleaseTimer !== null) {
+    window.clearTimeout(roomNavigationReleaseTimer);
+    roomNavigationReleaseTimer = null;
+  }
   removeLocalTestBridge();
   if (declareTick !== null) {
     window.clearInterval(declareTick);

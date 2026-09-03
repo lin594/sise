@@ -388,7 +388,11 @@ const leaveRoomDescription = computed(() => {
   return "你还没有入座，将返回游戏模式大厅。";
 });
 const departureDialogTitle = computed(() =>
-  departureIntent.value === "dissolve" ? "解散整张好友桌？" : "离开当前好友房？",
+  departureIntent.value === "dissolve"
+    ? "解散整张好友桌？"
+    : props.roomMode === "practice"
+      ? "离开当前练习？"
+      : "离开当前好友房？",
 );
 const seatSlots = computed(() =>
   Array.from({ length: 4 }, (_, seatIndex) => ({
@@ -506,6 +510,19 @@ function confirmDeparture(): void {
     emit("leave-room");
   }
 }
+
+function handleNavigationBack(): boolean {
+  if (!departureIntent.value) {
+    return false;
+  }
+  void cancelLeaveRoom();
+  return true;
+}
+
+defineExpose({
+  handleNavigationBack,
+  requestLeaveRoom,
+});
 
 function trapLeaveFocus(event: KeyboardEvent): void {
   const dialog = leaveDialogRef.value;

@@ -737,6 +737,31 @@ function confirmExit(): void {
   emit("exit");
 }
 
+function handleNavigationBack(): boolean {
+  if (confirmingExit.value) {
+    void cancelExit();
+    return true;
+  }
+  if (confirmingAutoPlay.value) {
+    void cancelAutoPlay();
+    return true;
+  }
+  if (settingsOpen.value) {
+    closeSettings();
+    return true;
+  }
+  if (historyOpen.value) {
+    closeHistory();
+    return true;
+  }
+  return false;
+}
+
+defineExpose({
+  handleNavigationBack,
+  requestExit,
+});
+
 onBeforeUnmount(() => {
   removeSettingsOutsideListener();
   stopObservingSettingsScroll();
