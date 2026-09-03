@@ -212,6 +212,30 @@ test.describe("phone portrait landscape canvas", () => {
     expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewportWidth);
     expect(overflow.bodyHeight).toBeLessThanOrEqual(overflow.viewportHeight);
   });
+
+  test("rotates a legacy 320x568 portrait into the supported small canvas", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto("/");
+
+    const layout = page.locator(".layout");
+    await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    const geometry = await layout.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        offsetWidth: (element as HTMLElement).offsetWidth,
+        offsetHeight: (element as HTMLElement).offsetHeight,
+        rectWidth: Math.round(rect.width),
+        rectHeight: Math.round(rect.height),
+      };
+    });
+    expect(geometry).toEqual({
+      offsetWidth: 568,
+      offsetHeight: 320,
+      rectWidth: 320,
+      rectHeight: 568,
+    });
+  });
 });
 
 test.describe("compact landscape gameplay", () => {
