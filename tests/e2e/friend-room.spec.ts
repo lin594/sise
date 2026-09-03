@@ -431,7 +431,13 @@ test("a later friend can choose a collective response before their polling turn"
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 
     await host.getByTestId("action-pass").click();
-    await expect(host.getByTestId("action-waiting")).toContainText("先响应牌友正在操作");
+    const receipt = host.getByTestId("action-feedback");
+    await expect(receipt).toHaveAttribute("data-status", "received");
+    await expect(receipt).toContainText(/操作已收到/);
+    await host.waitForTimeout(1_800);
+    await expect(receipt).toContainText("操作已收到，等待牌局继续");
+    await expect(host.getByTestId("action-pass")).toHaveCount(0);
+    await expect(host.getByTestId("action-waiting")).toHaveCount(0);
   } finally {
     await guestContext.close();
     await hostContext.close();
