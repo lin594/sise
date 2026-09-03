@@ -1,5 +1,6 @@
 ﻿<template>
   <div
+    ref="boardRef"
     class="board"
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
@@ -553,14 +554,14 @@
       v-if="props.state?.phase === 'playing'"
       class="embedded-actions action-dock"
       :actions="props.actions ?? []"
-      :can-act="Boolean(props.canAct)"
+      :can-act="canAct"
       :can-discard="canDiscard"
       :has-discard-selection="Boolean(selectedDiscardCardId)"
       :discard-pending="Boolean(discardingCardId)"
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
       :current-player-name="props.currentPlayerName ?? '-'"
-      :paused-hint="props.interactionPausedMessage ?? ''"
+      :paused-hint="effectiveInteractionPausedMessage"
       :seconds-left="seatCountdownSeconds"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
@@ -709,6 +710,7 @@ const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 
 const tableRef = ref<HTMLElement | null>(null);
+const boardRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
 const deckAnchorRef = ref<HTMLElement | null>(null);
 const selfHandRef = ref<HTMLElement | null>(null);
@@ -1035,7 +1037,19 @@ const isMyTurn = computed(
     !Boolean(currentPlayer.value?.isBot),
 );
 
-const canDiscard = computed(() => Boolean(props.canDiscard));
+const openingDealIntroActive = computed(() => isOpeningDealIntroState());
+const handPresentationBusy = computed(() => openingDealIntroActive.value || showDealAnimation.value);
+const canAct = computed(() => Boolean(props.canAct) && !handPresentationBusy.value);
+const canDiscard = computed(() => Boolean(props.canDiscard) && !handPresentationBusy.value);
+const effectiveInteractionPausedMessage = computed(() => {
+  if (props.interactionPausedMessage) {
+    return props.interactionPausedMessage;
+  }
+  if (handPresentationBusy.value && (props.canAct || props.canDiscard)) {
+    return "正在整理手牌，请稍候";
+  }
+  return "";
+});
 const canConfirmDiscard = computed(() => {
   const selectedId = selectedDiscardCardId.value;
   if (!selectedId || !canDiscard.value) {
@@ -1044,7 +1058,6 @@ const canConfirmDiscard = computed(() => {
   const card = props.privateHand.find((item) => item.id === selectedId);
   return Boolean(card && canDiscardCard(card));
 });
-const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed<Card[]>(() => {
   if (props.state?.phase === "waiting") {
     return [];
@@ -1139,8 +1152,8 @@ const seatCountdownPercent = computed<number>(() => {
 });
 
 const compactCenterHint = computed(() => {
-  if (props.interactionPausedMessage) {
-    return props.interactionPausedMessage;
+  if (effectiveInteractionPausedMessage.value) {
+    return effectiveInteractionPausedMessage.value;
   }
   if (props.turnHint) {
     return props.turnHint;
@@ -1149,12 +1162,12 @@ const compactCenterHint = computed(() => {
     return "选择手牌后确认出牌";
   }
   if (String(props.state?.responsePhase ?? "") === "collective") {
-    return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
+    return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
   }
-  if (String(props.state?.responsePhase ?? "") === "local_upper" && Boolean(props.canAct)) {
+  if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
     return "可吃或抓";
   }
-  if (String(props.state?.responsePhase ?? "") === "local_draw" && Boolean(props.canAct)) {
+  if (String(props.state?.responsePhase ?? "") === "local_draw" && canAct.value) {
     return "可吃或过";
   }
   return isMyTurn.value ? "轮到你操作" : "等待对方操作";
@@ -1878,6 +1891,23 @@ watch(canDiscard, (enabled) => {
     selectedDiscardCardId.value = null;
   }
 });
+
+watch(
+  () => canAct.value || canDiscard.value,
+  (ready, wasReady) => {
+    if (!ready || wasReady) {
+      return;
+    }
+    void nextTick(() => {
+      const board = boardRef.value;
+      const target = canDiscard.value
+        ? board?.querySelector<HTMLElement>(".hand-card.playable")
+        : board?.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
+      target?.focus();
+    });
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>

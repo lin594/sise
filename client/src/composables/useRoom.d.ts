@@ -621,14 +621,41 @@ export declare function useRoom(playerName?: string): {
         scenario: string;
         ok: boolean;
         ts: number;
+        actions?: {
+            action: ActionType;
+            enabled: boolean;
+            candidates?: {
+                id: string;
+                action: "kai" | "peng" | "chi";
+                kind?: string | undefined;
+                cardIds: string[];
+                source: "hand" | "hand+pool";
+                title: string;
+            }[] | undefined;
+            deferred?: boolean | undefined;
+        }[] | undefined;
     } | null, {
         scenario: string;
         ok: boolean;
         ts: number;
+        actions?: AvailableAction[];
     } | {
         scenario: string;
         ok: boolean;
         ts: number;
+        actions?: {
+            action: ActionType;
+            enabled: boolean;
+            candidates?: {
+                id: string;
+                action: "kai" | "peng" | "chi";
+                kind?: string | undefined;
+                cardIds: string[];
+                source: "hand" | "hand+pool";
+                title: string;
+            }[] | undefined;
+            deferred?: boolean | undefined;
+        }[] | undefined;
     } | null>;
     joinError: import("vue").Ref<string, string>;
     declareError: import("vue").Ref<string, string>;

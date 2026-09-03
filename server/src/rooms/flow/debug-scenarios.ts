@@ -13,6 +13,8 @@ export interface DebugScenarioContext {
   getPendingResponse: () => PendingResponseSnapshot | null;
   toSchemaCard: (card: Card, isResponseCard: boolean, source: "upper" | "draw") => CardSchema;
   setResponseCard: (card: Card, source: "upper" | "draw") => void;
+  clearAwaitingDiscardOwner: () => void;
+  updatePublicHandCounts: () => void;
   syncAllPrivateHands: () => void;
   resetCollectivePolling: () => void;
   broadcastAvailableActions: () => void;
@@ -26,10 +28,16 @@ export interface DebugScenarioContext {
  * 副作用：覆盖指定玩家手牌、pending/responsePhase/lastAction，并触发轮询或 bot 步进。
  */
 export function applyDebugScenario(context: DebugScenarioContext, seatId: string, scenario: string): boolean {
-  if (!context.state.players.has(seatId)) {
+  const player = context.state.players.get(seatId);
+  if (!player) {
     return false;
   }
 
+  // The scenario replaces the hand, so declarations derived from the random
+  // opening hand must not constrain the injected candidates.
+  context.clearAwaitingDiscardOwner();
+  context.resetCollectivePolling();
+  player.declaredKongs = 0;
   const hand = context.playerHands.get(seatId) ?? [];
   hand.length = 0;
   const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
@@ -126,11 +134,12 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   }
 
   context.playerHands.set(seatId, hand);
+  context.updatePublicHandCounts();
   context.syncAllPrivateHands();
+  context.broadcastAvailableActions();
 
   if (scenario === "discard_public") {
     context.resetCollectivePolling();
-    context.broadcastAvailableActions();
     return true;
   }
   if (scenario === "collective_no_actions" || scenario === "hu_fail_case") {

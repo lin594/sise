@@ -39,6 +39,7 @@ const dealerFlight = ref(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 const tableRef = ref(null);
+const boardRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
 const selfHandRef = ref(null);
@@ -323,7 +324,19 @@ const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "co
     Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot));
-const canDiscard = computed(() => Boolean(props.canDiscard));
+const openingDealIntroActive = computed(() => isOpeningDealIntroState());
+const handPresentationBusy = computed(() => openingDealIntroActive.value || showDealAnimation.value);
+const canAct = computed(() => Boolean(props.canAct) && !handPresentationBusy.value);
+const canDiscard = computed(() => Boolean(props.canDiscard) && !handPresentationBusy.value);
+const effectiveInteractionPausedMessage = computed(() => {
+    if (props.interactionPausedMessage) {
+        return props.interactionPausedMessage;
+    }
+    if (handPresentationBusy.value && (props.canAct || props.canDiscard)) {
+        return "正在整理手牌，请稍候";
+    }
+    return "";
+});
 const canConfirmDiscard = computed(() => {
     const selectedId = selectedDiscardCardId.value;
     if (!selectedId || !canDiscard.value) {
@@ -332,7 +345,6 @@ const canConfirmDiscard = computed(() => {
     const card = props.privateHand.find((item) => item.id === selectedId);
     return Boolean(card && canDiscardCard(card));
 });
-const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const displayPrivateHand = computed(() => {
     if (props.state?.phase === "waiting") {
         return [];
@@ -412,8 +424,8 @@ const seatCountdownPercent = computed(() => {
     return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
 });
 const compactCenterHint = computed(() => {
-    if (props.interactionPausedMessage) {
-        return props.interactionPausedMessage;
+    if (effectiveInteractionPausedMessage.value) {
+        return effectiveInteractionPausedMessage.value;
     }
     if (props.turnHint) {
         return props.turnHint;
@@ -422,12 +434,12 @@ const compactCenterHint = computed(() => {
         return "选择手牌后确认出牌";
     }
     if (String(props.state?.responsePhase ?? "") === "collective") {
-        return props.canAct ? "全局待响：可胡/开/碰/过" : "等待三家响应";
+        return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
     }
-    if (String(props.state?.responsePhase ?? "") === "local_upper" && Boolean(props.canAct)) {
+    if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
         return "可吃或抓";
     }
-    if (String(props.state?.responsePhase ?? "") === "local_draw" && Boolean(props.canAct)) {
+    if (String(props.state?.responsePhase ?? "") === "local_draw" && canAct.value) {
         return "可吃或过";
     }
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
@@ -1087,6 +1099,18 @@ watch(canDiscard, (enabled) => {
         selectedDiscardCardId.value = null;
     }
 });
+watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
+    if (!ready || wasReady) {
+        return;
+    }
+    void nextTick(() => {
+        const board = boardRef.value;
+        const target = canDiscard.value
+            ? board?.querySelector(".hand-card.playable")
+            : board?.querySelector(".action-dock .btn:not(:disabled)");
+        target?.focus();
+    });
+}, { immediate: true });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -1287,10 +1311,12 @@ let __VLS_directives;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ref: "boardRef",
     ...{ class: "board" },
     'data-testid': "game-board",
     'data-response-phase': (props.responsePhase ?? ''),
 });
+/** @type {typeof __VLS_ctx.boardRef} */ ;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "table" },
     ref: "tableRef",
@@ -2333,14 +2359,14 @@ if (props.state?.phase === 'playing') {
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
-        canAct: (Boolean(props.canAct)),
+        canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
-        pausedHint: (props.interactionPausedMessage ?? ''),
+        pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
@@ -2351,14 +2377,14 @@ if (props.state?.phase === 'playing') {
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
-        canAct: (Boolean(props.canAct)),
+        canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
         currentPlayerName: (props.currentPlayerName ?? '-'),
-        pausedHint: (props.interactionPausedMessage ?? ''),
+        pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
@@ -2582,6 +2608,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             dealerFlight: dealerFlight,
             flashActorId: flashActorId,
             tableRef: tableRef,
+            boardRef: boardRef,
             responseLandingRef: responseLandingRef,
             deckAnchorRef: deckAnchorRef,
             selfHandRef: selfHandRef,
@@ -2602,7 +2629,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             isActiveDiscardCard: isActiveDiscardCard,
             displayTurnPlayerId: displayTurnPlayerId,
             isMyTurn: isMyTurn,
+            canAct: canAct,
             canDiscard: canDiscard,
+            effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
             displayPrivateHand: displayPrivateHand,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             seatCountdownSeconds: seatCountdownSeconds,

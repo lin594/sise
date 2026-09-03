@@ -12,6 +12,7 @@ import { useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
+import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { getCardLabelText } from "@/utils/cardText";
 const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
@@ -72,7 +73,26 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, joinError, declareError, clearActionLogs, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
+const localTestPrivateHandReadyOverride = ref(null);
+function installLocalTestBridge() {
+    const query = new URLSearchParams(window.location.search);
+    const localHost = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+    if (!localHost || query.get("e2eDebug") !== "1") {
+        return;
+    }
+    window.__siseLocalTest = {
+        setupScenario: (scenario) => debugSetup(scenario),
+        getLastResult: () => debugApplied.value,
+        setPrivateHandReadyOverride: (ready) => {
+            localTestPrivateHandReadyOverride.value = ready;
+        },
+    };
+}
+function removeLocalTestBridge() {
+    localTestPrivateHandReadyOverride.value = null;
+    delete window.__siseLocalTest;
+}
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
@@ -270,18 +290,34 @@ const openingDealSecondsLeft = computed(() => {
     }
     return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
-const canAct = computed(() => connected.value &&
+const pendingActionDecision = computed(() => connected.value &&
     !openingDealActive.value &&
     isPlaying.value &&
     availableActions.value.some((x) => x.enabled || x.deferred));
-const canDiscard = computed(() => connected.value &&
+const pendingDiscardDecision = computed(() => connected.value &&
     !openingDealActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
     state.value?.responsePhase === "local_draw" &&
     availableActions.value.length === 0);
+const privateHandSynchronized = computed(() => {
+    if (localTestPrivateHandReadyOverride.value !== null) {
+        return localTestPrivateHandReadyOverride.value;
+    }
+    return isPrivateHandSynchronized(state.value, mySeatId.value, privateHand.value.length);
+});
+const canAct = computed(() => pendingActionDecision.value && privateHandSynchronized.value);
+const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
 const interactionPausedMessage = computed(() => {
-    if (connected.value || !isPlaying.value) {
+    if (connected.value) {
+        if (isPlaying.value &&
+            (pendingActionDecision.value || pendingDiscardDecision.value) &&
+            !privateHandSynchronized.value) {
+            return "正在同步手牌，请稍候";
+        }
+        return "";
+    }
+    if (!isPlaying.value) {
         return "";
     }
     if (connectionState.value === "offline") {
@@ -343,8 +379,11 @@ let globalNoticeTimer = null;
 const showRules = ref(false);
 const rulesPanelRef = ref(null);
 const rulesCloseButtonRef = ref(null);
+const candidatePanelRef = ref(null);
+const candidateCancelButtonRef = ref(null);
 const settlementPanelRef = ref(null);
 let rulesReturnFocus = null;
+let candidateReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 watch(showEndPanel, (visible) => {
     if (visible) {
@@ -357,7 +396,7 @@ const shouldShowDeclarePanel = computed(() => isDeclaring.value &&
     !declareDealIntroActive.value &&
     Boolean(mySeatId.value) &&
     !Boolean(mePlayer.value?.isBot));
-const settingsDecisionActive = computed(() => canAct.value || canDiscard.value);
+const settingsDecisionActive = computed(() => pendingActionDecision.value || pendingDiscardDecision.value);
 function openRules() {
     if (settingsDecisionActive.value) {
         return;
@@ -402,20 +441,22 @@ function trapRulesFocus(event) {
     }
 }
 function closeRulesForDecision() {
-    if (!showRules.value) {
-        return;
+    if (showRules.value) {
+        closeRules(false);
     }
-    closeRules(false);
-    void nextTick(() => {
-        const target = canDiscard.value
-            ? document.querySelector(".hand-card.playable")
-            : document.querySelector(".action-dock .btn:not(:disabled)");
-        target?.focus();
-    });
+}
+function focusReadyGameControl() {
+    document
+        .querySelector(".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)")
+        ?.focus();
 }
 watch(settingsDecisionActive, (active) => {
     if (active) {
         closeRulesForDecision();
+        // A decision can arrive while settings or the rules dialog owns focus.
+        // Wait until those layers are gone, then place keyboard/switch users on
+        // the first control that can actually resolve the game state.
+        void nextTick(focusReadyGameControl);
     }
 });
 const decisionAlertKey = computed(() => {
@@ -464,9 +505,20 @@ const declareProgressPercent = computed(() => {
     const percent = (remain / declareTotalMs.value) * 100;
     return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-function clearSelection() {
+function clearSelection(restoreFocus = false) {
+    const returnTarget = candidateReturnFocus;
+    candidateReturnFocus = null;
     selectionMode.value = null;
     selectedCandidateId.value = null;
+    if (!restoreFocus) {
+        return;
+    }
+    void nextTick(() => {
+        if (returnTarget?.isConnected &&
+            !(returnTarget instanceof HTMLButtonElement && returnTarget.disabled)) {
+            returnTarget.focus();
+        }
+    });
 }
 async function handleLeaveRoom() {
     globalError.value = "";
@@ -475,8 +527,43 @@ async function handleLeaveRoom() {
     await leaveRoom();
 }
 function onPanelSelectionChange(payload) {
+    if (!payload.mode) {
+        clearSelection(Boolean(selectionMode.value));
+        return;
+    }
+    if (!selectionMode.value) {
+        candidateReturnFocus = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+    }
     selectionMode.value = payload.mode;
     selectedCandidateId.value = payload.selectedCandidateId;
+    void nextTick(() => {
+        const firstCandidate = candidatePanelRef.value?.querySelector(".candidate-item");
+        (firstCandidate ?? candidateCancelButtonRef.value ?? candidatePanelRef.value)?.focus();
+    });
+}
+function trapCandidateFocus(event) {
+    const panel = candidatePanelRef.value;
+    if (!panel) {
+        return;
+    }
+    const focusable = Array.from(panel.querySelectorAll("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")).filter((element) => !element.hasAttribute("hidden"));
+    if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+    }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
+        event.preventDefault();
+        first.focus();
+    }
 }
 function actionFromRequest(request) {
     return typeof request === "string" ? request : request.action;
@@ -618,6 +705,7 @@ watch(() => availableActions.value, () => {
     }
 }, { deep: true });
 onMounted(() => {
+    installLocalTestBridge();
     if (!entryName.value) {
         entryName.value = nicknameHistory.value[0] || generateRandomNickname();
     }
@@ -628,6 +716,7 @@ onMounted(() => {
     void resumeStoredRoomSession();
 });
 onUnmounted(() => {
+    removeLocalTestBridge();
     if (declareTick !== null) {
         window.clearInterval(declareTick);
         declareTick = null;
@@ -1336,7 +1425,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
@@ -1849,21 +1940,50 @@ else {
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
+                    return;
+                __VLS_ctx.clearSelection(true);
+            } },
         ...{ class: "candidate-mask" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onKeydown: (...[$event]) => {
+                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
+                    return;
+                __VLS_ctx.clearSelection(true);
+            } },
+        ...{ onKeydown: (__VLS_ctx.trapCandidateFocus) },
+        ref: "candidatePanelRef",
         ...{ class: "candidate-panel" },
+        'data-testid': "candidate-panel",
+        role: "dialog",
+        'aria-modal': "true",
+        'aria-labelledby': "candidate-panel-title",
+        'aria-describedby': "candidate-panel-description",
+        tabindex: "-1",
     });
+    /** @type {typeof __VLS_ctx.candidatePanelRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "candidate-head" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
+        id: "candidate-panel-title",
+    });
     (__VLS_ctx.actionText(__VLS_ctx.selectionMode));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.clearSelection) },
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
+                    return;
+                __VLS_ctx.clearSelection(true);
+            } },
+        ref: "candidateCancelButtonRef",
         ...{ class: "ghost" },
+        'data-testid': "candidate-cancel",
     });
+    /** @type {typeof __VLS_ctx.candidateCancelButtonRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        id: "candidate-panel-description",
         ...{ class: "candidate-desc" },
     });
     (__VLS_ctx.candidatePromptText);
@@ -1882,6 +2002,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                     } },
                 key: (candidate.id),
                 ...{ class: "candidate-item" },
+                'data-testid': "candidate-option",
                 ...{ class: ({ selected: __VLS_ctx.selectedCandidateId === candidate.id }) },
             });
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
@@ -1958,6 +2079,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
+        handReady: (__VLS_ctx.privateHandSynchronized),
         secondsLeft: (__VLS_ctx.declareSecondsLeft),
         progressPercent: (__VLS_ctx.declareProgressPercent),
         serverError: (__VLS_ctx.declareError),
@@ -1969,6 +2091,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ...{ 'onSubmit': {} },
         hand: (__VLS_ctx.privateHand),
         submitted: (__VLS_ctx.isDeclareSubmitted),
+        handReady: (__VLS_ctx.privateHandSynchronized),
         secondsLeft: (__VLS_ctx.declareSecondsLeft),
         progressPercent: (__VLS_ctx.declareProgressPercent),
         serverError: (__VLS_ctx.declareError),
@@ -2560,6 +2683,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             hasFriendInvite: hasFriendInvite,
             entryPrimaryLabel: entryPrimaryLabel,
             isMyTurn: isMyTurn,
+            privateHandSynchronized: privateHandSynchronized,
             canAct: canAct,
             canDiscard: canDiscard,
             interactionPausedMessage: interactionPausedMessage,
@@ -2581,6 +2705,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             showRules: showRules,
             rulesPanelRef: rulesPanelRef,
             rulesCloseButtonRef: rulesCloseButtonRef,
+            candidatePanelRef: candidatePanelRef,
+            candidateCancelButtonRef: candidateCancelButtonRef,
             settlementPanelRef: settlementPanelRef,
             showEndPanel: showEndPanel,
             isDeclareSubmitted: isDeclareSubmitted,
@@ -2594,6 +2720,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             clearSelection: clearSelection,
             handleLeaveRoom: handleLeaveRoom,
             onPanelSelectionChange: onPanelSelectionChange,
+            trapCandidateFocus: trapCandidateFocus,
             onPanelSubmit: onPanelSubmit,
             submitCandidate: submitCandidate,
             actionText: actionText,

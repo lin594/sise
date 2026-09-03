@@ -16,6 +16,7 @@ import type {
 import { sortHandCards } from "@/utils/cardSort";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
+import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
@@ -429,7 +430,12 @@ export function useRoom(playerName = "Player") {
   const availableActions = ref<AvailableAction[]>([]);
   const huResult = ref<{ winnerId: string; groups: string[] } | null>(null);
   const roundResult = ref<RoundResultPayload | null>(null);
-  const debugApplied = ref<{ scenario: string; ok: boolean; ts: number } | null>(null);
+  const debugApplied = ref<{
+    scenario: string;
+    ok: boolean;
+    ts: number;
+    actions?: AvailableAction[];
+  } | null>(null);
   const joinError = ref("");
   const declareError = ref("");
   const actionLogs = ref<ParsedActionLog[]>([]);
@@ -664,13 +670,20 @@ export function useRoom(playerName = "Player") {
     void fetchPrivateState("page_visible");
   }
 
+  function privateHandCountMatches(snapshot = state.value): boolean {
+    if (!snapshot || !mySeatId.value) {
+      return true;
+    }
+    return isPrivateHandSynchronized(snapshot, mySeatId.value, privateHand.value.length);
+  }
+
   function maybeRequestMissingPrivateHand(reason: string) {
     const phase = state.value?.phase;
     if (!room.value || !mySeatId.value || (phase !== "declaring" && phase !== "playing")) {
       clearMissingHandSyncTimer();
       return;
     }
-    if (privateHand.value.length > 0) {
+    if (privateHandCountMatches()) {
       clearMissingHandSyncTimer();
       return;
     }
@@ -772,7 +785,7 @@ export function useRoom(playerName = "Player") {
           };
         }
       }
-      if (nextHand.length > 0) {
+      if (privateHandCountMatches()) {
         clearMissingHandSyncTimer();
         joinError.value = "";
       }
@@ -941,7 +954,7 @@ export function useRoom(playerName = "Player") {
     ) {
       privateHand.value = snapshotPrivateHand;
       privateHandFingerprint = nextPrivateHandFingerprint;
-      if (privateHand.value.length > 0) {
+      if (privateHandCountMatches(normalized)) {
         clearMissingHandSyncTimer();
       }
     }
@@ -978,9 +991,9 @@ export function useRoom(playerName = "Player") {
     if (
       mySeatId.value &&
       (normalized.phase === "declaring" || normalized.phase === "playing") &&
-      privateHand.value.length === 0
+      !privateHandCountMatches(normalized)
     ) {
-      requestSyncState("missing_private_hand");
+      requestSyncState("stale_private_hand");
       startMissingHandSyncTimer();
     } else {
       clearMissingHandSyncTimer();
@@ -1246,8 +1259,11 @@ export function useRoom(playerName = "Player") {
         privateStateAuthoritySeq += 1;
         privateHand.value = sortHandCards(asCardArray(payload));
         privateHandFingerprint = buildCardIdFingerprint(privateHand.value);
-        if (privateHand.value.length > 0) {
+        if (privateHandCountMatches()) {
           clearMissingHandSyncTimer();
+        } else {
+          requestSyncState("stale_private_hand_message");
+          startMissingHandSyncTimer();
         }
       });
       joined.onMessage("available_actions", (payload: AvailableAction[] | { items?: AvailableAction[] }) => {
@@ -1280,7 +1296,12 @@ export function useRoom(playerName = "Player") {
         roundResult.value = normalizeRoundResultPayload(payload);
         pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
       });
-      joined.onMessage("debug_applied", (payload: { scenario: string; ok: boolean; ts: number }) => {
+      joined.onMessage("debug_applied", (payload: {
+        scenario: string;
+        ok: boolean;
+        ts: number;
+        actions?: AvailableAction[];
+      }) => {
         if (!isCurrentJoinedRoom()) {
           return;
         }

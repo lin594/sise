@@ -27,7 +27,12 @@
         <span>✓</span> 声明已提交，正在等待其他玩家
       </p>
 
-      <template v-if="hand.length">
+      <p v-else-if="!handReady" class="declare-syncing" role="status" aria-live="polite">
+        <span class="loading-mark"></span>
+        <span><strong>正在同步完整手牌</strong><small>手牌到齐后才能调整和确认声明，请稍候。</small></span>
+      </p>
+
+      <template v-if="handReady && hand.length">
         <section class="hand-preview" aria-labelledby="declare-hand-title">
           <div class="section-heading compact-heading">
             <div>
@@ -129,7 +134,7 @@
         </div>
       </template>
 
-      <div v-else class="declaration-loading" role="status">
+      <div v-else-if="handReady" class="declaration-loading" role="status">
         <span class="loading-mark"></span>
         正在同步手牌…
       </div>
@@ -181,6 +186,7 @@ import {
 
 const props = defineProps<{
   hand: Card[];
+  handReady: boolean;
   submitted: boolean;
   secondsLeft: number;
   progressPercent: number;
@@ -207,7 +213,7 @@ const recommendedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions
 const hiddenKongAnalysis = computed(() => analyzeHiddenKongs(props.hand, selectedFishCardIds.value));
 const recommendedKongCount = computed(() => analyzeHiddenKongs(props.hand, recommendedFishCardIds.value).count);
 const kongChoices = computed(() => Array.from({ length: hiddenKongAnalysis.value.count + 1 }, (_, index) => index));
-const isLocked = computed(() => props.submitted || submitPending.value);
+const isLocked = computed(() => !props.handReady || props.submitted || submitPending.value);
 const isAtRecommendation = computed(() => {
   if (declaredKongs.value !== recommendedKongCount.value) {
     return false;
@@ -272,9 +278,9 @@ function submit() {
 }
 
 watch(
-  () => props.hand.map((card) => card.id).join("|"),
+  () => `${props.handReady ? "ready" : "waiting"}|${props.hand.map((card) => card.id).join("|")}`,
   () => {
-    if (!initialized.value && props.hand.length > 0) {
+    if (props.handReady && props.hand.length > 0 && !props.submitted && !submitPending.value) {
       restoreRecommendation();
     }
   },
@@ -431,6 +437,31 @@ watch(
   color: white;
   border-radius: 50%;
   background: #16a34a;
+}
+
+.declare-syncing {
+  margin: 0;
+  min-height: 4.5rem;
+  padding: 0.75rem;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  background: #f0f9ff;
+  color: #075985;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  text-align: left;
+}
+
+.declare-syncing > span:last-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.declare-syncing small {
+  color: #475569;
+  font-weight: 500;
 }
 
 .hand-preview,

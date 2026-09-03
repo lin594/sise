@@ -145,18 +145,30 @@
       />
     </template>
 
-    <div v-if="isPlaying && selectionMode" class="candidate-mask">
-      <div class="candidate-panel">
+    <div v-if="isPlaying && selectionMode" class="candidate-mask" @click.self="clearSelection(true)">
+      <div
+        ref="candidatePanelRef"
+        class="candidate-panel"
+        data-testid="candidate-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="candidate-panel-title"
+        aria-describedby="candidate-panel-description"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="clearSelection(true)"
+        @keydown.tab="trapCandidateFocus"
+      >
         <div class="candidate-head">
-          <h3>{{ actionText(selectionMode) }}候选牌组</h3>
-          <button class="ghost" @click="clearSelection">取消</button>
+          <h3 id="candidate-panel-title">{{ actionText(selectionMode) }}候选牌组</h3>
+          <button ref="candidateCancelButtonRef" class="ghost" data-testid="candidate-cancel" @click="clearSelection(true)">取消</button>
         </div>
-        <p class="candidate-desc">{{ candidatePromptText }}</p>
+        <p id="candidate-panel-description" class="candidate-desc">{{ candidatePromptText }}</p>
         <div v-if="activeCandidates.length" class="candidate-list">
           <button
             v-for="(candidate, index) in activeCandidates"
             :key="candidate.id"
             class="candidate-item"
+            data-testid="candidate-option"
             :class="{ selected: selectedCandidateId === candidate.id }"
             @click="submitCandidate(candidate.id)"
           >
@@ -191,6 +203,7 @@
       v-if="shouldShowDeclarePanel"
       :hand="privateHand"
       :submitted="isDeclareSubmitted"
+      :hand-ready="privateHandSynchronized"
       :seconds-left="declareSecondsLeft"
       :progress-percent="declareProgressPercent"
       :server-error="declareError"
@@ -444,9 +457,11 @@ import { useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
+import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import type {
   ActionCandidate,
   ActionRequest,
+  AvailableAction,
   Card,
   CardDisplayMode,
   GameDisplayPreferences,
@@ -550,9 +565,11 @@ const {
   availableActions,
   huResult,
   roundResult,
+  debugApplied,
   joinError,
   declareError,
   clearActionLogs,
+  debugSetup,
   sendAction,
   sendDiscardCard,
   declareSetup,
@@ -565,6 +582,41 @@ const {
   updateBot,
   removeSeat,
 } = useRoom("玩家");
+
+type LocalTestBridgeWindow = Window & {
+  __siseLocalTest?: {
+    setupScenario: (scenario: string) => void;
+    getLastResult: () => {
+      scenario: string;
+      ok: boolean;
+      ts: number;
+      actions?: AvailableAction[];
+    } | null;
+    setPrivateHandReadyOverride: (ready: boolean | null) => void;
+  };
+};
+
+const localTestPrivateHandReadyOverride = ref<boolean | null>(null);
+
+function installLocalTestBridge(): void {
+  const query = new URLSearchParams(window.location.search);
+  const localHost = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+  if (!localHost || query.get("e2eDebug") !== "1") {
+    return;
+  }
+  (window as LocalTestBridgeWindow).__siseLocalTest = {
+    setupScenario: (scenario) => debugSetup(scenario),
+    getLastResult: () => debugApplied.value,
+    setPrivateHandReadyOverride: (ready) => {
+      localTestPrivateHandReadyOverride.value = ready;
+    },
+  };
+}
+
+function removeLocalTestBridge(): void {
+  localTestPrivateHandReadyOverride.value = null;
+  delete (window as LocalTestBridgeWindow).__siseLocalTest;
+}
 
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
@@ -787,14 +839,14 @@ const openingDealSecondsLeft = computed(() => {
   }
   return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
-const canAct = computed(
+const pendingActionDecision = computed(
   () =>
     connected.value &&
     !openingDealActive.value &&
     isPlaying.value &&
     availableActions.value.some((x) => x.enabled || x.deferred),
 );
-const canDiscard = computed(
+const pendingDiscardDecision = computed(
   () =>
     connected.value &&
     !openingDealActive.value &&
@@ -803,8 +855,26 @@ const canDiscard = computed(
     state.value?.responsePhase === "local_draw" &&
     availableActions.value.length === 0,
 );
+const privateHandSynchronized = computed(() => {
+  if (localTestPrivateHandReadyOverride.value !== null) {
+    return localTestPrivateHandReadyOverride.value;
+  }
+  return isPrivateHandSynchronized(state.value, mySeatId.value, privateHand.value.length);
+});
+const canAct = computed(() => pendingActionDecision.value && privateHandSynchronized.value);
+const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
 const interactionPausedMessage = computed(() => {
-  if (connected.value || !isPlaying.value) {
+  if (connected.value) {
+    if (
+      isPlaying.value &&
+      (pendingActionDecision.value || pendingDiscardDecision.value) &&
+      !privateHandSynchronized.value
+    ) {
+      return "正在同步手牌，请稍候";
+    }
+    return "";
+  }
+  if (!isPlaying.value) {
     return "";
   }
   if (connectionState.value === "offline") {
@@ -878,8 +948,11 @@ let globalNoticeTimer: number | null = null;
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
+const candidatePanelRef = ref<HTMLElement | null>(null);
+const candidateCancelButtonRef = ref<HTMLButtonElement | null>(null);
 const settlementPanelRef = ref<HTMLElement | null>(null);
 let rulesReturnFocus: HTMLElement | null = null;
+let candidateReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 watch(
   showEndPanel,
@@ -900,7 +973,7 @@ const shouldShowDeclarePanel = computed(
     !Boolean(mePlayer.value?.isBot),
 );
 const settingsDecisionActive = computed(
-  () => canAct.value || canDiscard.value,
+  () => pendingActionDecision.value || pendingDiscardDecision.value,
 );
 
 function openRules(): void {
@@ -955,21 +1028,26 @@ function trapRulesFocus(event: KeyboardEvent): void {
 }
 
 function closeRulesForDecision(): void {
-  if (!showRules.value) {
-    return;
+  if (showRules.value) {
+    closeRules(false);
   }
-  closeRules(false);
-  void nextTick(() => {
-    const target = canDiscard.value
-      ? document.querySelector<HTMLElement>(".hand-card.playable")
-      : document.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
-    target?.focus();
-  });
+}
+
+function focusReadyGameControl(): void {
+  document
+    .querySelector<HTMLElement>(
+      ".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)",
+    )
+    ?.focus();
 }
 
 watch(settingsDecisionActive, (active) => {
   if (active) {
     closeRulesForDecision();
+    // A decision can arrive while settings or the rules dialog owns focus.
+    // Wait until those layers are gone, then place keyboard/switch users on
+    // the first control that can actually resolve the game state.
+    void nextTick(focusReadyGameControl);
   }
 });
 
@@ -1022,9 +1100,22 @@ const declareProgressPercent = computed(() => {
   const percent = (remain / declareTotalMs.value) * 100;
   return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-function clearSelection() {
+function clearSelection(restoreFocus = false) {
+  const returnTarget = candidateReturnFocus;
+  candidateReturnFocus = null;
   selectionMode.value = null;
   selectedCandidateId.value = null;
+  if (!restoreFocus) {
+    return;
+  }
+  void nextTick(() => {
+    if (
+      returnTarget?.isConnected &&
+      !(returnTarget instanceof HTMLButtonElement && returnTarget.disabled)
+    ) {
+      returnTarget.focus();
+    }
+  });
 }
 
 async function handleLeaveRoom(): Promise<void> {
@@ -1035,8 +1126,47 @@ async function handleLeaveRoom(): Promise<void> {
 }
 
 function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }) {
+  if (!payload.mode) {
+    clearSelection(Boolean(selectionMode.value));
+    return;
+  }
+  if (!selectionMode.value) {
+    candidateReturnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  }
   selectionMode.value = payload.mode;
   selectedCandidateId.value = payload.selectedCandidateId;
+  void nextTick(() => {
+    const firstCandidate = candidatePanelRef.value?.querySelector<HTMLElement>(".candidate-item");
+    (firstCandidate ?? candidateCancelButtonRef.value ?? candidatePanelRef.value)?.focus();
+  });
+}
+
+function trapCandidateFocus(event: KeyboardEvent): void {
+  const panel = candidatePanelRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((element) => !element.hasAttribute("hidden"));
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function actionFromRequest(request: ActionRequest): string {
@@ -1206,6 +1336,7 @@ watch(
 );
 
 onMounted(() => {
+  installLocalTestBridge();
   if (!entryName.value) {
     entryName.value = nicknameHistory.value[0] || generateRandomNickname();
   }
@@ -1217,6 +1348,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  removeLocalTestBridge();
   if (declareTick !== null) {
     window.clearInterval(declareTick);
     declareTick = null;
@@ -2402,6 +2534,11 @@ watch(
   gap: 10px;
 }
 
+.candidate-panel:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 2px;
+}
+
 .candidate-head {
   display: flex;
   justify-content: space-between;
@@ -2446,6 +2583,12 @@ watch(
 .candidate-item.selected {
   border-color: #f59e0b;
   background: #3f2d0f;
+}
+
+.candidate-item:focus-visible {
+  outline: 3px solid #bae6fd;
+  outline-offset: 2px;
+  border-color: #38bdf8;
 }
 
 .candidate-cards-preview {

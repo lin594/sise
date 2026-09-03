@@ -3,6 +3,7 @@ import { Client, ErrorCode, MatchMakeError } from "@colyseus/sdk";
 import { sortHandCards } from "@/utils/cardSort";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
+import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
@@ -595,13 +596,19 @@ export function useRoom(playerName = "Player") {
         requestSyncState("page_visible");
         void fetchPrivateState("page_visible");
     }
+    function privateHandCountMatches(snapshot = state.value) {
+        if (!snapshot || !mySeatId.value) {
+            return true;
+        }
+        return isPrivateHandSynchronized(snapshot, mySeatId.value, privateHand.value.length);
+    }
     function maybeRequestMissingPrivateHand(reason) {
         const phase = state.value?.phase;
         if (!room.value || !mySeatId.value || (phase !== "declaring" && phase !== "playing")) {
             clearMissingHandSyncTimer();
             return;
         }
-        if (privateHand.value.length > 0) {
+        if (privateHandCountMatches()) {
             clearMissingHandSyncTimer();
             return;
         }
@@ -693,7 +700,7 @@ export function useRoom(playerName = "Player") {
                     };
                 }
             }
-            if (nextHand.length > 0) {
+            if (privateHandCountMatches()) {
                 clearMissingHandSyncTimer();
                 joinError.value = "";
             }
@@ -844,7 +851,7 @@ export function useRoom(playerName = "Player") {
             nextPrivateHandFingerprint !== privateHandFingerprint) {
             privateHand.value = snapshotPrivateHand;
             privateHandFingerprint = nextPrivateHandFingerprint;
-            if (privateHand.value.length > 0) {
+            if (privateHandCountMatches(normalized)) {
                 clearMissingHandSyncTimer();
             }
         }
@@ -875,8 +882,8 @@ export function useRoom(playerName = "Player") {
         }
         if (mySeatId.value &&
             (normalized.phase === "declaring" || normalized.phase === "playing") &&
-            privateHand.value.length === 0) {
-            requestSyncState("missing_private_hand");
+            !privateHandCountMatches(normalized)) {
+            requestSyncState("stale_private_hand");
             startMissingHandSyncTimer();
         }
         else {
@@ -1124,8 +1131,12 @@ export function useRoom(playerName = "Player") {
                 privateStateAuthoritySeq += 1;
                 privateHand.value = sortHandCards(asCardArray(payload));
                 privateHandFingerprint = buildCardIdFingerprint(privateHand.value);
-                if (privateHand.value.length > 0) {
+                if (privateHandCountMatches()) {
                     clearMissingHandSyncTimer();
+                }
+                else {
+                    requestSyncState("stale_private_hand_message");
+                    startMissingHandSyncTimer();
                 }
             });
             joined.onMessage("available_actions", (payload) => {

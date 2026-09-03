@@ -324,7 +324,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         const ok = canUseDebugScenario(this.debugScenariosEnabled, seatId, this.state.hostPlayerId)
           ? this.applyDebugScenario(seatId!, scenario)
           : false;
-        client.send("debug_applied", { scenario, ok, ts: Date.now() });
+        client.send("debug_applied", {
+          scenario,
+          ok,
+          ts: Date.now(),
+          actions: ok && seatId ? this.getAvailableActions(seatId) : [],
+        });
       });
     }
 
@@ -2890,6 +2895,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：覆盖局部状态并触发轮询/机器人推进。
    */
   private applyDebugScenario(seatId: string, scenario: string): boolean {
+    // A scenario replaces the live decision window. Cancel callbacks queued by
+    // the randomly chosen opening player first, otherwise a bot step can race
+    // the injected state and make browser regressions nondeterministic.
+    this.clearBotTimer();
+    this.clearDeclareTimer();
+    this.clearDeclareIntroTimer();
+    this.clearCollectiveTimer();
     return applyDebugScenarioFlow(
       {
         state: this.state,
@@ -2904,6 +2916,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         getPendingResponse: () => this.pendingResponse,
         toSchemaCard: (card, isResponseCard, source) => this.ops.toSchemaCard(card, isResponseCard, source),
         setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
+        clearAwaitingDiscardOwner: () => {
+          this.awaitingDiscardOwnerId = null;
+        },
+        updatePublicHandCounts: () => this.updatePublicHandCounts(),
         syncAllPrivateHands: () => this.syncAllPrivateHands(),
         resetCollectivePolling: () => this.resetCollectivePolling(),
         broadcastAvailableActions: () => this.broadcastAvailableActions(),

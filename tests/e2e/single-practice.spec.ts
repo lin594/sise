@@ -106,6 +106,7 @@ async function playUntilSettlement(page: Page): Promise<void> {
         continue;
       }
       const handBeforeSelection = await snapshotBoard(page);
+      await expect(page.locator(".discard-tip")).not.toContainText(/手牌（\d+\/\d+张）/);
       await card.click({ force: true });
       await card.dblclick({ force: true });
       await expect(card).toHaveAttribute("aria-pressed", "true");
