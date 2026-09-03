@@ -1202,6 +1202,21 @@ watch(canDiscard, (enabled) => {
         selectedDiscardCardId.value = null;
     }
 });
+watch(() => props.actionFeedback?.status, (status) => {
+    if (status !== "rejected" || !discardingCardId.value) {
+        return;
+    }
+    discardingCardId.value = null;
+    locallyAnimatedDiscardCardId.value = null;
+    if (discardPendingTimer) {
+        clearTimeout(discardPendingTimer);
+        discardPendingTimer = null;
+    }
+    if (localDiscardAckTimer) {
+        clearTimeout(localDiscardAckTimer);
+        localDiscardAckTimer = null;
+    }
+});
 watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
     if (!ready || wasReady) {
         return;
@@ -2581,6 +2596,7 @@ if (props.state?.phase === 'playing') {
         canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
+        actionFeedback: (props.actionFeedback ?? null),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
@@ -2605,6 +2621,7 @@ if (props.state?.phase === 'playing') {
         canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
+        actionFeedback: (props.actionFeedback ?? null),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }, ...__VLS_functionalComponentArgsRest(__VLS_57));

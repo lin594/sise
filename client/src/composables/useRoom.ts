@@ -1,6 +1,7 @@
 ﻿import { computed, onUnmounted, ref, shallowRef } from "vue";
 import { Client, ErrorCode, MatchMakeError, Room } from "@colyseus/sdk";
 import type {
+  ActionFeedback,
   ActionCandidate,
   ActionRequest,
   ActionType,
@@ -26,6 +27,9 @@ const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const RESTORED_NOTICE_MS = 6000;
+const ACTION_RECEIPT_WAIT_MS = 2500;
+const ACTION_RECEIVED_VISIBLE_MS = 1600;
+const ACTION_REJECTED_VISIBLE_MS = 3600;
 
 const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
   4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
@@ -452,6 +456,7 @@ export function useRoom(playerName = "Player") {
   const joinError = ref("");
   const declareError = ref("");
   const actionLogs = ref<ParsedActionLog[]>([]);
+  const actionFeedback = ref<ActionFeedback | null>(null);
   const decisionTimer = ref<DecisionTimerState>({
     untimed: false,
     canRequestMoreTime: false,
@@ -481,6 +486,86 @@ export function useRoom(playerName = "Player") {
   let lastAppliedPrivateStateRequestSeq = 0;
   let reconnectAttempts = 0;
   let suppressReconnect = false;
+  let actionFeedbackTimer: number | null = null;
+
+  function clearActionFeedbackTimer(): void {
+    if (actionFeedbackTimer !== null) {
+      window.clearTimeout(actionFeedbackTimer);
+      actionFeedbackTimer = null;
+    }
+  }
+
+  function clearActionFeedback(): void {
+    clearActionFeedbackTimer();
+    actionFeedback.value = null;
+  }
+
+  function showActionFeedback(feedback: ActionFeedback, visibleMs = 0): void {
+    clearActionFeedbackTimer();
+    actionFeedback.value = feedback;
+    if (visibleMs <= 0) {
+      return;
+    }
+    actionFeedbackTimer = window.setTimeout(() => {
+      actionFeedbackTimer = null;
+      if (
+        actionFeedback.value?.status === feedback.status &&
+        actionFeedback.value.decisionKey === feedback.decisionKey
+      ) {
+        actionFeedback.value = feedback.status === "received"
+          ? { ...feedback, visible: false }
+          : null;
+      }
+    }, visibleMs);
+  }
+
+  function beginActionSubmission(decisionKey: string): void {
+    showActionFeedback({
+      status: "pending",
+      message: "操作已提交，正在确认。",
+      decisionKey,
+    });
+    actionFeedbackTimer = window.setTimeout(() => {
+      actionFeedbackTimer = null;
+      if (actionFeedback.value?.status !== "pending" || actionFeedback.value.decisionKey !== decisionKey) {
+        return;
+      }
+      if (decisionTimer.value.decisionKey && decisionTimer.value.decisionKey !== decisionKey) {
+        showActionFeedback(
+          { status: "received", message: "牌局已继续。", decisionKey },
+          ACTION_RECEIVED_VISIBLE_MS,
+        );
+        return;
+      }
+      showActionFeedback(
+        {
+          status: "rejected",
+          message: "暂未收到服务器确认，请按当前提示重试。",
+          decisionKey,
+        },
+        ACTION_REJECTED_VISIBLE_MS,
+      );
+    }, ACTION_RECEIPT_WAIT_MS);
+  }
+
+  function actionSubmissionLocked(decisionKey: string): boolean {
+    return Boolean(
+      decisionKey &&
+      actionFeedback.value?.decisionKey === decisionKey &&
+      (actionFeedback.value.status === "pending" || actionFeedback.value.status === "received"),
+    );
+  }
+
+  function reportUnsentAction(decisionKey: string): void {
+    showActionFeedback(
+      {
+        status: "rejected",
+        message: "网络未连接，这次操作没有发送，请稍候重试。",
+        decisionKey,
+      },
+      ACTION_REJECTED_VISIBLE_MS,
+    );
+  }
 
   function inferSeatId(snapshot: RoomStateSnapshot | null): string {
     if (!snapshot) {
@@ -546,6 +631,7 @@ export function useRoom(playerName = "Player") {
     clearReconnectTimer();
     clearRestoredNoticeTimer();
     clearPrivateStatePollTimer();
+    clearActionFeedback();
     connected.value = false;
     room.value = null;
     reconnectAttempt.value = 0;
@@ -668,6 +754,7 @@ export function useRoom(playerName = "Player") {
     connected.value = false;
     clearReconnectTimer();
     clearRestoredNoticeTimer();
+    clearActionFeedback();
     connectionState.value = "offline";
     joinError.value = "网络已断开，联网后会自动恢复牌局。";
   }
@@ -836,6 +923,7 @@ export function useRoom(playerName = "Player") {
     const keepJoinError = Boolean(options?.keepJoinError);
     clearMissingHandSyncTimer();
     clearPrivateStatePollTimer();
+    clearActionFeedback();
     state.value = null;
     privateHand.value = [];
     availableActions.value = [];
@@ -973,7 +1061,7 @@ export function useRoom(playerName = "Player") {
       return;
     }
     const raw = input as Partial<DecisionTimerState>;
-    decisionTimer.value = {
+    const nextTimer: DecisionTimerState = {
       untimed: Boolean(raw.untimed),
       canRequestMoreTime: Boolean(raw.canRequestMoreTime),
       extensionSeconds: Math.max(1, Math.ceil(Number(raw.extensionSeconds) || 20)),
@@ -981,6 +1069,14 @@ export function useRoom(playerName = "Player") {
       endsAt: Math.max(0, Number(raw.endsAt) || 0),
       decisionKey: typeof raw.decisionKey === "string" ? raw.decisionKey.trim() : "",
     };
+    decisionTimer.value = nextTimer;
+    if (
+      actionFeedback.value?.decisionKey &&
+      nextTimer.decisionKey &&
+      actionFeedback.value.decisionKey !== nextTimer.decisionKey
+    ) {
+      clearActionFeedback();
+    }
   }
 
   function applySnapshot(next: unknown) {
@@ -994,6 +1090,9 @@ export function useRoom(playerName = "Player") {
       privateStateAuthoritySeq += 1;
     }
     const normalized = normalizeSnapshot(next);
+    if (normalized.phase !== "playing") {
+      clearActionFeedback();
+    }
     applyDecisionTimer(rawSnapshot?.decisionTimer);
     const previousSnapshot = state.value;
     if (
@@ -1374,12 +1473,42 @@ export function useRoom(playerName = "Player") {
         availableActionsFingerprint = buildAvailableActionsFingerprint(availableActions.value);
         },
       );
-      joined.onMessage("action_rejected", (payload: { reason?: string }) => {
+      joined.onMessage("action_received", (payload: { decisionKey?: string; message?: string }) => {
+        if (!isCurrentJoinedRoom()) {
+          return;
+        }
+        const decisionKey = String(payload?.decisionKey ?? "").trim();
+        if (
+          actionFeedback.value?.status === "pending" &&
+          actionFeedback.value.decisionKey &&
+          decisionKey &&
+          actionFeedback.value.decisionKey !== decisionKey
+        ) {
+          return;
+        }
+        showActionFeedback(
+          {
+            status: "received",
+            message: String(payload?.message ?? "").trim() || "操作已收到，正在继续牌局。",
+            decisionKey,
+          },
+          ACTION_RECEIVED_VISIBLE_MS,
+        );
+      });
+      joined.onMessage("action_rejected", (payload: { reason?: string; decisionKey?: string; message?: string }) => {
         if (!isCurrentJoinedRoom()) {
           return;
         }
         const reason = String(payload?.reason ?? "unknown");
         pushLog(`ACTION_REJECTED ${reason}`);
+        showActionFeedback(
+          {
+            status: "rejected",
+            message: String(payload?.message ?? "").trim() || "这次操作没有生效，请按当前提示重新选择。",
+            decisionKey: String(payload?.decisionKey ?? decisionTimer.value.decisionKey).trim(),
+          },
+          ACTION_REJECTED_VISIBLE_MS,
+        );
       });
       joined.onMessage("hu_result", (payload: { winnerId: string; groups: string[] }) => {
         if (!isCurrentJoinedRoom()) {
@@ -1569,7 +1698,14 @@ export function useRoom(playerName = "Player") {
         return;
       }
       const decisionKey = decisionTimer.value.decisionKey;
-      safeRoomSend("action", decisionKey ? { action, decisionKey } : { action });
+      if (actionSubmissionLocked(decisionKey)) {
+        return;
+      }
+      if (safeRoomSend("action", decisionKey ? { action, decisionKey } : { action })) {
+        beginActionSubmission(decisionKey);
+      } else {
+        reportUnsentAction(decisionKey);
+      }
       return;
     }
     const action = normalizeAction(input.action);
@@ -1578,11 +1714,22 @@ export function useRoom(playerName = "Player") {
     }
     const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
     const decisionKey = decisionTimer.value.decisionKey;
-    if (candidateId) {
-      safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) });
+    if (actionSubmissionLocked(decisionKey)) {
       return;
     }
-    safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) });
+    if (candidateId) {
+      if (safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) })) {
+        beginActionSubmission(decisionKey);
+      } else {
+        reportUnsentAction(decisionKey);
+      }
+      return;
+    }
+    if (safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) })) {
+      beginActionSubmission(decisionKey);
+    } else {
+      reportUnsentAction(decisionKey);
+    }
   }
 
   function sendDiscardCard(cardId: string) {
@@ -1590,7 +1737,14 @@ export function useRoom(playerName = "Player") {
       return;
     }
     const decisionKey = decisionTimer.value.decisionKey;
-    safeRoomSend("discard_card", { cardId, ...(decisionKey ? { decisionKey } : {}) });
+    if (actionSubmissionLocked(decisionKey)) {
+      return;
+    }
+    if (safeRoomSend("discard_card", { cardId, ...(decisionKey ? { decisionKey } : {}) })) {
+      beginActionSubmission(decisionKey);
+    } else {
+      reportUnsentAction(decisionKey);
+    }
   }
 
   function declareKongs(count: number) {
@@ -1717,6 +1871,7 @@ export function useRoom(playerName = "Player") {
     clearReconnectTimer();
     clearRestoredNoticeTimer();
     clearPrivateStatePollTimer();
+    clearActionFeedback();
     window.removeEventListener("offline", handleBrowserOffline);
     window.removeEventListener("online", handleBrowserOnline);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -1746,6 +1901,7 @@ export function useRoom(playerName = "Player") {
     joinError,
     declareError,
     actionLogs,
+    actionFeedback,
     decisionTimer,
     connect,
     retryConnection,

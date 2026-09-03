@@ -1,16 +1,32 @@
 ﻿<template>
   <div class="panel" :class="{ locked: panelLocked }">
-    <span class="sr-only" role="status" aria-live="polite">
-      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `${isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${untimed && !isEarlyCollectiveChoice ? "练习不限时。" : ""}${panelHint}` : "" }}
+    <span
+      class="sr-only"
+      :role="actionFeedback?.status === 'rejected' ? 'alert' : 'status'"
+      :aria-live="actionFeedback?.status === 'rejected' ? 'assertive' : 'polite'"
+    >
+      {{ actionFeedback?.message || (pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `${isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${untimed && !isEarlyCollectiveChoice ? "练习不限时。" : ""}${panelHint}` : "") }}
     </span>
     <div
-      v-if="pausedHint || needsDecision"
+      v-if="actionFeedback || pausedHint || needsDecision"
       class="hint"
-      :class="{ active: needsDecision, urgent: isUrgent, paused: Boolean(pausedHint) }"
+      :class="[
+        { active: needsDecision, urgent: isUrgent, paused: Boolean(pausedHint), feedback: Boolean(actionFeedback) },
+        actionFeedback ? `feedback-${actionFeedback.status}` : '',
+      ]"
       :data-urgent="isUrgent ? 'true' : 'false'"
       data-testid="action-guidance"
     >
-      <span v-if="pausedHint" class="decision-line">
+      <span
+        v-if="actionFeedback"
+        class="decision-line action-feedback"
+        data-testid="action-feedback"
+        :data-status="actionFeedback.status"
+        aria-hidden="true"
+      >
+        <strong>{{ actionFeedback.message }}</strong>
+      </span>
+      <span v-else-if="pausedHint" class="decision-line">
         <strong>操作已暂停</strong>
       </span>
       <span v-else-if="needsDecision" class="decision-line">
@@ -18,9 +34,9 @@
         <b v-if="untimed && !isEarlyCollectiveChoice" class="untimed-label">练习不限时</b>
         <b v-else-if="!isEarlyCollectiveChoice && secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
       </span>
-      <span class="instruction">{{ panelHint }}</span>
+      <span v-if="!actionFeedback" class="instruction">{{ panelHint }}</span>
       <button
-        v-if="needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
+        v-if="!actionFeedback && needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
         type="button"
         class="more-time-button"
         data-testid="request-more-time"
@@ -36,7 +52,7 @@
       <strong>{{ pausedHint.includes("立即重试") ? "请点上方重试" : "无需操作，请稍候" }}</strong>
     </div>
     <div
-      v-else-if="!needsDecision"
+      v-else-if="!needsDecision && !actionFeedback"
       class="waiting-state"
       data-testid="action-waiting"
       role="status"
@@ -49,14 +65,14 @@
         <small>轮到你时会提醒</small>
       </span>
     </div>
-    <div v-else class="actions" :class="{ 'discard-mode': canDiscard }">
+    <div v-else-if="needsDecision" class="actions" :class="{ 'discard-mode': canDiscard }">
       <button
         v-if="canDiscard"
         type="button"
         class="btn discard-action"
         data-testid="discard-confirm"
-        :class="{ enabled: hasDiscardSelection && !discardPending }"
-        :disabled="!hasDiscardSelection || discardPending"
+        :class="{ enabled: hasDiscardSelection && !discardPending && !submissionLocked }"
+        :disabled="!hasDiscardSelection || discardPending || submissionLocked"
         :aria-label="discardButtonText"
         @click="emit('confirmDiscard')"
       >
@@ -71,7 +87,7 @@
           enabled: isClickable(item) && canAct,
           selected: selectionMode === item.action,
         }"
-        :disabled="!canAct || !isClickable(item) || busy"
+        :disabled="!canAct || !isClickable(item) || busy || submissionLocked"
         @click="onClick(item)"
       >
         {{ text(item) }}
@@ -82,7 +98,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import type { ActionRequest, ActionType, AvailableAction } from "@/types/game";
+import type { ActionFeedback, ActionRequest, ActionType, AvailableAction } from "@/types/game";
 
 type SelectionMode = "kai" | "peng" | "chi" | null;
 
@@ -105,6 +121,7 @@ const props = withDefaults(
     canRequestMoreTime?: boolean;
     moreTimeSeconds?: number;
     decisionKey?: string;
+    actionFeedback?: ActionFeedback | null;
   }>(),
   {
     canAct: false,
@@ -123,6 +140,7 @@ const props = withDefaults(
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
+    actionFeedback: null,
   },
 );
 
@@ -219,6 +237,14 @@ const normalized = computed(() => {
 });
 
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
+const rawActionFeedback = computed(() => props.actionFeedback ?? null);
+const actionFeedback = computed(() => rawActionFeedback.value?.visible === false ? null : rawActionFeedback.value);
+const submissionLocked = computed(
+  () =>
+    Boolean(props.decisionKey) &&
+    rawActionFeedback.value?.decisionKey === props.decisionKey &&
+    (rawActionFeedback.value.status === "pending" || rawActionFeedback.value.status === "received"),
+);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
 const selectedDiscardLabel = computed(() => props.selectedDiscardCardLabel.trim());
@@ -438,6 +464,27 @@ function onClick(item: PanelAction): void {
 
 .hint.paused .decision-line strong {
   color: #fecdd3;
+}
+
+.hint.feedback {
+  border-color: rgba(125, 211, 252, 0.75);
+  background: rgba(7, 89, 133, 0.48);
+  color: #e0f2fe;
+}
+
+.hint.feedback-received {
+  border-color: rgba(134, 239, 172, 0.78);
+  background: rgba(20, 83, 45, 0.58);
+}
+
+.hint.feedback-rejected {
+  border-color: rgba(253, 164, 175, 0.9);
+  background: rgba(127, 29, 29, 0.68);
+}
+
+.hint.feedback .action-feedback strong {
+  color: #f8fafc;
+  white-space: normal;
 }
 
 .paused-state {

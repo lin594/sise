@@ -1169,6 +1169,10 @@ test.describe("compact landscape gameplay", () => {
       (button as HTMLButtonElement).click();
       (button as HTMLButtonElement).click();
     });
+    const actionFeedback = page.getByTestId("action-feedback");
+    await expect(actionFeedback).toBeVisible();
+    await expect(actionFeedback).toHaveAttribute("data-status", /^(pending|received)$/);
+    await expect(actionFeedback).toContainText(/操作已提交|操作已收到/);
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
     await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(handCountBeforeDiscard - 1);
     await page.evaluate((testId) => {
@@ -1188,6 +1192,7 @@ test.describe("compact landscape gameplay", () => {
     expect(await page.evaluate(() => sessionStorage.getItem("sise_test_stale_private_card_reappeared"))).toBe("0");
     await page.unroute("**/private-state?**");
     await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
+    await expect(actionFeedback).toHaveCount(0);
     const waitingHandState = await page.locator(".hand").evaluate((hand) => {
       const cards = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card"));
       return {

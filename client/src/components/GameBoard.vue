@@ -602,6 +602,7 @@
       :can-request-more-time="Boolean(props.canRequestMoreTime)"
       :more-time-seconds="props.moreTimeSeconds ?? 20"
       :decision-key="props.decisionKey ?? ''"
+      :action-feedback="props.actionFeedback ?? null"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
       @confirm-discard="confirmDiscard"
@@ -630,6 +631,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import type {
+  ActionFeedback,
   ActionCandidate,
   ActionRequest,
   AvailableAction,
@@ -704,6 +706,7 @@ const props = defineProps<{
   decisionTimerTotalMs?: number;
   decisionTimerEndsAt?: number;
   decisionKey?: string;
+  actionFeedback?: ActionFeedback | null;
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
@@ -2062,6 +2065,25 @@ watch(canDiscard, (enabled) => {
     selectedDiscardCardId.value = null;
   }
 });
+
+watch(
+  () => props.actionFeedback?.status,
+  (status) => {
+    if (status !== "rejected" || !discardingCardId.value) {
+      return;
+    }
+    discardingCardId.value = null;
+    locallyAnimatedDiscardCardId.value = null;
+    if (discardPendingTimer) {
+      clearTimeout(discardPendingTimer);
+      discardPendingTimer = null;
+    }
+    if (localDiscardAckTimer) {
+      clearTimeout(localDiscardAckTimer);
+      localDiscardAckTimer = null;
+    }
+  },
+);
 
 watch(
   () => canAct.value || canDiscard.value,

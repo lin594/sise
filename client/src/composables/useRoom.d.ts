@@ -1,4 +1,4 @@
-import type { ActionRequest, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
+import type { ActionFeedback, ActionRequest, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
 type ConnectOptions = {
     nameOverride?: string;
     roomId?: string;
@@ -700,6 +700,17 @@ export declare function useRoom(playerName?: string): {
         isSystem: boolean;
         cardLabel?: string | undefined;
     }[]>;
+    actionFeedback: import("vue").Ref<{
+        status: "pending" | "received" | "rejected";
+        message: string;
+        decisionKey: string;
+        visible?: boolean | undefined;
+    } | null, ActionFeedback | {
+        status: "pending" | "received" | "rejected";
+        message: string;
+        decisionKey: string;
+        visible?: boolean | undefined;
+    } | null>;
     decisionTimer: import("vue").Ref<{
         untimed: boolean;
         canRequestMoreTime: boolean;

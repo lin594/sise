@@ -113,6 +113,13 @@ export interface DecisionTimerState {
   decisionKey: string;
 }
 
+export interface ActionFeedback {
+  status: "pending" | "received" | "rejected";
+  message: string;
+  decisionKey: string;
+  visible?: boolean;
+}
+
 export interface ActionCandidate {
   id: string;
   action: "kai" | "peng" | "chi";

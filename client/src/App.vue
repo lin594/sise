@@ -165,6 +165,7 @@
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
         :decision-key="decisionTimer.decisionKey"
+        :action-feedback="actionFeedback"
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
@@ -728,6 +729,7 @@ const {
   joinError,
   declareError,
   actionLogs,
+  actionFeedback,
   decisionTimer,
   clearActionLogs,
   debugSetup,

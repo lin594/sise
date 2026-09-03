@@ -11,6 +11,9 @@ const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const RESTORED_NOTICE_MS = 6000;
+const ACTION_RECEIPT_WAIT_MS = 2500;
+const ACTION_RECEIVED_VISIBLE_MS = 1600;
+const ACTION_REJECTED_VISIBLE_MS = 3600;
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
     4101: "房间已经坐满，无法恢复原座位。系统已停止自动恢复。",
@@ -396,6 +399,7 @@ export function useRoom(playerName = "Player") {
     const joinError = ref("");
     const declareError = ref("");
     const actionLogs = ref([]);
+    const actionFeedback = ref(null);
     const decisionTimer = ref({
         untimed: false,
         canRequestMoreTime: false,
@@ -424,6 +428,67 @@ export function useRoom(playerName = "Player") {
     let lastAppliedPrivateStateRequestSeq = 0;
     let reconnectAttempts = 0;
     let suppressReconnect = false;
+    let actionFeedbackTimer = null;
+    function clearActionFeedbackTimer() {
+        if (actionFeedbackTimer !== null) {
+            window.clearTimeout(actionFeedbackTimer);
+            actionFeedbackTimer = null;
+        }
+    }
+    function clearActionFeedback() {
+        clearActionFeedbackTimer();
+        actionFeedback.value = null;
+    }
+    function showActionFeedback(feedback, visibleMs = 0) {
+        clearActionFeedbackTimer();
+        actionFeedback.value = feedback;
+        if (visibleMs <= 0) {
+            return;
+        }
+        actionFeedbackTimer = window.setTimeout(() => {
+            actionFeedbackTimer = null;
+            if (actionFeedback.value?.status === feedback.status &&
+                actionFeedback.value.decisionKey === feedback.decisionKey) {
+                actionFeedback.value = feedback.status === "received"
+                    ? { ...feedback, visible: false }
+                    : null;
+            }
+        }, visibleMs);
+    }
+    function beginActionSubmission(decisionKey) {
+        showActionFeedback({
+            status: "pending",
+            message: "操作已提交，正在确认。",
+            decisionKey,
+        });
+        actionFeedbackTimer = window.setTimeout(() => {
+            actionFeedbackTimer = null;
+            if (actionFeedback.value?.status !== "pending" || actionFeedback.value.decisionKey !== decisionKey) {
+                return;
+            }
+            if (decisionTimer.value.decisionKey && decisionTimer.value.decisionKey !== decisionKey) {
+                showActionFeedback({ status: "received", message: "牌局已继续。", decisionKey }, ACTION_RECEIVED_VISIBLE_MS);
+                return;
+            }
+            showActionFeedback({
+                status: "rejected",
+                message: "暂未收到服务器确认，请按当前提示重试。",
+                decisionKey,
+            }, ACTION_REJECTED_VISIBLE_MS);
+        }, ACTION_RECEIPT_WAIT_MS);
+    }
+    function actionSubmissionLocked(decisionKey) {
+        return Boolean(decisionKey &&
+            actionFeedback.value?.decisionKey === decisionKey &&
+            (actionFeedback.value.status === "pending" || actionFeedback.value.status === "received"));
+    }
+    function reportUnsentAction(decisionKey) {
+        showActionFeedback({
+            status: "rejected",
+            message: "网络未连接，这次操作没有发送，请稍候重试。",
+            decisionKey,
+        }, ACTION_REJECTED_VISIBLE_MS);
+    }
     function inferSeatId(snapshot) {
         if (!snapshot) {
             return "";
@@ -480,6 +545,7 @@ export function useRoom(playerName = "Player") {
         clearReconnectTimer();
         clearRestoredNoticeTimer();
         clearPrivateStatePollTimer();
+        clearActionFeedback();
         connected.value = false;
         room.value = null;
         reconnectAttempt.value = 0;
@@ -598,6 +664,7 @@ export function useRoom(playerName = "Player") {
         connected.value = false;
         clearReconnectTimer();
         clearRestoredNoticeTimer();
+        clearActionFeedback();
         connectionState.value = "offline";
         joinError.value = "网络已断开，联网后会自动恢复牌局。";
     }
@@ -750,6 +817,7 @@ export function useRoom(playerName = "Player") {
         const keepJoinError = Boolean(options?.keepJoinError);
         clearMissingHandSyncTimer();
         clearPrivateStatePollTimer();
+        clearActionFeedback();
         state.value = null;
         privateHand.value = [];
         availableActions.value = [];
@@ -877,7 +945,7 @@ export function useRoom(playerName = "Player") {
             return;
         }
         const raw = input;
-        decisionTimer.value = {
+        const nextTimer = {
             untimed: Boolean(raw.untimed),
             canRequestMoreTime: Boolean(raw.canRequestMoreTime),
             extensionSeconds: Math.max(1, Math.ceil(Number(raw.extensionSeconds) || 20)),
@@ -885,6 +953,12 @@ export function useRoom(playerName = "Player") {
             endsAt: Math.max(0, Number(raw.endsAt) || 0),
             decisionKey: typeof raw.decisionKey === "string" ? raw.decisionKey.trim() : "",
         };
+        decisionTimer.value = nextTimer;
+        if (actionFeedback.value?.decisionKey &&
+            nextTimer.decisionKey &&
+            actionFeedback.value.decisionKey !== nextTimer.decisionKey) {
+            clearActionFeedback();
+        }
     }
     function applySnapshot(next) {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
@@ -895,6 +969,9 @@ export function useRoom(playerName = "Player") {
             privateStateAuthoritySeq += 1;
         }
         const normalized = normalizeSnapshot(next);
+        if (normalized.phase !== "playing") {
+            clearActionFeedback();
+        }
         applyDecisionTimer(rawSnapshot?.decisionTimer);
         const previousSnapshot = state.value;
         if (!normalized.dealerCard &&
@@ -1241,12 +1318,34 @@ export function useRoom(playerName = "Player") {
                 applyDecisionTimer(Array.isArray(payload) ? undefined : payload?.decisionTimer);
                 availableActionsFingerprint = buildAvailableActionsFingerprint(availableActions.value);
             });
+            joined.onMessage("action_received", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                const decisionKey = String(payload?.decisionKey ?? "").trim();
+                if (actionFeedback.value?.status === "pending" &&
+                    actionFeedback.value.decisionKey &&
+                    decisionKey &&
+                    actionFeedback.value.decisionKey !== decisionKey) {
+                    return;
+                }
+                showActionFeedback({
+                    status: "received",
+                    message: String(payload?.message ?? "").trim() || "操作已收到，正在继续牌局。",
+                    decisionKey,
+                }, ACTION_RECEIVED_VISIBLE_MS);
+            });
             joined.onMessage("action_rejected", (payload) => {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
                 const reason = String(payload?.reason ?? "unknown");
                 pushLog(`ACTION_REJECTED ${reason}`);
+                showActionFeedback({
+                    status: "rejected",
+                    message: String(payload?.message ?? "").trim() || "这次操作没有生效，请按当前提示重新选择。",
+                    decisionKey: String(payload?.decisionKey ?? decisionTimer.value.decisionKey).trim(),
+                }, ACTION_REJECTED_VISIBLE_MS);
             });
             joined.onMessage("hu_result", (payload) => {
                 if (!isCurrentJoinedRoom()) {
@@ -1434,7 +1533,15 @@ export function useRoom(playerName = "Player") {
                 return;
             }
             const decisionKey = decisionTimer.value.decisionKey;
-            safeRoomSend("action", decisionKey ? { action, decisionKey } : { action });
+            if (actionSubmissionLocked(decisionKey)) {
+                return;
+            }
+            if (safeRoomSend("action", decisionKey ? { action, decisionKey } : { action })) {
+                beginActionSubmission(decisionKey);
+            }
+            else {
+                reportUnsentAction(decisionKey);
+            }
             return;
         }
         const action = normalizeAction(input.action);
@@ -1443,18 +1550,39 @@ export function useRoom(playerName = "Player") {
         }
         const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
         const decisionKey = decisionTimer.value.decisionKey;
-        if (candidateId) {
-            safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) });
+        if (actionSubmissionLocked(decisionKey)) {
             return;
         }
-        safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) });
+        if (candidateId) {
+            if (safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) })) {
+                beginActionSubmission(decisionKey);
+            }
+            else {
+                reportUnsentAction(decisionKey);
+            }
+            return;
+        }
+        if (safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) })) {
+            beginActionSubmission(decisionKey);
+        }
+        else {
+            reportUnsentAction(decisionKey);
+        }
     }
     function sendDiscardCard(cardId) {
         if (!room.value || !cardId) {
             return;
         }
         const decisionKey = decisionTimer.value.decisionKey;
-        safeRoomSend("discard_card", { cardId, ...(decisionKey ? { decisionKey } : {}) });
+        if (actionSubmissionLocked(decisionKey)) {
+            return;
+        }
+        if (safeRoomSend("discard_card", { cardId, ...(decisionKey ? { decisionKey } : {}) })) {
+            beginActionSubmission(decisionKey);
+        }
+        else {
+            reportUnsentAction(decisionKey);
+        }
     }
     function declareKongs(count) {
         safeRoomSend("declare_kongs", count);
@@ -1562,6 +1690,7 @@ export function useRoom(playerName = "Player") {
         clearReconnectTimer();
         clearRestoredNoticeTimer();
         clearPrivateStatePollTimer();
+        clearActionFeedback();
         window.removeEventListener("offline", handleBrowserOffline);
         window.removeEventListener("online", handleBrowserOnline);
         document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -1589,6 +1718,7 @@ export function useRoom(playerName = "Player") {
         joinError,
         declareError,
         actionLogs,
+        actionFeedback,
         decisionTimer,
         connect,
         retryConnection,

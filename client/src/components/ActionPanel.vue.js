@@ -16,6 +16,7 @@ const props = withDefaults(defineProps(), {
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
+    actionFeedback: null,
 });
 const emit = defineEmits();
 const busy = ref(false);
@@ -87,6 +88,11 @@ const normalized = computed(() => {
     return ordered;
 });
 const selectionMode = computed(() => props.selectionMode ?? null);
+const rawActionFeedback = computed(() => props.actionFeedback ?? null);
+const actionFeedback = computed(() => rawActionFeedback.value?.visible === false ? null : rawActionFeedback.value);
+const submissionLocked = computed(() => Boolean(props.decisionKey) &&
+    rawActionFeedback.value?.decisionKey === props.decisionKey &&
+    (rawActionFeedback.value.status === "pending" || rawActionFeedback.value.status === "received"));
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
 const selectedDiscardLabel = computed(() => props.selectedDiscardCardLabel.trim());
@@ -251,6 +257,7 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
+    actionFeedback: null,
 });
 const __VLS_ctx = {};
 let __VLS_components;
@@ -260,6 +267,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['feedback']} */ ;
 /** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
 /** @type {__VLS_StyleScopedClasses['waiting-copy']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
@@ -309,18 +321,31 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "sr-only" },
-    role: "status",
-    'aria-live': "polite",
+    role: (__VLS_ctx.actionFeedback?.status === 'rejected' ? 'alert' : 'status'),
+    'aria-live': (__VLS_ctx.actionFeedback?.status === 'rejected' ? 'assertive' : 'polite'),
 });
-(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `${__VLS_ctx.isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${__VLS_ctx.untimed && !__VLS_ctx.isEarlyCollectiveChoice ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : "");
-if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
+(__VLS_ctx.actionFeedback?.message || (__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `${__VLS_ctx.isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${__VLS_ctx.untimed && !__VLS_ctx.isEarlyCollectiveChoice ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : ""));
+if (__VLS_ctx.actionFeedback || __VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "hint" },
-        ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint) }) },
+        ...{ class: ([
+                { active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint), feedback: Boolean(__VLS_ctx.actionFeedback) },
+                __VLS_ctx.actionFeedback ? `feedback-${__VLS_ctx.actionFeedback.status}` : '',
+            ]) },
         'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
         'data-testid': "action-guidance",
     });
-    if (__VLS_ctx.pausedHint) {
+    if (__VLS_ctx.actionFeedback) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "decision-line action-feedback" },
+            'data-testid': "action-feedback",
+            'data-status': (__VLS_ctx.actionFeedback.status),
+            'aria-hidden': "true",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+        (__VLS_ctx.actionFeedback.message);
+    }
+    else if (__VLS_ctx.pausedHint) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "decision-line" },
         });
@@ -342,11 +367,13 @@ if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
             (__VLS_ctx.secondsLeft);
         }
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "instruction" },
-    });
-    (__VLS_ctx.panelHint);
-    if (__VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
+    if (!__VLS_ctx.actionFeedback) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "instruction" },
+        });
+        (__VLS_ctx.panelHint);
+    }
+    if (!__VLS_ctx.actionFeedback && __VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestMoreTime) },
             type: "button",
@@ -408,8 +435,8 @@ else {
             type: "button",
             ...{ class: "btn discard-action" },
             'data-testid': "discard-confirm",
-            ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending }) },
-            disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending),
+            ...{ class: ({ enabled: __VLS_ctx.hasDiscardSelection && !__VLS_ctx.discardPending && !__VLS_ctx.submissionLocked }) },
+            disabled: (!__VLS_ctx.hasDiscardSelection || __VLS_ctx.discardPending || __VLS_ctx.submissionLocked),
             'aria-label': (__VLS_ctx.discardButtonText),
         });
         (__VLS_ctx.discardButtonText);
@@ -430,7 +457,7 @@ else {
                     enabled: __VLS_ctx.isClickable(item) && __VLS_ctx.canAct,
                     selected: __VLS_ctx.selectionMode === item.action,
                 }) },
-            disabled: (!__VLS_ctx.canAct || !__VLS_ctx.isClickable(item) || __VLS_ctx.busy),
+            disabled: (!__VLS_ctx.canAct || !__VLS_ctx.isClickable(item) || __VLS_ctx.busy || __VLS_ctx.submissionLocked),
         });
         (__VLS_ctx.text(item));
     }
@@ -438,6 +465,8 @@ else {
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['sr-only']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-feedback']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['untimed-label']} */ ;
@@ -462,6 +491,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             requestMoreTime: requestMoreTime,
             normalized: normalized,
             selectionMode: selectionMode,
+            actionFeedback: actionFeedback,
+            submissionLocked: submissionLocked,
             panelLocked: panelLocked,
             needsDecision: needsDecision,
             discardButtonText: discardButtonText,

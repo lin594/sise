@@ -75,7 +75,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setLobbyReady, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, actionFeedback, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setLobbyReady, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
 const localTestPrivateHandReadyOverride = ref(null);
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
@@ -2324,6 +2324,7 @@ else {
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
+        actionFeedback: (__VLS_ctx.actionFeedback),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         ownCardMode: (__VLS_ctx.resolvedOwnCardMode),
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
@@ -2355,6 +2356,7 @@ else {
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
+        actionFeedback: (__VLS_ctx.actionFeedback),
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         ownCardMode: (__VLS_ctx.resolvedOwnCardMode),
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
@@ -3337,6 +3339,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             joinError: joinError,
             declareError: declareError,
             actionLogs: actionLogs,
+            actionFeedback: actionFeedback,
             decisionTimer: decisionTimer,
             sendDiscardCard: sendDiscardCard,
             requestMoreTime: requestMoreTime,
