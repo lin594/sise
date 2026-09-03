@@ -27,7 +27,10 @@ export default defineConfig({
             NODE_ENV: "test",
             MIN_PLAYERS: "1",
             ROOM_CREATE_RATE_LIMIT: "1000",
-            WAITING_ROOM_IDLE_MS: "5000",
+            // Browser contexts and invitation pages can take several seconds
+            // to start on a loaded CI host. Keep this below production's
+            // 60-second grace while avoiding expiration before the first join.
+            WAITING_ROOM_IDLE_MS: "15000",
             ACTIVE_ROOM_IDLE_MS: "3000",
             RECONNECT_GRACE_MS: "300",
             BOT_THINK_MIN_MS: "30",
