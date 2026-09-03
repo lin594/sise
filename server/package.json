@@ -17,7 +17,8 @@
     "@colyseus/monitor": "^0.18.3",
     "@colyseus/schema": "^5.0.27",
     "@colyseus/ws-transport": "^0.18.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "redis": "^6.2.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
