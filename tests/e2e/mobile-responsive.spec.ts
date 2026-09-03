@@ -109,7 +109,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
     const brandElement = headerElement?.querySelector<HTMLElement>(".brand-lockup");
     const toolsElement = headerElement?.querySelector<HTMLElement>("[data-testid='game-tools']");
     const toolButtons = Array.from(headerElement?.querySelectorAll<HTMLElement>(".tool-button") ?? []);
-    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 3) {
+    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 4) {
       throw new Error("Game header or board is missing");
     }
     const headerRect = headerElement.getBoundingClientRect();

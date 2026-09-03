@@ -262,6 +262,47 @@ test("stale time-extension request cannot extend the next decision window", () =
   room.clearCollectiveTimer();
 });
 
+test("a delayed action from an older decision window is ignored", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("response", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+  room.responseDecisionWindowId = 12;
+  room.seatBySession.set("session-B", "B");
+  const client = { sessionId: "session-B", send: () => undefined };
+
+  room.handleAction(client, { action: "pass", decisionKey: "play:11" });
+
+  assert.equal(room.pendingResponse.collectives.size, 0);
+  assert.equal(room.collectiveResponderId, "B");
+});
+
+test("a delayed discard from an older decision window cannot remove a card", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  const discard = mkCard("discard", "yellow", "ma", "draw");
+  room.playerHands.set("A", [discard]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("draw", "green", "ju", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.state.currentPlayerId = "A";
+  room.awaitingDiscardOwnerId = "A";
+  room.responseDecisionWindowId = 21;
+  room.seatBySession.set("session-A", "A");
+  const client = { sessionId: "session-A", send: () => undefined };
+
+  room.handleDiscardCard(client, { cardId: discard.id, decisionKey: "play:20" });
+
+  assert.deepEqual(room.playerHands.get("A")?.map((card: Card) => card.id), [discard.id]);
+  assert.equal(room.state.players.get("A")?.discardPile.length, 0);
+});
+
 test("bots and disconnected players cannot request more decision time", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.state.phase = "declaring";

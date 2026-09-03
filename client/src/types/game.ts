@@ -127,6 +127,7 @@ export type ActionRequest =
       action: ActionType;
       candidateId?: string;
       deferred?: boolean;
+      decisionKey?: string;
     };
 
 export interface SessionTokenPayload {

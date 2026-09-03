@@ -107,6 +107,7 @@ export type ActionRequest = ActionType | {
     action: ActionType;
     candidateId?: string;
     deferred?: boolean;
+    decisionKey?: string;
 };
 export interface SessionTokenPayload {
     playerToken: string;

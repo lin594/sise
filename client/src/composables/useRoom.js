@@ -1418,7 +1418,8 @@ export function useRoom(playerName = "Player") {
             if (!action) {
                 return;
             }
-            safeRoomSend("action", action);
+            const decisionKey = decisionTimer.value.decisionKey;
+            safeRoomSend("action", decisionKey ? { action, decisionKey } : { action });
             return;
         }
         const action = normalizeAction(input.action);
@@ -1426,17 +1427,19 @@ export function useRoom(playerName = "Player") {
             return;
         }
         const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
+        const decisionKey = decisionTimer.value.decisionKey;
         if (candidateId) {
-            safeRoomSend("action", { action, candidateId });
+            safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) });
             return;
         }
-        safeRoomSend("action", action);
+        safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) });
     }
     function sendDiscardCard(cardId) {
         if (!room.value || !cardId) {
             return;
         }
-        safeRoomSend("discard_card", { cardId });
+        const decisionKey = decisionTimer.value.decisionKey;
+        safeRoomSend("discard_card", { cardId, ...(decisionKey ? { decisionKey } : {}) });
     }
     function declareKongs(count) {
         safeRoomSend("declare_kongs", count);

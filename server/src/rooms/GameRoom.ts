@@ -88,7 +88,10 @@ type ActionRequest =
   | {
       action: ActionType;
       candidateId?: string;
+      decisionKey?: string;
     };
+
+type DiscardCardRequest = { cardId?: string; decisionKey?: string } | string;
 
 interface DeclareSetupPayload {
   declaredKongs?: number;
@@ -352,7 +355,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.handleAction(client, payload);
     });
 
-    this.onMessage("discard_card", (client, payload: { cardId?: string } | string) => {
+    this.onMessage("discard_card", (client, payload: DiscardCardRequest) => {
       this.handleDiscardCard(client, payload);
     });
 
@@ -1823,7 +1826,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：输入客户端动作；输出无返回值。
    * 副作用：可能写入 collective 选择，或触发 chi/zhua/pass_to_next。
    */
-  private normalizeActionRequest(payload: ActionRequest): { action: ActionType; candidateId?: string } | null {
+  private normalizeActionRequest(payload: ActionRequest): {
+    action: ActionType;
+    candidateId?: string;
+    decisionKey?: string;
+  } | null {
     if (typeof payload === "string") {
       const action = normalizeActionUtil(payload);
       return action ? { action } : null;
@@ -1840,7 +1847,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return null;
     }
     const candidateId = typeof payload.candidateId === "string" ? payload.candidateId.trim() : "";
-    return { action, candidateId: candidateId || undefined };
+    const decisionKey = typeof payload.decisionKey === "string" ? payload.decisionKey.trim() : "";
+    return { action, candidateId: candidateId || undefined, decisionKey: decisionKey || undefined };
+  }
+
+  private acceptsDecisionKey(seatId: string, decisionKey?: string): boolean {
+    // Old clients remain compatible. New clients attach the server-issued key
+    // so a delayed tap cannot act on the next player's decision window.
+    return !decisionKey || decisionKey === this.buildDecisionTimerSnapshot(seatId).decisionKey;
   }
 
   private isManualCandidateAction(action: ActionType): boolean {
@@ -1875,7 +1889,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.rejectAction(client, "invalid_action_payload");
       return;
     }
-    const { action, candidateId } = parsed;
+    const { action, candidateId, decisionKey } = parsed;
+    if (!this.acceptsDecisionKey(seatId, decisionKey)) {
+      this.traceStep("action_stale", `seat=${seatId} decision=${decisionKey ?? "-"}`);
+      this.sendAvailableActionsToClient(client, seatId);
+      return;
+    }
     const availableActions = this.getAvailableActions(seatId);
     const enabledActions = availableActions.filter((x) => x.enabled).map((x) => x.action);
     const canCollectivePreselect = this.canSeatPreselectCollective(seatId);
@@ -1949,9 +1968,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：输入客户端与 cardId；输出无返回值。
    * 副作用：从手牌移除目标牌并进入 collective。
    */
-  private handleDiscardCard(client: Client, payload: { cardId?: string } | string): void {
+  private handleDiscardCard(client: Client, payload: DiscardCardRequest): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId || this.botIds.has(seatId)) {
+      return;
+    }
+
+    const decisionKey = typeof payload === "object" && typeof payload?.decisionKey === "string"
+      ? payload.decisionKey.trim()
+      : "";
+    if (!this.acceptsDecisionKey(seatId, decisionKey || undefined)) {
+      this.traceStep("discard_stale", `seat=${seatId} decision=${decisionKey || "-"}`);
+      this.sendAvailableActionsToClient(client, seatId);
       return;
     }
 
