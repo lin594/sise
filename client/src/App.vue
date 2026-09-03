@@ -26,7 +26,7 @@
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
       <ConnectionStatus
-        v-if="hasLobbySession || isConnectingWithoutState"
+        v-if="(hasLobbySession || isConnectingWithoutState) && !showSyncingScreen"
         :state="connectionState"
         :attempt="reconnectAttempt"
         :message="joinError"
@@ -48,7 +48,7 @@
         <button class="ghost reset-btn" @click="openRules">查看规则</button>
       </div>
     </header>
-    <p v-if="globalError" class="error global-error" role="alert">{{ globalError }}</p>
+    <p v-if="globalError && !showSyncingScreen" class="error global-error" role="alert">{{ globalError }}</p>
     <p
       v-else-if="globalNotice"
       class="global-notice"

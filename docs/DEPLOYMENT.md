@@ -146,8 +146,7 @@ ENABLE_MONITOR=0
 - `ENABLE_MONITOR`：是否开放 Colyseus 管理监控页；生产环境默认 `0`，仅可信诊断环境临时设为 `1`。
 - `TRUST_PROXY_HOPS`：可信反向代理跳数；直接暴露端口保持 `0`，Traefik 单层代理使用 `1`，不能在不受控直连端口上开启。
 - `HTTP_RATE_LIMIT_WINDOW_MS`：HTTP 限流统计窗口，默认 60000ms。
-- `ROOM_CREATE_RATE_LIMIT`：同一客户端每窗口创建或重置房间次数，默认 10。
-- `ROOM_LOOKUP_RATE_LIMIT`：同一客户端每窗口查询练习房入口次数，默认 120。
+- `ROOM_CREATE_RATE_LIMIT`：同一客户端每窗口通过新版或兼容入口创建、重置房间的合计次数，默认 10。
 - `PRIVATE_STATE_RATE_LIMIT`：同一客户端每窗口恢复私有状态次数，默认 180；默认值允许同一家庭网络下多名玩家正常轮询。
 - `OP_TIMEOUT_MS`：真人响应和出牌默认超时，默认 30000ms；`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS` 未设置时继承该值。
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。

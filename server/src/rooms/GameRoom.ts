@@ -390,6 +390,17 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     // Legacy/practice rooms keep their one-click behavior. Friend-room invitees
     // deliberately remain unseated until they choose one of the four positions.
     if (this.state.roomMode === "practice") {
+      const hasReservedHumanSeat = [...this.state.players.values()].some(
+        (player) => !player.isConfiguredBot,
+      );
+      if (hasReservedHumanSeat) {
+        client.send("join_error", {
+          message: "这是单人练习房，已有玩家在练习。请返回首页重新开始。",
+        });
+        client.leave(4106, "practice room already has a human seat");
+        this.scheduleRoomIdleIfEmpty();
+        return;
+      }
       const firstEmpty = this.findFirstEmptySeatIndex();
       if (firstEmpty < 0) {
         client.send("join_error", { message: "房间已满。" });

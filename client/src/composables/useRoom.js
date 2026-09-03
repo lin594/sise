@@ -18,11 +18,15 @@ const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4103: "原座位已经不存在，无法继续恢复。系统已停止自动恢复。",
     4104: "你已被移出房间。系统已停止自动恢复。",
     4105: "牌局已经开始，未入座的访问已结束。系统已停止自动恢复。",
+    4106: "这是单人练习房，已有玩家在练习。请返回首页重新开始。",
 };
 function terminalJoinFailureMessage(error) {
     const code = error instanceof MatchMakeError
         ? error.code
         : Number(error?.code);
+    if (TERMINAL_ROOM_CLOSE_MESSAGES[code]) {
+        return TERMINAL_ROOM_CLOSE_MESSAGES[code];
+    }
     if (code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED) {
         return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
     }
@@ -977,7 +981,7 @@ export function useRoom(playerName = "Player") {
         url.searchParams.delete("new");
         window.history.replaceState(null, "", url.toString());
     }
-    async function fetchSingletonRoomId() {
+    async function createCompatibilityPracticeRoomId() {
         const response = await fetch(`${HTTP_URL}/room-id`, { method: "GET" });
         if (!response.ok) {
             throw new Error(await apiErrorMessage(response, "获取房间失败，请稍后重试。"));
@@ -1083,7 +1087,7 @@ export function useRoom(playerName = "Player") {
             const cachedName = readStored(NAME_KEY);
             const desiredName = String(resolvedOptions.nameOverride ?? "").trim() || queryName || cachedName || playerName;
             localPlayerName.value = desiredName;
-            const initialRoomId = queryRoomId || cachedRoomId || (await fetchSingletonRoomId());
+            const initialRoomId = queryRoomId || cachedRoomId || (await createCompatibilityPracticeRoomId());
             const cachedToken = readStored(tokenKey(initialRoomId)) ||
                 (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
             const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
@@ -1102,6 +1106,12 @@ export function useRoom(playerName = "Player") {
                 });
             }
             catch (error) {
+                const closeCode = error instanceof MatchMakeError
+                    ? error.code
+                    : Number(error?.code);
+                if (TERMINAL_ROOM_CLOSE_MESSAGES[closeCode]) {
+                    throw error;
+                }
                 if (reconnecting) {
                     throw error;
                 }
@@ -1109,7 +1119,7 @@ export function useRoom(playerName = "Player") {
                     throw new Error("房间不存在或已关闭，请让房主重新分享邀请链接。");
                 }
                 clearStored(ROOM_KEY);
-                const fallbackRoomId = await fetchSingletonRoomId();
+                const fallbackRoomId = await createCompatibilityPracticeRoomId();
                 joined = await client.joinById(fallbackRoomId, {
                     name: desiredName,
                     playerToken: desiredToken,
@@ -1341,17 +1351,15 @@ export function useRoom(playerName = "Player") {
             pushLog(`ERROR ${message}`);
             connected.value = false;
             room.value = null;
-            if (preserveState) {
-                const terminalMessage = terminalJoinFailureMessage(error);
-                if (terminalMessage) {
-                    stopTerminalRecovery(terminalMessage);
-                }
-                else {
-                    connectionState.value = navigator.onLine ? "retry_wait" : "offline";
-                    joinError.value = navigator.onLine
-                        ? `暂时未能恢复牌局，系统会继续重试（第 ${Math.max(1, reconnectAttempt.value)} 次）。`
-                        : "网络已断开，联网后会自动恢复牌局。";
-                }
+            const terminalMessage = terminalJoinFailureMessage(error);
+            if (terminalMessage) {
+                stopTerminalRecovery(terminalMessage);
+            }
+            else if (preserveState) {
+                connectionState.value = navigator.onLine ? "retry_wait" : "offline";
+                joinError.value = navigator.onLine
+                    ? `暂时未能恢复牌局，系统会继续重试（第 ${Math.max(1, reconnectAttempt.value)} 次）。`
+                    : "网络已断开，联网后会自动恢复牌局。";
             }
             else {
                 joinError.value = message;

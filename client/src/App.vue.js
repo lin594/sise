@@ -1697,7 +1697,7 @@ if (!__VLS_ctx.showGameTools) {
         ...{ class: "top-slogan" },
     });
 }
-if (__VLS_ctx.hasLobbySession || __VLS_ctx.isConnectingWithoutState) {
+if ((__VLS_ctx.hasLobbySession || __VLS_ctx.isConnectingWithoutState) && !__VLS_ctx.showSyncingScreen) {
     /** @type {[typeof ConnectionStatus, ]} */ ;
     // @ts-ignore
     const __VLS_0 = __VLS_asFunctionalComponent(ConnectionStatus, new ConnectionStatus({
@@ -1764,7 +1764,7 @@ if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
         ...{ class: "ghost reset-btn" },
     });
 }
-if (__VLS_ctx.globalError) {
+if (__VLS_ctx.globalError && !__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "error global-error" },
         role: "alert",

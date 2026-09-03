@@ -4,9 +4,9 @@ import { randomBytes } from "node:crypto";
 import { Server, matchMaker } from "@colyseus/core";
 import { monitor } from "@colyseus/monitor";
 import { WebSocketTransport } from "@colyseus/ws-transport";
+import { createIsolatedPracticeRoomId } from "./http/practice-room-creation.js";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
 import { createRateLimitMiddleware, parseBoundedInteger } from "./http/rate-limit.js";
-import { isReusablePracticeLobbyRoom } from "./http/room-selection.js";
 import {
   buildCorsOriginHeaders,
   createCorsMiddleware,
@@ -54,10 +54,6 @@ const roomCreationLimit = createRateLimitMiddleware({
   windowMs: rateLimitWindowMs,
   message: "创建房间过于频繁，请稍后再试。",
 });
-const roomLookupLimit = createRateLimitMiddleware({
-  maxRequests: parseBoundedInteger(process.env.ROOM_LOOKUP_RATE_LIMIT, 120, 1, 100_000),
-  windowMs: rateLimitWindowMs,
-});
 const privateStateLimit = createRateLimitMiddleware({
   maxRequests: parseBoundedInteger(process.env.PRIVATE_STATE_RATE_LIMIT, 180, 1, 100_000),
   windowMs: rateLimitWindowMs,
@@ -67,51 +63,6 @@ const privateStateLimit = createRateLimitMiddleware({
 gameServer.define("four-color", FourColorGameRoom);
 if (shouldEnableMonitor(runtimeEnv, process.env.ENABLE_MONITOR)) {
   app.use("/colyseus", monitor());
-}
-
-let creatingSingletonRoom: Promise<string> | null = null;
-let singletonRoomId = "";
-
-async function listFourColorRooms() {
-  return await matchMaker.query({ name: "four-color" });
-}
-
-async function isRoomAlive(roomId: string): Promise<boolean> {
-  if (!roomId) {
-    return false;
-  }
-  const rooms = await listFourColorRooms();
-  return rooms.some((room) => room.roomId === roomId);
-}
-
-async function getOrCreateSingletonRoomId(): Promise<string> {
-  if (creatingSingletonRoom) {
-    return creatingSingletonRoom;
-  }
-
-  creatingSingletonRoom = (async () => {
-    const rooms = await listFourColorRooms();
-    if (singletonRoomId) {
-      const current = rooms.find((room) => room.roomId === singletonRoomId);
-      if (current && isReusablePracticeLobbyRoom(current)) {
-        return singletonRoomId;
-      }
-    }
-    const reusableWaitingRoom = rooms.find((room) => isReusablePracticeLobbyRoom(room));
-    if (reusableWaitingRoom) {
-      singletonRoomId = reusableWaitingRoom.roomId;
-      return singletonRoomId;
-    }
-    const created = await matchMaker.createRoom("four-color", { roomMode: "practice" });
-    singletonRoomId = created.roomId;
-    return singletonRoomId;
-  })();
-
-  try {
-    return await creatingSingletonRoom;
-  } finally {
-    creatingSingletonRoom = null;
-  }
 }
 
 function createHostKey(): string {
@@ -128,9 +79,12 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
-app.get("/room-id", roomLookupLimit, async (_req, res) => {
+app.get("/room-id", roomCreationLimit, async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   try {
-    const roomId = await getOrCreateSingletonRoomId();
+    const roomId = await createIsolatedPracticeRoomId((roomName, options) =>
+      matchMaker.createRoom(roomName, options),
+    );
     res.json({ ok: true, roomId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to get room id";
@@ -156,7 +110,6 @@ app.post("/rooms", roomCreationLimit, async (req, res) => {
 app.post("/reset-room", roomCreationLimit, async (_req, res) => {
   try {
     const created = await createGameRoom("practice");
-    singletonRoomId = created.roomId;
     res.json({ ok: true, ...created });
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to reset room";
