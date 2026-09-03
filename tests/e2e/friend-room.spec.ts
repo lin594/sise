@@ -165,4 +165,76 @@ test("copies an invite link on an insecure LAN deployment", async ({ page }) => 
 
   await page.getByTestId("copy-invite").click();
   await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
+  await expect(page.getByTestId("copy-invite")).toBeFocused();
+});
+
+test("offers an accessible in-app fallback when invite copying is blocked", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "isSecureContext", {
+      configurable: true,
+      value: false,
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: () => false,
+    });
+    Object.defineProperty(window, "prompt", {
+      configurable: true,
+      value: () => {
+        (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled = true;
+        return null;
+      },
+    });
+  });
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("复制受限房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+
+  const copyButton = page.getByTestId("copy-invite");
+  await copyButton.click();
+  const fallback = page.getByRole("dialog", { name: "复制邀请链接" });
+  const linkField = page.getByTestId("invite-copy-fallback-url");
+  await expect(fallback).toBeVisible();
+  await expect(linkField).toBeFocused();
+  const inviteUrl = await linkField.inputValue();
+  expect(inviteUrl).toContain("roomId=");
+  expect(inviteUrl).not.toContain("playerToken");
+  expect(inviteUrl).not.toContain("hostKey");
+  expect(await page.evaluate(() => (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled)).not.toBe(true);
+
+  const metrics = await fallback.evaluate((dialog) => {
+    const rect = dialog.getBoundingClientRect();
+    const selectedText = window.getSelection()?.toString() ?? "";
+    const field = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+    const close = dialog.querySelector<HTMLElement>("[data-testid='close-invite-copy-fallback']")!;
+    const select = dialog.querySelector<HTMLElement>("[data-testid='select-invite-link']")!;
+    return {
+      withinViewport:
+        rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight,
+      selectionStart: field.selectionStart,
+      selectionEnd: field.selectionEnd,
+      valueLength: field.value.length,
+      selectedText,
+      closeHeight: close.getBoundingClientRect().height,
+      selectHeight: select.getBoundingClientRect().height,
+    };
+  });
+  expect(metrics.withinViewport).toBe(true);
+  expect(metrics.selectionStart).toBe(0);
+  expect(metrics.selectionEnd).toBe(metrics.valueLength);
+  expect(metrics.closeHeight).toBeGreaterThanOrEqual(48);
+  expect(metrics.selectHeight).toBeGreaterThanOrEqual(48);
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByTestId("select-invite-link")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(linkField).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(fallback).toHaveCount(0);
+  await expect(copyButton).toBeFocused();
 });

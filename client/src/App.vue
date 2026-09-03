@@ -154,6 +154,12 @@
       />
     </template>
 
+    <InviteLinkFallbackDialog
+      v-if="inviteCopyFallbackUrl"
+      :url="inviteCopyFallbackUrl"
+      @close="closeInviteCopyFallback"
+    />
+
     <div v-if="isPlaying && selectionMode" class="candidate-mask" @click.self="clearSelection(true)">
       <div
         ref="candidatePanelRef"
@@ -498,6 +504,7 @@ import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
+import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -996,7 +1003,9 @@ const resolvedTableCardMode = computed<RenderedCardMode>(() =>
 );
 const globalError = ref("");
 const globalNotice = ref("");
+const inviteCopyFallbackUrl = ref("");
 let globalNoticeTimer: number | null = null;
+let inviteCopyReturnFocus: HTMLElement | null = null;
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
@@ -2121,6 +2130,7 @@ async function copyInviteLink() {
   if (!activeRoomId.value) {
     return;
   }
+  inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const url = new URL(window.location.origin + window.location.pathname);
   url.searchParams.set("roomId", activeRoomId.value);
   const inviteUrl = url.toString();
@@ -2155,8 +2165,25 @@ async function copyInviteLink() {
   if (copied) {
     globalError.value = "";
     showGlobalNotice("邀请链接已复制，可以发给朋友了");
+    const returnTarget = inviteCopyReturnFocus;
+    inviteCopyReturnFocus = null;
+    await nextTick();
+    returnTarget?.isConnected && returnTarget.focus();
   } else {
-    window.prompt("请长按并复制邀请链接", inviteUrl);
+    globalError.value = "";
+    inviteCopyFallbackUrl.value = inviteUrl;
+  }
+}
+
+function closeInviteCopyFallback(restoreFocus = true): void {
+  if (!inviteCopyFallbackUrl.value) {
+    return;
+  }
+  const returnTarget = inviteCopyReturnFocus;
+  inviteCopyFallbackUrl.value = "";
+  inviteCopyReturnFocus = null;
+  if (restoreFocus) {
+    void nextTick(() => returnTarget?.isConnected && returnTarget.focus());
   }
 }
 
@@ -2182,6 +2209,9 @@ watch(
   (phase) => {
     if (phase && phase !== "waiting") {
       pendingPracticeAutoStart.value = false;
+    }
+    if (phase !== "waiting") {
+      closeInviteCopyFallback(false);
     }
   },
 );
