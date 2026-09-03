@@ -53,6 +53,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.phase = "playing";
     context.state.responsePhase = "local_draw";
     context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: hu_ready_local_draw#${seq}`;
   } else if (scenario === "eat_mode1" || scenario === "chi_local_upper") {
@@ -64,6 +65,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.phase = "playing";
     context.state.responsePhase = "local_upper";
     context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: chi_local_upper#${seq}`;
   } else if (scenario === "mode2_pass" || scenario === "local_draw_pass") {
@@ -74,6 +76,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.phase = "playing";
     context.state.responsePhase = "local_draw";
     context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
   } else if (scenario === "collective_no_actions") {
