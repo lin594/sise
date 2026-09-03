@@ -36,10 +36,11 @@ export class PlayerState extends Schema {
 }
 
 export class GameState extends Schema {
-  @type("string") roomMode: "practice" | "friends" = "practice";
+  @type("string") roomMode: "practice" | "friends" | "match" = "practice";
   @type("string") scoringMode: "single" | "cumulative" = "single";
   @type("number") completedRounds: number = 0;
   @type("string") phase: "waiting" | "declaring" | "playing" | "ended" = "waiting";
+  @type("number") matchStartsAt: number = 0;
   @type("string") hostPlayerId: string = "";
   @type("string") dealerId: string = "";
   @type("string") dealerPickerId: string = "";

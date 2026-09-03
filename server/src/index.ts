@@ -60,7 +60,10 @@ const privateStateLimit = createRateLimitMiddleware({
   message: "恢复牌局请求过于频繁，请稍后再试。",
 });
 
-gameServer.define("four-color", FourColorGameRoom);
+gameServer
+  .define("four-color", FourColorGameRoom)
+  .filterBy(["roomMode", "matchOpen"])
+  .sortBy({ clients: -1 });
 if (shouldEnableMonitor(runtimeEnv, process.env.ENABLE_MONITOR)) {
   app.use("/colyseus", monitor());
 }

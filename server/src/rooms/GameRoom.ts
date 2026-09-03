@@ -99,7 +99,7 @@ interface DeclareSetupPayload {
 }
 
 interface RoomCreateOptions {
-  roomMode?: "practice" | "friends";
+  roomMode?: "practice" | "friends" | "match";
   hostKey?: string;
 }
 
@@ -217,6 +217,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
   private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
   private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));
+  private readonly matchWaitMs = Math.max(1000, Number(process.env.MATCH_WAIT_MS ?? 12_000));
+  private readonly matchFullStartMs = Math.max(250, Number(process.env.MATCH_FULL_START_MS ?? 900));
   private readonly reconnectGraceMs = Math.max(
     0,
     Number(process.env.RECONNECT_GRACE_MS ?? DEFAULT_RECONNECT_GRACE_MS),
@@ -241,6 +243,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private huChecksValid = 0;
   private readonly huChecksBySeat = new Map<string, { total: number; valid: number }>();
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  private matchStartTimer: ReturnType<typeof setTimeout> | null = null;
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
@@ -281,7 +284,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   onCreate(options: RoomCreateOptions = {}): void {
     this.setState(new GameState());
-    this.state.roomMode = options.roomMode === "friends" ? "friends" : "practice";
+    this.state.roomMode = options.roomMode === "friends" || options.roomMode === "match"
+      ? options.roomMode
+      : "practice";
+    if (this.state.roomMode === "match") {
+      this.maxClients = this.targetSeats;
+    }
     this.hostKey = String(options.hostKey ?? "").trim();
     this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
     this.syncRoomMetadata();
@@ -452,6 +460,20 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
 
+    if (this.state.roomMode === "match") {
+      const firstEmpty = this.findFirstEmptySeatIndex();
+      if (firstEmpty < 0) {
+        client.send("join_error", { message: "这桌刚好坐满了，正在为你寻找下一桌。" });
+        client.leave(4101, "quick match room full");
+        return;
+      }
+      this.pendingNameBySession.set(client.sessionId, inputName);
+      if (this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil())) {
+        this.onMatchRosterChanged();
+      }
+      return;
+    }
+
     this.pendingNameBySession.set(client.sessionId, inputName || "玩家");
     this.pendingTokenBySession.set(client.sessionId, inputToken || generateTokenUtil());
     client.send("lobby_presence", { roomId: this.roomId, seated: false });
@@ -490,6 +512,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         }
         this.state.lastAction = `SEAT_LEFT ${seatId}`;
         this.broadcastAvailableActions();
+        this.onMatchRosterChanged();
         this.scheduleRoomIdleIfEmpty();
         return;
       }
@@ -499,6 +522,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.botIds.delete(seatId);
       this.state.lastAction = `OFFLINE ${seatId}`;
       this.scheduleSeatRelease(seatId);
+      this.onMatchRosterChanged();
     } else {
       player.isBot = false;
       player.botStrength = 50;
@@ -537,6 +561,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.clearDeclareIntroTimer();
     this.clearCollectiveTimer();
     this.clearRoomIdleTimer();
+    this.clearMatchStartTimer();
     for (const timer of this.seatDisconnectTimers.values()) {
       clearTimeout(timer);
     }
@@ -587,6 +612,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         this.sendLobbyError(client, "cannot_start", problem);
         return;
       }
+    } else if (this.state.roomMode === "match") {
+      if (this.hasDisconnectedMatchHuman()) {
+        this.sendLobbyError(client, "waiting_reconnect", "有牌友正在重连，请稍等一下。");
+        return;
+      }
+      this.clearMatchStartTimer();
+      this.updateMatchOpen(false);
+      this.ensureBotSeatsForStart();
     } else {
       this.ensureBotSeatsForStart();
     }
@@ -600,6 +633,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：可能补齐机器人并重启回合。
    */
   private handleNextRound(client: Client): void {
+    if (this.state.roomMode === "match") {
+      this.sendLobbyError(client, "individual_rematch", "快速配桌结束后，请点击“再来一局”重新配桌。");
+      return;
+    }
     const seatId = this.seatBySession.get(client.sessionId);
     if (!canStartNextRound(seatId, this.state.phase, this.state.hostPlayerId)) {
       return;
@@ -622,6 +659,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：清理局内运行态并刷新大厅视图。
    */
   private handleReturnLobby(client: Client): void {
+    if (this.state.roomMode === "match") {
+      this.sendLobbyError(client, "individual_rematch", "快速配桌不让单个玩家带整桌返回，请重新配桌。");
+      return;
+    }
     const seatId = this.seatBySession.get(client.sessionId);
     if (!canReturnLobby(seatId, this.state.phase) || seatId !== this.state.hostPlayerId) {
       this.sendLobbyError(client, "not_host", "仅房主可让全桌返回大厅。");
@@ -766,6 +807,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private handleClaimSeat(client: Client, payload: { seatIndex?: number }): void {
+    if (this.state.roomMode === "match") {
+      this.sendLobbyError(client, "fixed_match_seat", "快速配桌会按加入顺序安排座位，无需手动选座。");
+      return;
+    }
     if (this.state.phase !== "waiting") {
       this.sendLobbyError(client, "not_waiting", "游戏已经开始，无法再选择座位。");
       return;
@@ -860,7 +905,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private handleAddBot(client: Client, payload: { seatIndex?: number; strength?: number }): void {
-    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+    if (this.state.phase !== "waiting" || this.state.roomMode !== "friends") {
+      this.sendLobbyError(client, "not_friend_waiting", "只有好友房等待阶段可以添加机器人。");
+      return;
+    }
+    if (!this.isHostClient(client)) {
       this.sendLobbyError(client, "not_host", "仅房主可添加机器人。");
       return;
     }
@@ -944,7 +993,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private handleUpdateBot(client: Client, payload: { seatIndex?: number; strength?: number }): void {
-    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+    if (this.state.phase !== "waiting" || this.state.roomMode !== "friends") {
+      this.sendLobbyError(client, "not_friend_waiting", "只有好友房等待阶段可以调整机器人。");
+      return;
+    }
+    if (!this.isHostClient(client)) {
       this.sendLobbyError(client, "not_host", "仅房主可调整机器人。");
       return;
     }
@@ -961,7 +1014,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private handleRemoveSeat(client: Client, payload: { seatIndex?: number }): void {
-    if (this.state.phase !== "waiting" || !this.isHostClient(client)) {
+    if (this.state.phase !== "waiting" || this.state.roomMode !== "friends") {
+      this.sendLobbyError(client, "not_friend_waiting", "只有好友房等待阶段可以移除座位成员。");
+      return;
+    }
+    if (!this.isHostClient(client)) {
       this.sendLobbyError(client, "not_host", "仅房主可移除座位成员。");
       return;
     }
@@ -1029,6 +1086,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       this.state.lastAction = `SEAT_EXPIRED ${seatId}`;
       this.broadcastAvailableActions();
+      this.onMatchRosterChanged();
     }, this.lobbySeatHoldMs);
     this.seatDisconnectTimers.set(seatId, timer);
   }
@@ -1160,6 +1218,85 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }, timeoutMs);
   }
 
+  private connectedMatchHumanCount(): number {
+    return [...this.state.players.values()].filter(
+      (player) => !player.isConfiguredBot && player.connected,
+    ).length;
+  }
+
+  private hasDisconnectedMatchHuman(): boolean {
+    return [...this.state.players.values()].some(
+      (player) => !player.isConfiguredBot && !player.connected,
+    );
+  }
+
+  private updateMatchOpen(matchOpen: boolean): void {
+    void this.setMetadata({ roomMode: "match", matchOpen });
+  }
+
+  private clearMatchStartTimer(): void {
+    if (this.matchStartTimer) {
+      clearTimeout(this.matchStartTimer);
+      this.matchStartTimer = null;
+    }
+    this.state.matchStartsAt = 0;
+  }
+
+  private scheduleMatchStart(delayMs: number): void {
+    const deadline = Date.now() + delayMs;
+    if (
+      this.matchStartTimer &&
+      this.state.matchStartsAt > 0 &&
+      this.state.matchStartsAt <= deadline
+    ) {
+      return;
+    }
+    this.clearMatchStartTimer();
+    this.state.matchStartsAt = deadline;
+    this.matchStartTimer = setTimeout(() => {
+      this.matchStartTimer = null;
+      this.attemptMatchStart();
+    }, delayMs);
+  }
+
+  /**
+   * Quick-match seats are fixed and the first player starts a short shared
+   * countdown. More arrivals never restart that wait; a full human table only
+   * shortens it so everyone can see the final roster before play begins.
+   */
+  private onMatchRosterChanged(): void {
+    if (this.state.roomMode !== "match" || this.state.phase !== "waiting") {
+      return;
+    }
+    this.updateMatchOpen(true);
+    const connectedHumans = this.connectedMatchHumanCount();
+    if (connectedHumans === 0 || this.hasDisconnectedMatchHuman()) {
+      this.clearMatchStartTimer();
+      return;
+    }
+    const roomIsFull = this.state.players.size >= this.targetSeats;
+    this.scheduleMatchStart(roomIsFull ? this.matchFullStartMs : this.matchWaitMs);
+  }
+
+  private attemptMatchStart(): void {
+    this.clearMatchStartTimer();
+    if (
+      this.state.roomMode !== "match" ||
+      this.state.phase !== "waiting" ||
+      this.connectedMatchHumanCount() === 0 ||
+      this.hasDisconnectedMatchHuman()
+    ) {
+      if (this.state.roomMode === "match" && this.state.phase === "waiting") {
+        this.updateMatchOpen(true);
+      }
+      return;
+    }
+    this.updateMatchOpen(false);
+    this.ensureBotSeatsForStart();
+    this.removeUnseatedClientsForGameStart();
+    this.bootstrapRound();
+  }
+
   /**
    * 作用：重连回收座位，踢掉旧会话并恢复真人控制。
    * 关键输入/输出：输入客户端、seat/token/name；输出无返回值。
@@ -1213,6 +1350,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.sendSessionToken(client, seatId, token, true);
     this.syncAllPrivateHands();
     this.broadcastAvailableActions();
+    this.onMatchRosterChanged();
     this.tickBots();
   }
 
@@ -2817,6 +2955,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       scoringMode: this.state.scoringMode,
       completedRounds: this.state.completedRounds,
       phase: this.state.phase,
+      matchStartsAt: this.state.matchStartsAt,
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,
       dealerPickerId: this.state.dealerPickerId,
@@ -2917,6 +3056,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     void this.setMetadata({
       phase: this.state.phase,
       roomMode: this.state.roomMode,
+      matchOpen: this.state.roomMode === "match" && this.state.phase === "waiting",
       hostPlayerId: this.state.hostPlayerId,
       occupiedSeats: this.playerOrder.length,
     });
