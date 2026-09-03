@@ -431,16 +431,12 @@ watch(
       clearFillRequestState();
       return;
     }
-    if (!fillRequested.value || emptySeats !== 0) {
+    if (!fillRequested.value || emptySeats !== 0 || !canStart) {
       return;
     }
     clearFillRequestState();
     await nextTick();
-    if (canStart) {
-      startButtonRef.value?.focus();
-    } else {
-      lobbyTitleRef.value?.focus();
-    }
+    startButtonRef.value?.focus();
   },
 );
 

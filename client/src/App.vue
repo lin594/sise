@@ -1613,26 +1613,51 @@ function closeRulesForDecision(): void {
   }
 }
 
-function focusReadyGameControl(): void {
+let decisionControlFocusPending = false;
+
+function focusReadyGameControl(): boolean {
   if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
-    return;
+    return false;
   }
-  document
-    .querySelector<HTMLElement>(
-      ".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)",
-    )
-    ?.focus();
+  const control = document.querySelector<HTMLElement>(
+    ".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)",
+  );
+  if (!control) {
+    return false;
+  }
+  control.focus();
+  decisionControlFocusPending = false;
+  return true;
 }
 
 watch(settingsDecisionActive, (active) => {
-  if (active) {
-    closeRulesForDecision();
-    // A decision can arrive while settings or the rules dialog owns focus.
-    // Wait until those layers are gone, then place keyboard/switch users on
-    // the first control that can actually resolve the game state.
-    void nextTick(focusReadyGameControl);
+  if (!active) {
+    decisionControlFocusPending = false;
+    return;
   }
+  decisionControlFocusPending = true;
+  closeRulesForDecision();
+  // A decision can arrive before the private hand or action buttons finish
+  // their adjacent state patch. Keep the focus request pending until a real
+  // control exists instead of leaving keyboard users on removed settings.
+  void nextTick(focusReadyGameControl);
 });
+
+watch(
+  () => [
+    privateHandSynchronized.value,
+    canDiscard.value,
+    availableActions.value
+      .filter((action) => action.enabled || action.deferred)
+      .map((action) => action.action)
+      .join("|"),
+  ] as const,
+  () => {
+    if (decisionControlFocusPending && settingsDecisionActive.value) {
+      void nextTick(focusReadyGameControl);
+    }
+  },
+);
 
 const decisionAlertKey = computed(() => {
   const authoritativeDecisionKey = decisionTimer.value.decisionKey.trim();
