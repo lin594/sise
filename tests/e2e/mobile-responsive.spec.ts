@@ -1193,6 +1193,7 @@ test.describe("compact landscape gameplay", () => {
     await page.unroute("**/private-state?**");
     await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
     await expect(actionFeedback).toHaveCount(0);
+    await expect(page.getByTestId("discard-confirm")).toHaveCount(0);
     const waitingHandState = await page.locator(".hand").evaluate((hand) => {
       const cards = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card"));
       return {

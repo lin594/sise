@@ -94,7 +94,9 @@ const actionFeedback = computed(() => {
     if (!feedback || feedback.visible !== false) {
         return feedback;
     }
-    if (feedback.status === "received" && feedback.decisionKey === props.decisionKey) {
+    if (feedback.status === "received" &&
+        feedback.decisionKey === props.decisionKey &&
+        (props.canAct || props.canDiscard)) {
         return { ...feedback, message: "操作已收到，等待牌局继续。", visible: true };
     }
     return null;
