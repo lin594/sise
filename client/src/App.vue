@@ -37,6 +37,9 @@
         v-if="showGameTools"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
+        :action-logs="actionLogs"
+        :players="players"
+        :my-seat-id="mySeatId"
         @open-rules="openRules"
         @exit="handleLeaveRoom"
       />
@@ -568,6 +571,7 @@ const {
   debugApplied,
   joinError,
   declareError,
+  actionLogs,
   clearActionLogs,
   debugSetup,
   sendAction,

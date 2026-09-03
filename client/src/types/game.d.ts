@@ -74,6 +74,7 @@ export interface ParsedActionLog {
     actionKey: string;
     displayText: string;
     isSystem: boolean;
+    cardLabel?: string;
 }
 export interface AvailableAction {
     action: ActionType;

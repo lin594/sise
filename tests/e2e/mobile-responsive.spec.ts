@@ -76,6 +76,9 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   await expect(settingsButton).toBeVisible();
   await expect(settingsButton).toContainText(/设置|先操作/);
   await expect(settingsButton).toHaveAttribute("aria-label", /牌局设置|请先完成当前操作，再打开设置/);
+  await expect(header.getByTestId("game-history")).toBeVisible();
+  await expect(header.getByTestId("game-history")).toContainText("记录");
+  await expect(header.getByTestId("game-history")).toHaveAttribute("aria-label", /最近操作/);
   await expect(header.getByRole("button", { name: "退出牌局" })).toContainText("退出");
   await expect(header.getByText(/座位ID|房主|已连接|同步中/)).toHaveCount(0);
 
@@ -242,7 +245,7 @@ test.describe("compact landscape gameplay", () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
   test("keeps lobby actions reachable and gameplay controls touch sized", async ({ page }, testInfo) => {
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
     await enterLobby(page);
 
     const lobbyMetrics = await page.locator(".lobby").evaluate((element) => ({
@@ -333,6 +336,42 @@ test.describe("compact landscape gameplay", () => {
     expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    const gameHistory = page.getByTestId("game-history");
+    await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
+      .toBeGreaterThan(0);
+    await gameHistory.click();
+    const historyPanel = page.getByTestId("history-panel");
+    await expect(historyPanel).toBeVisible();
+    await expect(historyPanel).toHaveAttribute("aria-modal", "true");
+    await expect(historyPanel).toBeFocused();
+    await expect(page.getByTestId("history-entry").first()).toBeVisible();
+    await expect(page.getByTestId("history-entry").first()).not.toContainText(/seat_|bot_|DISCARD|DEALER|PASS/);
+    const historyGeometry = await historyPanel.evaluate((panel) => {
+      const panelRect = panel.getBoundingClientRect();
+      const headerRect = document.querySelector<HTMLElement>('[data-testid="game-control-header"]')!.getBoundingClientRect();
+      const closeRect = panel.querySelector<HTMLButtonElement>('[data-testid="close-history"]')!.getBoundingClientRect();
+      const firstEntry = panel.querySelector<HTMLElement>('[data-testid="history-entry"]')!;
+      return {
+        top: panelRect.top,
+        right: panelRect.right,
+        bottom: panelRect.bottom,
+        headerBottom: headerRect.bottom,
+        closeWidth: closeRect.width,
+        closeHeight: closeRect.height,
+        entryFontSize: Number.parseFloat(getComputedStyle(firstEntry).fontSize),
+      };
+    });
+    expect(historyGeometry.top).toBeGreaterThanOrEqual(historyGeometry.headerBottom);
+    expect(historyGeometry.right).toBeLessThanOrEqual(667);
+    expect(historyGeometry.bottom).toBeLessThanOrEqual(375);
+    expect(historyGeometry.closeWidth).toBeGreaterThanOrEqual(40);
+    expect(historyGeometry.closeHeight).toBeGreaterThanOrEqual(40);
+    expect(historyGeometry.entryFontSize).toBeGreaterThanOrEqual(13);
+    await page.waitForTimeout(180);
+    await page.screenshot({ path: testInfo.outputPath("iphone-se-action-history.png") });
+    await page.keyboard.press("Escape");
+    await expect(historyPanel).toHaveCount(0);
+    await expect(gameHistory).toBeFocused();
     await expect.poll(async () => {
       const label = (await page.locator(".discard-tip").textContent()) ?? "";
       const match = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);

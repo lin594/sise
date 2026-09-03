@@ -667,6 +667,7 @@ export declare function useRoom(playerName?: string): {
         actionKey: string;
         displayText: string;
         isSystem: boolean;
+        cardLabel?: string | undefined;
     }[], ParsedActionLog[] | {
         id: number;
         at: string;
@@ -675,6 +676,7 @@ export declare function useRoom(playerName?: string): {
         actionKey: string;
         displayText: string;
         isSystem: boolean;
+        cardLabel?: string | undefined;
     }[]>;
     connect: (options?: string | ConnectOptions) => Promise<boolean>;
     retryConnection: () => void;

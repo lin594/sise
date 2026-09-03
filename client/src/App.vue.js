@@ -73,7 +73,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, startGame, nextRound, returnLobby, leaveRoom, claimSeat, addBot, updateBot, removeSeat, } = useRoom("玩家");
 const localTestPrivateHandReadyOverride = ref(null);
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
@@ -1645,12 +1645,18 @@ if (__VLS_ctx.showGameTools) {
         ...{ 'onExit': {} },
         modelValue: (__VLS_ctx.displayPreferences),
         decisionActive: (__VLS_ctx.settingsDecisionActive),
+        actionLogs: (__VLS_ctx.actionLogs),
+        players: (__VLS_ctx.players),
+        mySeatId: (__VLS_ctx.mySeatId),
     }));
     const __VLS_8 = __VLS_7({
         ...{ 'onOpenRules': {} },
         ...{ 'onExit': {} },
         modelValue: (__VLS_ctx.displayPreferences),
         decisionActive: (__VLS_ctx.settingsDecisionActive),
+        actionLogs: (__VLS_ctx.actionLogs),
+        players: (__VLS_ctx.players),
+        mySeatId: (__VLS_ctx.mySeatId),
     }, ...__VLS_functionalComponentArgsRest(__VLS_7));
     let __VLS_10;
     let __VLS_11;
@@ -2653,6 +2659,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             availableActions: availableActions,
             joinError: joinError,
             declareError: declareError,
+            actionLogs: actionLogs,
             sendDiscardCard: sendDiscardCard,
             nextRound: nextRound,
             returnLobby: returnLobby,

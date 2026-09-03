@@ -2,6 +2,24 @@
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
       <button
+        ref="historyButtonRef"
+        class="tool-button history"
+        type="button"
+        :aria-label="historyButtonLabel"
+        title="回看本局最近操作"
+        data-testid="game-history"
+        aria-controls="game-history-panel"
+        :aria-expanded="historyOpen"
+        @click="toggleHistory"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h11M4 12h11M4 17h8" />
+          <path d="M18 14v5l3-2.5L18 14Z" />
+        </svg>
+        <span>记录</span>
+        <span v-if="historyItems.length" class="history-count" aria-hidden="true">{{ historyCountText }}</span>
+      </button>
+      <button
         ref="settingsButtonRef"
         class="tool-button"
         type="button"
@@ -35,6 +53,60 @@
         <span>退出</span>
       </button>
     </div>
+
+    <Transition name="popover">
+      <div
+        v-if="historyOpen || settingsOpen"
+        class="tools-popover-backdrop"
+        data-testid="tools-popover-backdrop"
+        aria-hidden="true"
+        @click="closeOpenPopover"
+      ></div>
+    </Transition>
+
+    <Transition name="popover">
+      <section
+        v-if="historyOpen"
+        id="game-history-panel"
+        ref="historyPanelRef"
+        class="history-panel"
+        data-testid="history-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-panel-title"
+        aria-describedby="history-panel-description"
+        tabindex="-1"
+        @keydown.esc.stop.prevent="closeHistory()"
+        @keydown.tab="trapHistoryFocus"
+      >
+        <header>
+          <div>
+            <small>没看清刚才发生了什么？</small>
+            <strong id="history-panel-title">最近操作</strong>
+          </div>
+          <button type="button" aria-label="关闭最近操作" data-testid="close-history" @click="closeHistory()">×</button>
+        </header>
+        <p id="history-panel-description" class="history-description">本局最新记录排在最前，关闭后不会影响牌局。</p>
+        <ol v-if="historyItems.length" class="history-list">
+          <li
+            v-for="item in historyItems"
+            :key="item.id"
+            data-testid="history-entry"
+            :aria-label="`${item.at}，${item.actor}${item.action}`"
+          >
+            <time>{{ item.at }}</time>
+            <p>
+              <strong>{{ item.actor }}</strong>
+              <span>{{ item.action }}</span>
+            </p>
+          </li>
+        </ol>
+        <div v-else class="history-empty" data-testid="history-empty">
+          <span aria-hidden="true">◎</span>
+          <p><strong>还没有可回看的操作</strong><small>正式开局后，出牌、吃碰开和系统托管会记录在这里。</small></p>
+        </div>
+      </section>
+    </Transition>
 
     <Transition name="popover">
       <section
@@ -199,13 +271,31 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
-import type { CardDisplayMode, GameDisplayPreferences, SeatDirection, TurnAlertMode } from "@/types/game";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import type {
+  CardDisplayMode,
+  GameDisplayPreferences,
+  ParsedActionLog,
+  PlayerState,
+  SeatDirection,
+  TurnAlertMode,
+} from "@/types/game";
 
-const props = defineProps<{
-  modelValue: GameDisplayPreferences;
-  decisionActive?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: GameDisplayPreferences;
+    decisionActive?: boolean;
+    actionLogs?: ParsedActionLog[];
+    players?: PlayerState[];
+    mySeatId?: string;
+  }>(),
+  {
+    decisionActive: false,
+    actionLogs: () => [],
+    players: () => [],
+    mySeatId: "",
+  },
+);
 
 const emit = defineEmits<{
   "update:modelValue": [preferences: GameDisplayPreferences];
@@ -214,6 +304,9 @@ const emit = defineEmits<{
 }>();
 
 const gameToolsRef = ref<HTMLElement | null>(null);
+const historyButtonRef = ref<HTMLButtonElement | null>(null);
+const historyPanelRef = ref<HTMLElement | null>(null);
+const historyOpen = ref(false);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
@@ -232,6 +325,55 @@ const alertModes: Array<{ value: TurnAlertMode; label: string; icon: string }> =
   { value: "sound", label: "仅响铃", icon: "♫" },
   { value: "off", label: "关闭", icon: "—" },
 ];
+const historyItems = computed(() =>
+  props.actionLogs
+    .filter((log) => Boolean(log.displayText))
+    .slice(0, 16)
+    .map((log) => {
+      const player = props.players.find((candidate) => candidate.clientId === log.actorId);
+      const identity = player?.isConfiguredBot
+        ? "（机器人）"
+        : player?.clientId === props.mySeatId
+          ? player.isBot ? "（你·托管中）" : "（你）"
+          : player?.isBot ? "（托管中）" : "";
+      return {
+        id: log.id,
+        at: log.at,
+        actor: player ? `${player.name}${identity}` : log.actorId ? "一位玩家" : "系统",
+        action: formattedHistoryAction(log),
+      };
+    }),
+);
+const historyCountText = computed(() => (historyItems.value.length > 99 ? "99+" : String(historyItems.value.length)));
+const historyButtonLabel = computed(() =>
+  historyItems.value.length
+    ? `最近操作，共${historyItems.value.length}条`
+    : "最近操作，暂无记录",
+);
+
+function formattedHistoryAction(log: ParsedActionLog): string {
+  const card = log.cardLabel;
+  if (!card) {
+    return log.displayText;
+  }
+  const withCard: Partial<Record<string, string>> = {
+    DISCARD: `打出 ${card}`,
+    PENG: `碰 ${card}`,
+    CHI: `吃下 ${card}`,
+    KAI: `开 ${card}`,
+    HU: `以 ${card} 胡牌`,
+    ZHUA: `抓到 ${card}`,
+    PASS: `把 ${card} 让给下家`,
+    TIMEOUT_PASS: `超时，系统自动过（${card}）`,
+    TIMEOUT_DISCARD: `超时，系统自动打出 ${card}`,
+    FORCE_TAKE: `收下 ${card}`,
+    DRAW_GENERAL: `摸取公共将 ${card}`,
+    DEALER: `以 ${card} 定为庄家`,
+    DEALER_PICK: `翻开定庄牌 ${card}`,
+    DEALER_CARD: `定庄牌 ${card} 揭晓`,
+  };
+  return withCard[log.actionKey] ?? log.displayText;
+}
 
 watch(
   () => props.decisionActive,
@@ -239,6 +381,7 @@ watch(
     if (active) {
       removeSettingsOutsideListener();
       settingsOpen.value = false;
+      historyOpen.value = false;
     }
   },
 );
@@ -248,10 +391,42 @@ async function toggleSettings(): Promise<void> {
     closeSettings();
     return;
   }
+  closeHistory(false);
   settingsOpen.value = true;
   await nextTick();
   settingsPanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+async function toggleHistory(): Promise<void> {
+  if (historyOpen.value) {
+    closeHistory();
+    return;
+  }
+  closeSettings(false);
+  historyOpen.value = true;
+  await nextTick();
+  historyPanelRef.value?.focus();
+  document.addEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+function closeOpenPopover(): void {
+  if (historyOpen.value) {
+    closeHistory();
+    return;
+  }
+  closeSettings();
+}
+
+function closeHistory(restoreFocus = true): void {
+  if (!historyOpen.value) {
+    return;
+  }
+  removeSettingsOutsideListener();
+  historyOpen.value = false;
+  if (restoreFocus) {
+    void nextTick(() => historyButtonRef.value?.focus());
+  }
 }
 
 function closeSettings(restoreFocus = true): void {
@@ -270,7 +445,12 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
   if (!(target instanceof Node) || gameToolsRef.value?.contains(target)) {
     return;
   }
-  closeSettings();
+  if (settingsOpen.value) {
+    closeSettings();
+  }
+  if (historyOpen.value) {
+    closeHistory();
+  }
 }
 
 function removeSettingsOutsideListener(): void {
@@ -278,7 +458,14 @@ function removeSettingsOutsideListener(): void {
 }
 
 function trapSettingsFocus(event: KeyboardEvent): void {
-  const panel = settingsPanelRef.value;
+  trapPanelFocus(event, settingsPanelRef.value);
+}
+
+function trapHistoryFocus(event: KeyboardEvent): void {
+  trapPanelFocus(event, historyPanelRef.value);
+}
+
+function trapPanelFocus(event: KeyboardEvent, panel: HTMLElement | null): void {
   if (!panel) {
     return;
   }
@@ -322,6 +509,7 @@ function setKeepScreenAwake(keepScreenAwake: boolean): void {
 function openRules(): void {
   removeSettingsOutsideListener();
   settingsOpen.value = false;
+  historyOpen.value = false;
   emit("openRules");
 }
 
@@ -331,6 +519,7 @@ async function requestExit(): Promise<void> {
     : exitButtonRef.value;
   removeSettingsOutsideListener();
   settingsOpen.value = false;
+  historyOpen.value = false;
   confirmingExit.value = true;
   await nextTick();
   // “继续游戏” is intentionally first: an accidental Enter cannot confirm
@@ -387,6 +576,8 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .tool-buttons {
+  position: relative;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
   gap: clamp(0.3rem, 0.8vh, 0.5rem);
@@ -421,6 +612,20 @@ onBeforeUnmount(removeSettingsOutsideListener);
   color: #fecaca;
 }
 
+.history-count {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: #fbbf24;
+  color: #422006;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .tool-button:disabled {
   cursor: not-allowed;
   border-color: rgba(250, 204, 21, 0.62);
@@ -440,7 +645,8 @@ onBeforeUnmount(removeSettingsOutsideListener);
   stroke-linejoin: round;
 }
 
-.settings-panel {
+.settings-panel,
+.history-panel {
   position: absolute;
   top: calc(100% + 0.42rem);
   right: 0;
@@ -454,9 +660,23 @@ onBeforeUnmount(removeSettingsOutsideListener);
   color: #e2e8f0;
   box-shadow: 0 16px 36px rgba(2, 6, 23, 0.48);
   backdrop-filter: blur(14px);
+  z-index: 1;
 }
 
-.settings-panel header {
+.tools-popover-backdrop {
+  position: fixed;
+  inset: var(--game-header-height, 3rem) 0 0;
+  z-index: 0;
+  background: rgba(2, 6, 23, 0.16);
+}
+
+.history-panel {
+  width: min(22rem, calc(100dvw - 1rem));
+  padding: 0.8rem;
+}
+
+.settings-panel header,
+.history-panel header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -464,22 +684,26 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .settings-panel header div,
+.history-panel header div,
 .preference-copy {
   display: grid;
   gap: 0.12rem;
   text-align: left;
 }
 
-.settings-panel small {
+.settings-panel small,
+.history-panel small {
   color: #94a3b8;
   font-size: 0.78rem;
 }
 
-.settings-panel header strong {
+.settings-panel header strong,
+.history-panel header strong {
   font-size: 1rem;
 }
 
-.settings-panel header button {
+.settings-panel header button,
+.history-panel header button {
   width: 2.75rem;
   height: 2.75rem;
   min-width: 42px;
@@ -489,6 +713,92 @@ onBeforeUnmount(removeSettingsOutsideListener);
   background: rgba(30, 41, 59, 0.78);
   color: #cbd5e1;
   font-size: 1.25rem;
+}
+
+.history-description {
+  margin: 0.45rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.history-list {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.history-list li {
+  min-height: 2.7rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(71, 85, 105, 0.72);
+  border-radius: 0.72rem;
+  background: #111b2d;
+  display: grid;
+  grid-template-columns: 4.9rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.history-list time {
+  color: #93c5fd;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.76rem;
+}
+
+.history-list p {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.history-list p strong {
+  overflow: hidden;
+  color: #fde68a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-list p span {
+  color: #f8fafc;
+}
+
+.history-empty {
+  margin-top: 0.65rem;
+  min-height: 5.2rem;
+  padding: 0.7rem;
+  border: 1px dashed rgba(100, 116, 139, 0.75);
+  border-radius: 0.8rem;
+  background: #111827;
+  color: #cbd5e1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  text-align: left;
+}
+
+.history-empty > span {
+  color: #fbbf24;
+  font-size: 1.65rem;
+}
+
+.history-empty p {
+  margin: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.history-empty small {
+  line-height: 1.4;
 }
 
 .preference-group {
@@ -762,15 +1072,31 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 @media (max-width: 960px), (max-height: 500px) {
-  .settings-panel {
+  .settings-panel,
+  .history-panel {
     width: min(16rem, calc(100dvw - 0.5rem));
     padding: 0.6rem;
   }
 
   .tool-button {
-    min-width: clamp(3.85rem, 10vw, 4.6rem);
+    min-width: clamp(3.6rem, 9vw, 4.4rem);
     height: clamp(2.05rem, 9.5vh, 2.4rem);
-    padding-inline: 0.5rem;
+    padding-inline: 0.42rem;
+  }
+
+  .history-list li {
+    min-height: 2.55rem;
+    grid-template-columns: 4.4rem minmax(0, 1fr);
+    gap: 0.4rem;
+  }
+
+  .history-list p {
+    display: block;
+    font-size: 0.82rem;
+  }
+
+  .history-list p strong {
+    margin-right: 0.35rem;
   }
 
   .mode-options button {

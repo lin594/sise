@@ -1,6 +1,8 @@
 import { computed, onUnmounted, ref, shallowRef } from "vue";
 import { Client, ErrorCode, MatchMakeError } from "@colyseus/sdk";
 import { sortHandCards } from "@/utils/cardSort";
+import { getCardLabelText } from "@/utils/cardText";
+import { actionHistoryText, parseActionDescriptor } from "@/utils/actionHistory";
 import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
@@ -330,31 +332,29 @@ function normalizeResponsePhase(input) {
     }
     return input;
 }
-const SYSTEM_ACTION_KEYS = new Set(["NO_RESPONSE", "TURN_DRAW", "KONG_DRAW"]);
-function parseActionDescriptor(action) {
-    const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) {
-        return { actorId: "", actionKey: "" };
+function actionCardLabel(action, snapshot) {
+    if (!snapshot) {
+        return "";
     }
-    if (parts[0].startsWith("seat_") || parts[0].startsWith("bot_")) {
-        return { actorId: parts[0], actionKey: parts[1] ?? "" };
-    }
-    return { actorId: "", actionKey: parts[0] };
-}
-function toDisplayAction(actionKey) {
-    const label = {
-        DISCARD: "出牌",
-        PENG: "碰",
-        CHI: "吃",
-        KAI: "开",
-        HU: "胡",
-        ZHUA: "抓",
-        PASS: "过",
-        TIMEOUT_PASS: "超时过",
-        DRAW_GAME: "流局",
-        DEALER: "定庄",
-    };
-    return label[actionKey] ?? actionKey;
+    const { actionKey } = parseActionDescriptor(action);
+    const card = ["DEALER", "DEALER_PICK", "DEALER_CARD"].includes(actionKey)
+        ? snapshot.dealerCard
+        : [
+            "DISCARD",
+            "PENG",
+            "CHI",
+            "KAI",
+            "HU",
+            "ZHUA",
+            "PASS",
+            "TIMEOUT_PASS",
+            "TIMEOUT_DISCARD",
+            "FORCE_TAKE",
+            "DRAW_GENERAL",
+        ].includes(actionKey)
+            ? snapshot.responseCard ?? snapshot.targetCard
+            : null;
+    return card ? getCardLabelText(card) : "";
 }
 export function useRoom(playerName = "Player") {
     const ROOM_KEY = "four_room_id";
@@ -906,7 +906,7 @@ export function useRoom(playerName = "Player") {
         const lastAction = String(state.value?.lastAction ?? "").trim();
         const fingerprint = `${lastAction}|${String(state.value?.phase ?? "")}|${String(state.value?.currentPlayerId ?? "")}|${String(state.value?.responseCard?.id ?? "")}|${String(state.value?.deckCount ?? "")}`;
         if (lastAction && fingerprint !== lastFingerprint) {
-            pushLog(lastAction);
+            pushLog(lastAction, normalized);
             lastFingerprint = fingerprint;
         }
     }
@@ -954,25 +954,30 @@ export function useRoom(playerName = "Player") {
         }
         return payload.roomId;
     }
-    function pushLog(text) {
+    function pushLog(text, snapshot) {
         const line = String(text ?? "").trim();
         if (!line) {
             return;
         }
         const { actorId, actionKey } = parseActionDescriptor(line);
-        const isSystem = SYSTEM_ACTION_KEYS.has(actionKey);
-        if (isSystem) {
+        const displayText = actionHistoryText(actionKey);
+        if (!displayText) {
             return;
         }
         actionLogs.value = [
             {
                 id: ++logSeq,
-                at: new Date().toLocaleTimeString(),
+                at: new Date().toLocaleTimeString("zh-CN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                }),
                 text: line,
                 actorId,
                 actionKey,
-                displayText: toDisplayAction(actionKey),
-                isSystem,
+                displayText,
+                isSystem: !actorId,
+                cardLabel: actionCardLabel(line, snapshot),
             },
             ...actionLogs.value,
         ].slice(0, MAX_LOGS);
