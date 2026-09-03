@@ -39,7 +39,7 @@ const rightPlayer = computed(() => props.seatDirection === "clockwise" ? ordered
 const leftPlayer = computed(() => props.seatDirection === "clockwise" ? orderedPlayers.value[1] ?? null : orderedPlayers.value[3] ?? null);
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
-const lastLocalDiscardAt = ref(0);
+const locallyAnimatedDiscardCardId = ref(null);
 const flights = ref([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
@@ -72,6 +72,8 @@ let dealAnimatingUntil = 0;
 let flashTimer = null;
 let drawHideTimer = null;
 let countdownTimer = null;
+let discardPendingTimer = null;
+let localDiscardAckTimer = null;
 const OP_COUNTDOWN_MS = 30000;
 function splitExposedGroups(cards, sizes, prefix) {
     const normalizeResponseFlag = (chunk) => {
@@ -650,17 +652,34 @@ function confirmDiscard() {
     }
     const cardElement = Array.from(selfHandRef.value?.querySelectorAll("[data-card-id]") ?? [])
         .find((element) => element.dataset.cardId === cardId);
+    if (localDiscardAckTimer) {
+        clearTimeout(localDiscardAckTimer);
+        localDiscardAckTimer = null;
+    }
     if (cardElement) {
         triggerDiscardAnimationFromElement(cardElement, picked);
-        lastLocalDiscardAt.value = Date.now();
+        locallyAnimatedDiscardCardId.value = cardId;
+        localDiscardAckTimer = setTimeout(() => {
+            if (locallyAnimatedDiscardCardId.value === cardId) {
+                locallyAnimatedDiscardCardId.value = null;
+            }
+            localDiscardAckTimer = null;
+        }, 10_000);
+    }
+    else {
+        locallyAnimatedDiscardCardId.value = null;
     }
     discardingCardId.value = cardId;
     emit("discardCard", cardId);
-    window.setTimeout(() => {
+    if (discardPendingTimer) {
+        clearTimeout(discardPendingTimer);
+    }
+    discardPendingTimer = setTimeout(() => {
         if (discardingCardId.value === cardId) {
             discardingCardId.value = null;
         }
-    }, 460);
+        discardPendingTimer = null;
+    }, 2500);
 }
 function onSubmitAction(request) {
     emit("submitAction", request);
@@ -1096,6 +1115,14 @@ onUnmounted(() => {
         clearTimeout(drawHideTimer);
         drawHideTimer = null;
     }
+    if (discardPendingTimer) {
+        clearTimeout(discardPendingTimer);
+        discardPendingTimer = null;
+    }
+    if (localDiscardAckTimer) {
+        clearTimeout(localDiscardAckTimer);
+        localDiscardAckTimer = null;
+    }
     flashActorId.value = "";
     drawHiddenCardId.value = "";
     dealerFlight.value = null;
@@ -1104,6 +1131,10 @@ onUnmounted(() => {
         countdownTimer = null;
     }
 });
+// GameBoard is mounted when the waiting lobby changes into the dealer intro.
+// Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
+// mount hook incorrectly started a complete deal here and DEALER started a
+// second one a moment later.
 watch(() => props.state?.lastAction, (action) => {
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
@@ -1128,7 +1159,15 @@ watch(() => props.state?.lastAction, (action) => {
         triggerActorFlash(actor);
     }
     if (keyword === "DISCARD" && actor) {
-        if (!(actor === props.mySeatId && Date.now() - lastLocalDiscardAt.value < 650)) {
+        const isLocalAcknowledgement = actor === props.mySeatId && Boolean(locallyAnimatedDiscardCardId.value);
+        if (isLocalAcknowledgement) {
+            locallyAnimatedDiscardCardId.value = null;
+            if (localDiscardAckTimer) {
+                clearTimeout(localDiscardAckTimer);
+                localDiscardAckTimer = null;
+            }
+        }
+        else {
             triggerDiscardAnimationFromSeat(actor);
         }
         return;
@@ -1140,18 +1179,17 @@ watch(() => props.state?.lastAction, (action) => {
     if ((keyword === "ZHUA" || keyword === "TURN_DRAW" || keyword === "KONG_DRAW") && actor) {
         triggerDrawAnimation(actor);
     }
-},
-// GameBoard is mounted when the waiting lobby changes into the dealer intro.
-// Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
-// mount hook incorrectly started a complete deal here and DEALER started a
-// second one a moment later.
-{ immediate: true });
+}, { immediate: true });
 watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (!showDealAnimation.value && !openingDealIntroActive.value && props.state?.phase !== "waiting") {
         visibleHandCount.value = props.privateHand.length;
     }
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
         discardingCardId.value = null;
+        if (discardPendingTimer) {
+            clearTimeout(discardPendingTimer);
+            discardPendingTimer = null;
+        }
     }
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
         selectedDiscardCardId.value = null;

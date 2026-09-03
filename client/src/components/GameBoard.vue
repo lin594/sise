@@ -766,7 +766,7 @@ const leftPlayer = computed<PlayerState | null>(() =>
 );
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
-const lastLocalDiscardAt = ref(0);
+const locallyAnimatedDiscardCardId = ref<string | null>(null);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
@@ -801,6 +801,8 @@ let dealAnimatingUntil = 0;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 let drawHideTimer: ReturnType<typeof setTimeout> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let discardPendingTimer: ReturnType<typeof setTimeout> | null = null;
+let localDiscardAckTimer: ReturnType<typeof setTimeout> | null = null;
 const OP_COUNTDOWN_MS = 30000;
 
 function splitExposedGroups(cards: Card[], sizes: number[], prefix: string): ExposedGroup[] {
@@ -1462,17 +1464,33 @@ function confirmDiscard(): void {
   }
   const cardElement = Array.from(selfHandRef.value?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])
     .find((element) => element.dataset.cardId === cardId);
+  if (localDiscardAckTimer) {
+    clearTimeout(localDiscardAckTimer);
+    localDiscardAckTimer = null;
+  }
   if (cardElement) {
     triggerDiscardAnimationFromElement(cardElement, picked);
-    lastLocalDiscardAt.value = Date.now();
+    locallyAnimatedDiscardCardId.value = cardId;
+    localDiscardAckTimer = setTimeout(() => {
+      if (locallyAnimatedDiscardCardId.value === cardId) {
+        locallyAnimatedDiscardCardId.value = null;
+      }
+      localDiscardAckTimer = null;
+    }, 10_000);
+  } else {
+    locallyAnimatedDiscardCardId.value = null;
   }
   discardingCardId.value = cardId;
   emit("discardCard", cardId);
-  window.setTimeout(() => {
+  if (discardPendingTimer) {
+    clearTimeout(discardPendingTimer);
+  }
+  discardPendingTimer = setTimeout(() => {
     if (discardingCardId.value === cardId) {
       discardingCardId.value = null;
     }
-  }, 460);
+    discardPendingTimer = null;
+  }, 2500);
 }
 
 function onSubmitAction(request: ActionRequest): void {
@@ -1948,6 +1966,14 @@ onUnmounted(() => {
     clearTimeout(drawHideTimer);
     drawHideTimer = null;
   }
+  if (discardPendingTimer) {
+    clearTimeout(discardPendingTimer);
+    discardPendingTimer = null;
+  }
+  if (localDiscardAckTimer) {
+    clearTimeout(localDiscardAckTimer);
+    localDiscardAckTimer = null;
+  }
   flashActorId.value = "";
   drawHiddenCardId.value = "";
   dealerFlight.value = null;
@@ -1987,7 +2013,14 @@ watch(
       triggerActorFlash(actor);
     }
     if (keyword === "DISCARD" && actor) {
-      if (!(actor === props.mySeatId && Date.now() - lastLocalDiscardAt.value < 650)) {
+      const isLocalAcknowledgement = actor === props.mySeatId && Boolean(locallyAnimatedDiscardCardId.value);
+      if (isLocalAcknowledgement) {
+        locallyAnimatedDiscardCardId.value = null;
+        if (localDiscardAckTimer) {
+          clearTimeout(localDiscardAckTimer);
+          localDiscardAckTimer = null;
+        }
+      } else {
         triggerDiscardAnimationFromSeat(actor);
       }
       return;
@@ -2011,6 +2044,10 @@ watch(
     }
     if (discardingCardId.value && !props.privateHand.some((card) => card.id === discardingCardId.value)) {
       discardingCardId.value = null;
+      if (discardPendingTimer) {
+        clearTimeout(discardPendingTimer);
+        discardPendingTimer = null;
+      }
     }
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
       selectedDiscardCardId.value = null;
