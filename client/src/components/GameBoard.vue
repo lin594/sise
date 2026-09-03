@@ -485,21 +485,20 @@
             手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 先选牌，再确认出牌</span>
           </p>
           <div v-if="handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
-            <span aria-hidden="true">左右翻看</span>
             <button
               type="button"
               data-testid="hand-scroll-prev"
               aria-label="向左翻看手牌"
               :disabled="!handCanScrollBackward"
               @click="scrollHand('backward')"
-            >‹</button>
+            >‹ 前翻</button>
             <button
               type="button"
               data-testid="hand-scroll-next"
               aria-label="向右翻看更多手牌"
               :disabled="!handCanScrollForward"
               @click="scrollHand('forward')"
-            >›</button>
+            >后翻 ›</button>
           </div>
         </div>
         <div
@@ -2923,18 +2922,23 @@ watch(
 }
 
 .hand-scroll-tools button {
-  width: 2rem;
-  height: 1.8rem;
-  padding: 0;
+  min-width: 3rem;
+  height: 2.25rem;
+  padding: 0 0.5rem;
   border: 1px solid rgba(125, 211, 252, 0.68);
   border-radius: 0.5rem;
   background: #075985;
   color: #f0f9ff;
   display: inline-grid;
   place-items: center;
-  font-size: 1.35rem;
+  font-size: 0.86rem;
   font-weight: 900;
   line-height: 1;
+}
+
+.hand-scroll-tools button:focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 2px;
 }
 
 .hand-scroll-tools button:disabled {
@@ -3637,14 +3641,14 @@ watch(
 
   .hand-scroll-tools {
     gap: 0.2rem;
-    font-size: clamp(0.62rem, 2.7vh, 0.72rem);
   }
 
   .hand-scroll-tools button {
-    width: clamp(1.75rem, 7.8vh, 2rem);
-    height: clamp(1.65rem, 7.2vh, 1.85rem);
+    min-width: 44px;
+    height: 34px;
+    padding: 0 0.34rem;
     border-radius: 0.8vh;
-    font-size: clamp(1.05rem, 4.8vh, 1.3rem);
+    font-size: clamp(0.74rem, 3.1vh, 0.84rem);
   }
 
   .discard-token.mode-large {

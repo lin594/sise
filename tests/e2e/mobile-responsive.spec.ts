@@ -473,7 +473,10 @@ test.describe("compact landscape gameplay", () => {
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");
     const handScrollNext = page.getByTestId("hand-scroll-next");
-    await expect(handScrollTools).toContainText("左右翻看");
+    await expect(handScrollPrev).toHaveText("‹ 前翻");
+    await expect(handScrollNext).toHaveText("后翻 ›");
+    await expect(handScrollPrev).toHaveAttribute("aria-label", "向左翻看手牌");
+    await expect(handScrollNext).toHaveAttribute("aria-label", "向右翻看更多手牌");
     await expect(handScrollPrev).toBeDisabled();
     await expect(handScrollNext).toBeEnabled();
     const handScrollButtonSizes = await handScrollTools.locator("button").evaluateAll((buttons) =>
@@ -482,20 +485,30 @@ test.describe("compact landscape gameplay", () => {
         return { width: Math.round(rect.width), height: Math.round(rect.height) };
       }),
     );
-    expect(Math.min(...handScrollButtonSizes.map((size) => size.width))).toBeGreaterThanOrEqual(26);
-    expect(Math.min(...handScrollButtonSizes.map((size) => size.height))).toBeGreaterThanOrEqual(26);
+    expect(Math.min(...handScrollButtonSizes.map((size) => size.width))).toBeGreaterThanOrEqual(44);
+    expect(Math.min(...handScrollButtonSizes.map((size) => size.height))).toBeGreaterThanOrEqual(34);
     const handIdsBeforePaging = await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     );
     await handScrollNext.click();
     await expect.poll(() => page.locator(".hand").evaluate((hand) => hand.scrollLeft)).toBeGreaterThan(50);
     await expect(handScrollPrev).toBeEnabled();
+    for (let attempt = 0; attempt < 6 && await handScrollNext.isEnabled(); attempt += 1) {
+      await handScrollNext.click();
+      await page.waitForTimeout(360);
+    }
+    await expect(handScrollNext).toBeDisabled();
+    await expect(handScrollPrev).toBeEnabled();
     expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handIdsBeforePaging);
-    await handScrollPrev.click();
+    for (let attempt = 0; attempt < 6 && await handScrollPrev.isEnabled(); attempt += 1) {
+      await handScrollPrev.click();
+      await page.waitForTimeout(360);
+    }
     await expect.poll(() => page.locator(".hand").evaluate((hand) => hand.scrollLeft)).toBeLessThanOrEqual(2);
     await expect(handScrollPrev).toBeDisabled();
+    await expect(handScrollNext).toBeEnabled();
     await expect(page.locator(".hand .card[role='img']").first()).toHaveAttribute("aria-label", /^(黄|红|绿|白|金条).+/);
     const redCardContrast = await page.locator(".hand .card").first().evaluate((source) => {
       const sample = source.cloneNode(true) as HTMLElement;
@@ -985,6 +998,20 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.minimumCardFontSize).toBeGreaterThanOrEqual(22);
     expect(metrics.minimumDockButtonWidth).toBeGreaterThanOrEqual(40);
     expect(metrics.minimumDockButtonHeight).toBeGreaterThanOrEqual(40);
+    const handScrollTools = page.getByTestId("hand-scroll-tools");
+    const handScrollPrev = page.getByTestId("hand-scroll-prev");
+    const handScrollNext = page.getByTestId("hand-scroll-next");
+    await expect(handScrollTools).toBeVisible();
+    await expect(handScrollPrev).toHaveText("‹ 前翻");
+    await expect(handScrollNext).toHaveText("后翻 ›");
+    const handScrollSizes = await handScrollTools.locator("button").evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { width: Math.round(rect.width), height: Math.round(rect.height) };
+      }),
+    );
+    expect(Math.min(...handScrollSizes.map((size) => size.width))).toBeGreaterThanOrEqual(44);
+    expect(Math.min(...handScrollSizes.map((size) => size.height))).toBeGreaterThanOrEqual(34);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game.png") });
   });
 });
