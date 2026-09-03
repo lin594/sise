@@ -2,6 +2,14 @@ services:
   redis:
     image: "${REDIS_IMAGE:-docker.m.daocloud.io/library/redis:7-alpine}"
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - guest-profile-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     networks:
       - app
 
@@ -22,6 +30,7 @@ services:
       HTTP_RATE_LIMIT_WINDOW_MS: "${HTTP_RATE_LIMIT_WINDOW_MS:-60000}"
       ROOM_CREATE_RATE_LIMIT: "${ROOM_CREATE_RATE_LIMIT:-10}"
       PRIVATE_STATE_RATE_LIMIT: "${PRIVATE_STATE_RATE_LIMIT:-180}"
+      GUEST_PROFILE_RATE_LIMIT: "${GUEST_PROFILE_RATE_LIMIT:-60}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       MIN_PLAYERS: "${MIN_PLAYERS:-1}"
       OP_TIMEOUT_MS: "${OP_TIMEOUT_MS:-30000}"
@@ -37,7 +46,8 @@ services:
       HU_LOG: "${HU_LOG:-1}"
       ROOM_STATE_LOG_MODE: "${ROOM_STATE_LOG_MODE:-compact}"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-global-proxy}"
@@ -85,3 +95,6 @@ networks:
   traefik:
     name: "${TRAEFIK_NETWORK:-traefik-global-proxy}"
     external: true
+
+volumes:
+  guest-profile-data:

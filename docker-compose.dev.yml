@@ -2,6 +2,11 @@ services:
   redis:
     image: "${REDIS_IMAGE:-docker.m.daocloud.io/library/redis:7-alpine}"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     ports:
       - "6379:6379"
 
@@ -21,6 +26,7 @@ services:
       - "2567:2567"
     environment:
       PORT: "2567"
+      GUEST_PROFILE_RATE_LIMIT: "${GUEST_PROFILE_RATE_LIMIT:-60}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       MIN_PLAYERS: "${MIN_PLAYERS:-1}"
       BOT_THINK_MIN_MS: "${BOT_THINK_MIN_MS:-450}"
@@ -32,7 +38,8 @@ services:
       HU_LOG: "${HU_LOG:-1}"
       ROOM_STATE_LOG_MODE: "${ROOM_STATE_LOG_MODE:-compact}"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   client:
     build:

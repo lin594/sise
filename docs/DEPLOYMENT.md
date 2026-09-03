@@ -47,6 +47,8 @@ docker compose up --build -d
 - HTTP / WebSocket 服务：`http://localhost:2567`
 - Redis：只在 Compose 内部网络可达，不映射宿主机端口；使用 AOF 和 `guest-profile-data` 命名卷保存访客档案
 
+Compose 会等待 Redis 健康后再启动服务端，避免首次部署时过早降级到内存。正式环境应备份 `guest-profile-data`；删除这个命名卷会永久删除尚未绑定正式账号的本机档案，但不会影响规则代码。
+
 普通 Compose 默认只允许 `http://localhost:3000` 和 `http://127.0.0.1:3000` 作为浏览器来源。使用局域网主机名或 IP 访问时，必须在 `.env` 写入实际前端来源，例如：
 
 ```dotenv
@@ -132,7 +134,7 @@ CORS_ALLOWED_ORIGINS=http://imac.tajuren.cn:3000
 ENABLE_MONITOR=0
 ```
 
-普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让凭证明文经过网络。
+普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，档案 token 可以读取和更新聚合档案；任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让两类凭证明文经过网络。
 
 好友房“出示二维码”由浏览器本机生成，只包含当前公开邀请地址和 `roomId`，不请求第三方二维码服务。它可作为普通 HTTP 试玩时系统分享或现代剪贴板不可用的现场邀请方式；正式公网环境仍应优先完成 HTTPS/WSS 配置。
 

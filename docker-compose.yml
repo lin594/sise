@@ -5,6 +5,11 @@ services:
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
       - guest-profile-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   server:
     build:
@@ -40,7 +45,8 @@ services:
     ports:
       - "2567:2567"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   web:
     build:
