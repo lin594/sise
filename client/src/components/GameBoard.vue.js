@@ -1358,6 +1358,14 @@ if (__VLS_ctx.topPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.topPlayer.name);
+    if (__VLS_ctx.topPlayer.isConfiguredBot) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "bot-seat-badge" },
+            'data-testid': "bot-identity",
+            'aria-label': "机器人",
+            title: "机器人",
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -1518,6 +1526,14 @@ if (__VLS_ctx.leftPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.leftPlayer.name);
+    if (__VLS_ctx.leftPlayer.isConfiguredBot) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "bot-seat-badge" },
+            'data-testid': "bot-identity",
+            'aria-label': "机器人",
+            title: "机器人",
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -1786,6 +1802,14 @@ if (__VLS_ctx.rightPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.rightPlayer.name);
+    if (__VLS_ctx.rightPlayer.isConfiguredBot) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "bot-seat-badge" },
+            'data-testid': "bot-identity",
+            'aria-label': "机器人",
+            title: "机器人",
+        });
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -2102,6 +2126,14 @@ if (__VLS_ctx.selfPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     (__VLS_ctx.selfPlayer.name);
+    if (__VLS_ctx.selfPlayer.isConfiguredBot) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "bot-seat-badge" },
+            'data-testid': "bot-identity",
+            'aria-label': "机器人",
+            title: "机器人",
+        });
+    }
     if (__VLS_ctx.isDealer(__VLS_ctx.selfPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-badge" },
@@ -2385,6 +2417,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -2411,6 +2444,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -2460,6 +2494,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -2500,6 +2535,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;

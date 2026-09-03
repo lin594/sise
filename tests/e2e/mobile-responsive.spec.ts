@@ -13,6 +13,10 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByTestId("deck-stack")).toHaveAttribute("data-card-back", "red-four-color");
   await expect(page.getByTestId("deck-stack").locator(".deck-layer")).toHaveCount(8);
   await expect(page.getByTestId("opponent-hand-count")).toHaveCount(3);
+  await expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+  const botNames = await page.locator(".player-card .seat-identity strong").allTextContents();
+  expect(new Set(botNames.map((name) => name.trim())).size).toBe(3);
+  expect(botNames.every((name) => !/^机器人\d+$/.test(name.trim()))).toBe(true);
   for (const countText of await page.getByTestId("opponent-hand-count").allTextContents()) {
     expect(countText.trim()).toMatch(/^\d+张$/);
   }
@@ -278,6 +282,18 @@ test.describe("compact landscape gameplay", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
+    const botIdentityBadges = page.getByTestId("bot-identity");
+    await expect(botIdentityBadges).toHaveCount(3);
+    await expect(botIdentityBadges).toHaveText(["电脑", "电脑", "电脑"]);
+    for (const badge of await botIdentityBadges.all()) {
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveAttribute("aria-label", "机器人");
+    }
+    const botNames = await botIdentityBadges.evaluateAll((badges) =>
+      badges.map((badge) => badge.parentElement?.querySelector("strong")?.textContent?.trim() ?? ""),
+    );
+    expect(new Set(botNames).size).toBe(3);
+    expect(botNames.every((name) => name.length >= 2 && !/^机器人\d+$/u.test(name))).toBe(true);
     await expect(page.getByText("暂无牌组")).toHaveCount(0);
     await expect(page.locator(".self-groups-card")).toHaveClass(/empty/);
     await expect(page.getByText(/牌组 0 组/)).toHaveCount(0);

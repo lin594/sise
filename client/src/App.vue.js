@@ -684,13 +684,16 @@ const derivedWinnerId = computed(() => {
     const match = String(state.value?.lastAction ?? "").match(/^(\S+)\s+HU$/);
     return match?.[1] ?? "";
 });
+function participantDisplayName(player) {
+    return player.isConfiguredBot ? `${player.name}（机器人）` : player.name;
+}
 const winnerName = computed(() => {
     const winnerId = derivedWinnerId.value;
     if (!winnerId) {
         return "-";
     }
     const player = players.value.find((x) => x.clientId === winnerId);
-    return player?.name || winnerId;
+    return player ? participantDisplayName(player) : winnerId;
 });
 const roundOutcomeText = computed(() => {
     if (!derivedWinnerId.value) {
@@ -1037,7 +1040,7 @@ function settlementScoreLines(player) {
             ? [
                 {
                     key: `hu-pay-${winner.clientId}-${player.clientId}`,
-                    label: `${winner.name} 收胡牌分`,
+                    label: `${participantDisplayName(winner)} 收胡牌分`,
                     total: -winnerPerOpponent,
                 },
             ]
@@ -1046,7 +1049,7 @@ function settlementScoreLines(player) {
     }
     return payers.map((payer) => ({
         key: `hu-pay-${payer.clientId}`,
-        label: `${payer.name} 付胡牌分`,
+        label: `${participantDisplayName(payer)} 付胡牌分`,
         total: winnerPerOpponent,
     }));
 }
@@ -1059,7 +1062,7 @@ const endSummary = computed(() => {
     if (noDiscardMatch) {
         const seatId = noDiscardMatch[1];
         const player = players.value.find((x) => x.clientId === seatId);
-        return `${player?.name || seatId} 无可弃牌，流局。`;
+        return `${player ? participantDisplayName(player) : seatId} 无可弃牌，流局。`;
     }
     return "对局结束。";
 });
@@ -1093,7 +1096,7 @@ const currentPlayerName = computed(() => {
         return "-";
     }
     const player = players.value.find((x) => x.clientId === playerId);
-    return player?.name || playerId;
+    return player ? participantDisplayName(player) : playerId;
 });
 const roundDealerCard = computed(() => {
     const card = state.value?.dealerCard ?? null;
@@ -2046,7 +2049,7 @@ if (__VLS_ctx.showEndPanel) {
             ...{ class: "score-formula" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.winnerSettlementPlayer.name);
+        (__VLS_ctx.participantDisplayName(__VLS_ctx.winnerSettlementPlayer));
         (__VLS_ctx.winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡");
         (__VLS_ctx.signedScore(__VLS_ctx.winnerPerOpponentScore));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
@@ -2080,6 +2083,12 @@ if (__VLS_ctx.showEndPanel) {
                 ...{ class: "settlement-name" },
             });
             (p.name);
+            if (p.isConfiguredBot) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "settlement-bot-badge" },
+                    'data-testid': "settlement-bot-identity",
+                });
+            }
             if (p.clientId === __VLS_ctx.mySeatId) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
             }
@@ -2448,6 +2457,7 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-bot-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-zone']} */ ;
@@ -2593,6 +2603,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             submitDeclaration: submitDeclaration,
             endPanelTitle: endPanelTitle,
             derivedWinnerId: derivedWinnerId,
+            participantDisplayName: participantDisplayName,
             roundOutcomeText: roundOutcomeText,
             settlementPlayers: settlementPlayers,
             settlementReady: settlementReady,

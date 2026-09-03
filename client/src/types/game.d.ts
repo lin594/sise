@@ -105,6 +105,7 @@ export interface SessionTokenPayload {
 export interface RoundResultPlayer {
     clientId: string;
     name: string;
+    isConfiguredBot: boolean;
     hand: Card[];
     declaredKongs: number;
     huType?: "small" | "big" | null;

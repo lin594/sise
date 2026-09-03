@@ -44,6 +44,13 @@
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
             <span
+              v-if="topPlayer.isConfiguredBot"
+              class="bot-seat-badge"
+              data-testid="bot-identity"
+              aria-label="机器人"
+              title="机器人"
+            >电脑</span>
+            <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
               :data-player-id="topPlayer.clientId"
@@ -128,6 +135,13 @@
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
+            <span
+              v-if="leftPlayer.isConfiguredBot"
+              class="bot-seat-badge"
+              data-testid="bot-identity"
+              aria-label="机器人"
+              title="机器人"
+            >电脑</span>
             <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
@@ -269,6 +283,13 @@
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
+            <span
+              v-if="rightPlayer.isConfiguredBot"
+              class="bot-seat-badge"
+              data-testid="bot-identity"
+              aria-label="机器人"
+              title="机器人"
+            >电脑</span>
             <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
@@ -428,6 +449,13 @@
         <div>
           <div class="seat-identity">
             <h3>{{ selfPlayer.name }}（你）</h3>
+            <span
+              v-if="selfPlayer.isConfiguredBot"
+              class="bot-seat-badge"
+              data-testid="bot-identity"
+              aria-label="机器人"
+              title="机器人"
+            >电脑</span>
             <span v-if="isDealer(selfPlayer.clientId)" class="dealer-badge" data-testid="dealer-badge">庄</span>
             <span v-if="isDealer(selfPlayer.clientId) && dealerInfoCard" class="dealer-card-mark" data-testid="dealer-card">
               <CardComp :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
@@ -2064,6 +2092,22 @@ watch(canDiscard, (enabled) => {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bot-seat-badge {
+  flex: 0 0 auto;
+  min-height: 1.2rem;
+  padding: 0.06rem 0.32rem;
+  border: 1px solid rgba(125, 211, 252, 0.74);
+  border-radius: 999px;
+  background: rgba(3, 105, 161, 0.42);
+  color: #e0f2fe;
+  display: inline-grid;
+  place-items: center;
+  font-size: clamp(0.66rem, 1.35vh, 0.78rem);
+  font-weight: 900;
+  line-height: 1;
   white-space: nowrap;
 }
 

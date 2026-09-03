@@ -227,7 +227,7 @@
         <section v-if="winnerSettlementPlayer && huCalculationLines.length" class="settlement scoring-explain">
           <h3>胡牌计分</h3>
           <div class="score-formula">
-            <p>{{ winnerSettlementPlayer.name }} {{ winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡" }}：赢一家 {{ signedScore(winnerPerOpponentScore) }}分</p>
+            <p>{{ participantDisplayName(winnerSettlementPlayer) }} {{ winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡" }}：赢一家 {{ signedScore(winnerPerOpponentScore) }}分</p>
             <ul>
               <li v-for="line in huCalculationLines" :key="`hu-calc-${line.key}`">
                 {{ line.label }}：{{ signedScore(line.unit) }}分
@@ -248,7 +248,7 @@
               <div class="settlement-head">
                 <div>
                   <p class="settlement-name">
-                    {{ p.name }}<span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
+                    {{ p.name }}<span v-if="p.isConfiguredBot" class="settlement-bot-badge" data-testid="settlement-bot-identity">机器人</span><span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
                   </p>
                   <p class="settlement-meta">
                     手牌 {{ p.hand.length }} 张 · 牌组 {{ settlementGroupBlocks(p).length }} 组 · 流水 {{ p.discardCount }} 张
@@ -1294,13 +1294,18 @@ const derivedWinnerId = computed(() => {
   const match = String(state.value?.lastAction ?? "").match(/^(\S+)\s+HU$/);
   return match?.[1] ?? "";
 });
+
+function participantDisplayName(player: { name: string; isConfiguredBot?: boolean }): string {
+  return player.isConfiguredBot ? `${player.name}（机器人）` : player.name;
+}
+
 const winnerName = computed(() => {
   const winnerId = derivedWinnerId.value;
   if (!winnerId) {
     return "-";
   }
   const player = players.value.find((x) => x.clientId === winnerId);
-  return player?.name || winnerId;
+  return player ? participantDisplayName(player) : winnerId;
 });
 const roundOutcomeText = computed(() => {
   if (!derivedWinnerId.value) {
@@ -1674,7 +1679,7 @@ function settlementScoreLines(player: RoundResultPlayer): Array<{ key: string; l
         ? [
             {
               key: `hu-pay-${winner.clientId}-${player.clientId}`,
-              label: `${winner.name} 收胡牌分`,
+              label: `${participantDisplayName(winner)} 收胡牌分`,
               total: -winnerPerOpponent,
             },
           ]
@@ -1683,7 +1688,7 @@ function settlementScoreLines(player: RoundResultPlayer): Array<{ key: string; l
   }
   return payers.map((payer) => ({
     key: `hu-pay-${payer.clientId}`,
-    label: `${payer.name} 付胡牌分`,
+    label: `${participantDisplayName(payer)} 付胡牌分`,
     total: winnerPerOpponent,
   }));
 }
@@ -1697,7 +1702,7 @@ const endSummary = computed(() => {
   if (noDiscardMatch) {
     const seatId = noDiscardMatch[1];
     const player = players.value.find((x) => x.clientId === seatId);
-    return `${player?.name || seatId} 无可弃牌，流局。`;
+    return `${player ? participantDisplayName(player) : seatId} 无可弃牌，流局。`;
   }
   return "对局结束。";
 });
@@ -1733,7 +1738,7 @@ const currentPlayerName = computed(() => {
     return "-";
   }
   const player = players.value.find((x) => x.clientId === playerId);
-  return player?.name || playerId;
+  return player ? participantDisplayName(player) : playerId;
 });
 
 const roundDealerCard = computed<Card | null>(() => {
@@ -2709,6 +2714,22 @@ watch(
   margin: 0 0 6px;
   font-weight: 600;
   font-size: clamp(0.92rem, 1.7vh, 1.08rem);
+}
+
+.settlement-bot-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.38rem;
+  border: 1px solid #7dd3fc;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.72em;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .settlement-meta {

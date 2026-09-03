@@ -170,6 +170,8 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
   await expect(settlementPanel).toHaveAttribute("aria-busy", "false");
   await expect(page.getByTestId("round-overview")).toContainText("你本局");
   await expect(page.locator(".settlement-item").first().locator(".settlement-name")).toContainText("（你）");
+  await expect(page.getByTestId("settlement-bot-identity")).toHaveCount(3);
+  await expect(page.getByTestId("settlement-bot-identity")).toHaveText(["机器人", "机器人", "机器人"]);
   await expect(page.getByText(/最后动作/)).toHaveCount(0);
   await expect(page.getByTestId("game-tools")).toBeVisible();
   await expect(page.getByRole("button", { name: "下一局（房主）" })).toBeEnabled();

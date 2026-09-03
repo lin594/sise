@@ -144,6 +144,7 @@ export declare function useRoom(playerName?: string): {
             players: {
                 clientId: string;
                 name: string;
+                isConfiguredBot: boolean;
                 hand: {
                     id: string;
                     color: string;
@@ -342,6 +343,7 @@ export declare function useRoom(playerName?: string): {
             players: {
                 clientId: string;
                 name: string;
+                isConfiguredBot: boolean;
                 hand: {
                     id: string;
                     color: string;
@@ -468,6 +470,7 @@ export declare function useRoom(playerName?: string): {
         players: {
             clientId: string;
             name: string;
+            isConfiguredBot: boolean;
             hand: {
                 id: string;
                 color: string;
@@ -543,6 +546,7 @@ export declare function useRoom(playerName?: string): {
         players: {
             clientId: string;
             name: string;
+            isConfiguredBot: boolean;
             hand: {
                 id: string;
                 color: string;

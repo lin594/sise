@@ -296,6 +296,7 @@ function normalizeRoundResultPayload(payload) {
         ...payload,
         players: (payload.players ?? []).map((p) => ({
             ...p,
+            isConfiguredBot: Boolean(p.isConfiguredBot),
             hand: sortHandCards(p.hand ?? []),
             declaredKongs: Number(p.declaredKongs ?? 0),
             huType: p.huType === "big" || p.huType === "small" ? p.huType : null,

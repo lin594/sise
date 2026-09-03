@@ -95,6 +95,14 @@ test("host invites a friend, configures bots, and starts a shared game", async (
       `[data-testid^='player-'][data-player-id='${guestIdentity.seatId}']`,
     );
     await expect(host.locator(".player-card .tag.status").filter({ hasText: /^机器人$/ })).toHaveCount(2);
+    await expect(host.locator(".player-card .bot-seat-badge")).toHaveCount(2);
+    const botNames = await host.locator(".player-card .seat-identity strong").evaluateAll((elements) =>
+      elements
+        .filter((element) => element.parentElement?.querySelector(".bot-seat-badge"))
+        .map((element) => element.textContent?.trim() ?? ""),
+    );
+    expect(new Set(botNames).size).toBe(2);
+    expect(botNames.every((name) => !/^机器人\d+$/.test(name))).toBe(true);
 
     await guest.close();
     await host.setViewportSize({ width: 667, height: 375 });
