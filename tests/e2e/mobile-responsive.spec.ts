@@ -361,6 +361,8 @@ test.describe("clear first-time entry", () => {
     const nicknameInput = page.getByTestId("nickname-input");
     const firstNickname = await nicknameInput.inputValue();
     expect(firstNickname.trim().length).toBeGreaterThan(0);
+    await expect(page.locator(".entry-desc")).toContainText("不用注册，也不用密码");
+    await expect(page.locator(".entry-desc")).toContainText("这台设备会记住昵称");
     await expect(page.getByTestId("login-submit")).toHaveText("下一步：选择玩法");
     await expect(page.getByTestId("open-rules")).toHaveCount(1);
     await expect(page.locator(".entry-actions button")).toHaveCount(2);
