@@ -407,13 +407,15 @@ test.describe("clear first-time entry", () => {
     await page.getByTestId("login-submit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     const practiceMode = page.getByTestId("mode-practice_bots");
+    const quickMatchMode = page.getByTestId("mode-quick_match");
     const friendMode = page.getByTestId("mode-friends");
-    await expect(page.locator(".mode-card")).toHaveCount(2);
-    await expect(page.getByText("联机匹配", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("即将开放", { exact: true })).toHaveCount(0);
+    await expect(page.locator(".mode-card")).toHaveCount(3);
+    await expect(page.locator(".mode-card:disabled")).toHaveCount(0);
     await expect(practiceMode).toHaveAttribute("aria-pressed", "true");
+    await expect(quickMatchMode).toHaveAttribute("aria-pressed", "false");
     await expect(friendMode).toHaveAttribute("aria-pressed", "false");
     await expect(practiceMode).toContainText("已选择");
+    await expect(quickMatchMode).toContainText("一键开桌");
     await expect(friendMode).toContainText("邀请朋友");
     await expect(practiceMode).toBeFocused();
     await expect(page.locator(".front-lobby-identity")).toContainText(firstNickname);
