@@ -184,6 +184,50 @@ async function expectCompactTableContained(page: Page): Promise<{
   };
 }
 
+async function expectReadableCompactSeatIdentities(page: Page): Promise<void> {
+  const metrics = await page.evaluate(() => {
+    const sideSeats = Array.from(document.querySelectorAll<HTMLElement>(".player-left, .player-right"));
+    const sideNames = sideSeats.map((seat) => {
+      const identity = seat.querySelector<HTMLElement>(".seat-identity")!;
+      const name = identity.querySelector<HTMLElement>("strong")!;
+      const nameRect = name.getBoundingClientRect();
+      const detailRects = Array.from(identity.children)
+        .filter((element) => element !== name)
+        .map((element) => (element as HTMLElement).getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0);
+      return {
+        width: nameRect.width,
+        horizontalOverflow: seat.scrollWidth - seat.clientWidth,
+        detailsBelowName: detailRects.every((rect) => rect.top >= nameRect.bottom - 1),
+      };
+    });
+    const selfName = document.querySelector<HTMLElement>(".self-info-card .seat-identity h3")!;
+    const selfBadge = document.querySelector<HTMLElement>(".self-info-card .self-seat-badge")!;
+    const selfNameRect = selfName.getBoundingClientRect();
+    const selfBadgeRect = selfBadge.getBoundingClientRect();
+    return {
+      sideNames,
+      selfName: selfName.textContent?.trim() ?? "",
+      selfNameWidth: selfNameRect.width,
+      selfNameOverflow: selfName.scrollWidth - selfName.clientWidth,
+      selfBadgeText: selfBadge.textContent?.trim() ?? "",
+      selfBadgeWidth: selfBadgeRect.width,
+      selfBadgeBelowName: selfBadgeRect.top >= selfNameRect.bottom - 1,
+    };
+  });
+
+  expect(metrics.sideNames).toHaveLength(2);
+  expect(Math.min(...metrics.sideNames.map((name) => name.width))).toBeGreaterThanOrEqual(40);
+  expect(Math.max(...metrics.sideNames.map((name) => name.horizontalOverflow))).toBeLessThanOrEqual(1);
+  expect(metrics.sideNames.every((name) => name.detailsBelowName)).toBe(true);
+  expect(metrics.selfName).not.toContain("（你）");
+  expect(metrics.selfNameWidth).toBeGreaterThanOrEqual(48);
+  expect(metrics.selfNameOverflow).toBeLessThanOrEqual(1);
+  expect(metrics.selfBadgeText).toBe("你");
+  expect(metrics.selfBadgeWidth).toBeGreaterThanOrEqual(24);
+  expect(metrics.selfBadgeBelowName).toBe(true);
+}
+
 async function reachDiscardConfirmation(page: Page): Promise<void> {
   const deadline = Date.now() + 60_000;
   const confirm = page.getByTestId("discard-confirm");
@@ -835,6 +879,7 @@ test.describe("compact landscape gameplay", () => {
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
+    await expectReadableCompactSeatIdentities(page);
     const botIdentityBadges = page.getByTestId("bot-identity");
     await expect(botIdentityBadges).toHaveCount(3);
     await expect(botIdentityBadges).toHaveText(["电脑", "电脑", "电脑"]);
@@ -1863,6 +1908,7 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(page.getByTestId("bot-identity")).toHaveCount(3);
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await expectReadableCompactSeatIdentities(page);
 
     const metrics = await page.evaluate(() => {
       const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;

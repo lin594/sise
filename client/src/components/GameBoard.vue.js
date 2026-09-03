@@ -1385,6 +1385,20 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
@@ -1398,6 +1412,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['response-wrap']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
@@ -2337,6 +2355,10 @@ if (__VLS_ctx.selfPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     (__VLS_ctx.selfPlayer.name);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "self-seat-badge" },
+        'aria-hidden': "true",
+    });
     if (__VLS_ctx.selfPlayer.isConfiguredBot) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "bot-seat-badge" },
@@ -2774,6 +2796,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;

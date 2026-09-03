@@ -481,7 +481,8 @@
       <header class="self-head">
         <div>
           <div class="seat-identity">
-            <h3>{{ selfPlayer.name }}（你）</h3>
+            <h3>{{ selfPlayer.name }}</h3>
+            <span class="self-seat-badge" aria-hidden="true">你</span>
             <span
               v-if="selfPlayer.isConfiguredBot"
               class="bot-seat-badge"
@@ -2317,6 +2318,22 @@ watch(
   white-space: nowrap;
 }
 
+.self-seat-badge {
+  flex: 0 0 auto;
+  min-width: 1.65rem;
+  min-height: 1.65rem;
+  padding: 0.08rem 0.35rem;
+  border: 1px solid rgba(56, 189, 248, 0.82);
+  border-radius: 999px;
+  background: rgba(3, 105, 161, 0.52);
+  color: #e0f2fe;
+  display: inline-grid;
+  place-items: center;
+  font-size: clamp(0.74rem, 1.5vh, 0.88rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
 .hand-count-badge {
   flex: 0 0 auto;
   min-width: clamp(1.8rem, 4.4vh, 2.35rem);
@@ -3052,7 +3069,7 @@ watch(
   width: 100%;
   max-width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   overflow: hidden;
 }
 
@@ -3877,6 +3894,33 @@ watch(
     min-height: 0;
   }
 
+  .player-left,
+  .player-right {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .player-left .seat-head,
+  .player-right .seat-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.3vh;
+  }
+
+  .player-left .seat-identity,
+  .player-right .seat-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.3vh;
+  }
+
+  .player-left .seat-identity > strong,
+  .player-right .seat-identity > strong {
+    flex: 1 0 100%;
+    width: 100%;
+  }
+
   .seat-head strong {
     font-size: clamp(0.92rem, 4vh, 1.05rem);
   }
@@ -3949,6 +3993,18 @@ watch(
   .self-head h3 {
     font-size: clamp(0.96rem, 4.2vh, 1.1rem);
     line-height: 1.08;
+  }
+
+  .self-info-card .seat-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.3vh;
+  }
+
+  .self-info-card .seat-identity > h3 {
+    flex: 1 0 100%;
+    width: 100%;
   }
 
   .self-head p {
