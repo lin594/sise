@@ -115,6 +115,17 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(guest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
 
+    // 玩家实际按 B、D、A、C 的顺序完成占座/补位。牌桌仍必须严格按
+    // seatIndex 的 A→B→C→D 顺序围绕本人排列，而不能沿用加入顺序。
+    await expect(host.getByTestId("player-self")).toHaveAttribute("data-player-id", "seat_3");
+    await expect(host.getByTestId("player-right")).toHaveAttribute("data-player-id", "seat_0");
+    await expect(host.getByTestId("player-top")).toHaveAttribute("data-player-id", "seat_1");
+    await expect(host.getByTestId("player-left")).toHaveAttribute("data-player-id", "seat_2");
+    await expect(guest.getByTestId("player-self")).toHaveAttribute("data-player-id", "seat_1");
+    await expect(guest.getByTestId("player-right")).toHaveAttribute("data-player-id", "seat_2");
+    await expect(guest.getByTestId("player-top")).toHaveAttribute("data-player-id", "seat_3");
+    await expect(guest.getByTestId("player-left")).toHaveAttribute("data-player-id", "seat_0");
+
     await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 15_000 });
     await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 15_000 });
     await host.getByTestId("confirm-declaration").click();

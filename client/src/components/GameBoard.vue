@@ -690,7 +690,17 @@ function shouldConcealOpeningHand(): boolean {
 }
 
 const orderedPlayers = computed<PlayerState[]>(() => {
-  const list = props.players ?? [];
+  // 房间中的 Map 插入顺序会随加入、换座和机器人补位而变化，不能代表
+  // A→B→C→D 的权威座次。先按服务端 seatIndex 排序，再围绕本人旋转。
+  const list = [...(props.players ?? [])].sort((left, right) => {
+    const leftSeat = Number.isInteger(left.seatIndex) && left.seatIndex >= 0
+      ? left.seatIndex
+      : Number.MAX_SAFE_INTEGER;
+    const rightSeat = Number.isInteger(right.seatIndex) && right.seatIndex >= 0
+      ? right.seatIndex
+      : Number.MAX_SAFE_INTEGER;
+    return leftSeat - rightSeat || left.clientId.localeCompare(right.clientId);
+  });
   if (!list.length) {
     return [];
   }

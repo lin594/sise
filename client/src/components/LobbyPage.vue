@@ -246,7 +246,7 @@ const props = defineProps<{
   invitePending: boolean;
 }>();
 
-const seatNames = ["首席", "二席", "三席", "四席"];
+const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
 const botLevels = [
   { id: "easy", label: "轻松", strength: 20 },
   { id: "standard", label: "标准", strength: 50 },
