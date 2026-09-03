@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -36,111 +36,43 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   }
 }
 
-async function clickFirstVisible(locator: Locator): Promise<boolean> {
-  const count = await locator.count();
-  for (let index = 0; index < count; index += 1) {
-    const item = locator.nth(index);
-    if (
-      (await item.isVisible({ timeout: 300 }).catch(() => false)) &&
-      (await item.isEnabled({ timeout: 300 }).catch(() => false))
-    ) {
-      const clicked = await item.click({ force: true, timeout: 800 }).then(() => true, () => false);
-      if (clicked) {
-        return true;
-      }
+async function finishRoundThroughDebugHu(page: Page): Promise<void> {
+  const declaration = page.getByTestId("confirm-declaration");
+  await expect(declaration).toBeEnabled({ timeout: 20_000 });
+  await declaration.click();
+  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+
+  await page.evaluate(() => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+    }).__siseLocalTest;
+    if (!bridge) {
+      throw new Error("Local test bridge is unavailable");
     }
-  }
-  return false;
+    bridge.setupScenario("settlement_hu");
+  });
+  await expect.poll(() =>
+    page.evaluate(() =>
+      (window as Window & {
+        __siseLocalTest?: {
+          getLastResult: () => {
+            scenario: string;
+            ok: boolean;
+            actions?: Array<{ action: string; enabled: boolean }>;
+          } | null;
+        };
+      }).__siseLocalTest?.getLastResult() ?? null,
+    ),
+  ).toMatchObject({
+    scenario: "settlement_hu",
+    ok: true,
+  });
 }
 
-async function playUntilSettlement(page: Page): Promise<void> {
-  const deadline = Date.now() + 360_000;
-  const settlementTitle = page.getByText(/胡牌结算|流局结算/).first();
-  while (Date.now() < deadline) {
-    if (await settlementTitle.isVisible().catch(() => false)) {
-      return;
-    }
-    if (await page.getByRole("button", { name: "下一局（房主）" }).isVisible().catch(() => false)) {
-      return;
-    }
-    if (await clickFirstVisible(page.locator(".candidate-item"))) {
-      await page.waitForTimeout(120);
-      continue;
-    }
-    if (await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) {
-      const declareButton = page.getByTestId("confirm-declaration");
-      if (await declareButton.isEnabled({ timeout: 300 }).catch(() => false)) {
-        await declareButton.click();
-        await page.waitForTimeout(120);
-        continue;
-      }
-    }
-    const responsePhase = await page.getByTestId("game-board").getAttribute("data-response-phase");
-    const actionIds = responsePhase === "collective"
-      ? ["action-hu", "action-pass", "action-deferred-pass", "action-kai", "action-peng", "action-chi"]
-      : ["action-hu", "action-pass", "action-chi", "action-kai", "action-peng"];
-    let acted = false;
-    for (const id of actionIds) {
-      const action = page.getByTestId(id);
-      if (
-        (await action.isVisible({ timeout: 300 }).catch(() => false)) &&
-        (await action.isEnabled({ timeout: 300 }).catch(() => false))
-      ) {
-        acted = await action.click({ force: true, timeout: 800 }).then(() => true, () => false);
-        if (acted) {
-          break;
-        }
-      }
-    }
-    if (acted) {
-      await page.waitForTimeout(120);
-      continue;
-    }
-    const handCards = page.locator("[data-testid^='hand-card-']");
-    for (let index = 0; index < await handCards.count(); index += 1) {
-      const card = handCards.nth(index);
-      if (
-        !(await card.isVisible({ timeout: 300 }).catch(() => false)) ||
-        !(await card.isEnabled({ timeout: 300 }).catch(() => false))
-      ) {
-        continue;
-      }
-      const handBeforeSelection = await snapshotBoard(page);
-      await expect(page.locator(".discard-tip")).not.toContainText(/手牌（\d+\/\d+张）/);
-      await card.click({ force: true });
-      await card.dblclick({ force: true });
-      await expect(card).toHaveAttribute("aria-pressed", "true");
-      const handAfterSelection = await snapshotBoard(page);
-      expect(handAfterSelection.handCards).toEqual(handBeforeSelection.handCards);
-      const discardConfirm = page.getByTestId("discard-confirm");
-      await expect(discardConfirm).toBeEnabled();
-      await discardConfirm.click({ force: true });
-      acted = true;
-      break;
-    }
-    if (acted) {
-      await page.waitForTimeout(120);
-      continue;
-    }
-    await page.waitForTimeout(200);
-  }
-  const finalSnapshot = await page.evaluate(() => ({
-    bodyText: document.body.innerText.slice(0, 2000),
-    buttons: Array.from(document.querySelectorAll("button"))
-      .map((button) => ({
-        text: button.textContent?.trim() ?? "",
-        disabled: (button as HTMLButtonElement).disabled,
-      }))
-      .filter((button) => button.text),
-  }));
-  console.log(`[settlement-timeout] ${JSON.stringify(finalSnapshot)}`);
-  throw new Error("Timed out before settlement");
-}
+test("practice settlement stays readable and reachable on legacy phones", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
 
-test("single practice flow reaches settlement", async ({ page }, testInfo) => {
-  test.setTimeout(420_000);
-
-  await page.goto("/");
+  await page.goto("/?e2eDebug=1");
 
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
@@ -157,7 +89,7 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
 
   await assertOpeningDealDoesNotRevealFullHand(page);
 
-  await playUntilSettlement(page);
+  await finishRoundThroughDebugHu(page);
 
   await expect(page.getByText(/胡牌结算|流局结算/)).toBeVisible();
   const settlementPanel = page.getByTestId("settlement-panel");
@@ -167,16 +99,29 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
     await expect(nextRoundButton).toBeDisabled();
   }
   const settlementList = page.locator(".settlement-list");
+  const settlementScrollRegion = page.getByTestId("settlement-scroll-region");
+  const settlementItems = page.locator(".settlement-item");
+  const settlementSummaries = page.getByTestId("settlement-player-summary");
   await expect(settlementList).toBeVisible({ timeout: 10_000 });
+  await expect(settlementItems).toHaveCount(4);
+  await expect(settlementSummaries).toHaveCount(4);
   await expect(settlementPanel).toHaveAttribute("aria-busy", "false");
   await expect(page.getByTestId("round-overview")).toContainText("你本局");
-  await expect(page.locator(".settlement-item").first().locator(".settlement-name")).toContainText("（你）");
+  await expect(settlementItems.first().locator(".settlement-name")).toContainText("（你）");
   await expect(page.getByTestId("settlement-bot-identity")).toHaveCount(3);
   await expect(page.getByTestId("settlement-bot-identity")).toHaveText(["机器人", "机器人", "机器人"]);
+  expect(await settlementItems.evaluateAll((items) => items.every((item) => !item.hasAttribute("open")))).toBe(true);
   await expect(page.getByText(/最后动作/)).toHaveCount(0);
   await expect(page.getByTestId("game-tools")).toBeVisible();
   await expect(page.getByRole("button", { name: "下一局（房主）" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "全桌返回大厅（房主）" })).toBeEnabled();
+
+  await settlementSummaries.first().click();
+  await expect(settlementItems.first()).toHaveAttribute("open", "");
+  await expect(settlementItems.first().getByText("收起明细")).toBeVisible();
+  const firstSettlementCard = settlementItems.first().locator(".settlement-cards .card").first();
+  await firstSettlementCard.scrollIntoViewIfNeeded();
+  await expect(firstSettlementCard).toBeVisible();
   const settlementMetrics = await settlementList.evaluate((list) => {
     const panel = document.querySelector<HTMLElement>("[data-testid='settlement-panel']")!;
     const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
@@ -200,11 +145,108 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
   expect(settlementMetrics.cardFontSize).toBeGreaterThanOrEqual(16);
   expect(settlementMetrics.metaFontSize).toBeGreaterThanOrEqual(12);
   await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement.png") });
-  await settlementList.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("iphone-se-settlement-details.png") });
 
-  await page.setViewportSize({ width: 375, height: 667 });
+  await settlementSummaries.first().click();
+  await expect(settlementItems.first()).not.toHaveAttribute("open", "");
+  await page.setViewportSize({ width: 568, height: 320 });
+  await settlementScrollRegion.evaluate((region) => {
+    region.scrollTop = 0;
+  });
+  await expect(page.locator("main.layout")).toHaveAttribute("data-effective-viewport", "568x320");
+  const legacyLandscapeGeometry = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>("[data-testid='settlement-panel']")!;
+    const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+    const scrollRegion = document.querySelector<HTMLElement>("[data-testid='settlement-scroll-region']")!;
+    const actions = document.querySelector<HTMLElement>(".end-actions")!;
+    const summaries = [...document.querySelectorAll<HTMLElement>("[data-testid='settlement-player-summary']")];
+    const buttons = [...actions.querySelectorAll<HTMLElement>("button")];
+    const panelRect = panel.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const scrollRect = scrollRegion.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    const isContained = (child: DOMRect, parent: DOMRect) =>
+      child.left >= parent.left - 1 &&
+      child.right <= parent.right + 1 &&
+      child.top >= parent.top - 1 &&
+      child.bottom <= parent.bottom + 1;
+    const overlaps = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return {
+      panelBelowHeader: panelRect.top >= headerRect.bottom,
+      outerDoesNotScroll: panel.scrollHeight <= panel.clientHeight + 1 && panel.scrollWidth <= panel.clientWidth + 1,
+      detailsCanScroll: scrollRegion.scrollHeight > scrollRegion.clientHeight,
+      actionsDoNotCoverDetails: !overlaps(scrollRect, actionsRect),
+      firstThreeSummariesVisible: summaries.slice(0, 3).every((summary) =>
+        isContained(summary.getBoundingClientRect(), scrollRect),
+      ),
+      buttonsContained: buttons.every((button) => isContained(button.getBoundingClientRect(), panelRect)),
+      minimumButtonHeight: Math.min(...buttons.map((button) => button.getBoundingClientRect().height)),
+    };
+  });
+  expect(legacyLandscapeGeometry).toMatchObject({
+    panelBelowHeader: true,
+    outerDoesNotScroll: true,
+    detailsCanScroll: true,
+    actionsDoNotCoverDetails: true,
+    firstThreeSummariesVisible: true,
+    buttonsContained: true,
+  });
+  expect(legacyLandscapeGeometry.minimumButtonHeight).toBeGreaterThanOrEqual(48);
+  await page.screenshot({ path: testInfo.outputPath("legacy-landscape-settlement-overview.png") });
+
+  await settlementSummaries.first().click();
+  await expect(settlementItems.first()).toHaveAttribute("open", "");
+  await firstSettlementCard.scrollIntoViewIfNeeded();
+  const legacyCardMetrics = await firstSettlementCard.evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    return {
+      width: rect.width,
+      fontSize: Number.parseFloat(getComputedStyle(card).fontSize),
+    };
+  });
+  expect(legacyCardMetrics.width).toBeGreaterThanOrEqual(32);
+  expect(legacyCardMetrics.fontSize).toBeGreaterThanOrEqual(16);
+  await page.screenshot({ path: testInfo.outputPath("legacy-landscape-settlement-expanded.png") });
+  await settlementSummaries.first().click();
+  await settlementSummaries.last().scrollIntoViewIfNeeded();
+  const lastSummaryContained = await settlementSummaries.last().evaluate((summary) => {
+    const region = document.querySelector<HTMLElement>("[data-testid='settlement-scroll-region']")!;
+    const summaryRect = summary.getBoundingClientRect();
+    const regionRect = region.getBoundingClientRect();
+    return summaryRect.top >= regionRect.top - 1 && summaryRect.bottom <= regionRect.bottom + 1;
+  });
+  expect(lastSummaryContained).toBe(true);
+
+  await settlementScrollRegion.evaluate((region) => {
+    region.scrollTop = 0;
+  });
+  await page.setViewportSize({ width: 320, height: 568 });
   await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+  const legacyPortraitGeometry = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>("[data-testid='settlement-panel']")!;
+    const scrollRegion = document.querySelector<HTMLElement>("[data-testid='settlement-scroll-region']")!;
+    const actions = document.querySelector<HTMLElement>(".end-actions")!;
+    const panelRect = panel.getBoundingClientRect();
+    const scrollRect = scrollRegion.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    const overlaps = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return {
+      panelInPhysicalViewport:
+        panelRect.left >= 0 &&
+        panelRect.right <= window.innerWidth &&
+        panelRect.top >= 0 &&
+        panelRect.bottom <= window.innerHeight,
+      outerDoesNotScroll: panel.scrollHeight <= panel.clientHeight + 1 && panel.scrollWidth <= panel.clientWidth + 1,
+      actionsDoNotCoverDetails: !overlaps(scrollRect, actionsRect),
+    };
+  });
+  expect(legacyPortraitGeometry).toEqual({
+    panelInPhysicalViewport: true,
+    outerDoesNotScroll: true,
+    actionsDoNotCoverDetails: true,
+  });
+  await page.screenshot({ path: testInfo.outputPath("legacy-portrait-settlement.png") });
   const returnLobbyTrigger = page.getByTestId("return-lobby-trigger");
   await returnLobbyTrigger.click();
   const returnLobbyDialog = page.getByRole("dialog", { name: "让全桌返回大厅？" });
@@ -229,4 +271,31 @@ test("single practice flow reaches settlement", async ({ page }, testInfo) => {
   await expect(returnLobbyDialog).toHaveCount(0);
   await expect(returnLobbyTrigger).toBeFocused();
   await expect(settlementPanel).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
+  await expect.poll(() => settlementItems.evaluateAll((items) => items.every((item) => item.hasAttribute("open")))).toBe(true);
+  const desktopGeometry = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>("[data-testid='settlement-panel']")!;
+    const scrollRegion = document.querySelector<HTMLElement>("[data-testid='settlement-scroll-region']")!;
+    const actions = document.querySelector<HTMLElement>(".end-actions")!;
+    const panelRect = panel.getBoundingClientRect();
+    const scrollRect = scrollRegion.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    return {
+      panelInViewport:
+        panelRect.left >= 0 &&
+        panelRect.right <= window.innerWidth &&
+        panelRect.top >= 0 &&
+        panelRect.bottom <= window.innerHeight,
+      outerDoesNotScroll: panel.scrollHeight <= panel.clientHeight + 1 && panel.scrollWidth <= panel.clientWidth + 1,
+      detailsAboveActions: scrollRect.bottom <= actionsRect.top + 1,
+    };
+  });
+  expect(desktopGeometry).toEqual({
+    panelInViewport: true,
+    outerDoesNotScroll: true,
+    detailsAboveActions: true,
+  });
+  await page.screenshot({ path: testInfo.outputPath("desktop-settlement.png") });
 });

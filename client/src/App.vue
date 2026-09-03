@@ -246,135 +246,157 @@
         :aria-busy="!settlementReady"
         tabindex="-1"
       >
-        <h2 id="settlement-panel-title">{{ endPanelTitle }}</h2>
-        <div v-if="!settlementReady" class="settlement-loading" data-testid="settlement-loading" role="status" aria-live="polite">
-          <strong>正在整理本局得分…</strong>
-          <span>请稍候，结算完成后才能开始下一局。</span>
-        </div>
-        <div v-else class="round-overview" data-testid="round-overview" role="status" aria-live="polite">
-          <strong>{{ roundOutcomeText }}</strong>
-          <span v-if="mySettlementPlayer">
-            你本局 <b :class="scoreToneClass(mySettlementPlayer.totalScore)">{{ signedScore(mySettlementPlayer.totalScore) }}分</b>
-          </span>
-          <small>你的结果排在最前面，向下滑动可查看每家明细。</small>
-        </div>
-        <p v-if="settlementReady && !derivedWinnerId">{{ endSummary }}</p>
-        <p v-if="roundDealerCard" class="end-global-info">本局定庄牌: {{ cardLabel(roundDealerCard) }}</p>
-        <section v-if="winnerSettlementPlayer && huCalculationLines.length" class="settlement scoring-explain">
-          <h3>胡牌计分</h3>
-          <div class="score-formula">
-            <p>{{ participantDisplayName(winnerSettlementPlayer) }} {{ winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡" }}：赢一家 {{ signedScore(winnerPerOpponentScore) }}分</p>
-            <ul>
-              <li v-for="line in huCalculationLines" :key="`hu-calc-${line.key}`">
-                {{ line.label }}：{{ signedScore(line.unit) }}分
-              </li>
-            </ul>
+        <div class="settlement-fixed-head">
+          <h2 id="settlement-panel-title">{{ endPanelTitle }}</h2>
+          <div v-if="!settlementReady" class="settlement-loading" data-testid="settlement-loading" role="status" aria-live="polite">
+            <strong>正在整理本局得分…</strong>
+            <span>请稍候，结算完成后才能开始下一局。</span>
           </div>
-        </section>
+          <div v-else class="round-overview" data-testid="round-overview" role="status" aria-live="polite">
+            <strong>{{ roundOutcomeText }}</strong>
+            <span v-if="mySettlementPlayer">
+              你本局 <b :class="scoreToneClass(mySettlementPlayer.totalScore)">{{ signedScore(mySettlementPlayer.totalScore) }}分</b>
+            </span>
+            <small>你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
+          </div>
+        </div>
 
-        <section v-if="settlementPlayers.length" class="settlement">
-          <h3>各家结算</h3>
-          <div class="settlement-list">
-            <div
-              v-for="p in orderedSettlementPlayers"
-              :key="`settle-${p.clientId}`"
-              class="settlement-item"
-              :class="{ winner: isSettlementWinner(p) }"
-            >
-              <div class="settlement-head">
-                <div>
-                  <p class="settlement-name">
-                    {{ p.name }}<span v-if="p.isConfiguredBot" class="settlement-bot-badge" data-testid="settlement-bot-identity">机器人</span><span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
-                  </p>
-                  <p class="settlement-meta">
-                    手牌 {{ p.hand.length }} 张 · 牌组 {{ settlementGroupBlocks(p).length }} 组 · 流水 {{ p.discardCount }} 张
-                  </p>
-                </div>
-                <p class="score-total" :class="scoreToneClass(p.totalScore)">{{ signedScore(p.totalScore) }}分</p>
-              </div>
+        <div
+          v-if="settlementReady"
+          class="settlement-scroll-region"
+          data-testid="settlement-scroll-region"
+          role="region"
+          aria-label="各家结算与计分明细"
+          tabindex="0"
+        >
+          <p v-if="!derivedWinnerId">{{ endSummary }}</p>
+          <p v-if="roundDealerCard" class="end-global-info">本局定庄牌: {{ cardLabel(roundDealerCard) }}</p>
 
-              <div class="settlement-zone">
-                <p class="zone-title">牌组区</p>
-                <div class="settlement-group-list" v-if="settlementGroupBlocks(p).length">
-                  <div
-                    v-for="group in settlementGroupBlocks(p)"
-                    :key="`settle-group-${p.clientId}-${group.id}`"
-                    class="settlement-group"
-                    :class="group.tone"
-                  >
-                    <span v-if="group.badge" class="settlement-group-badge">{{ group.badge }}</span>
-                    <div class="settlement-cards compact">
-                      <CardComp
-                        v-for="card in group.cards"
-                        :key="`settle-e-${p.clientId}-${group.id}-${card.id}`"
-                        :card="card"
-                        size="sm"
-                        :mode="resolvedTableCardMode"
-                      />
+          <section v-if="settlementPlayers.length" class="settlement settlement-player-section">
+            <h3>各家结算</h3>
+            <div class="settlement-list">
+              <details
+                v-for="p in orderedSettlementPlayers"
+                :key="`settle-${p.clientId}`"
+                class="settlement-item"
+                :class="{ winner: isSettlementWinner(p) }"
+                :open="!isCompactViewport"
+              >
+                <summary class="settlement-head" data-testid="settlement-player-summary">
+                  <span class="settlement-person">
+                    <strong class="settlement-name">
+                      {{ p.name }}<span v-if="p.isConfiguredBot" class="settlement-bot-badge" data-testid="settlement-bot-identity">机器人</span><span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
+                    </strong>
+                    <small class="settlement-meta">
+                      手牌 {{ p.hand.length }} 张 · 牌组 {{ settlementGroupBlocks(p).length }} 组 · 流水 {{ p.discardCount }} 张
+                    </small>
+                  </span>
+                  <span class="settlement-result">
+                    <strong class="score-total" :class="scoreToneClass(p.totalScore)">{{ signedScore(p.totalScore) }}分</strong>
+                    <small class="settlement-toggle-label" aria-hidden="true">
+                      <span class="settlement-toggle-closed">查看明细</span>
+                      <span class="settlement-toggle-open">收起明细</span>
+                    </small>
+                  </span>
+                </summary>
+
+                <div class="settlement-item-body">
+                  <div class="settlement-zone">
+                    <p class="zone-title">牌组区</p>
+                    <div class="settlement-group-list" v-if="settlementGroupBlocks(p).length">
+                      <div
+                        v-for="group in settlementGroupBlocks(p)"
+                        :key="`settle-group-${p.clientId}-${group.id}`"
+                        class="settlement-group"
+                        :class="group.tone"
+                      >
+                        <span v-if="group.badge" class="settlement-group-badge">{{ group.badge }}</span>
+                        <div class="settlement-cards compact">
+                          <CardComp
+                            v-for="card in group.cards"
+                            :key="`settle-e-${p.clientId}-${group.id}-${card.id}`"
+                            :card="card"
+                            size="sm"
+                            :mode="resolvedTableCardMode"
+                          />
+                        </div>
+                      </div>
                     </div>
+                    <p v-else class="settlement-empty">（无）</p>
                   </div>
-                </div>
-                <p v-else class="settlement-empty">（无）</p>
-              </div>
 
-              <div class="settlement-zone">
-                <p class="zone-title">手牌区</p>
-                <div class="settlement-group-list" v-if="settlementHandBlocks(p).length">
-                  <div
-                    v-for="group in settlementHandBlocks(p)"
-                    :key="`settle-hand-${p.clientId}-${group.id}`"
-                    class="settlement-group"
-                    :class="group.tone"
-                  >
-                    <span v-if="group.badge" class="settlement-group-badge">{{ group.badge }}</span>
-                    <div class="settlement-cards compact">
+                  <div class="settlement-zone">
+                    <p class="zone-title">手牌区</p>
+                    <div class="settlement-group-list" v-if="settlementHandBlocks(p).length">
+                      <div
+                        v-for="group in settlementHandBlocks(p)"
+                        :key="`settle-hand-${p.clientId}-${group.id}`"
+                        class="settlement-group"
+                        :class="group.tone"
+                      >
+                        <span v-if="group.badge" class="settlement-group-badge">{{ group.badge }}</span>
+                        <div class="settlement-cards compact">
+                          <CardComp
+                            v-for="card in group.cards"
+                            :key="`settle-hg-${p.clientId}-${group.id}-${card.id}`"
+                            :card="card"
+                            size="sm"
+                            :mode="settlementHandCardMode(p.clientId)"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div class="settlement-cards" v-else-if="p.hand.length">
                       <CardComp
-                        v-for="card in group.cards"
-                        :key="`settle-hg-${p.clientId}-${group.id}-${card.id}`"
+                        v-for="card in p.hand"
+                        :key="`settle-${p.clientId}-${card.id}`"
                         :card="card"
                         size="sm"
                         :mode="settlementHandCardMode(p.clientId)"
                       />
                     </div>
+                    <p v-else class="settlement-empty">（无手牌）</p>
+                  </div>
+
+                  <div class="score-breakdown">
+                    <p class="zone-title">分数明细</p>
+                    <p v-if="!settlementScoreLines(p).length" class="settlement-empty">（无）</p>
+                    <ul v-else>
+                      <li v-for="line in settlementScoreLines(p)" :key="`score-${p.clientId}-${line.key}`">
+                        {{ line.label }}：{{ signedScore(line.total) }}分
+                      </li>
+                    </ul>
                   </div>
                 </div>
-                <div class="settlement-cards" v-else-if="p.hand.length">
-                  <CardComp
-                    v-for="card in p.hand"
-                    :key="`settle-${p.clientId}-${card.id}`"
-                    :card="card"
-                    size="sm"
-                    :mode="settlementHandCardMode(p.clientId)"
-                  />
-                </div>
-                <p v-else class="settlement-empty">（无手牌）</p>
-              </div>
-
-              <div class="score-breakdown">
-                <p class="zone-title">分数明细</p>
-                <p v-if="!settlementScoreLines(p).length" class="settlement-empty">（无）</p>
-                <ul v-else>
-                  <li v-for="line in settlementScoreLines(p)" :key="`score-${p.clientId}-${line.key}`">
-                    {{ line.label }}：{{ signedScore(line.total) }}分
-                  </li>
-                </ul>
-              </div>
+              </details>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section v-if="remainingDeckPreview.length" class="settlement remaining-deck">
-          <h3>留底牌堆前{{ remainingDeckPreview.length }}张</h3>
-          <div class="settlement-cards">
-            <CardComp
-              v-for="card in remainingDeckPreview"
-              :key="`remain-${card.id}`"
-              :card="card"
-              size="sm"
-              :mode="resolvedTableCardMode"
-            />
-          </div>
-        </section>
+          <section v-if="winnerSettlementPlayer && huCalculationLines.length" class="settlement scoring-explain">
+            <h3>胡牌计分</h3>
+            <div class="score-formula">
+              <p>{{ participantDisplayName(winnerSettlementPlayer) }} {{ winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡" }}：赢一家 {{ signedScore(winnerPerOpponentScore) }}分</p>
+              <ul>
+                <li v-for="line in huCalculationLines" :key="`hu-calc-${line.key}`">
+                  {{ line.label }}：{{ signedScore(line.unit) }}分
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section v-if="remainingDeckPreview.length" class="settlement remaining-deck">
+            <h3>留底牌堆前{{ remainingDeckPreview.length }}张</h3>
+            <div class="settlement-cards">
+              <CardComp
+                v-for="card in remainingDeckPreview"
+                :key="`remain-${card.id}`"
+                :card="card"
+                size="sm"
+                :mode="resolvedTableCardMode"
+              />
+            </div>
+          </section>
+        </div>
 
         <div class="end-actions">
           <template v-if="isHost">
@@ -2881,13 +2903,40 @@ watch(
   min-width: 300px;
   max-width: min(92vw, 1100px);
   max-height: 86vh;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   font-size: clamp(0.84rem, 1.45vh, 1rem);
 }
 
 .hu-panel:focus-visible {
   outline: 3px solid #38bdf8;
   outline-offset: -3px;
+}
+
+.settlement-fixed-head {
+  flex: 0 0 auto;
+}
+
+.settlement-fixed-head h2 {
+  margin: 0;
+}
+
+.settlement-scroll-region {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0.65rem;
+  padding-right: 0.2rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settlement-scroll-region:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: -3px;
+  border-radius: 0.55rem;
 }
 
 .settlement-loading,
@@ -3005,11 +3054,38 @@ watch(
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  min-height: 2.75rem;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 0.45rem;
+}
+
+.settlement-head::-webkit-details-marker {
+  display: none;
+}
+
+.settlement-head:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.settlement-person,
+.settlement-result {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+}
+
+.settlement-result {
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 0.12rem;
 }
 
 .settlement-name {
-  margin: 0 0 6px;
+  display: block;
+  margin: 0 0 4px;
   font-weight: 600;
   font-size: clamp(0.92rem, 1.7vh, 1.08rem);
 }
@@ -3031,9 +3107,35 @@ watch(
 }
 
 .settlement-meta {
-  margin: 0 0 8px;
+  display: block;
+  margin: 0;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
   color: #334155;
+}
+
+.settlement-toggle-label {
+  color: #1d4ed8;
+  font-size: clamp(0.7rem, 1.2vh, 0.8rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settlement-toggle-open {
+  display: none;
+}
+
+.settlement-item[open] .settlement-toggle-closed {
+  display: none;
+}
+
+.settlement-item[open] .settlement-toggle-open {
+  display: inline;
+}
+
+.settlement-item-body {
+  margin-top: 0.4rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid #e2e8f0;
 }
 
 .settlement-cards {
@@ -3158,6 +3260,7 @@ watch(
 }
 
 .score-total {
+  display: block;
   margin: 0;
   font-weight: 700;
   font-size: clamp(0.92rem, 1.75vh, 1.12rem);
@@ -3176,6 +3279,7 @@ watch(
 }
 
 .end-actions {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   margin-top: 14px;
@@ -3189,12 +3293,10 @@ watch(
 }
 
 .hu-panel > .end-actions {
-  position: sticky;
-  bottom: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
   z-index: 5;
-  margin-inline: calc(-1 * clamp(0.9rem, 2vh, 1.2rem));
-  padding: 0.65rem clamp(0.9rem, 2vh, 1.2rem) clamp(0.9rem, 2vh, 1.2rem);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0), #f8fafc 30%);
+  padding-top: 0.65rem;
+  border-top: 1px solid #cbd5e1;
+  background: #f8fafc;
 }
 
 .table-return-mask {
@@ -3405,8 +3507,14 @@ watch(
   padding: 0.65rem;
 }
 
+.layout.compact-viewport .settlement-scroll-region {
+  margin-top: 0.45rem;
+  padding-right: 0.15rem;
+}
+
 .layout.compact-viewport .settlement-list {
   grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem;
 }
 
 .layout.compact-viewport .round-overview,
@@ -3417,6 +3525,14 @@ watch(
 .layout.compact-viewport .settlement-name {
   font-size: 1rem;
   font-weight: 750;
+}
+
+.layout.compact-viewport .settlement-item {
+  padding: 0.35rem 0.55rem;
+}
+
+.layout.compact-viewport .settlement-head {
+  min-height: 2.5rem;
 }
 
 .layout.compact-viewport .settlement-meta,
@@ -3443,9 +3559,8 @@ watch(
 }
 
 .layout.compact-viewport .hu-panel > .end-actions {
-  bottom: -0.65rem;
-  margin-inline: -0.65rem;
-  padding: 0.55rem 0.65rem 0.65rem;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
 }
 
 .layout.compact-viewport .ghost.mini,
@@ -3465,5 +3580,108 @@ watch(
 
 .layout.ultra-compact-viewport .rules-list {
   line-height: 1.35;
+}
+
+.layout.ultra-compact-viewport .settlement-fixed-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.layout.ultra-compact-viewport .settlement-fixed-head h2 {
+  flex: 0 0 auto;
+  font-size: 1.08rem;
+  line-height: 1.15;
+}
+
+.layout.ultra-compact-viewport .round-overview,
+.layout.ultra-compact-viewport .settlement-loading {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+  padding: 0.32rem 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  line-height: 1.15;
+}
+
+.layout.ultra-compact-viewport .round-overview strong,
+.layout.ultra-compact-viewport .settlement-loading strong {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.layout.ultra-compact-viewport .round-overview > span,
+.layout.ultra-compact-viewport .settlement-loading > span {
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.layout.ultra-compact-viewport .round-overview small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.layout.ultra-compact-viewport .settlement-scroll-region {
+  margin-top: 0.3rem;
+}
+
+.layout.ultra-compact-viewport .settlement-player-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.layout.ultra-compact-viewport .settlement-player-section > h3 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.layout.ultra-compact-viewport .settlement-list {
+  gap: 0.25rem;
+}
+
+.layout.ultra-compact-viewport .settlement-item {
+  padding: 0.14rem 0.45rem;
+}
+
+.layout.ultra-compact-viewport .settlement-head {
+  min-height: 2.5rem;
+  gap: 0.45rem;
+}
+
+.layout.ultra-compact-viewport .settlement-name {
+  margin-bottom: 0.1rem;
+  font-size: 0.94rem;
+}
+
+.layout.ultra-compact-viewport .settlement-meta,
+.layout.ultra-compact-viewport .settlement-toggle-label {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.layout.ultra-compact-viewport .score-total {
+  font-size: 1rem;
+}
+
+.layout.ultra-compact-viewport .hu-panel > .end-actions {
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
 }
 </style>

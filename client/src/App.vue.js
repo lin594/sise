@@ -1515,6 +1515,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
@@ -1530,6 +1532,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['winner']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-result']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-toggle-open']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group']} */ ;
@@ -1604,6 +1612,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
@@ -1614,6 +1625,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
@@ -1659,6 +1676,66 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-player-section']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-toggle-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
@@ -2270,6 +2347,9 @@ if (__VLS_ctx.showEndPanel) {
         tabindex: "-1",
     });
     /** @type {typeof __VLS_ctx.settlementPanelRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "settlement-fixed-head" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
         id: "settlement-panel-title",
     });
@@ -2302,246 +2382,275 @@ if (__VLS_ctx.showEndPanel) {
         }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     }
-    if (__VLS_ctx.settlementReady && !__VLS_ctx.derivedWinnerId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.endSummary);
-    }
-    if (__VLS_ctx.roundDealerCard) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "end-global-info" },
-        });
-        (__VLS_ctx.cardLabel(__VLS_ctx.roundDealerCard));
-    }
-    if (__VLS_ctx.winnerSettlementPlayer && __VLS_ctx.huCalculationLines.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-            ...{ class: "settlement scoring-explain" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+    if (__VLS_ctx.settlementReady) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "score-formula" },
+            ...{ class: "settlement-scroll-region" },
+            'data-testid': "settlement-scroll-region",
+            role: "region",
+            'aria-label': "各家结算与计分明细",
+            tabindex: "0",
         });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.participantDisplayName(__VLS_ctx.winnerSettlementPlayer));
-        (__VLS_ctx.winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡");
-        (__VLS_ctx.signedScore(__VLS_ctx.winnerPerOpponentScore));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
-        for (const [line] of __VLS_getVForSourceType((__VLS_ctx.huCalculationLines))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
-                key: (`hu-calc-${line.key}`),
-            });
-            (line.label);
-            (__VLS_ctx.signedScore(line.unit));
+        if (!__VLS_ctx.derivedWinnerId) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+            (__VLS_ctx.endSummary);
         }
-    }
-    if (__VLS_ctx.settlementPlayers.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-            ...{ class: "settlement" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "settlement-list" },
-        });
-        for (const [p] of __VLS_getVForSourceType((__VLS_ctx.orderedSettlementPlayers))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                key: (`settle-${p.clientId}`),
-                ...{ class: "settlement-item" },
-                ...{ class: ({ winner: __VLS_ctx.isSettlementWinner(p) }) },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "settlement-head" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+        if (__VLS_ctx.roundDealerCard) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "settlement-name" },
+                ...{ class: "end-global-info" },
             });
-            (p.name);
-            if (p.isConfiguredBot) {
+            (__VLS_ctx.cardLabel(__VLS_ctx.roundDealerCard));
+        }
+        if (__VLS_ctx.settlementPlayers.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+                ...{ class: "settlement settlement-player-section" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "settlement-list" },
+            });
+            for (const [p] of __VLS_getVForSourceType((__VLS_ctx.orderedSettlementPlayers))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.details, __VLS_intrinsicElements.details)({
+                    key: (`settle-${p.clientId}`),
+                    ...{ class: "settlement-item" },
+                    ...{ class: ({ winner: __VLS_ctx.isSettlementWinner(p) }) },
+                    open: (!__VLS_ctx.isCompactViewport),
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.summary, __VLS_intrinsicElements.summary)({
+                    ...{ class: "settlement-head" },
+                    'data-testid': "settlement-player-summary",
+                });
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                    ...{ class: "settlement-bot-badge" },
-                    'data-testid': "settlement-bot-identity",
+                    ...{ class: "settlement-person" },
                 });
-            }
-            if (p.clientId === __VLS_ctx.mySeatId) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            }
-            if (__VLS_ctx.isSettlementWinner(p)) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "settlement-meta" },
-            });
-            (p.hand.length);
-            (__VLS_ctx.settlementGroupBlocks(p).length);
-            (p.discardCount);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "score-total" },
-                ...{ class: (__VLS_ctx.scoreToneClass(p.totalScore)) },
-            });
-            (__VLS_ctx.signedScore(p.totalScore));
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "settlement-zone" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "zone-title" },
-            });
-            if (__VLS_ctx.settlementGroupBlocks(p).length) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
+                    ...{ class: "settlement-name" },
+                });
+                (p.name);
+                if (p.isConfiguredBot) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        ...{ class: "settlement-bot-badge" },
+                        'data-testid': "settlement-bot-identity",
+                    });
+                }
+                if (p.clientId === __VLS_ctx.mySeatId) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+                }
+                if (__VLS_ctx.isSettlementWinner(p)) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+                }
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                    ...{ class: "settlement-meta" },
+                });
+                (p.hand.length);
+                (__VLS_ctx.settlementGroupBlocks(p).length);
+                (p.discardCount);
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "settlement-result" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
+                    ...{ class: "score-total" },
+                    ...{ class: (__VLS_ctx.scoreToneClass(p.totalScore)) },
+                });
+                (__VLS_ctx.signedScore(p.totalScore));
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                    ...{ class: "settlement-toggle-label" },
+                    'aria-hidden': "true",
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "settlement-toggle-closed" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "settlement-toggle-open" },
+                });
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                    ...{ class: "settlement-group-list" },
+                    ...{ class: "settlement-item-body" },
                 });
-                for (const [group] of __VLS_getVForSourceType((__VLS_ctx.settlementGroupBlocks(p)))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "settlement-zone" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "zone-title" },
+                });
+                if (__VLS_ctx.settlementGroupBlocks(p).length) {
                     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                        key: (`settle-group-${p.clientId}-${group.id}`),
-                        ...{ class: "settlement-group" },
-                        ...{ class: (group.tone) },
+                        ...{ class: "settlement-group-list" },
                     });
-                    if (group.badge) {
-                        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                            ...{ class: "settlement-group-badge" },
+                    for (const [group] of __VLS_getVForSourceType((__VLS_ctx.settlementGroupBlocks(p)))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                            key: (`settle-group-${p.clientId}-${group.id}`),
+                            ...{ class: "settlement-group" },
+                            ...{ class: (group.tone) },
                         });
-                        (group.badge);
-                    }
-                    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                        ...{ class: "settlement-cards compact" },
-                    });
-                    for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                        /** @type {[typeof CardComp, ]} */ ;
-                        // @ts-ignore
-                        const __VLS_72 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                            key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
-                            card: (card),
-                            size: "sm",
-                            mode: (__VLS_ctx.resolvedTableCardMode),
-                        }));
-                        const __VLS_73 = __VLS_72({
-                            key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
-                            card: (card),
-                            size: "sm",
-                            mode: (__VLS_ctx.resolvedTableCardMode),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_72));
+                        if (group.badge) {
+                            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                                ...{ class: "settlement-group-badge" },
+                            });
+                            (group.badge);
+                        }
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                            ...{ class: "settlement-cards compact" },
+                        });
+                        for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                            /** @type {[typeof CardComp, ]} */ ;
+                            // @ts-ignore
+                            const __VLS_72 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                                key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
+                                card: (card),
+                                size: "sm",
+                                mode: (__VLS_ctx.resolvedTableCardMode),
+                            }));
+                            const __VLS_73 = __VLS_72({
+                                key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
+                                card: (card),
+                                size: "sm",
+                                mode: (__VLS_ctx.resolvedTableCardMode),
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_72));
+                        }
                     }
                 }
-            }
-            else {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                    ...{ class: "settlement-empty" },
-                });
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "settlement-zone" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "zone-title" },
-            });
-            if (__VLS_ctx.settlementHandBlocks(p).length) {
+                else {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                        ...{ class: "settlement-empty" },
+                    });
+                }
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                    ...{ class: "settlement-group-list" },
+                    ...{ class: "settlement-zone" },
                 });
-                for (const [group] of __VLS_getVForSourceType((__VLS_ctx.settlementHandBlocks(p)))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "zone-title" },
+                });
+                if (__VLS_ctx.settlementHandBlocks(p).length) {
                     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                        key: (`settle-hand-${p.clientId}-${group.id}`),
-                        ...{ class: "settlement-group" },
-                        ...{ class: (group.tone) },
+                        ...{ class: "settlement-group-list" },
                     });
-                    if (group.badge) {
-                        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                            ...{ class: "settlement-group-badge" },
+                    for (const [group] of __VLS_getVForSourceType((__VLS_ctx.settlementHandBlocks(p)))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                            key: (`settle-hand-${p.clientId}-${group.id}`),
+                            ...{ class: "settlement-group" },
+                            ...{ class: (group.tone) },
                         });
-                        (group.badge);
+                        if (group.badge) {
+                            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                                ...{ class: "settlement-group-badge" },
+                            });
+                            (group.badge);
+                        }
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                            ...{ class: "settlement-cards compact" },
+                        });
+                        for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                            /** @type {[typeof CardComp, ]} */ ;
+                            // @ts-ignore
+                            const __VLS_75 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                                key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
+                                card: (card),
+                                size: "sm",
+                                mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
+                            }));
+                            const __VLS_76 = __VLS_75({
+                                key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
+                                card: (card),
+                                size: "sm",
+                                mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_75));
+                        }
                     }
+                }
+                else if (p.hand.length) {
                     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                        ...{ class: "settlement-cards compact" },
+                        ...{ class: "settlement-cards" },
                     });
-                    for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_75 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                            key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
+                        const __VLS_78 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_76 = __VLS_75({
-                            key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
+                        const __VLS_79 = __VLS_78({
+                            key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_75));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_78));
                     }
                 }
-            }
-            else if (p.hand.length) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                    ...{ class: "settlement-cards" },
-                });
-                for (const [card] of __VLS_getVForSourceType((p.hand))) {
-                    /** @type {[typeof CardComp, ]} */ ;
-                    // @ts-ignore
-                    const __VLS_78 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                        key: (`settle-${p.clientId}-${card.id}`),
-                        card: (card),
-                        size: "sm",
-                        mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                    }));
-                    const __VLS_79 = __VLS_78({
-                        key: (`settle-${p.clientId}-${card.id}`),
-                        card: (card),
-                        size: "sm",
-                        mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_78));
-                }
-            }
-            else {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                    ...{ class: "settlement-empty" },
-                });
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "score-breakdown" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                ...{ class: "zone-title" },
-            });
-            if (!__VLS_ctx.settlementScoreLines(p).length) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-                    ...{ class: "settlement-empty" },
-                });
-            }
-            else {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
-                for (const [line] of __VLS_getVForSourceType((__VLS_ctx.settlementScoreLines(p)))) {
-                    __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
-                        key: (`score-${p.clientId}-${line.key}`),
+                else {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                        ...{ class: "settlement-empty" },
                     });
-                    (line.label);
-                    (__VLS_ctx.signedScore(line.total));
+                }
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                    ...{ class: "score-breakdown" },
+                });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                    ...{ class: "zone-title" },
+                });
+                if (!__VLS_ctx.settlementScoreLines(p).length) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                        ...{ class: "settlement-empty" },
+                    });
+                }
+                else {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
+                    for (const [line] of __VLS_getVForSourceType((__VLS_ctx.settlementScoreLines(p)))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
+                            key: (`score-${p.clientId}-${line.key}`),
+                        });
+                        (line.label);
+                        (__VLS_ctx.signedScore(line.total));
+                    }
                 }
             }
         }
-    }
-    if (__VLS_ctx.remainingDeckPreview.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-            ...{ class: "settlement remaining-deck" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
-        (__VLS_ctx.remainingDeckPreview.length);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "settlement-cards" },
-        });
-        for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_81 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                key: (`remain-${card.id}`),
-                card: (card),
-                size: "sm",
-                mode: (__VLS_ctx.resolvedTableCardMode),
-            }));
-            const __VLS_82 = __VLS_81({
-                key: (`remain-${card.id}`),
-                card: (card),
-                size: "sm",
-                mode: (__VLS_ctx.resolvedTableCardMode),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_81));
+        if (__VLS_ctx.winnerSettlementPlayer && __VLS_ctx.huCalculationLines.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+                ...{ class: "settlement scoring-explain" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "score-formula" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+            (__VLS_ctx.participantDisplayName(__VLS_ctx.winnerSettlementPlayer));
+            (__VLS_ctx.winnerSettlementPlayer.huType === "big" ? "大胡" : "小胡");
+            (__VLS_ctx.signedScore(__VLS_ctx.winnerPerOpponentScore));
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.ul, __VLS_intrinsicElements.ul)({});
+            for (const [line] of __VLS_getVForSourceType((__VLS_ctx.huCalculationLines))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.li, __VLS_intrinsicElements.li)({
+                    key: (`hu-calc-${line.key}`),
+                });
+                (line.label);
+                (__VLS_ctx.signedScore(line.unit));
+            }
+        }
+        if (__VLS_ctx.remainingDeckPreview.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+                ...{ class: "settlement remaining-deck" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+            (__VLS_ctx.remainingDeckPreview.length);
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+                ...{ class: "settlement-cards" },
+            });
+            for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_81 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`remain-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                    mode: (__VLS_ctx.resolvedTableCardMode),
+                }));
+                const __VLS_82 = __VLS_81({
+                    key: (`remain-${card.id}`),
+                    card: (card),
+                    size: "sm",
+                    mode: (__VLS_ctx.resolvedTableCardMode),
+                }, ...__VLS_functionalComponentArgsRest(__VLS_81));
+            }
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2767,20 +2876,26 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['candidate-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-global-info']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
-/** @type {__VLS_StyleScopedClasses['scoring-explain']} */ ;
-/** @type {__VLS_StyleScopedClasses['score-formula']} */ ;
-/** @type {__VLS_StyleScopedClasses['settlement']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-player-section']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-person']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-bot-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-toggle-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-toggle-closed']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-toggle-open']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-item-body']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-group-list']} */ ;
@@ -2801,6 +2916,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['score-breakdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['zone-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement']} */ ;
+/** @type {__VLS_StyleScopedClasses['scoring-explain']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-formula']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['remaining-deck']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
