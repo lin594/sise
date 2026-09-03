@@ -249,13 +249,26 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   await firstSettlementCard.scrollIntoViewIfNeeded();
   const legacyCardMetrics = await firstSettlementCard.evaluate((card) => {
     const rect = card.getBoundingClientRect();
+    const summary = card.closest("details")?.querySelector<HTMLElement>("summary");
+    const scrollRegion = document.querySelector<HTMLElement>("[data-testid='settlement-scroll-region']");
+    const summaryRect = summary?.getBoundingClientRect();
+    const scrollRect = scrollRegion?.getBoundingClientRect();
     return {
       width: rect.width,
       fontSize: Number.parseFloat(getComputedStyle(card).fontSize),
+      summaryPosition: summary ? getComputedStyle(summary).position : "",
+      summaryVisible:
+        Boolean(summaryRect && scrollRect) &&
+        summaryRect!.top >= scrollRect!.top - 1 &&
+        summaryRect!.bottom <= scrollRect!.bottom + 1,
+      summaryText: summary?.textContent ?? "",
     };
   });
   expect(legacyCardMetrics.width).toBeGreaterThanOrEqual(32);
   expect(legacyCardMetrics.fontSize).toBeGreaterThanOrEqual(16);
+  expect(legacyCardMetrics.summaryPosition).toBe("sticky");
+  expect(legacyCardMetrics.summaryVisible).toBe(true);
+  expect(legacyCardMetrics.summaryText).toContain("（你）");
   await page.screenshot({ path: testInfo.outputPath("legacy-landscape-settlement-expanded.png") });
   await settlementSummaries.first().click();
   await settlementSummaries.last().scrollIntoViewIfNeeded();

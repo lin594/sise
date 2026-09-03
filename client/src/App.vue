@@ -3880,6 +3880,21 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   min-height: 2.5rem;
 }
 
+.layout.compact-viewport .settlement-item[open] > .settlement-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -0.12rem -0.25rem 0;
+  padding: 0.12rem 0.25rem;
+  border-bottom: 1px solid #bfdbfe;
+  background: #ffffff;
+  box-shadow: 0 0.2rem 0.35rem rgba(15, 23, 42, 0.08);
+}
+
+.layout.compact-viewport .settlement-item.winner[open] > .settlement-head {
+  background: #f8fafc;
+}
+
 .layout.compact-viewport .settlement-meta,
 .layout.compact-viewport .zone-title,
 .layout.compact-viewport .score-formula li,
