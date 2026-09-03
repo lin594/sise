@@ -2056,6 +2056,10 @@ test.describe("legacy small landscape gameplay", () => {
     expect(rotatedControls.minimumGlyphFontSize).toBeGreaterThanOrEqual(22);
     expect(rotatedControls.minimumButtonWidth).toBeGreaterThanOrEqual(40);
     expect(rotatedControls.minimumButtonHeight).toBeGreaterThanOrEqual(40);
+    const rotatedHandRange = await readVisibleHandRange(handVisibleRange);
+    expect(rotatedHandRange.start).toBe(1);
+    expect(rotatedHandRange.end).toBeLessThan(rotatedHandRange.total);
+    expect(rotatedHandRange.total).toBe(legacyInitialRange.total);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game-rotated.png") });
   });
 });

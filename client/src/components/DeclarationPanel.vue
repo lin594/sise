@@ -480,18 +480,20 @@ function updateHandScrollState(): void {
   handCanScrollForward.value = rail.scrollLeft < maxScrollLeft - 2;
 
   const cards = Array.from(rail.querySelectorAll<HTMLElement>(".hand-preview-card"));
-  const railRect = rail.getBoundingClientRect();
+  const firstCardOffset = cards[0]?.offsetLeft ?? 0;
+  const viewportStart = rail.scrollLeft;
+  const viewportEnd = viewportStart + rail.clientWidth;
   let visibleIndexes = cards
-    .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
-    .filter(({ rect }) => {
-      const center = rect.left + rect.width / 2;
-      return center >= railRect.left && center <= railRect.right;
+    .map((card, index) => ({ index, start: card.offsetLeft - firstCardOffset, width: card.offsetWidth }))
+    .filter(({ start, width }) => {
+      const center = start + width / 2;
+      return center >= viewportStart && center <= viewportEnd;
     })
     .map(({ index }) => index);
   if (!visibleIndexes.length) {
     visibleIndexes = cards
-      .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
-      .filter(({ rect }) => rect.right > railRect.left && rect.left < railRect.right)
+      .map((card, index) => ({ index, start: card.offsetLeft - firstCardOffset, width: card.offsetWidth }))
+      .filter(({ start, width }) => start + width > viewportStart && start < viewportEnd)
       .map(({ index }) => index);
   }
   handVisibleRange.value = visibleIndexes.length

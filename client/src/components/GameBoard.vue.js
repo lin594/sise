@@ -621,18 +621,20 @@ function updateHandScrollState() {
     handCanScrollBackward.value = hand.scrollLeft > 2;
     handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
     const cards = Array.from(hand.querySelectorAll("[data-card-id]"));
-    const handRect = hand.getBoundingClientRect();
+    const firstCardOffset = cards[0]?.offsetLeft ?? 0;
+    const viewportStart = hand.scrollLeft;
+    const viewportEnd = viewportStart + hand.clientWidth;
     let visibleIndexes = cards
-        .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
-        .filter(({ rect }) => {
-        const center = rect.left + rect.width / 2;
-        return center >= handRect.left && center <= handRect.right;
+        .map((card, index) => ({ index, start: card.offsetLeft - firstCardOffset, width: card.offsetWidth }))
+        .filter(({ start, width }) => {
+        const center = start + width / 2;
+        return center >= viewportStart && center <= viewportEnd;
     })
         .map(({ index }) => index);
     if (!visibleIndexes.length) {
         visibleIndexes = cards
-            .map((card, index) => ({ index, rect: card.getBoundingClientRect() }))
-            .filter(({ rect }) => rect.right > handRect.left && rect.left < handRect.right)
+            .map((card, index) => ({ index, start: card.offsetLeft - firstCardOffset, width: card.offsetWidth }))
+            .filter(({ start, width }) => start + width > viewportStart && start < viewportEnd)
             .map(({ index }) => index);
     }
     handVisibleRange.value = visibleIndexes.length
@@ -1221,6 +1223,7 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     void nextTick(updateHandScrollState);
 });
 watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(updateHandScrollState));
+watch(() => props.ownCardMode, () => void nextTick(updateHandScrollState));
 watch(selfHandRef, observeHandScroller, { immediate: true });
 watch(canDiscard, (enabled) => {
     if (!enabled) {
