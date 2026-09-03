@@ -711,6 +711,7 @@ export declare function useRoom(playerName?: string): {
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => void;
     addBot: (seatIndex: number, strength?: number) => void;
+    fillBots: () => void;
     updateBot: (seatIndex: number, strength: number) => void;
     removeSeat: (seatIndex: number) => void;
 };

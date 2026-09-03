@@ -408,6 +408,66 @@ t("lobby: fixed seats support host bots and atomic occupancy", () => {
   assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "seat_occupied"), true);
 });
 
+t("lobby: host can fill every empty friend-room seat with one atomic action", () => {
+  const room = new FourColorGameRoom() as any;
+  room.state = new GameState();
+  room.state.phase = "waiting";
+  room.state.roomMode = "friends";
+  room.targetSeats = 4;
+  room.stateOps = null;
+  room.playerOrder = [];
+  room.playerHands = new Map();
+  room.botIds = new Set();
+  room.configuredBotIds = new Set();
+  room.seatBySession = new Map();
+  room.seatByToken = new Map();
+  room.baseNameBySeat = new Map();
+  room.pendingNameBySession = new Map();
+  room.pendingTokenBySession = new Map();
+  room.clients = [];
+  let broadcastCount = 0;
+  room.broadcastAvailableActions = () => {
+    broadcastCount += 1;
+  };
+  const sent: Array<{ event: string; payload: any }> = [];
+  const host = { sessionId: "host", send: (event: string, payload: any) => sent.push({ event, payload }) };
+  const intruder = { sessionId: "intruder", send: (event: string, payload: any) => sent.push({ event, payload }) };
+  room.pendingNameBySession.set("host", "房主");
+  assert.equal(room.claimSeatForClient(host, 0, "token-host"), true);
+  broadcastCount = 0;
+
+  room.handleFillBots(host);
+
+  assert.deepEqual(room.playerOrder, ["seat_0", "seat_1", "seat_2", "seat_3"]);
+  assert.equal(room.state.players.size, 4);
+  assert.equal(room.playerHands.size, 4);
+  assert.equal(broadcastCount, 1);
+  assert.equal(room.state.lastAction, "BOT_FILL 3");
+  const players = [...room.state.players.values()];
+  const bots = players.filter((player) => player.isConfiguredBot);
+  assert.equal(bots.length, 3);
+  assert.equal(bots.every((bot) => bot.isBot && !bot.connected && bot.botStrength === 50), true);
+  assert.equal(bots.every((bot) => room.botIds.has(bot.clientId) && room.configuredBotIds.has(bot.clientId)), true);
+  assert.equal(new Set(players.map((player) => player.name)).size, 4);
+  assert.equal(bots.every((bot) => BOT_DISPLAY_NAMES.some((name) => name === bot.name)), true);
+
+  room.handleFillBots(intruder);
+  assert.equal(room.state.players.size, 4);
+  assert.equal(broadcastCount, 1);
+  assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "not_host"), true);
+
+  room.handleFillBots(host);
+  assert.equal(room.state.players.size, 4);
+  assert.equal(broadcastCount, 1);
+  assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "room_full"), true);
+
+  room.state.roomMode = "practice";
+  room.handleFillBots(host);
+  assert.equal(room.state.players.size, 4);
+  assert.equal(broadcastCount, 1);
+  assert.equal(sent.some((item) => item.event === "lobby_error" && item.payload.code === "not_friend_waiting"), true);
+});
+
 t("lobby: practice auto-fill uses unique friendly bot names", () => {
   const room = new FourColorGameRoom() as any;
   room.state = new GameState();

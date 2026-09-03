@@ -22,7 +22,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     expect(inviteUrl).toContain("roomId=");
     expect(inviteUrl).not.toContain("playerToken");
     expect(inviteUrl).not.toContain("hostKey");
-    await expect(host.getByText("把邀请链接发给朋友；四个座位都准备好后即可开始。")).toBeVisible();
+    await expect(host.getByText("把邀请链接发给朋友，或点击“补齐 3 位电脑”后开始。")).toBeVisible();
     await host.getByTestId("copy-invite").click();
     await expect(host.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
     const copiedInviteUrl = await host.evaluate(async () =>
@@ -45,6 +45,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByText("请选择一个写着“等待入座”的空座位；入座后等待房主开始。")).toBeVisible();
     await expect(guest.getByTestId("lobby-start")).toHaveText("请先选择座位");
+    await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
     await guest.getByTestId("leave-waiting-room").click();
     await expect(guest.getByRole("dialog", { name: "离开当前好友房？" })).toContainText("你还没有入座，将返回游戏模式大厅。");
     await expect(guest.getByTestId("cancel-waiting-leave")).toBeFocused();
@@ -67,6 +68,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByTestId("seat-1")).toContainText("你");
     await expect(guest.getByTestId("seat-1").locator(".player-name")).toHaveText("同名牌友（2）");
     await expect(guest.getByText("你已入座；等待房主开始，也可以换到其他空座位。")).toBeVisible();
+    await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
     await expect(host.getByTestId("seat-1")).toContainText("真人在线");
 
     await host.setViewportSize({ width: 667, height: 375 });
@@ -75,15 +77,15 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByTestId("seat-3")).toContainText("你");
 
     await host.getByTestId("add-bot-0").click();
-    await host.getByTestId("add-bot-2").click();
-    await expect(host.getByTestId("seat-2")).toContainText("机器人 · 标准");
-    await expect(host.getByTestId("bot-level-2-standard")).toHaveAttribute("aria-pressed", "true");
-    await host.getByTestId("bot-level-2-expert").click();
-    await expect(host.getByTestId("seat-2")).toContainText("机器人 · 高手");
-    await expect(host.getByTestId("bot-level-2-expert")).toHaveAttribute("aria-pressed", "true");
-    await expect(host.getByTestId("bot-level-2-standard")).toHaveAttribute("aria-pressed", "false");
+    await expect(host.getByTestId("fill-bots")).toHaveText("补齐 1 位电脑");
+    await expect(host.getByTestId("seat-0")).toContainText("机器人 · 标准");
+    await expect(host.getByTestId("bot-level-0-standard")).toHaveAttribute("aria-pressed", "true");
+    await host.getByTestId("bot-level-0-expert").click();
+    await expect(host.getByTestId("seat-0")).toContainText("机器人 · 高手");
+    await expect(host.getByTestId("bot-level-0-expert")).toHaveAttribute("aria-pressed", "true");
+    await expect(host.getByTestId("bot-level-0-standard")).toHaveAttribute("aria-pressed", "false");
     await expect(host.locator("input[type='range']")).toHaveCount(0);
-    const botLevelMetrics = await host.getByTestId("bot-levels-2").evaluate((group) => {
+    const botLevelMetrics = await host.getByTestId("bot-levels-0").evaluate((group) => {
       const seat = group.closest<HTMLElement>(".seat-card")!.getBoundingClientRect();
       const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>("button")).map((button) =>
         button.getBoundingClientRect(),
@@ -100,6 +102,13 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     expect(botLevelMetrics.minimumHeight).toBeGreaterThanOrEqual(42);
     expect(botLevelMetrics.insideSeat).toBe(true);
     await host.screenshot({ path: testInfo.outputPath("friend-bot-levels-iphone-se.png") });
+
+    await host.getByTestId("fill-bots").click();
+    await expect(host.getByTestId("fill-bots")).toHaveCount(0);
+    await expect(host.getByTestId("seat-0")).toContainText("机器人 · 高手");
+    await expect(host.getByTestId("seat-1").locator(".player-name")).toHaveText("同名牌友（2）");
+    await expect(host.getByTestId("seat-2")).toContainText("机器人 · 标准");
+    await expect(host.getByTestId("seat-3")).toContainText("房主 · 你");
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
 
     await host.getByTestId("lobby-start").click();
@@ -164,9 +173,15 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
 
   const seatGrid = page.getByTestId("seat-grid");
   const leaveButton = page.getByTestId("leave-waiting-room");
+  const fillBotsButton = page.getByTestId("fill-bots");
+  const startButton = page.getByTestId("lobby-start");
   await expect(seatGrid).toBeVisible();
   await expect(leaveButton).toBeVisible();
   await expect(leaveButton).toHaveText("离开房间");
+  await expect(page.getByRole("heading", { name: "还差 3 位即可开局" })).toBeVisible();
+  await expect(fillBotsButton).toBeVisible();
+  await expect(fillBotsButton).toHaveText("补齐 3 位电脑");
+  await expect(startButton).toBeDisabled();
 
   const geometry = await page.evaluate(() => {
     const lobby = document.querySelector<HTMLElement>(".lobby")!;
@@ -176,7 +191,10 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
     const invite = lobby.querySelector<HTMLElement>(".invite-card")!;
     const firstSeat = lobby.querySelector<HTMLElement>("[data-testid='seat-0']")!;
     const controls = Array.from(
-      lobby.querySelectorAll<HTMLElement>(".lobby-head-actions button, [data-testid='copy-invite'], [data-testid='lobby-start']"),
+      lobby.querySelectorAll<HTMLElement>(".lobby-head-actions button, [data-testid='copy-invite'], [data-testid='fill-bots'], [data-testid='lobby-start']"),
+    ).map((element) => element.getBoundingClientRect());
+    const primaryActions = Array.from(
+      lobby.querySelectorAll<HTMLElement>("[data-testid='fill-bots'], [data-testid='lobby-start']"),
     ).map((element) => element.getBoundingClientRect());
     const lobbyRect = lobby.getBoundingClientRect();
     const headerRect = header.getBoundingClientRect();
@@ -196,6 +214,7 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
       actionHeight: actionRect.height,
       inviteHeight: invite.getBoundingClientRect().height,
       minimumControlHeight: Math.min(...controls.map((rect) => rect.height)),
+      minimumPrimaryActionHeight: Math.min(...primaryActions.map((rect) => rect.height)),
       bodyWidth: document.body.scrollWidth,
       bodyHeight: document.body.scrollHeight,
       viewportWidth: innerWidth,
@@ -207,6 +226,7 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
   expect(geometry.scrollBeforeActions).toBe(true);
   expect(geometry.visibleFirstSeatHeight, JSON.stringify(geometry)).toBeGreaterThanOrEqual(80);
   expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(42);
+  expect(geometry.minimumPrimaryActionHeight).toBeGreaterThanOrEqual(46);
   expect(geometry.bodyWidth).toBeLessThanOrEqual(geometry.viewportWidth);
   expect(geometry.bodyHeight).toBeLessThanOrEqual(geometry.viewportHeight);
   await page.screenshot({ path: testInfo.outputPath("friend-waiting-room-568.png") });
@@ -231,6 +251,19 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
   await page.getByTestId("waiting-leave-mask").click({ position: { x: 2, y: 2 } });
   await expect(leaveDialog).toHaveCount(0);
   await expect(leaveButton).toBeFocused();
+
+  await fillBotsButton.click();
+  await expect(page.getByTestId("fill-bots")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "四席已就绪" })).toBeVisible();
+  await expect(page.getByText("四席已就绪，请点开始好友对局")).toHaveCount(1);
+  await expect(startButton).toBeEnabled();
+  await expect(startButton).toBeFocused();
+  const configuredBots = page.locator(".seat-card").filter({ hasText: /机器人 · 标准/ });
+  await expect(configuredBots).toHaveCount(3);
+  const configuredBotNames = await configuredBots.locator(".player-name").allTextContents();
+  expect(new Set(configuredBotNames.map((name) => name.trim())).size).toBe(3);
+  expect(configuredBotNames.every((name) => !/^机器人\d+$/u.test(name.trim()))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("friend-waiting-room-filled-568.png") });
 
   const departingRoomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
   expect(departingRoomId).toBeTruthy();
@@ -261,6 +294,8 @@ test.describe("rotated legacy friend waiting room", () => {
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await expect(page.getByTestId("fill-bots")).toBeVisible();
+    await expect(page.getByTestId("fill-bots")).toHaveText("补齐 3 位电脑");
     await page.getByTestId("leave-waiting-room").click();
     const leaveDialog = page.getByRole("dialog", { name: "离开当前好友房？" });
     await expect(leaveDialog).toBeVisible();
@@ -282,6 +317,16 @@ test.describe("rotated legacy friend waiting room", () => {
     await page.keyboard.press("Escape");
     await expect(leaveDialog).toHaveCount(0);
     await expect(page.getByTestId("leave-waiting-room")).toBeFocused();
+
+    const fillBotsButton = page.getByTestId("fill-bots");
+    const startButton = page.getByTestId("lobby-start");
+    await expect(fillBotsButton).toHaveText("补齐 3 位电脑");
+    await fillBotsButton.click();
+    await expect(fillBotsButton).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "四席已就绪" })).toBeVisible();
+    await expect(startButton).toBeEnabled();
+    await expect(startButton).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath("friend-waiting-filled-rotated-320x568.png") });
   });
 });
 

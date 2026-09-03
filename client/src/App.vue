@@ -105,6 +105,7 @@
       @copy-invite="copyInviteLink"
       @claim-seat="claimSeat"
       @add-bot="addBot($event, 50)"
+      @fill-bots="fillBots"
       @update-bot="updateBot"
       @remove-seat="removeSeat"
       @leave-room="handleLeaveRoom"
@@ -675,6 +676,7 @@ const {
   leaveRoom,
   claimSeat,
   addBot,
+  fillBots,
   updateBot,
   removeSeat,
 } = useRoom("玩家");
@@ -852,7 +854,28 @@ const canStartSelectedMode = computed(
     (!hasLobbySession.value && (selectedLobbyMode.value === "practice_bots" || selectedLobbyMode.value === "friends")) ||
     canPressStartGame.value,
 );
-const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
+const remainingFriendSeats = computed(() => Math.max(0, 4 - players.value.length));
+const hasOfflineFriend = computed(() =>
+  players.value.some((player) => !player.isConfiguredBot && !player.connected),
+);
+const lobbyTitle = computed(() => {
+  if (!isWaiting.value) {
+    return "游戏模式选择";
+  }
+  if (state.value?.roomMode !== "friends") {
+    return "房间准备中";
+  }
+  if (!mySeatId.value) {
+    return "请先选择座位";
+  }
+  if (hasOfflineFriend.value) {
+    return "等待牌友重新上线";
+  }
+  if (remainingFriendSeats.value > 0) {
+    return isHost.value ? `还差 ${remainingFriendSeats.value} 位即可开局` : "等待房主安排座位";
+  }
+  return isHost.value ? "四席已就绪" : "等待房主开始";
+});
 const lobbySubtitle = computed(() => {
   if (!isWaiting.value) {
     return "选择一种玩法。第一次玩，建议选单人练习。";
@@ -864,7 +887,13 @@ const lobbySubtitle = computed(() => {
     return "请选择一个写着“等待入座”的空座位；入座后等待房主开始。";
   }
   if (isHost.value) {
-    return "把邀请链接发给朋友；四个座位都准备好后即可开始。";
+    if (hasOfflineFriend.value) {
+      return "有真人暂时离线；请等对方重新上线，或移出该座位后再安排电脑。";
+    }
+    if (remainingFriendSeats.value > 0) {
+      return `把邀请链接发给朋友，或点击“补齐 ${remainingFriendSeats.value} 位电脑”后开始。`;
+    }
+    return "四个座位都准备好了，请确认后开始好友对局。";
   }
   return "你已入座；等待房主开始，也可以换到其他空座位。";
 });
@@ -885,9 +914,9 @@ const lobbyStartHint = computed(() => {
   if (!mySeatId.value) return "请先选择一个空座位";
   if (!isHost.value) return "座位配置完成后由房主开始";
   if (state.value?.roomMode !== "friends") return "";
-  if (players.value.length < 4) return `还差 ${4 - players.value.length} 个座位`;
+  if (players.value.length < 4) return `还差 ${4 - players.value.length} 个座位，可一键补电脑`;
   if (players.value.some((player) => !player.isConfiguredBot && !player.connected)) return "仍有真人玩家离线";
-  return "四席已就绪";
+  return "四席已就绪，请点开始好友对局";
 });
 const hasFriendInvite = computed(
   () => Boolean(new URLSearchParams(window.location.search).get("roomId")?.trim()),

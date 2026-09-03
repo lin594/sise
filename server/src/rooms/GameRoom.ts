@@ -293,6 +293,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.handleAddBot(client, payload);
     });
 
+    this.onMessage("fill_bots", (client) => {
+      this.handleFillBots(client);
+    });
+
     this.onMessage("update_bot", (client, payload: { seatIndex?: number; strength?: number }) => {
       this.handleUpdateBot(client, payload);
     });
@@ -726,6 +730,57 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.botIds.add(seatId);
     this.configuredBotIds.add(seatId);
     this.state.lastAction = `BOT_ADD ${seatId}`;
+    this.broadcastAvailableActions();
+  }
+
+  /**
+   * 作用：让好友房房主用标准难度机器人一次补齐所有空座。
+   * 关键输入/输出：输入发起客户端；成功时创建零到多个配置机器人。
+   * 副作用：批量更新玩家、手牌和机器人索引，并只广播一次大厅状态。
+   */
+  private handleFillBots(client: Client): void {
+    if (this.state.phase !== "waiting" || this.state.roomMode !== "friends") {
+      this.sendLobbyError(client, "not_friend_waiting", "只有好友房等待阶段可以补齐电脑。");
+      return;
+    }
+    if (!this.isHostClient(client)) {
+      this.sendLobbyError(client, "not_host", "仅房主可补齐电脑。");
+      return;
+    }
+
+    const emptySeatIndexes = Array.from({ length: this.targetSeats }, (_, seatIndex) => seatIndex)
+      .filter((seatIndex) => !this.state.players.has(this.seatIdForIndex(seatIndex)));
+    if (emptySeatIndexes.length === 0) {
+      this.sendLobbyError(client, "room_full", "四个座位已经坐满，无需补齐电脑。");
+      return;
+    }
+
+    const plannedBots: Array<{ seatId: string; bot: PlayerState }> = [];
+    const plannedNames = [...this.state.players.values()].map((player) => player.name);
+    for (const seatIndex of emptySeatIndexes) {
+      const seatId = this.seatIdForIndex(seatIndex);
+      const bot = new PlayerState();
+      bot.clientId = seatId;
+      bot.seatIndex = seatIndex;
+      bot.name = chooseBotDisplayName(plannedNames);
+      bot.isBot = true;
+      bot.isConfiguredBot = true;
+      bot.botStrength = 50;
+      bot.connected = false;
+      plannedBots.push({ seatId, bot });
+      plannedNames.push(bot.name);
+    }
+
+    for (const { seatId, bot } of plannedBots) {
+      this.state.players.set(seatId, bot);
+      this.playerHands.set(seatId, []);
+      this.playerOrder.push(seatId);
+      this.botIds.add(seatId);
+      this.configuredBotIds.add(seatId);
+    }
+
+    this.sortPlayerOrder();
+    this.state.lastAction = `BOT_FILL ${emptySeatIndexes.length}`;
     this.broadcastAvailableActions();
   }
 

@@ -1621,6 +1621,11 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("add_bot", { seatIndex, strength });
   }
 
+  function fillBots() {
+    joinError.value = "";
+    safeRoomSend("fill_bots");
+  }
+
   function updateBot(seatIndex: number, strength: number) {
     safeRoomSend("update_bot", { seatIndex, strength });
   }
@@ -1685,6 +1690,7 @@ export function useRoom(playerName = "Player") {
     leaveRoom,
     claimSeat,
     addBot,
+    fillBots,
     updateBot,
     removeSeat,
   };

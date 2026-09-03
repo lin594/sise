@@ -9,7 +9,7 @@
     <div class="lobby-head">
       <div>
         <p class="lobby-kicker">{{ kicker }}</p>
-        <h2>{{ title }}</h2>
+        <h2 ref="lobbyTitleRef" tabindex="-1">{{ title }}</h2>
         <p class="lobby-rule-tip">{{ subtitle }}</p>
       </div>
       <div class="lobby-head-actions">
@@ -141,10 +141,29 @@
     </div>
 
     <div class="lobby-actions">
-      <button class="primary" type="button" data-testid="lobby-start" :disabled="!canStart" @click="$emit('start')">
-        {{ startLabel }}
-      </button>
-      <span v-if="startHint" class="start-hint">{{ startHint }}</span>
+      <div class="lobby-primary-actions">
+        <button
+          v-if="showFillBots"
+          class="ghost fill-bots"
+          type="button"
+          data-testid="fill-bots"
+          :disabled="fillRequested"
+          @click="requestFillBots"
+        >
+          {{ fillRequested ? "正在补齐…" : `补齐 ${emptySeatCount} 位电脑` }}
+        </button>
+        <button
+          ref="startButtonRef"
+          class="primary"
+          type="button"
+          data-testid="lobby-start"
+          :disabled="!canStart"
+          @click="$emit('start')"
+        >
+          {{ startLabel }}
+        </button>
+      </div>
+      <span v-if="startHint" class="start-hint" role="status" aria-live="polite">{{ startHint }}</span>
     </div>
 
     <Teleport to=".layout">
@@ -179,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 
 type LobbyMode = {
   id: string;
@@ -230,14 +249,19 @@ const emit = defineEmits<{
   "copy-invite": [];
   "claim-seat": [seatIndex: number];
   "add-bot": [seatIndex: number];
+  "fill-bots": [];
   "update-bot": [seatIndex: number, strength: number];
   "remove-seat": [seatIndex: number];
   "leave-room": [];
 }>();
 const confirmingLeave = ref(false);
+const fillRequested = ref(false);
 const leaveButtonRef = ref<HTMLButtonElement | null>(null);
+const startButtonRef = ref<HTMLButtonElement | null>(null);
+const lobbyTitleRef = ref<HTMLHeadingElement | null>(null);
 const leaveDialogRef = ref<HTMLElement | null>(null);
 const leaveCancelButtonRef = ref<HTMLButtonElement | null>(null);
+let fillRequestTimer: number | null = null;
 const leaveRoomDescription = computed(() => {
   if (props.isHost) {
     return "如果还有真人，房主会自动转交；如果只剩你，房间会关闭。你将返回游戏模式大厅。";
@@ -253,6 +277,32 @@ const seatSlots = computed(() =>
     player: props.players.find((player) => player.seatIndex === seatIndex) ?? null,
   })),
 );
+const emptySeatCount = computed(() => seatSlots.value.filter((slot) => !slot.player).length);
+const showFillBots = computed(
+  () => props.roomMode === "friends" && Boolean(props.roomId) && props.isHost && emptySeatCount.value > 0,
+);
+
+watch(
+  () => [emptySeatCount.value, props.canStart, props.joinError] as const,
+  async ([emptySeats, canStart, joinError]) => {
+    if (joinError && fillRequested.value) {
+      clearFillRequestState();
+      return;
+    }
+    if (!fillRequested.value || emptySeats !== 0) {
+      return;
+    }
+    clearFillRequestState();
+    await nextTick();
+    if (canStart) {
+      startButtonRef.value?.focus();
+    } else {
+      lobbyTitleRef.value?.focus();
+    }
+  },
+);
+
+onUnmounted(() => clearFillRequestState());
 
 function botLevelForStrength(strength: number): (typeof botLevels)[number] {
   const normalized = Number.isFinite(strength) ? strength : 50;
@@ -263,6 +313,26 @@ function botLevelForStrength(strength: number): (typeof botLevels)[number] {
     return botLevels[1];
   }
   return botLevels[2];
+}
+
+function clearFillRequestState(): void {
+  fillRequested.value = false;
+  if (fillRequestTimer !== null) {
+    window.clearTimeout(fillRequestTimer);
+    fillRequestTimer = null;
+  }
+}
+
+function requestFillBots(): void {
+  if (fillRequested.value || !showFillBots.value) {
+    return;
+  }
+  fillRequested.value = true;
+  emit("fill-bots");
+  fillRequestTimer = window.setTimeout(() => {
+    fillRequested.value = false;
+    fillRequestTimer = null;
+  }, 5_000);
 }
 
 async function requestLeaveRoom(): Promise<void> {
@@ -351,6 +421,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .lobby-head > div:first-child {
   min-width: 0;
+}
+
+.lobby-head h2:focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .lobby-head-actions {
@@ -554,8 +630,9 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .start-hint {
   color: #cbd5e1;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 650;
+  line-height: 1.25;
 }
 
 .error {
@@ -571,9 +648,32 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   background: #0b1220;
 }
 
+.lobby-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.fill-bots {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: #3f2f0b;
+  color: #fef3c7;
+  font-weight: 800;
+}
+
+.fill-bots:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .mode-selection .lobby-actions .primary {
   width: min(18rem, 100%);
   font-size: 1rem;
+}
+
+.mode-selection .lobby-primary-actions {
+  width: 100%;
 }
 
 .waiting-leave-mask {
@@ -790,6 +890,36 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     padding-top: 0.35rem;
   }
 
+  .friend-waiting-room .lobby-actions {
+    justify-content: space-between;
+    gap: 0.45rem;
+  }
+
+  .friend-waiting-room .lobby-primary-actions {
+    flex: 1 1 auto;
+    gap: 0.4rem;
+  }
+
+  .friend-waiting-room .lobby-primary-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 46px;
+    padding: 0.45rem 0.55rem;
+    font-size: 0.9375rem;
+  }
+
+  .friend-waiting-room .start-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .waiting-leave-dialog {
     width: min(26rem, calc(100dvw - 0.8rem));
     padding: 0.65rem;
@@ -839,12 +969,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-actions) {
-  min-height: 42px;
+  min-height: 46px;
   padding-top: 0.1rem;
 }
 
-:global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-actions .primary) {
-  min-height: 42px;
+:global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-primary-actions button) {
+  min-height: 46px;
   padding-block: 0.4rem;
 }
 </style>
