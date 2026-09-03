@@ -50,3 +50,40 @@ test("a host can dissolve a waiting friend table for everyone", async ({ browser
     await hostContext.close();
   }
 });
+
+test("the host can dissolve after the whole table returns from settlement", async ({ page }) => {
+  await page.goto("/?e2eDebug=1");
+  await page.getByTestId("nickname-input").fill("返厅解散房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+  await page.getByTestId("fill-bots").click();
+  await expect(page.getByTestId("lobby-start")).toBeEnabled();
+  await page.getByTestId("lobby-start").click();
+
+  const declaration = page.getByTestId("confirm-declaration");
+  await expect(declaration).toBeEnabled({ timeout: 20_000 });
+  await declaration.click();
+  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+
+  await page.evaluate(() => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+    }).__siseLocalTest;
+    if (!bridge) {
+      throw new Error("Local test bridge is unavailable");
+    }
+    bridge.setupScenario("settlement_hu");
+  });
+  await expect(page.getByTestId("settlement-panel")).toBeVisible();
+  await expect(page.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: "全桌返回大厅（房主）" }).click();
+  await page.getByTestId("confirm-table-return").click();
+
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+  await expect(page.getByTestId("dissolve-room")).toBeVisible();
+  await page.getByTestId("dissolve-room").click();
+  await page.getByTestId("confirm-dissolve-room").click();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+});
