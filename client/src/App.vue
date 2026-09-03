@@ -999,8 +999,8 @@ const isPendingSpecialCard = computed(() => {
 const candidatePromptText = computed(() => {
   if (selectionMode.value === "chi" && isPendingSpecialCard.value) {
     return state.value?.responsePhase === "collective"
-      ? "请选择将士象组合，或单独收下；系统会先等待其他玩家响应"
-      : "请选择将士象组合，或单独收下这张将/金条";
+      ? "请选择一种吃法；系统会先等待其他玩家响应"
+      : "请选择一种吃法";
   }
   if (state.value?.responsePhase === "collective" && selectionMode.value === "chi") {
     return "请先选吃的牌组；系统会先过待响，待无人胡/开/碰后自动吃";
@@ -2001,7 +2001,7 @@ const turnHint = computed(() => {
   }
   if (state.value?.responsePhase === "local_draw" && canAct.value) {
     if (isMyTurn.value && isPendingSpecialCard.value) {
-      return "请选择吃牌组合，或收下将/金条";
+      return "请选择一种吃法";
     }
     return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
   }

@@ -298,7 +298,7 @@ t("bot-strategy: grabbed generals and gold cannot be passed when chi is legal", 
                 kind: "single",
                 cardIds: [],
                 source: "hand",
-                title: "吃下",
+                title: "吃",
               },
             ],
           },
@@ -323,7 +323,7 @@ t("bot-strategy: hu still outranks mandatory special-card chi", () => {
         action: "chi",
         enabled: true,
         candidates: [
-          { id: "chi-yellow", action: "chi", kind: "single", cardIds: [], source: "hand", title: "吃下" },
+          { id: "chi-yellow", action: "chi", kind: "single", cardIds: [], source: "hand", title: "吃" },
         ],
       },
       { action: "pass", enabled: true },
@@ -1132,11 +1132,13 @@ t("room: force-take draw wildcard can directly win when no legal discard", () =>
     collectives: new Map(),
   };
   room.enterOwnerLocalPhaseAfterNoResponse("A");
-  const candidateId = room
+  const singleCandidate = room
     .getAvailableActions("A")
     .find((item: any) => item.action === "chi")
-    ?.candidates?.find((candidate: any) => candidate.kind === "single")?.id;
+    ?.candidates?.find((candidate: any) => candidate.kind === "single");
+  const candidateId = singleCandidate?.id;
   assert.ok(candidateId);
+  assert.equal(singleCandidate?.title, "吃");
   room.executeEat("A", candidateId);
   assert.equal(room.state.phase, "ended");
   assert.match(String(room.state.lastAction), /^A HU$/);

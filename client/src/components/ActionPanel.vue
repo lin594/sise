@@ -230,13 +230,11 @@ const panelHint = computed(() => {
   );
   if (specialChi) {
     if (props.responsePhase === "collective") {
-      return (specialChi.candidates?.length ?? 0) > 1
-        ? "先选吃法，再等其他玩家响应"
-        : "先选收下，再等其他玩家响应";
+      return "先选吃法，再等其他玩家响应";
     }
     return (specialChi.candidates?.length ?? 0) > 1
-      ? "请选择吃法，或单独收下"
-      : "将和金条不能过，请收下";
+      ? "请选择一种吃法"
+      : "这张牌不能过，请点吃";
   }
   if (props.responsePhase === "collective" && !props.isCurrentTurn) {
     if (normalized.value.some((item) => item.key === "deferred-pass")) {
@@ -284,13 +282,6 @@ function actionText(action: ActionType): string {
 function text(item: PanelAction): string {
   if (item.deferredKind === "pass") {
     return "抓";
-  }
-  if (
-    item.action === "chi" &&
-    item.candidates?.length === 1 &&
-    item.candidates[0]?.kind === "single"
-  ) {
-    return "收下";
   }
   return actionText(item.action);
 }

@@ -66,6 +66,7 @@ test("multiple meld choices keep focus inside a safely cancellable dialog", asyn
 
   const chiButton = page.getByTestId("action-chi");
   await expect(chiButton).toBeEnabled();
+  await expect(chiButton).toHaveText("吃");
   await chiButton.click();
 
   const dialog = page.getByTestId("candidate-panel");
@@ -74,8 +75,10 @@ test("multiple meld choices keep focus inside a safely cancellable dialog", asyn
   await expect(dialog).toHaveAttribute("role", "dialog");
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog).toHaveAccessibleName("吃候选牌组");
-  await expect(dialog).toHaveAccessibleDescription(/单独收下/);
+  await expect(dialog).toHaveAccessibleDescription(/请选择一种吃法/);
   await expect(options).toHaveCount(2);
+  await expect(dialog).not.toContainText("收下");
+  await expect(options.last()).toContainText("吃");
   await expect(options.first()).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");

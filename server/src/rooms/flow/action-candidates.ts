@@ -73,7 +73,7 @@ export function buildPengCandidates(
   });
 }
 
-function chiKindLabel(kind: ChiPlan["kind"], response: Card): string {
+function chiKindLabel(kind: ChiPlan["kind"]): string {
   if (kind === "jmp") {
     return "吃（车马炮）";
   }
@@ -87,7 +87,7 @@ function chiKindLabel(kind: ChiPlan["kind"], response: Card): string {
     return "吃（四色卒）";
   }
   if (kind === "single") {
-    return response.color === "gold" ? "收下金条" : "收下将";
+    return "吃";
   }
   return "吃（对子）";
 }
@@ -104,7 +104,7 @@ export function buildChiCandidates(hand: Card[], response: Card, wildcardPool: C
         kind: plan.kind,
         cardIds: handIds,
         source,
-        title: chiKindLabel(plan.kind, response),
+        title: chiKindLabel(plan.kind),
       },
       plan,
     };

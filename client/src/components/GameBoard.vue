@@ -1110,7 +1110,7 @@ const ACTION_LABELS: Record<string, string> = {
   ZHUA: "抓",
   PASS: "过",
   TIMEOUT_PASS: "超时过",
-  FORCE_TAKE: "收下将/金",
+  FORCE_TAKE: "吃",
 };
 
 const latestSeatAction = computed<{ actorId: string; label: string } | null>(() => {

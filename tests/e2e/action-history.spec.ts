@@ -11,7 +11,7 @@ test("action history identifies actors in both server action formats", () => {
 
 test("action history exposes only player-facing Chinese events", () => {
   expect(actionHistoryText("TIMEOUT_DISCARD")).toBe("超时，系统自动出牌");
-  expect(actionHistoryText("FORCE_TAKE")).toBe("收下将或金条");
+  expect(actionHistoryText("FORCE_TAKE")).toBe("吃牌");
   expect(actionHistoryText("RECONNECT_WAIT")).toBe("断线，等待恢复");
   expect(actionHistoryText("TURN_DRAW")).toBeNull();
   expect(actionHistoryText("DEBUG_EVENT")).toBeNull();

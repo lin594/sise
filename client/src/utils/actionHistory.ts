@@ -21,7 +21,7 @@ const ACTION_TEXT: Readonly<Record<string, string>> = {
   PASS: "把牌让给下家",
   TIMEOUT_PASS: "超时，系统自动过",
   TIMEOUT_DISCARD: "超时，系统自动出牌",
-  FORCE_TAKE: "收下将或金条",
+  FORCE_TAKE: "吃牌",
   DRAW_GENERAL: "摸取公共将",
   DRAW_GAME: "本局流局",
   DEALER: "成为庄家",
