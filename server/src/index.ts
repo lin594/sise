@@ -5,6 +5,7 @@ import { Server, matchMaker } from "@colyseus/core";
 import { monitor } from "@colyseus/monitor";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { createIsolatedPracticeRoomId } from "./http/practice-room-creation.js";
+import { createGuestProfileHandlers } from "./http/guest-profile-api.js";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
 import { createRateLimitMiddleware, parseBoundedInteger } from "./http/rate-limit.js";
 import {
@@ -16,6 +17,8 @@ import {
 } from "./http/origin-policy.js";
 import { FourColorGameRoom } from "./rooms/GameRoom.js";
 import { getRegisteredRoom } from "./rooms/room-registry.js";
+import { createGuestProfileStore } from "./profiles/redis-guest-profile-store.js";
+import { configureGuestProfileStore } from "./profiles/guest-profile-runtime.js";
 
 const port = Number(process.env.PORT ?? 2567);
 const runtimeEnv = process.env.NODE_ENV;
@@ -27,6 +30,9 @@ if (trustedProxyHops > 0) {
   app.set("trust proxy", trustedProxyHops);
 }
 const server = http.createServer(app);
+const guestProfileStore = await createGuestProfileStore(process.env.REDIS_URL);
+configureGuestProfileStore(guestProfileStore);
+const guestProfileHandlers = createGuestProfileHandlers(guestProfileStore);
 const gameServer = new Server({
   transport: new WebSocketTransport({
     server,
@@ -59,6 +65,11 @@ const privateStateLimit = createRateLimitMiddleware({
   windowMs: rateLimitWindowMs,
   message: "恢复牌局请求过于频繁，请稍后再试。",
 });
+const guestProfileLimit = createRateLimitMiddleware({
+  maxRequests: parseBoundedInteger(process.env.GUEST_PROFILE_RATE_LIMIT, 60, 1, 10_000),
+  windowMs: rateLimitWindowMs,
+  message: "本机档案请求过于频繁，请稍后再试。",
+});
 
 gameServer
   .define("four-color", FourColorGameRoom)
@@ -81,6 +92,9 @@ async function createGameRoom(mode: "friends" | "practice") {
 app.get("/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
+
+app.get("/guest-profile", guestProfileLimit, guestProfileHandlers.get);
+app.put("/guest-profile", guestProfileLimit, guestProfileHandlers.put);
 
 app.get("/room-id", roomCreationLimit, async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");

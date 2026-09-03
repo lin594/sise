@@ -79,9 +79,11 @@ test("quick-match players are assigned the first free fixed seat", () => {
     leave: () => assert.fail("the first match player should be admitted"),
   };
 
-  room.onJoin(client, { name: "阿青", playerToken: "pt_match" });
+  const profileToken = `gp_${"f".repeat(48)}`;
+  room.onJoin(client, { name: "阿青", playerToken: "pt_match", profileToken });
 
   assert.equal(room.seatBySession.get(client.sessionId), "seat_0");
+  assert.equal(room.profileTokenBySeat.get("seat_0"), profileToken);
   assert.equal(room.state.players.get("seat_0")?.name, "阿青");
   assert.equal(room.state.players.get("seat_0")?.seatIndex, 0);
   assert.equal(sent.some(({ event }) => event === "session_token"), true);
