@@ -3158,20 +3158,6 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   font-size: clamp(0.78rem, 1.6vh, 0.9rem);
 }
 
-.round-overview .round-number {
-  color: #92400e;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.round-overview .cumulative-overview {
-  width: fit-content;
-  padding: 0.26rem 0.58rem;
-  border-radius: 999px;
-  background: #fef3c7;
-  font-weight: 750;
-}
-
 .round-overview b.positive {
   color: #166534;
 }
@@ -3281,6 +3267,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 .score-caption,
 .cumulative-total {
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -3293,25 +3280,6 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   border-radius: 999px;
   background: #f1f5f9;
   font-weight: 750;
-}
-
-.cumulative-total.positive {
-  color: #166534;
-}
-
-.cumulative-total.negative {
-  color: #b91c1c;
-}
-
-.cumulative-total.neutral {
-  color: #334155;
-}
-
-.score-caption,
-.cumulative-total {
-  color: #64748b;
-  font-size: clamp(0.7rem, 1.2vh, 0.8rem);
-  font-weight: 700;
 }
 
 .cumulative-total.positive {
@@ -3888,6 +3856,10 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 
 .layout.ultra-compact-viewport .settlement-scroll-region {
   margin-top: 0.3rem;
+}
+
+.layout.ultra-compact-viewport .end-global-info {
+  display: none;
 }
 
 .layout.ultra-compact-viewport .settlement-player-section {

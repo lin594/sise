@@ -224,11 +224,16 @@ test("practice settlement stays readable and reachable on legacy phones", async 
       firstThreeSummariesVisible: summaries.slice(0, 3).every((summary) =>
         isContained(summary.getBoundingClientRect(), scrollRect),
       ),
+      summaryRects: summaries.slice(0, 3).map((summary) => {
+        const rect = summary.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, height: rect.height };
+      }),
+      scrollRect: { top: scrollRect.top, bottom: scrollRect.bottom, height: scrollRect.height },
       buttonsContained: buttons.every((button) => isContained(button.getBoundingClientRect(), panelRect)),
       minimumButtonHeight: Math.min(...buttons.map((button) => button.getBoundingClientRect().height)),
     };
   });
-  expect(legacyLandscapeGeometry).toMatchObject({
+  expect(legacyLandscapeGeometry, JSON.stringify(legacyLandscapeGeometry)).toMatchObject({
     panelBelowHeader: true,
     outerDoesNotScroll: true,
     detailsCanScroll: true,
