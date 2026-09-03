@@ -6,6 +6,7 @@ import { monitor } from "@colyseus/monitor";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
 import { createRateLimitMiddleware, parseBoundedInteger } from "./http/rate-limit.js";
+import { isReusablePracticeLobbyRoom } from "./http/room-selection.js";
 import {
   buildCorsOriginHeaders,
   createCorsMiddleware,
@@ -75,14 +76,6 @@ async function listFourColorRooms() {
   return await matchMaker.query({ name: "four-color" });
 }
 
-function roomPhase(room: any): string {
-  return String(room?.metadata?.phase ?? "");
-}
-
-function isWaitingLobbyRoom(room: any): boolean {
-  return roomPhase(room) === "waiting";
-}
-
 async function isRoomAlive(roomId: string): Promise<boolean> {
   if (!roomId) {
     return false;
@@ -100,11 +93,11 @@ async function getOrCreateSingletonRoomId(): Promise<string> {
     const rooms = await listFourColorRooms();
     if (singletonRoomId) {
       const current = rooms.find((room) => room.roomId === singletonRoomId);
-      if (current && isWaitingLobbyRoom(current)) {
+      if (current && isReusablePracticeLobbyRoom(current)) {
         return singletonRoomId;
       }
     }
-    const reusableWaitingRoom = rooms.find((room) => isWaitingLobbyRoom(room));
+    const reusableWaitingRoom = rooms.find((room) => isReusablePracticeLobbyRoom(room));
     if (reusableWaitingRoom) {
       singletonRoomId = reusableWaitingRoom.roomId;
       return singletonRoomId;
