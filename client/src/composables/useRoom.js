@@ -395,6 +395,9 @@ export function useRoom(playerName = "Player") {
     let activeConnectionSeq = 0;
     let lastManualSyncAt = 0;
     let privateStateRetryAfterAt = 0;
+    let privateStateAuthoritySeq = 0;
+    let privateStateRequestSeq = 0;
+    let lastAppliedPrivateStateRequestSeq = 0;
     let reconnectAttempts = 0;
     let suppressReconnect = false;
     function inferSeatId(snapshot) {
@@ -642,9 +645,13 @@ export function useRoom(playerName = "Player") {
             return;
         }
         const requestConnectionSeq = activeConnectionSeq;
+        const requestAuthoritySeq = privateStateAuthoritySeq;
+        const requestSeq = ++privateStateRequestSeq;
         const isCurrentRequest = () => requestConnectionSeq === activeConnectionSeq &&
             activeRoomId.value.trim() === roomId &&
-            playerToken.value.trim() === token;
+            playerToken.value.trim() === token &&
+            requestAuthoritySeq === privateStateAuthoritySeq &&
+            requestSeq > lastAppliedPrivateStateRequestSeq;
         try {
             const url = new URL(`${HTTP_URL}/private-state`);
             url.searchParams.set("roomId", roomId);
@@ -666,6 +673,7 @@ export function useRoom(playerName = "Player") {
             if (!isCurrentRequest() || !payload?.ok) {
                 return;
             }
+            lastAppliedPrivateStateRequestSeq = requestSeq;
             if (payload.seatId) {
                 mySeatId.value = payload.seatId;
             }
@@ -792,6 +800,11 @@ export function useRoom(playerName = "Player") {
     function applySnapshot(next) {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
         const rawSnapshot = next;
+        if (Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "privateHand") ||
+            Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "availableActions") ||
+            Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "roundResult")) {
+            privateStateAuthoritySeq += 1;
+        }
         const normalized = normalizeSnapshot(next);
         const previousSnapshot = state.value;
         if (!normalized.dealerCard &&
@@ -1107,6 +1120,7 @@ export function useRoom(playerName = "Player") {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
+                privateStateAuthoritySeq += 1;
                 privateHand.value = sortHandCards(asCardArray(payload));
                 privateHandFingerprint = buildCardIdFingerprint(privateHand.value);
                 if (privateHand.value.length > 0) {
@@ -1117,6 +1131,7 @@ export function useRoom(playerName = "Player") {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
+                privateStateAuthoritySeq += 1;
                 availableActions.value = normalizeAvailableActions(payload);
                 availableActionsFingerprint = buildAvailableActionsFingerprint(availableActions.value);
             });
@@ -1138,6 +1153,7 @@ export function useRoom(playerName = "Player") {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
+                privateStateAuthoritySeq += 1;
                 roundResult.value = normalizeRoundResultPayload(payload);
                 pushLog(`ROUND_RESULT ${payload.winnerId ?? "-"}`);
             });

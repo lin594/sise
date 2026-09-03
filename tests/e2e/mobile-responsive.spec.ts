@@ -422,6 +422,32 @@ test.describe("compact landscape gameplay", () => {
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");
     expect(selectedCardTestId).toBeTruthy();
+    let releasePrivateState = () => undefined;
+    let markPrivateStateCaptured = () => undefined;
+    let privateStateIntercepted = false;
+    let capturedPrivateStateCardIds: string[] = [];
+    const privateStateRelease = new Promise<void>((resolve) => {
+      releasePrivateState = resolve;
+    });
+    const privateStateCaptured = new Promise<void>((resolve) => {
+      markPrivateStateCaptured = resolve;
+    });
+    await page.route("**/private-state?**", async (route) => {
+      if (privateStateIntercepted) {
+        await route.continue();
+        return;
+      }
+      privateStateIntercepted = true;
+      const response = await route.fetch();
+      const payload = await response.json() as { privateHand?: Array<{ id?: string }> };
+      capturedPrivateStateCardIds = (payload.privateHand ?? []).map((card) => String(card.id ?? ""));
+      markPrivateStateCaptured();
+      await privateStateRelease;
+      await route.fulfill({ response, body: JSON.stringify(payload) });
+    });
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await privateStateCaptured;
+    expect(capturedPrivateStateCardIds).toContain(selectedCardTestId!.replace(/^hand-card-/, ""));
     const discardConfirm = page.getByTestId("discard-confirm");
     await expect(page.locator(".action-dock").getByTestId("discard-confirm")).toBeVisible();
     await expect(page.locator(".hand-toolbar").getByTestId("discard-confirm")).toHaveCount(0);
@@ -456,6 +482,22 @@ test.describe("compact landscape gameplay", () => {
     expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
     await discardConfirm.click();
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
+    await page.evaluate((testId) => {
+      const key = "sise_test_stale_private_card_reappeared";
+      sessionStorage.setItem(key, "0");
+      const observer = new MutationObserver(() => {
+        if (document.querySelector(`[data-testid="${testId}"]`)) {
+          sessionStorage.setItem(key, "1");
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      window.setTimeout(() => observer.disconnect(), 1_000);
+    }, selectedCardTestId!);
+    releasePrivateState();
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem("sise_test_stale_private_card_reappeared"))).toBe("0");
+    await page.unroute("**/private-state?**");
     await expect(page.getByTestId("pending-card")).toBeVisible({ timeout: 5_000 });
     const waitingHandState = await page.locator(".hand").evaluate((hand) => {
       const cards = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card"));
