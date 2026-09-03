@@ -44,9 +44,21 @@
         @open-rules="openRules"
         @exit="handleLeaveRoom"
       />
-      <div class="meta" v-if="!hasLobbySession && !isConnectingWithoutState">
-        <span>首页</span>
-        <button class="ghost reset-btn" @click="openRules">查看规则</button>
+      <div
+        class="meta"
+        :class="{ 'front-lobby-meta': showModeLobby }"
+        v-if="!hasLobbySession && !isConnectingWithoutState"
+      >
+        <span v-if="showModeLobby" class="front-lobby-identity">昵称：<strong>{{ entryName }}</strong></span>
+        <button
+          v-if="showModeLobby"
+          class="ghost reset-btn change-name"
+          type="button"
+          data-testid="change-entry-name"
+          :disabled="enteringLobby"
+          @click="returnToEntry"
+        >修改昵称</button>
+        <button class="ghost reset-btn" type="button" data-testid="open-rules" @click="openRules">查看规则</button>
       </div>
     </header>
     <p v-if="globalError && !showSyncingScreen" class="error global-error" role="alert">{{ globalError }}</p>
@@ -67,7 +79,6 @@
       :history-names="nicknameHistory"
       @update:nickname="entryName = $event"
       @submit="enterLobby"
-      @open-rules="openRules"
       @randomize="randomizeNickname"
       @select-history="entryName = $event"
     />
@@ -89,7 +100,6 @@
       :room-id="activeRoomId"
       :room-mode="state?.roomMode || ''"
       :players="players"
-      @open-rules="openRules"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
@@ -560,11 +570,12 @@ type SettlementGroupBlock = {
   label?: string;
   tone: "meld" | "fish" | "public" | "strong";
 };
-type LobbyModeId = "practice_bots" | "friends" | "ranked_reserved";
+type LobbyModeId = "practice_bots" | "friends";
 type LobbyMode = {
   id: LobbyModeId;
   name: string;
   description: string;
+  badge: string;
   enabled: boolean;
 };
 const HTTP_URL = BACKEND_HTTP_URL;
@@ -716,20 +727,16 @@ const lobbyModes: LobbyMode[] = [
   {
     id: "practice_bots" as const,
     name: "单人练习",
-    description: "当前模式：你进入大厅后，由系统自动补 3 个机器人，适合单机练习和规则体验。",
+    description: "系统补 3 位电脑，马上开一局。适合第一次玩和熟悉规则。",
+    badge: "推荐新手",
     enabled: true,
   },
   {
     id: "friends" as const,
     name: "好友同桌",
-    description: "创建私密好友房，通过链接邀请玩家自由选座，也可按座位添加不同强度的机器人。",
+    description: "创建房间，把链接发给朋友；空位也可以添加电脑。",
+    badge: "邀请朋友",
     enabled: true,
-  },
-  {
-    id: "ranked_reserved" as const,
-    name: "联机匹配",
-    description: "预留入口：未来会接账号、匹配和更多大厅信息，但这次先把结构留好。",
-    enabled: false,
   },
 ];
 
@@ -848,7 +855,7 @@ const canStartSelectedMode = computed(
 const lobbyTitle = computed(() => (isWaiting.value ? "房间准备中" : "游戏模式选择"));
 const lobbySubtitle = computed(() => {
   if (!isWaiting.value) {
-    return "选择一键单人练习，或创建一个可以邀请朋友和配置机器人的好友房。";
+    return "选择一种玩法。第一次玩，建议选单人练习。";
   }
   if (state.value?.roomMode !== "friends") {
     return "正在补齐机器人并准备开始单人练习。";
@@ -862,11 +869,8 @@ const lobbySubtitle = computed(() => {
   return "你已入座；等待房主开始，也可以换到其他空座位。";
 });
 const lobbyStartLabel = computed(() => {
-  if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
-    return "该模式尚未开放";
-  }
   if (!hasLobbySession.value) {
-    return selectedLobbyMode.value === "friends" ? "创建好友房" : "进入单人练习";
+    return selectedLobbyMode.value === "friends" ? "创建好友房" : "开始单人练习";
   }
   if (pendingPracticeAutoStart.value) {
     return "正在自动开始...";
@@ -888,7 +892,7 @@ const lobbyStartHint = computed(() => {
 const hasFriendInvite = computed(
   () => Boolean(new URLSearchParams(window.location.search).get("roomId")?.trim()),
 );
-const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "进入大厅"));
+const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
 const displayTurnPlayerId = computed(() => {
   if (state.value?.responsePhase === "collective") {
@@ -2039,6 +2043,8 @@ async function enterLobby() {
   enteredFrontLobby.value = true;
   const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
   if (!invitedRoomId) {
+    await nextTick();
+    document.querySelector<HTMLButtonElement>("[data-testid='mode-practice_bots']")?.focus();
     return;
   }
   enteringLobby.value = true;
@@ -2058,11 +2064,17 @@ function randomizeNickname() {
   entryName.value = generateRandomNickname();
 }
 
-function startSelectedMode() {
-  if (!hasLobbySession.value && selectedLobbyMode.value === "ranked_reserved") {
-    globalError.value = "该模式暂未开放，当前只支持单人练习。";
+async function returnToEntry() {
+  if (hasLobbySession.value || enteringLobby.value) {
     return;
   }
+  globalError.value = "";
+  enteredFrontLobby.value = false;
+  await nextTick();
+  document.querySelector<HTMLInputElement>("[data-testid='nickname-input']")?.focus();
+}
+
+function startSelectedMode() {
   globalError.value = "";
   if (!hasLobbySession.value) {
     if (selectedLobbyMode.value === "friends") {
@@ -2402,6 +2414,23 @@ watch(
 
 .meta span {
   white-space: nowrap;
+}
+
+.meta.front-lobby-meta {
+  gap: 0.45rem;
+  overflow: visible;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+}
+
+.front-lobby-identity strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.front-lobby-meta .change-name {
+  border-color: #0ea5e9;
+  color: #e0f2fe;
 }
 
 .layout.game-tools-active .hu-mask,

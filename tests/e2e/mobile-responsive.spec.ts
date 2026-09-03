@@ -278,6 +278,132 @@ async function expectFiveButtonActionGrid(page: Page): Promise<void> {
   expect(Math.max(...actionMetrics.sizes.map((size) => size.height))).toBeLessThanOrEqual(46);
 }
 
+test.describe("clear first-time entry", () => {
+  test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
+
+  test("keeps nickname and playable modes obvious on legacy phones", async ({ page }, testInfo) => {
+    await page.goto("/");
+
+    const nicknameInput = page.getByTestId("nickname-input");
+    const firstNickname = await nicknameInput.inputValue();
+    expect(firstNickname.trim().length).toBeGreaterThan(0);
+    await expect(page.getByTestId("login-submit")).toHaveText("下一步：选择玩法");
+    await expect(page.getByTestId("open-rules")).toHaveCount(1);
+    await expect(page.locator(".entry-actions button")).toHaveCount(2);
+
+    const entryGeometry = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>(".entry-shell")!;
+      const card = shell.querySelector<HTMLElement>(".entry-card")!;
+      const input = shell.querySelector<HTMLInputElement>("[data-testid='nickname-input']")!;
+      const label = shell.querySelector<HTMLElement>(".entry-field > span")!;
+      const description = shell.querySelector<HTMLElement>(".entry-desc")!;
+      const buttons = [...shell.querySelectorAll<HTMLButtonElement>(".entry-actions button")];
+      const cardRect = card.getBoundingClientRect();
+      const isInsideCard = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left >= cardRect.left && rect.right <= cardRect.right && rect.top >= cardRect.top && rect.bottom <= cardRect.bottom;
+      };
+      return {
+        noPageOverflow: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+        controlsInsideCard: [input, ...buttons].every(isInsideCard),
+        inputFontSize: Number.parseFloat(getComputedStyle(input).fontSize),
+        labelFontSize: Number.parseFloat(getComputedStyle(label).fontSize),
+        descriptionFontSize: Number.parseFloat(getComputedStyle(description).fontSize),
+        minimumButtonWidth: Math.min(...buttons.map((button) => button.getBoundingClientRect().width)),
+        minimumButtonHeight: Math.min(...buttons.map((button) => button.getBoundingClientRect().height)),
+        minimumButtonFontSize: Math.min(...buttons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize))),
+      };
+    });
+    expect(entryGeometry).toMatchObject({
+      noPageOverflow: true,
+      controlsInsideCard: true,
+    });
+    expect(entryGeometry.inputFontSize).toBeGreaterThanOrEqual(18);
+    expect(entryGeometry.labelFontSize).toBeGreaterThanOrEqual(15);
+    expect(entryGeometry.descriptionFontSize).toBeGreaterThanOrEqual(14);
+    expect(entryGeometry.minimumButtonWidth).toBeGreaterThanOrEqual(150);
+    expect(entryGeometry.minimumButtonHeight).toBeGreaterThanOrEqual(48);
+    expect(entryGeometry.minimumButtonFontSize).toBeGreaterThanOrEqual(16);
+    await page.screenshot({ path: testInfo.outputPath("legacy-entry-568x320.png") });
+
+    await page.getByTestId("login-submit").click();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    const practiceMode = page.getByTestId("mode-practice_bots");
+    const friendMode = page.getByTestId("mode-friends");
+    await expect(page.locator(".mode-card")).toHaveCount(2);
+    await expect(page.getByText("联机匹配", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("即将开放", { exact: true })).toHaveCount(0);
+    await expect(practiceMode).toHaveAttribute("aria-pressed", "true");
+    await expect(friendMode).toHaveAttribute("aria-pressed", "false");
+    await expect(practiceMode).toContainText("已选择");
+    await expect(friendMode).toContainText("邀请朋友");
+    await expect(practiceMode).toBeFocused();
+    await expect(page.locator(".front-lobby-identity")).toContainText(firstNickname);
+    await expect(page.getByTestId("lobby-start")).toHaveText("开始单人练习");
+    await expect(page.getByTestId("open-rules")).toHaveCount(1);
+
+    const lobbyGeometry = await page.evaluate(() => {
+      const scroll = document.querySelector<HTMLElement>("[data-testid='lobby-scroll']")!;
+      const modeCards = [...scroll.querySelectorAll<HTMLElement>(".mode-card")];
+      const descriptions = [...scroll.querySelectorAll<HTMLElement>(".mode-card p")];
+      const start = document.querySelector<HTMLButtonElement>("[data-testid='lobby-start']")!;
+      const scrollRect = scroll.getBoundingClientRect();
+      const isInsideScroll = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left >= scrollRect.left - 1 && rect.right <= scrollRect.right + 1 && rect.top >= scrollRect.top - 1 && rect.bottom <= scrollRect.bottom + 1;
+      };
+      return {
+        scrollDoesNotHideModes: scroll.scrollHeight <= scroll.clientHeight + 1 && modeCards.every(isInsideScroll),
+        minimumDescriptionFontSize: Math.min(...descriptions.map((description) => Number.parseFloat(getComputedStyle(description).fontSize))),
+        startWidth: start.getBoundingClientRect().width,
+        startHeight: start.getBoundingClientRect().height,
+        startFontSize: Number.parseFloat(getComputedStyle(start).fontSize),
+      };
+    });
+    expect(lobbyGeometry.scrollDoesNotHideModes).toBe(true);
+    expect(lobbyGeometry.minimumDescriptionFontSize).toBeGreaterThanOrEqual(14);
+    expect(lobbyGeometry.startWidth).toBeGreaterThanOrEqual(180);
+    expect(lobbyGeometry.startHeight).toBeGreaterThanOrEqual(48);
+    expect(lobbyGeometry.startFontSize).toBeGreaterThanOrEqual(16);
+    await page.screenshot({ path: testInfo.outputPath("legacy-mode-lobby-568x320.png") });
+
+    await page.getByTestId("change-entry-name").click();
+    await expect(nicknameInput).toBeVisible();
+    await expect(nicknameInput).toBeFocused();
+    await expect(nicknameInput).toHaveValue(firstNickname);
+    await nicknameInput.fill("王阿姨");
+    await nicknameInput.press("Enter");
+    await expect(practiceMode).toBeFocused();
+    await expect(page.locator(".front-lobby-identity")).toContainText("王阿姨");
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+    const portraitGeometry = await page.evaluate(() => {
+      const elements = [
+        ...document.querySelectorAll<HTMLElement>(".mode-card"),
+        document.querySelector<HTMLElement>("[data-testid='lobby-start']")!,
+        document.querySelector<HTMLElement>("[data-testid='change-entry-name']")!,
+        document.querySelector<HTMLElement>("[data-testid='open-rules']")!,
+      ];
+      return {
+        noPageOverflow: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+        allControlsInPhysicalViewport: elements.every((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+        }),
+      };
+    });
+    expect(portraitGeometry).toEqual({ noPageOverflow: true, allControlsInPhysicalViewport: true });
+    await page.screenshot({ path: testInfo.outputPath("legacy-mode-lobby-320x568.png") });
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
+    await expect(practiceMode).toBeVisible();
+    await expect(friendMode).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("desktop-mode-lobby.png") });
+  });
+});
+
 test.describe("phone portrait landscape canvas", () => {
   test.use({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true });
 

@@ -3,6 +3,7 @@
     class="lobby"
     :class="{
       'friend-waiting-room': roomMode === 'friends' && Boolean(roomId),
+      'mode-selection': modes.length > 0,
     }"
   >
     <div class="lobby-head">
@@ -12,7 +13,7 @@
         <p class="lobby-rule-tip">{{ subtitle }}</p>
       </div>
       <div class="lobby-head-actions">
-        <button class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
+        <button v-if="roomId" class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
         <button
           v-if="roomMode === 'friends' && roomId"
           ref="leaveButtonRef"
@@ -35,11 +36,12 @@
           class="mode-card"
           :class="{ active: selectedMode === mode.id, disabled: !mode.enabled }"
           :disabled="!mode.enabled"
+          :aria-pressed="selectedMode === mode.id"
           @click="$emit('select-mode', mode.id)"
         >
           <div class="mode-head">
             <strong>{{ mode.name }}</strong>
-            <span>{{ mode.enabled ? "可开始" : "即将开放" }}</span>
+            <span>{{ selectedMode === mode.id ? "已选择" : mode.badge }}</span>
           </div>
           <p>{{ mode.description }}</p>
         </button>
@@ -183,6 +185,7 @@ type LobbyMode = {
   id: string;
   name: string;
   description: string;
+  badge: string;
   enabled: boolean;
 };
 
@@ -414,12 +417,30 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
+  align-items: baseline;
+}
+
+.mode-head strong {
+  font-size: 1.02rem;
+}
+
+.mode-head span {
+  color: #93c5fd;
+  font-size: 0.8rem;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .mode-card p,
 .player-name,
 .empty-label {
   margin: 0.35rem 0;
+}
+
+.mode-card p {
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .seat-card {
@@ -548,6 +569,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding-bottom: max(0.1rem, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(71, 85, 105, 0.72);
   background: #0b1220;
+}
+
+.mode-selection .lobby-actions .primary {
+  width: min(18rem, 100%);
+  font-size: 1rem;
 }
 
 .waiting-leave-mask {
@@ -693,6 +719,15 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     padding: 0.5rem;
   }
 
+  .mode-selection {
+    gap: 0.3rem;
+    padding: 0.4rem;
+  }
+
+  .mode-selection .lobby-rule-tip {
+    display: none;
+  }
+
   .lobby-scroll {
     gap: 0.4rem;
   }
@@ -707,9 +742,22 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     font-size: 0.78rem;
   }
 
+  .lobby-kicker {
+    display: none;
+  }
+
+  .mode-head strong {
+    font-size: 1.05rem;
+  }
+
+  .mode-head span {
+    font-size: 0.82rem;
+  }
+
   .mode-card p {
-    font-size: 0.75rem;
-    line-height: 1.3;
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.35;
   }
 
   .lobby-rule-tip {

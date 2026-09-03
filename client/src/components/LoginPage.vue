@@ -6,7 +6,7 @@
       <p class="entry-desc">
         {{ friendInvite
           ? "这是朋友发来的牌局邀请。输入昵称后进入房间，再选择一个空座位。"
-          : "输入昵称后进入大厅，可以开始单人练习或创建好友房。" }}
+          : "输入昵称后选择玩法；第一次玩可以选择单人练习。" }}
       </p>
     </div>
 
@@ -45,8 +45,7 @@
         <button class="primary" data-testid="login-submit" :disabled="entering" @click="$emit('submit')">
           <span data-testid="login-submit-label">{{ entering ? "进入中..." : primaryLabel }}</span>
         </button>
-        <button class="ghost quick-name" data-testid="random-nickname" @click="$emit('randomize')">随机昵称</button>
-        <button class="ghost" data-testid="open-rules" @click="$emit('open-rules')">查看规则</button>
+        <button class="ghost quick-name" data-testid="random-nickname" @click="$emit('randomize')">换个名字</button>
       </div>
     </div>
   </section>
@@ -64,7 +63,6 @@ defineProps<{
 const emit = defineEmits<{
   "update:nickname": [value: string];
   submit: [];
-  "open-rules": [];
   randomize: [];
   "select-history": [value: string];
 }>();
@@ -131,19 +129,19 @@ function onInput(event: Event) {
 
 .entry-field span {
   color: #bfdbfe;
-  font-size: 0.85rem;
+  font-size: 0.94rem;
   font-weight: 600;
 }
 
 .entry-input {
   width: min(28rem, 100%);
-  min-height: 2.8rem;
+  min-height: 3.1rem;
   border-radius: 12px;
   border: 1px solid #475569;
   background: #020617;
   color: #f8fafc;
   padding: 0.7rem 0.85rem;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 .entry-input:focus {
@@ -181,6 +179,8 @@ function onInput(event: Event) {
   padding: 10px 14px;
   cursor: pointer;
   min-height: 48px;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .primary {
@@ -249,11 +249,20 @@ function onInput(event: Event) {
   }
 
   .entry-desc {
-    font-size: 0.82rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
   }
 
   .entry-card {
     padding: 0.55rem;
+  }
+
+  .entry-hero h2 {
+    font-size: 1.35rem;
+  }
+
+  .entry-input {
+    min-height: 52px;
   }
 
   .history-chips {
