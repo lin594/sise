@@ -44,7 +44,7 @@
 - 当前必须弃牌的座位
 - 超时任务、断线托管和本局结算快照
 
-私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。
+私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。好友邀请访客尚未选座时只同步公开大厅状态；客户端接收 `lobby_presence` 并保持本地座位为空，不启动私有状态请求。收到 `session_token` 确认入座后才立即补拉并进入周期轮询，避免未入座 token 产生必然失败的 404。
 
 决策倒计同样由服务端权威管理。`available_actions`、本人房间快照和 `/private-state` 会携带 `decisionTimer`，包含是否不限时、加时权限、加时量、当前总时长、准确截止时间和一次性决策指纹。单人练习只对当前在线真人关闭声明与操作超时；机器人及断线托管继续计时。新客户端发送 `action`、`discard_card` 和 `request_more_time` 时都回传该指纹；服务端忽略不属于当前窗口的迟到请求并重发当前可用动作，避免重复点击或慢网络消息作用于下一个玩家、下一次操作或下一局。未携带指纹的旧客户端仍按原协议兼容。公开 Schema 补丁不含该私有字段，客户端收到不带它的公开补丁时必须保留最近一次私有结果。
 

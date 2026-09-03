@@ -748,7 +748,7 @@ export function useRoom(playerName = "Player") {
     }
     const roomId = activeRoomId.value.trim();
     const token = playerToken.value.trim();
-    if (!roomId || !token) {
+    if (!roomId || !token || !mySeatId.value) {
       return;
     }
     const requestConnectionSeq = activeConnectionSeq;
@@ -821,7 +821,7 @@ export function useRoom(playerName = "Player") {
     clearPrivateStatePollTimer();
     privateStatePollTimer = window.setInterval(() => {
       const phase = state.value?.phase;
-      if (!connected.value || !activeRoomId.value || !playerToken.value) {
+      if (!connected.value || !activeRoomId.value || !playerToken.value || !mySeatId.value) {
         return;
       }
       if (phase !== "waiting" && phase !== "declaring" && phase !== "playing" && phase !== "ended") {
@@ -1425,6 +1425,19 @@ export function useRoom(playerName = "Player") {
           updateInviteUrl(payload.roomId);
         }
         pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
+        void fetchPrivateState("seat_confirmed");
+      });
+      joined.onMessage("lobby_presence", (payload: { roomId?: string; seated?: boolean }) => {
+        if (!isCurrentJoinedRoom()) {
+          return;
+        }
+        if (payload?.seated === false) {
+          mySeatId.value = "";
+          privateHand.value = [];
+          availableActions.value = [];
+          privateHandFingerprint = "";
+          availableActionsFingerprint = "";
+        }
       });
       joined.onMessage("session_replaced", (payload: { message?: string }) => {
         if (!isCurrentJoinedRoom()) {
