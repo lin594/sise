@@ -46,10 +46,11 @@ export interface PlayerState {
 }
 export interface RoomStateSnapshot {
     roomId?: string;
-    roomMode: "practice" | "friends";
+    roomMode: "practice" | "friends" | "match";
     scoringMode: ScoringMode;
     completedRounds: number;
     phase: string;
+    matchStartsAt: number;
     hostPlayerId: string;
     dealerId: string;
     dealerPickerId?: string;

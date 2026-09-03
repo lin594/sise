@@ -107,6 +107,7 @@
       :is-host="isHost"
       :room-id="activeRoomId"
       :room-mode="state?.roomMode || ''"
+      :match-seconds-left="matchSecondsLeft"
       :scoring-mode="state?.scoringMode || 'single'"
       :completed-rounds="state?.completedRounds || 0"
       :players="players"
@@ -670,7 +671,7 @@ type SettlementGroupBlock = {
   label?: string;
   tone: "meld" | "fish" | "public" | "strong";
 };
-type LobbyModeId = "practice_bots" | "friends";
+type LobbyModeId = "practice_bots" | "quick_match" | "friends";
 type LobbyMode = {
   id: LobbyModeId;
   name: string;
@@ -844,6 +845,13 @@ const lobbyModes: LobbyMode[] = [
     enabled: true,
   },
   {
+    id: "quick_match" as const,
+    name: "快速配桌",
+    description: "先等真人牌友；人数不足时电脑自动补位，不会一直空等。",
+    badge: "一键开桌",
+    enabled: true,
+  },
+  {
     id: "friends" as const,
     name: "好友同桌",
     description: "创建房间，把链接发给朋友；空位也可以添加电脑。",
@@ -969,7 +977,10 @@ const canPressStartGame = computed(
 );
 const canStartSelectedMode = computed(
   () =>
-    (!hasLobbySession.value && (selectedLobbyMode.value === "practice_bots" || selectedLobbyMode.value === "friends")) ||
+    (!hasLobbySession.value &&
+      (selectedLobbyMode.value === "practice_bots" ||
+        selectedLobbyMode.value === "quick_match" ||
+        selectedLobbyMode.value === "friends")) ||
     canPressStartGame.value,
 );
 const remainingFriendSeats = computed(() => Math.max(0, 4 - players.value.length));
@@ -988,6 +999,9 @@ const unreadyFriendCount = computed(
 const lobbyTitle = computed(() => {
   if (!isWaiting.value) {
     return "游戏模式选择";
+  }
+  if (state.value?.roomMode === "match") {
+    return "正在快速配桌";
   }
   if (state.value?.roomMode !== "friends") {
     return "房间准备中";
@@ -1015,6 +1029,12 @@ const lobbySubtitle = computed(() => {
   if (!isWaiting.value) {
     return "选择一种玩法。第一次玩，建议选单人练习。";
   }
+  if (state.value?.roomMode === "match") {
+    const humanCount = players.value.filter((player) => !player.isConfiguredBot).length;
+    return state.value.matchStartsAt > 0
+      ? `已找到 ${humanCount} 位真人，${matchSecondsLeft.value} 秒后电脑补位自动开始。`
+      : "有牌友正在恢复连接，座位会为对方暂时保留。";
+  }
   if (state.value?.roomMode !== "friends") {
     return "正在补齐机器人并准备开始单人练习。";
   }
@@ -1040,7 +1060,8 @@ const lobbySubtitle = computed(() => {
 });
 const lobbyStartLabel = computed(() => {
   if (!hasLobbySession.value) {
-    return selectedLobbyMode.value === "friends" ? "创建好友房" : "开始单人练习";
+    if (selectedLobbyMode.value === "friends") return "创建好友房";
+    return selectedLobbyMode.value === "quick_match" ? "开始快速配桌" : "开始单人练习";
   }
   if (pendingPracticeAutoStart.value) {
     return "正在自动开始...";
@@ -1048,11 +1069,17 @@ const lobbyStartLabel = computed(() => {
   if (state.value?.roomMode === "friends" && !mySeatId.value) {
     return "请先选择座位";
   }
+  if (state.value?.roomMode === "match") {
+    return "电脑补位，立即开始";
+  }
   return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
 });
 const lobbyStartHint = computed(() => {
   if (!hasLobbySession.value || !isWaiting.value) return "";
   if (!mySeatId.value) return "请先选择一个空座位";
+  if (state.value?.roomMode === "match") {
+    return isHost.value ? "不想等待时，可立即补齐电脑" : `约 ${matchSecondsLeft.value} 秒后自动开始`;
+  }
   if (!isHost.value) return mePlayer.value?.lobbyReady ? "已准备，等待房主开始" : "请先确认准备";
   if (state.value?.roomMode !== "friends") return "";
   if (players.value.length < 4) return `还差 ${4 - players.value.length} 个座位，可一键补电脑`;
@@ -1065,6 +1092,10 @@ const hasFriendInvite = computed(
 );
 const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
+const matchSecondsLeft = computed(() => {
+  const startsAt = Number(state.value?.matchStartsAt ?? 0);
+  return startsAt > 0 ? Math.max(0, Math.ceil((startsAt - nowMs.value) / 1000)) : 0;
+});
 const displayTurnPlayerId = computed(() => {
   if (state.value?.responsePhase === "collective") {
     return (
@@ -2595,7 +2626,11 @@ async function enterLobby() {
   }
   enteringLobby.value = true;
   try {
-    const ok = await connect({ nameOverride: nickname, roomId: invitedRoomId });
+    const ok = await connect({
+      nameOverride: nickname,
+      roomId: invitedRoomId,
+      exposeRoomIdInUrl: true,
+    });
     if (!ok) {
       throw new Error(joinError.value || "加入好友房失败");
     }
@@ -2625,15 +2660,40 @@ function startSelectedMode() {
   if (!hasLobbySession.value) {
     if (selectedLobbyMode.value === "friends") {
       void startFriendLobby();
+    } else if (selectedLobbyMode.value === "quick_match") {
+      void startQuickMatchLobby();
     } else {
       void startPracticeLobby();
     }
     return;
   }
-  if (state.value?.roomMode === "friends") {
+  if (state.value?.roomMode === "friends" || state.value?.roomMode === "match") {
     startGame();
   } else {
     requestPracticeAutoStart();
+  }
+}
+
+async function startQuickMatchLobby() {
+  if (enteringLobby.value) {
+    return;
+  }
+  const nickname = entryName.value.trim() || generateRandomNickname();
+  entryName.value = nickname;
+  enteringLobby.value = true;
+  try {
+    const ok = await connect({
+      nameOverride: nickname,
+      forceNew: true,
+      matchmaking: true,
+    });
+    if (!ok) {
+      throw new Error(joinError.value || "暂时无法快速配桌，请稍后重试。");
+    }
+  } catch (error) {
+    globalError.value = error instanceof Error ? error.message : "暂时无法快速配桌，请稍后重试。";
+  } finally {
+    enteringLobby.value = false;
   }
 }
 
@@ -2703,6 +2763,7 @@ async function startFriendLobby() {
       roomId: payload.roomId,
       hostKey: payload.hostKey,
       forceNew: true,
+      exposeRoomIdInUrl: true,
     });
     if (!ok) {
       throw new Error(joinError.value || "进入好友房失败");

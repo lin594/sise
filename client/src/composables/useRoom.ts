@@ -69,6 +69,8 @@ type ConnectOptions = {
   forceNew?: boolean;
   reconnecting?: boolean;
   preserveState?: boolean;
+  matchmaking?: boolean;
+  exposeRoomIdInUrl?: boolean;
 };
 
 function generateLocalPlayerToken(): string {
@@ -262,10 +264,13 @@ function normalizeSnapshot(next: unknown): RoomStateSnapshot {
 
   return {
     roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
-    roomMode: rawState?.roomMode === "friends" ? "friends" : "practice",
+    roomMode: rawState?.roomMode === "friends" || rawState?.roomMode === "match"
+      ? rawState.roomMode
+      : "practice",
     scoringMode: rawState?.scoringMode === "cumulative" ? "cumulative" : "single",
     completedRounds: Math.max(0, Number(rawState?.completedRounds ?? 0)),
     phase: String(rawState?.phase ?? ""),
+    matchStartsAt: Math.max(0, Number(rawState?.matchStartsAt ?? 0)),
     hostPlayerId: String(rawState?.hostPlayerId ?? ""),
     dealerId: String(rawState?.dealerId ?? ""),
     dealerPickerId: String(rawState?.dealerPickerId ?? ""),
@@ -1012,9 +1017,11 @@ export function useRoom(playerName = "Player") {
       .join("|");
     return [
       snapshot.roomId ?? activeRoomId.value,
+      snapshot.roomMode,
       snapshot.scoringMode,
       String(snapshot.completedRounds),
       snapshot.phase,
+      String(snapshot.matchStartsAt),
       snapshot.responsePhase,
       snapshot.hostPlayerId,
       snapshot.dealerId,
@@ -1303,10 +1310,16 @@ export function useRoom(playerName = "Player") {
             forceNew: Boolean(options?.forceNew),
             reconnecting: Boolean(options?.reconnecting),
             preserveState: Boolean(options?.preserveState),
+            matchmaking: Boolean(options?.matchmaking),
+            exposeRoomIdInUrl: Boolean(options?.exposeRoomIdInUrl),
           };
     const forceNew = Boolean(resolvedOptions.forceNew || query.get("new") === "1");
     const reconnecting = Boolean(resolvedOptions.reconnecting);
     const preserveState = !forceNew && Boolean(resolvedOptions.preserveState || reconnecting);
+    const matchmaking = Boolean(resolvedOptions.matchmaking);
+    const exposeRoomIdInUrl = Boolean(
+      resolvedOptions.exposeRoomIdInUrl || (!matchmaking && query.get("roomId")?.trim()),
+    );
 
     suppressReconnect = false;
     connectInFlight = true;
@@ -1351,24 +1364,35 @@ export function useRoom(playerName = "Player") {
       const cachedName = readStored(NAME_KEY);
       const desiredName = String(resolvedOptions.nameOverride ?? "").trim() || queryName || cachedName || playerName;
       localPlayerName.value = desiredName;
-      const initialRoomId = queryRoomId || cachedRoomId || (await createCompatibilityPracticeRoomId());
-      const cachedToken = readStored(tokenKey(initialRoomId)) ||
+      const initialRoomId = matchmaking
+        ? ""
+        : queryRoomId || cachedRoomId || (await createCompatibilityPracticeRoomId());
+      const cachedToken = (initialRoomId && readStored(tokenKey(initialRoomId))) ||
         (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
       const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
       playerToken.value = desiredToken;
       if (preserveState && !activeRoomId.value) {
         activeRoomId.value = initialRoomId;
       }
-      writeStored(tokenKey(initialRoomId), desiredToken);
+      if (initialRoomId) {
+        writeStored(tokenKey(initialRoomId), desiredToken);
+      }
       writeStored(NAME_KEY, desiredName);
 
       let joined: Room;
       try {
-        joined = await client.joinById(initialRoomId, {
-          name: desiredName,
-          playerToken: desiredToken,
-          hostKey: resolvedOptions.hostKey,
-        });
+        joined = matchmaking
+          ? await client.joinOrCreate("four-color", {
+              name: desiredName,
+              playerToken: desiredToken,
+              roomMode: "match",
+              matchOpen: true,
+            })
+          : await client.joinById(initialRoomId, {
+              name: desiredName,
+              playerToken: desiredToken,
+              hostKey: resolvedOptions.hostKey,
+            });
       } catch (error) {
         const closeCode =
           error instanceof MatchMakeError
@@ -1377,7 +1401,7 @@ export function useRoom(playerName = "Player") {
         if (TERMINAL_ROOM_CLOSE_MESSAGES[closeCode]) {
           throw error;
         }
-        if (reconnecting) {
+        if (reconnecting || matchmaking) {
           throw error;
         }
         if (queryRoomId) {
@@ -1420,7 +1444,9 @@ export function useRoom(playerName = "Player") {
       }
       if (joined.roomId) {
         writeStored(ROOM_KEY, joined.roomId);
-        updateInviteUrl(joined.roomId);
+        if (exposeRoomIdInUrl) {
+          updateInviteUrl(joined.roomId);
+        }
       }
 
       const isCurrentJoinedRoom = () =>
@@ -1552,7 +1578,9 @@ export function useRoom(playerName = "Player") {
           }
           writeStored(ROOM_KEY, payload.roomId);
           writeStored(tokenKey(payload.roomId), payload.playerToken);
-          updateInviteUrl(payload.roomId);
+          if (exposeRoomIdInUrl) {
+            updateInviteUrl(payload.roomId);
+          }
         }
         pushLog(`SEAT ${payload.seatId}${payload.reclaimed ? " RECLAIM" : " JOIN"}`);
         void fetchPrivateState("seat_confirmed");

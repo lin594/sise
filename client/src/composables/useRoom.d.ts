@@ -7,6 +7,8 @@ type ConnectOptions = {
     forceNew?: boolean;
     reconnecting?: boolean;
     preserveState?: boolean;
+    matchmaking?: boolean;
+    exposeRoomIdInUrl?: boolean;
 };
 export declare function useRoom(playerName?: string): {
     connected: import("vue").Ref<boolean, boolean>;
@@ -18,10 +20,11 @@ export declare function useRoom(playerName?: string): {
     activeRoomId: import("vue").Ref<string, string>;
     state: import("vue").Ref<{
         roomId?: string | undefined;
-        roomMode: "practice" | "friends";
+        roomMode: "practice" | "friends" | "match";
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
         phase: string;
+        matchStartsAt: number;
         hostPlayerId: string;
         dealerId: string;
         dealerPickerId?: string | undefined;
@@ -225,10 +228,11 @@ export declare function useRoom(playerName?: string): {
         } | null | undefined;
     } | null, RoomStateSnapshot | {
         roomId?: string | undefined;
-        roomMode: "practice" | "friends";
+        roomMode: "practice" | "friends" | "match";
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
         phase: string;
+        matchStartsAt: number;
         hostPlayerId: string;
         dealerId: string;
         dealerPickerId?: string | undefined;

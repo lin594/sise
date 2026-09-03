@@ -3,6 +3,7 @@
     class="lobby"
     :class="{
       'friend-waiting-room': roomMode === 'friends' && Boolean(roomId),
+      'match-waiting-room': roomMode === 'match' && Boolean(roomId),
       'mode-selection': modes.length > 0,
     }"
   >
@@ -15,7 +16,7 @@
       <div class="lobby-head-actions">
         <button v-if="roomId" class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
         <button
-          v-if="roomMode === 'friends' && roomId"
+          v-if="(roomMode === 'friends' || roomMode === 'match') && roomId"
           ref="leaveButtonRef"
           class="ghost head-action leave-room"
           type="button"
@@ -83,6 +84,21 @@
         </div>
       </div>
 
+      <section
+        v-if="roomMode === 'match' && roomId"
+        class="match-status-card"
+        aria-live="polite"
+        data-testid="match-status"
+      >
+        <div>
+          <strong data-testid="match-human-count">真人 {{ matchHumanCount }} / 4</strong>
+          <span>先等真人，人数不足时电脑补位</span>
+        </div>
+        <b data-testid="match-countdown">
+          {{ matchSecondsLeft > 0 ? `${matchSecondsLeft} 秒后自动开始` : "等待牌友恢复连接" }}
+        </b>
+      </section>
+
       <div v-if="roomId" class="seat-grid" data-testid="seat-grid">
         <article
           v-for="slot in seatSlots"
@@ -93,7 +109,7 @@
         >
           <div class="seat-head">
             <strong>{{ seatNames[slot.seatIndex] }}</strong>
-            <span v-if="slot.player?.clientId === hostPlayerId">
+            <span v-if="roomMode !== 'match' && slot.player?.clientId === hostPlayerId">
               {{ slot.player?.clientId === mySeatId ? "房主 · 你" : "房主" }}
             </span>
             <span v-else-if="slot.player?.clientId === mySeatId">你</span>
@@ -105,14 +121,14 @@
             <small v-else class="human-seat-status">
               {{ slot.player.connected ? "真人在线" : "真人离线（座位暂留）" }}
               <strong
-                v-if="slot.player.clientId !== hostPlayerId"
+                v-if="roomMode === 'friends' && slot.player.clientId !== hostPlayerId"
                 class="ready-state"
                 :class="{ ready: slot.player.lobbyReady }"
                 :data-testid="`seat-ready-${slot.seatIndex}`"
               >{{ slot.player.lobbyReady ? "已准备" : "未准备" }}</strong>
             </small>
 
-            <template v-if="slot.player.isConfiguredBot && isHost">
+            <template v-if="roomMode === 'friends' && slot.player.isConfiguredBot && isHost">
               <div
                 class="bot-level-group"
                 role="group"
@@ -139,7 +155,7 @@
               <button class="danger mini" type="button" @click="$emit('remove-seat', slot.seatIndex)">移除机器人</button>
             </template>
             <button
-              v-else-if="isHost && slot.player.clientId !== hostPlayerId"
+              v-else-if="roomMode === 'friends' && isHost && slot.player.clientId !== hostPlayerId"
               class="danger mini"
               type="button"
               @click="$emit('remove-seat', slot.seatIndex)"
@@ -150,7 +166,7 @@
 
           <template v-else>
             <p class="empty-label">等待入座</p>
-            <div class="seat-actions">
+            <div v-if="roomMode === 'friends'" class="seat-actions">
               <button
                 class="ghost mini"
                 type="button"
@@ -240,7 +256,7 @@
           {{ myLobbyReady ? "取消准备" : "我准备好了" }}
         </button>
         <button
-          v-else
+          v-else-if="showStartAction"
           ref="startButtonRef"
           class="primary"
           type="button"
@@ -250,6 +266,7 @@
         >
           {{ startLabel }}
         </button>
+        <p v-else-if="roomMode === 'match'" class="match-waiting-note">正在等牌友，准备好后会自动开始</p>
       </div>
       <span v-if="startHint" class="start-hint" role="status" aria-live="polite">{{ startHint }}</span>
     </div>
@@ -332,7 +349,8 @@ const props = defineProps<{
   mySeatId: string;
   isHost: boolean;
   roomId: string;
-  roomMode: "practice" | "friends" | "";
+  roomMode: "practice" | "friends" | "match" | "";
+  matchSecondsLeft: number;
   players: LobbyPlayer[];
   canShareInvite: boolean;
   invitePending: boolean;
@@ -380,6 +398,9 @@ const leaveRoomDescription = computed(() => {
   if (departureIntent.value === "dissolve") {
     return "这会结束本桌的累计积分，并让所有牌友立即返回模式选择。这个操作不能撤销。";
   }
+  if (props.roomMode === "match") {
+    return "只让你退出这次配桌，不会把其他牌友一起带走。你将返回游戏模式大厅。";
+  }
   if (props.isHost) {
     return "如果还有真人，房主会自动转交；如果只剩你，房间会关闭。你将返回游戏模式大厅。";
   }
@@ -393,7 +414,9 @@ const departureDialogTitle = computed(() =>
     ? "解散整张好友桌？"
     : props.roomMode === "practice"
       ? "离开当前练习？"
-      : "离开当前好友房？",
+      : props.roomMode === "match"
+        ? "离开快速配桌？"
+        : "离开当前好友房？",
 );
 const seatSlots = computed(() =>
   Array.from({ length: 4 }, (_, seatIndex) => ({
@@ -402,6 +425,9 @@ const seatSlots = computed(() =>
   })),
 );
 const emptySeatCount = computed(() => seatSlots.value.filter((slot) => !slot.player).length);
+const matchHumanCount = computed(
+  () => props.players.filter((player) => !player.isConfiguredBot).length,
+);
 const myLobbyReady = computed(
   () => props.players.find((player) => player.clientId === props.mySeatId)?.lobbyReady ?? false,
 );
@@ -415,6 +441,7 @@ const showReadyAction = computed(
 const showFillBots = computed(
   () => props.roomMode === "friends" && Boolean(props.roomId) && props.isHost && emptySeatCount.value > 0,
 );
+const showStartAction = computed(() => props.roomMode !== "match" || props.isHost);
 const cumulativeRanking = computed(() =>
   [...props.players].sort((left, right) =>
     right.cumulativeScore - left.cumulativeScore || left.seatIndex - right.seatIndex,
@@ -642,19 +669,63 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .mode-grid,
 .seat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.mode-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.seat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .mode-card,
 .seat-card,
 .invite-card,
+.match-status-card,
 .scoring-card {
   border: 1px solid #334155;
   border-radius: 14px;
   background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
   color: #e2e8f0;
   padding: 0.9rem;
+}
+
+.match-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: rgba(56, 189, 248, 0.55);
+  background: linear-gradient(135deg, rgba(7, 89, 133, 0.72), rgba(15, 23, 42, 0.96));
+}
+
+.match-status-card > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.match-status-card strong {
+  color: #fef08a;
+  font-size: 1.1rem;
+}
+
+.match-status-card span {
+  color: #bae6fd;
+  font-size: 0.82rem;
+}
+
+.match-status-card b {
+  flex: 0 0 auto;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.match-waiting-note {
+  margin: 0;
+  color: #bae6fd;
+  font-weight: 750;
 }
 
 .scoring-card {
@@ -1112,6 +1183,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   .mode-card,
   .seat-card,
   .invite-card,
+  .match-status-card,
   .scoring-card {
     padding: 0.62rem;
     border-radius: 11px;
@@ -1146,6 +1218,10 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     display: none;
   }
 
+  .mode-selection .mode-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .lobby-scroll {
     gap: 0.4rem;
   }
@@ -1176,6 +1252,14 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     margin: 0;
     font-size: 0.875rem;
     line-height: 1.35;
+  }
+
+  .match-status-card {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .match-status-card span {
+    display: none;
   }
 
   .lobby-rule-tip {
