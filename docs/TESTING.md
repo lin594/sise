@@ -177,6 +177,17 @@ Playwright 至少覆盖 320×568/375×667 旋转画布、568×320 老旧横屏�
 5. 创建一个房间但不建立 WebSocket；超过等待房空闲宽限后，确认该 roomId 已不能加入。
 6. 对比部署 commit 与本地已验证 commit，避免只重建了旧代码。
 
+可直接从本地测试仓库复用部署后浏览器回归（测试机地址按实际环境替换）：
+
+```bash
+PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn:3000 PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
+  npx playwright test tests/e2e/next-round-confirm.spec.ts
+PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn:3000 PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
+  npx playwright test tests/e2e/mobile-responsive.spec.ts --grep "keeps eight readable hand cards"
+```
+
+下一局用例在 localhost 使用受限调试场景以缩短回归时间；连接外部部署时不要求、也不允许生产调试桥，而是让两名真人座位从界面开启托管，由真实牌局自然完成后再验证结算确认和下一局同步。
+
 ## 6. 文档链接检查
 
 文档改名或归档后，使用 `rg` 搜索旧文件名，并逐一确认 Markdown 的相对链接存在。档案可以保留历史文字，但当前 `README.md`、`docs/README.md` 与六份权威文档不得链接到已移走的旧路径。
