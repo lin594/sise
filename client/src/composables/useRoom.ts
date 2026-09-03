@@ -225,6 +225,7 @@ function normalizePlayer(raw: any): PlayerState {
     isAutoPlay: Boolean(raw?.isAutoPlay),
     isConfiguredBot: Boolean(raw?.isConfiguredBot),
     botStrength: Math.max(0, Math.min(100, Number(raw?.botStrength ?? 50))),
+    cumulativeScore: Number(raw?.cumulativeScore ?? 0),
     connected: Boolean(raw?.connected),
     discardPile: asCardArray(raw?.discardPile),
     exposedArea: asCardArray(raw?.exposedArea),
@@ -257,6 +258,8 @@ function normalizeSnapshot(next: unknown): RoomStateSnapshot {
   return {
     roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
     roomMode: rawState?.roomMode === "friends" ? "friends" : "practice",
+    scoringMode: rawState?.scoringMode === "cumulative" ? "cumulative" : "single",
+    completedRounds: Math.max(0, Number(rawState?.completedRounds ?? 0)),
     phase: String(rawState?.phase ?? ""),
     hostPlayerId: String(rawState?.hostPlayerId ?? ""),
     dealerId: String(rawState?.dealerId ?? ""),
@@ -373,8 +376,11 @@ function normalizeRoundResultPayload(payload: RoundResultPayload): RoundResultPa
       discardCount: Number(p.discardCount ?? 0),
       scoreBreakdown: p.scoreBreakdown ?? [],
       totalScore: Number(p.totalScore ?? 0),
+      cumulativeScore: Number(p.cumulativeScore ?? 0),
     })),
     remainingDeck: asCardArray((payload as { remainingDeck?: unknown }).remainingDeck),
+    scoringMode: payload.scoringMode === "cumulative" ? "cumulative" : "single",
+    roundNumber: Math.max(1, Number(payload.roundNumber ?? 1)),
   };
 }
 
@@ -905,6 +911,7 @@ export function useRoom(playerName = "Player") {
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
             player.isAutoPlay ? 1 : 0,
+            player.cumulativeScore,
             player.discardPile.map((card) => card.id).join(","),
             player.exposedArea.map((card) => card.id).join(","),
             player.exposedGroupKinds.join(","),
@@ -915,6 +922,8 @@ export function useRoom(playerName = "Player") {
       .join("|");
     return [
       snapshot.roomId ?? activeRoomId.value,
+      snapshot.scoringMode,
+      String(snapshot.completedRounds),
       snapshot.phase,
       snapshot.responsePhase,
       snapshot.hostPlayerId,
@@ -1608,6 +1617,11 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("dissolve_room");
   }
 
+  function setScoringMode(mode: "single" | "cumulative") {
+    joinError.value = "";
+    safeRoomSend("set_scoring_mode", { mode });
+  }
+
   function setAutoPlay(enabled: boolean) {
     safeRoomSend("set_auto_play", { enabled });
   }
@@ -1723,6 +1737,7 @@ export function useRoom(playerName = "Player") {
     nextRound,
     returnLobby,
     dissolveRoom,
+    setScoringMode,
     setAutoPlay,
     leaveRoom,
     claimSeat,

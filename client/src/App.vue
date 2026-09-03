@@ -102,6 +102,8 @@
       :is-host="isHost"
       :room-id="activeRoomId"
       :room-mode="state?.roomMode || ''"
+      :scoring-mode="state?.scoringMode || 'single'"
+      :completed-rounds="state?.completedRounds || 0"
       :players="players"
       :can-share-invite="canShareInvite"
       :invite-pending="inviteActionPending"
@@ -116,6 +118,7 @@
       @remove-seat="removeSeat"
       @leave-room="handleLeaveRoom"
       @dissolve-room="dissolveRoom"
+      @set-scoring-mode="setScoringMode"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -278,9 +281,14 @@
             <span>请稍候，结算完成后才能开始下一局。</span>
           </div>
           <div v-else class="round-overview" data-testid="round-overview" role="status" aria-live="polite">
+            <small v-if="isCumulativeSettlement" class="round-number">本桌第 {{ settlementRoundNumber }} 局</small>
             <strong>{{ roundOutcomeText }}</strong>
             <span v-if="mySettlementPlayer">
               你本局 <b :class="scoreToneClass(mySettlementPlayer.totalScore)">{{ signedScore(mySettlementPlayer.totalScore) }}分</b>
+            </span>
+            <span v-if="isCumulativeSettlement && mySettlementPlayer" class="cumulative-overview">
+              你本桌累计
+              <b :class="scoreToneClass(mySettlementPlayer.cumulativeScore)">{{ signedScore(mySettlementPlayer.cumulativeScore) }}分</b>
             </span>
             <small>你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
           </div>
@@ -317,7 +325,11 @@
                     </small>
                   </span>
                   <span class="settlement-result">
+                    <small class="score-caption">本局</small>
                     <strong class="score-total" :class="scoreToneClass(p.totalScore)">{{ signedScore(p.totalScore) }}分</strong>
+                    <small v-if="isCumulativeSettlement" class="cumulative-total" :class="scoreToneClass(p.cumulativeScore)">
+                      累计 {{ signedScore(p.cumulativeScore) }}分
+                    </small>
                     <small class="settlement-toggle-label" aria-hidden="true">
                       <span class="settlement-toggle-closed">查看明细</span>
                       <span class="settlement-toggle-open">收起明细</span>
@@ -692,6 +704,7 @@ const {
   nextRound,
   returnLobby,
   dissolveRoom,
+  setScoringMode,
   setAutoPlay,
   leaveRoom,
   claimSeat,
@@ -1662,6 +1675,8 @@ const roundOutcomeText = computed(() => {
 
 const settlementPlayers = computed<RoundResultPlayer[]>(() => roundResult.value?.players ?? []);
 const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const isCumulativeSettlement = computed(() => roundResult.value?.scoringMode === "cumulative");
+const settlementRoundNumber = computed(() => Math.max(1, Number(roundResult.value?.roundNumber ?? 1)));
 const mySettlementPlayer = computed<RoundResultPlayer | null>(() =>
   settlementPlayers.value.find((player) => player.clientId === mySeatId.value) ?? null,
 );
@@ -3124,9 +3139,37 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   font-size: clamp(0.96rem, 2.2vh, 1.15rem);
 }
 
+.round-overview .round-number {
+  color: #92400e;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.round-overview .cumulative-overview {
+  width: fit-content;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  font-weight: 750;
+}
+
 .round-overview small {
   color: #57534e;
   font-size: clamp(0.78rem, 1.6vh, 0.9rem);
+}
+
+.round-overview .round-number {
+  color: #92400e;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.round-overview .cumulative-overview {
+  width: fit-content;
+  padding: 0.26rem 0.58rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  font-weight: 750;
 }
 
 .round-overview b.positive {
@@ -3233,6 +3276,54 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   flex: 0 0 auto;
   justify-items: end;
   gap: 0.12rem;
+}
+
+.score-caption,
+.cumulative-total {
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  line-height: 1.2;
+}
+
+.score-caption {
+  color: #64748b;
+}
+
+.cumulative-total {
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-weight: 750;
+}
+
+.cumulative-total.positive {
+  color: #166534;
+}
+
+.cumulative-total.negative {
+  color: #b91c1c;
+}
+
+.cumulative-total.neutral {
+  color: #334155;
+}
+
+.score-caption,
+.cumulative-total {
+  color: #64748b;
+  font-size: clamp(0.7rem, 1.2vh, 0.8rem);
+  font-weight: 700;
+}
+
+.cumulative-total.positive {
+  color: #166534;
+}
+
+.cumulative-total.negative {
+  color: #b91c1c;
+}
+
+.cumulative-total.neutral {
+  color: #334155;
 }
 
 .settlement-name {
@@ -3782,6 +3873,19 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   border: 0;
 }
 
+.layout.ultra-compact-viewport .round-overview .cumulative-overview {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0.2rem 0.42rem;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+  border: 0;
+  font-size: 0.84rem;
+}
+
 .layout.ultra-compact-viewport .settlement-scroll-region {
   margin-top: 0.3rem;
 }
@@ -3830,6 +3934,11 @@ watch(activeRoomId, (roomId, previousRoomId) => {
 
 .layout.ultra-compact-viewport .score-total {
   font-size: 1rem;
+}
+
+.layout.ultra-compact-viewport .score-caption,
+.layout.ultra-compact-viewport .cumulative-total {
+  font-size: 0.7rem;
 }
 
 .layout.ultra-compact-viewport .hu-panel > .end-actions {

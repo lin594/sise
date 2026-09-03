@@ -19,6 +19,8 @@ export declare function useRoom(playerName?: string): {
     state: import("vue").Ref<{
         roomId?: string | undefined;
         roomMode: "practice" | "friends";
+        scoringMode: import("@/types/game").ScoringMode;
+        completedRounds: number;
         phase: string;
         hostPlayerId: string;
         dealerId: string;
@@ -80,6 +82,7 @@ export declare function useRoom(playerName?: string): {
             isAutoPlay: boolean;
             isConfiguredBot: boolean;
             botStrength: number;
+            cumulativeScore: number;
             connected: boolean;
             discardPile: {
                 id: string;
@@ -207,6 +210,7 @@ export declare function useRoom(playerName?: string): {
                     total: number;
                 }[];
                 totalScore: number;
+                cumulativeScore: number;
             }[];
             remainingDeck?: {
                 id: string;
@@ -215,10 +219,14 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[] | undefined;
+            scoringMode: import("@/types/game").ScoringMode;
+            roundNumber: number;
         } | null | undefined;
     } | null, RoomStateSnapshot | {
         roomId?: string | undefined;
         roomMode: "practice" | "friends";
+        scoringMode: import("@/types/game").ScoringMode;
+        completedRounds: number;
         phase: string;
         hostPlayerId: string;
         dealerId: string;
@@ -280,6 +288,7 @@ export declare function useRoom(playerName?: string): {
             isAutoPlay: boolean;
             isConfiguredBot: boolean;
             botStrength: number;
+            cumulativeScore: number;
             connected: boolean;
             discardPile: {
                 id: string;
@@ -407,6 +416,7 @@ export declare function useRoom(playerName?: string): {
                     total: number;
                 }[];
                 totalScore: number;
+                cumulativeScore: number;
             }[];
             remainingDeck?: {
                 id: string;
@@ -415,6 +425,8 @@ export declare function useRoom(playerName?: string): {
                 source?: "upper" | "draw" | undefined;
                 isResponseCard?: boolean | undefined;
             }[] | undefined;
+            scoringMode: import("@/types/game").ScoringMode;
+            roundNumber: number;
         } | null | undefined;
     } | null>;
     players: import("vue").ComputedRef<PlayerState[]>;
@@ -534,6 +546,7 @@ export declare function useRoom(playerName?: string): {
                 total: number;
             }[];
             totalScore: number;
+            cumulativeScore: number;
         }[];
         remainingDeck?: {
             id: string;
@@ -542,6 +555,8 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         }[] | undefined;
+        scoringMode: import("@/types/game").ScoringMode;
+        roundNumber: number;
     } | null, RoundResultPayload | {
         winnerId: string | null;
         groups: string[];
@@ -610,6 +625,7 @@ export declare function useRoom(playerName?: string): {
                 total: number;
             }[];
             totalScore: number;
+            cumulativeScore: number;
         }[];
         remainingDeck?: {
             id: string;
@@ -618,6 +634,8 @@ export declare function useRoom(playerName?: string): {
             source?: "upper" | "draw" | undefined;
             isResponseCard?: boolean | undefined;
         }[] | undefined;
+        scoringMode: import("@/types/game").ScoringMode;
+        roundNumber: number;
     } | null>;
     debugApplied: import("vue").Ref<{
         scenario: string;
@@ -711,6 +729,7 @@ export declare function useRoom(playerName?: string): {
     nextRound: () => void;
     returnLobby: () => void;
     dissolveRoom: () => void;
+    setScoringMode: (mode: "single" | "cumulative") => void;
     setAutoPlay: (enabled: boolean) => void;
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => void;

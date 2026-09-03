@@ -75,7 +75,7 @@ function readNicknameHistory() {
 function writeNicknameHistory(names) {
     window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
 const localTestPrivateHandReadyOverride = ref(null);
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
@@ -884,6 +884,8 @@ const roundOutcomeText = computed(() => {
 });
 const settlementPlayers = computed(() => roundResult.value?.players ?? []);
 const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const isCumulativeSettlement = computed(() => roundResult.value?.scoringMode === "cumulative");
+const settlementRoundNumber = computed(() => Math.max(1, Number(roundResult.value?.roundNumber ?? 1)));
 const mySettlementPlayer = computed(() => settlementPlayers.value.find((player) => player.clientId === mySeatId.value) ?? null);
 const orderedSettlementPlayers = computed(() => {
     const winnerId = derivedWinnerId.value;
@@ -1625,6 +1627,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-number']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
@@ -1634,6 +1642,22 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-result']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-caption']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['positive']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['negative']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['neutral']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-caption']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['positive']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['negative']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['neutral']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-item']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-toggle-open']} */ ;
@@ -1804,6 +1828,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
@@ -1831,6 +1859,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-caption']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
@@ -2052,6 +2086,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onRemoveSeat': {} },
         ...{ 'onLeaveRoom': {} },
         ...{ 'onDissolveRoom': {} },
+        ...{ 'onSetScoringMode': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2066,6 +2101,8 @@ else if (__VLS_ctx.showModeLobby) {
         isHost: (__VLS_ctx.isHost),
         roomId: (__VLS_ctx.activeRoomId),
         roomMode: (__VLS_ctx.state?.roomMode || ''),
+        scoringMode: (__VLS_ctx.state?.scoringMode || 'single'),
+        completedRounds: (__VLS_ctx.state?.completedRounds || 0),
         players: (__VLS_ctx.players),
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
@@ -2082,6 +2119,7 @@ else if (__VLS_ctx.showModeLobby) {
         ...{ 'onRemoveSeat': {} },
         ...{ 'onLeaveRoom': {} },
         ...{ 'onDissolveRoom': {} },
+        ...{ 'onSetScoringMode': {} },
         kicker: (__VLS_ctx.isWaiting ? '房间页' : '大厅页'),
         title: (__VLS_ctx.lobbyTitle),
         subtitle: (__VLS_ctx.lobbySubtitle),
@@ -2096,6 +2134,8 @@ else if (__VLS_ctx.showModeLobby) {
         isHost: (__VLS_ctx.isHost),
         roomId: (__VLS_ctx.activeRoomId),
         roomMode: (__VLS_ctx.state?.roomMode || ''),
+        scoringMode: (__VLS_ctx.state?.scoringMode || 'single'),
+        completedRounds: (__VLS_ctx.state?.completedRounds || 0),
         players: (__VLS_ctx.players),
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
@@ -2148,6 +2188,9 @@ else if (__VLS_ctx.showModeLobby) {
     const __VLS_42 = {
         onDissolveRoom: (__VLS_ctx.dissolveRoom)
     };
+    const __VLS_43 = {
+        onSetScoringMode: (__VLS_ctx.setScoringMode)
+    };
     var __VLS_28;
 }
 else if (__VLS_ctx.showSyncingScreen) {
@@ -2188,7 +2231,7 @@ else if (__VLS_ctx.showSyncingScreen) {
 else {
     /** @type {[typeof GameBoard, ]} */ ;
     // @ts-ignore
-    const __VLS_43 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
+    const __VLS_44 = __VLS_asFunctionalComponent(GameBoard, new GameBoard({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2219,7 +2262,7 @@ else {
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
     }));
-    const __VLS_44 = __VLS_43({
+    const __VLS_45 = __VLS_44({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
@@ -2249,64 +2292,64 @@ else {
         selectionMode: (__VLS_ctx.selectionMode),
         selectedCandidateId: (__VLS_ctx.selectedCandidateId),
         activeCandidates: (__VLS_ctx.activeCandidates),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_43));
-    let __VLS_46;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_44));
     let __VLS_47;
     let __VLS_48;
-    const __VLS_49 = {
+    let __VLS_49;
+    const __VLS_50 = {
         onDiscardCard: (__VLS_ctx.sendDiscardCard)
     };
-    const __VLS_50 = {
+    const __VLS_51 = {
         onSubmitAction: (__VLS_ctx.onPanelSubmit)
     };
-    const __VLS_51 = {
+    const __VLS_52 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    const __VLS_52 = {
+    const __VLS_53 = {
         onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
     };
-    var __VLS_45;
+    var __VLS_46;
 }
 if (__VLS_ctx.inviteCopyFallbackUrl) {
     /** @type {[typeof InviteLinkFallbackDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_53 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
+    const __VLS_54 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
     }));
-    const __VLS_54 = __VLS_53({
+    const __VLS_55 = __VLS_54({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_53));
-    let __VLS_56;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_54));
     let __VLS_57;
     let __VLS_58;
-    const __VLS_59 = {
+    let __VLS_59;
+    const __VLS_60 = {
         onClose: (__VLS_ctx.closeInviteCopyFallback)
     };
-    var __VLS_55;
+    var __VLS_56;
 }
 if (__VLS_ctx.inviteQrUrl) {
-    const __VLS_60 = {}.FriendInviteQrDialog;
+    const __VLS_61 = {}.FriendInviteQrDialog;
     /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_61 = __VLS_asFunctionalComponent(__VLS_60, new __VLS_60({
+    const __VLS_62 = __VLS_asFunctionalComponent(__VLS_61, new __VLS_61({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
     }));
-    const __VLS_62 = __VLS_61({
+    const __VLS_63 = __VLS_62({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
-    let __VLS_64;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_62));
     let __VLS_65;
     let __VLS_66;
-    const __VLS_67 = {
+    let __VLS_67;
+    const __VLS_68 = {
         onClose: (__VLS_ctx.closeInviteQr)
     };
-    var __VLS_63;
+    var __VLS_64;
 }
 if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2390,16 +2433,16 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_68 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_69 = __VLS_68({
+                const __VLS_70 = __VLS_69({
                     card: (__VLS_ctx.candidateTargetCard),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_68));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_69));
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "preview-col group" },
@@ -2412,18 +2455,18 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
                 for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_72 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
                     }));
-                    const __VLS_72 = __VLS_71({
+                    const __VLS_73 = __VLS_72({
                         key: (`cand-${candidate.id}-${card.id}`),
                         card: (card),
                         size: "sm",
                         mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_72));
                 }
             }
             else {
@@ -2445,7 +2488,7 @@ if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_74 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_75 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2462,7 +2505,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }));
-    const __VLS_75 = __VLS_74({
+    const __VLS_76 = __VLS_75({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -2478,17 +2521,17 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_74));
-    let __VLS_77;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_75));
     let __VLS_78;
     let __VLS_79;
-    const __VLS_80 = {
+    let __VLS_80;
+    const __VLS_81 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    const __VLS_81 = {
+    const __VLS_82 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    var __VLS_76;
+    var __VLS_77;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2528,6 +2571,12 @@ if (__VLS_ctx.showEndPanel) {
             role: "status",
             'aria-live': "polite",
         });
+        if (__VLS_ctx.isCumulativeSettlement) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                ...{ class: "round-number" },
+            });
+            (__VLS_ctx.settlementRoundNumber);
+        }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
         (__VLS_ctx.roundOutcomeText);
         if (__VLS_ctx.mySettlementPlayer) {
@@ -2536,6 +2585,15 @@ if (__VLS_ctx.showEndPanel) {
                 ...{ class: (__VLS_ctx.scoreToneClass(__VLS_ctx.mySettlementPlayer.totalScore)) },
             });
             (__VLS_ctx.signedScore(__VLS_ctx.mySettlementPlayer.totalScore));
+        }
+        if (__VLS_ctx.isCumulativeSettlement && __VLS_ctx.mySettlementPlayer) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "cumulative-overview" },
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
+                ...{ class: (__VLS_ctx.scoreToneClass(__VLS_ctx.mySettlementPlayer.cumulativeScore)) },
+            });
+            (__VLS_ctx.signedScore(__VLS_ctx.mySettlementPlayer.cumulativeScore));
         }
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     }
@@ -2604,11 +2662,21 @@ if (__VLS_ctx.showEndPanel) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "settlement-result" },
                 });
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                    ...{ class: "score-caption" },
+                });
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
                     ...{ class: "score-total" },
                     ...{ class: (__VLS_ctx.scoreToneClass(p.totalScore)) },
                 });
                 (__VLS_ctx.signedScore(p.totalScore));
+                if (__VLS_ctx.isCumulativeSettlement) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                        ...{ class: "cumulative-total" },
+                        ...{ class: (__VLS_ctx.scoreToneClass(p.cumulativeScore)) },
+                    });
+                    (__VLS_ctx.signedScore(p.cumulativeScore));
+                }
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
                     ...{ class: "settlement-toggle-label" },
                     'aria-hidden': "true",
@@ -2650,18 +2718,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_82 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_83 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
                             }));
-                            const __VLS_83 = __VLS_82({
+                            const __VLS_84 = __VLS_83({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_82));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_83));
                         }
                     }
                 }
@@ -2698,18 +2766,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_85 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_86 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                             }));
-                            const __VLS_86 = __VLS_85({
+                            const __VLS_87 = __VLS_86({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_85));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_86));
                         }
                     }
                 }
@@ -2720,18 +2788,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_88 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_89 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_89 = __VLS_88({
+                        const __VLS_90 = __VLS_89({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_88));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_89));
                     }
                 }
                 else {
@@ -2795,18 +2863,18 @@ if (__VLS_ctx.showEndPanel) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_91 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_92 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_92 = __VLS_91({
+                const __VLS_93 = __VLS_92({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_91));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_92));
             }
         }
     }
@@ -3040,6 +3108,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-loading']} */ ;
 /** @type {__VLS_StyleScopedClasses['round-overview']} */ ;
+/** @type {__VLS_StyleScopedClasses['round-number']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-overview']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-scroll-region']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-global-info']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement']} */ ;
@@ -3052,7 +3122,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['settlement-bot-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-result']} */ ;
+/** @type {__VLS_StyleScopedClasses['score-caption']} */ ;
 /** @type {__VLS_StyleScopedClasses['score-total']} */ ;
+/** @type {__VLS_StyleScopedClasses['cumulative-total']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-toggle-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-toggle-closed']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-toggle-open']} */ ;
@@ -3143,6 +3215,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             requestMoreTime: requestMoreTime,
             nextRound: nextRound,
             dissolveRoom: dissolveRoom,
+            setScoringMode: setScoringMode,
             setAutoPlay: setAutoPlay,
             claimSeat: claimSeat,
             addBot: addBot,
@@ -3239,6 +3312,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             roundOutcomeText: roundOutcomeText,
             settlementPlayers: settlementPlayers,
             settlementReady: settlementReady,
+            isCumulativeSettlement: isCumulativeSettlement,
+            settlementRoundNumber: settlementRoundNumber,
             mySettlementPlayer: mySettlementPlayer,
             orderedSettlementPlayers: orderedSettlementPlayers,
             remainingDeckPreview: remainingDeckPreview,

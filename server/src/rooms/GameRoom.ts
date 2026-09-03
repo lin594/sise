@@ -18,6 +18,7 @@ import {
   dealInitialHands as dealInitialHandsFlow,
   decideStartGame,
   endRoundFlow,
+  finalizeRoomScores,
   chooseBotDisplayName,
   makeUniqueHumanName,
   reclaimSeatStateFlow,
@@ -258,6 +259,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     groups: string[];
     players: RoundResultPlayer[];
     remainingDeck: Card[];
+    scoringMode: "single" | "cumulative";
+    roundNumber: number;
   } | null = null;
   private stateOps: RoomStateOps | null = null;
 
@@ -295,6 +298,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.onMessage("dissolve_room", (client) => {
       void this.handleDissolveRoom(client);
+    });
+
+    this.onMessage("set_scoring_mode", (client, payload: { mode?: unknown } | undefined) => {
+      this.handleSetScoringMode(client, payload);
     });
 
     this.onMessage("claim_seat", (client, payload: { seatIndex?: number }) => {
@@ -639,6 +646,41 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     this.seatByToken.clear();
     await this.disconnect(4110);
+  }
+
+  /**
+   * 作用：由好友房房主在首局开始前选择单局或本桌累计计分。
+   * 关键输入/输出：输入模式；首局结束后保持锁定，避免中途改变榜单含义。
+   * 副作用：更新公开房间状态并刷新等待大厅。
+   */
+  private handleSetScoringMode(client: Client, payload?: { mode?: unknown }): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    const mode = payload?.mode;
+    if (this.state.roomMode !== "friends" || this.state.phase !== "waiting") {
+      this.sendLobbyError(client, "cannot_set_scoring", "只有好友房等待阶段可以选择计分方式。");
+      return;
+    }
+    if (!seatId || seatId !== this.state.hostPlayerId) {
+      this.sendLobbyError(client, "not_host", "仅房主可选择计分方式。");
+      return;
+    }
+    if (this.state.completedRounds > 0) {
+      this.sendLobbyError(client, "scoring_locked", "本桌已经完成过牌局，计分方式要到解散后重新选择。");
+      return;
+    }
+    if (mode !== "single" && mode !== "cumulative") {
+      this.sendLobbyError(client, "invalid_scoring_mode", "计分方式无效。");
+      return;
+    }
+    if (this.state.scoringMode === mode) {
+      return;
+    }
+    this.state.scoringMode = mode;
+    for (const player of this.state.players.values()) {
+      player.cumulativeScore = 0;
+    }
+    this.state.lastAction = `SCORING_MODE ${mode}`;
+    this.broadcastAvailableActions();
   }
 
   private seatIdForIndex(seatIndex: number): string {
@@ -2466,6 +2508,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
+    // Multiple asynchronous paths can observe the same terminal move. Only the
+    // first one may settle the round, otherwise a cumulative table would score
+    // one hand more than once.
+    if (this.state.phase === "ended") {
+      return;
+    }
     if (winnerId) {
       const previewPlayers = this.buildRoundResultPlayers(winnerId, groups);
       const winnerView = previewPlayers.find((player) => player.clientId === winnerId);
@@ -2486,12 +2534,21 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         },
         broadcast: (event, payload) => {
           if (event === "round_result") {
-            this.lastRoundResult = payload as {
+            const baseResult = payload as {
               winnerId: string | null;
               groups: string[];
               players: RoundResultPlayer[];
               remainingDeck: Card[];
             };
+            const completedPlayers = finalizeRoomScores(this.state, baseResult.players);
+            this.lastRoundResult = {
+              ...baseResult,
+              players: completedPlayers,
+              scoringMode: this.state.scoringMode,
+              roundNumber: this.state.completedRounds,
+            };
+            this.broadcast(event, this.lastRoundResult);
+            return;
           }
           this.broadcast(event, payload);
         },
@@ -2631,6 +2688,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return {
       roomId: this.roomId,
       roomMode: this.state.roomMode,
+      scoringMode: this.state.scoringMode,
+      completedRounds: this.state.completedRounds,
       phase: this.state.phase,
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,
@@ -2677,6 +2736,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           isAutoPlay: player.isAutoPlay,
           isConfiguredBot: player.isConfiguredBot,
           botStrength: player.botStrength,
+          cumulativeScore: player.cumulativeScore,
           connected: player.connected,
           discardPile: this.buildCardListSnapshot(player.discardPile),
           exposedArea: this.buildCardListSnapshot(player.exposedArea),

@@ -3,6 +3,7 @@ export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 export type CardDisplayMode = "large" | "adaptive" | "long";
 export type RenderedCardMode = Exclude<CardDisplayMode, "adaptive">;
 export type SeatDirection = "clockwise" | "counterclockwise";
+export type ScoringMode = "single" | "cumulative";
 export type TurnAlertMode = "sound-vibration" | "sound" | "off";
 export type RoomConnectionState =
   | "idle"
@@ -42,6 +43,7 @@ export interface PlayerState {
   isAutoPlay: boolean;
   isConfiguredBot: boolean;
   botStrength: number;
+  cumulativeScore: number;
   connected: boolean;
   discardPile: Card[];
   exposedArea: Card[];
@@ -55,6 +57,8 @@ export interface PlayerState {
 export interface RoomStateSnapshot {
   roomId?: string;
   roomMode: "practice" | "friends";
+  scoringMode: ScoringMode;
+  completedRounds: number;
   phase: string;
   hostPlayerId: string;
   dealerId: string;
@@ -163,6 +167,7 @@ export interface RoundResultPlayer {
     total: number;
   }>;
   totalScore: number;
+  cumulativeScore: number;
 }
 
 export interface RoundResultPayload {
@@ -170,4 +175,6 @@ export interface RoundResultPayload {
   groups: string[];
   players: RoundResultPlayer[];
   remainingDeck?: Card[];
+  scoringMode: ScoringMode;
+  roundNumber: number;
 }

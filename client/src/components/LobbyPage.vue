@@ -83,6 +83,46 @@
         </div>
       </div>
 
+      <section v-if="roomMode === 'friends' && roomId" class="scoring-card" data-testid="scoring-mode-card">
+        <div class="scoring-copy">
+          <strong>计分方式</strong>
+          <p v-if="completedRounds > 0">本桌已完成 {{ completedRounds }} 局，计分方式已锁定到解散。</p>
+          <p v-else>{{ isHost ? "开局前选择；开始后整桌保持不变。" : "由房主在开局前选择。" }}</p>
+        </div>
+        <div class="scoring-options" role="radiogroup" aria-label="好友房计分方式">
+          <button
+            v-for="option in scoringOptions"
+            :key="option.mode"
+            type="button"
+            role="radio"
+            :data-testid="`scoring-mode-${option.mode}`"
+            :aria-checked="scoringMode === option.mode"
+            :class="{ active: scoringMode === option.mode }"
+            :disabled="!isHost || completedRounds > 0"
+            @click="$emit('set-scoring-mode', option.mode)"
+          >
+            <strong>{{ option.label }}</strong>
+            <small>{{ option.hint }}</small>
+          </button>
+        </div>
+        <ol
+          v-if="scoringMode === 'cumulative' && completedRounds > 0"
+          class="cumulative-board"
+          data-testid="cumulative-scoreboard"
+          aria-label="本桌累计积分"
+        >
+          <li v-for="player in cumulativeRanking" :key="`score-${player.clientId}`">
+            <span>{{ player.name }}<small v-if="player.clientId === mySeatId">（你）</small></span>
+            <strong
+              :class="{ positive: player.cumulativeScore > 0, negative: player.cumulativeScore < 0 }"
+              :data-testid="`cumulative-score-${player.clientId}`"
+            >
+              {{ signedScore(player.cumulativeScore) }}分
+            </strong>
+          </li>
+        </ol>
+      </section>
+
       <div v-if="roomId" class="seat-grid" data-testid="seat-grid">
         <article
           v-for="slot in seatSlots"
@@ -236,6 +276,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import type { ScoringMode } from "@/types/game";
 
 type LobbyMode = {
   id: string;
@@ -252,6 +293,7 @@ type LobbyPlayer = {
   isBot: boolean;
   isConfiguredBot: boolean;
   botStrength: number;
+  cumulativeScore: number;
   connected: boolean;
 };
 
@@ -273,6 +315,8 @@ const props = defineProps<{
   players: LobbyPlayer[];
   canShareInvite: boolean;
   invitePending: boolean;
+  scoringMode: ScoringMode;
+  completedRounds: number;
 }>();
 
 const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
@@ -281,6 +325,10 @@ const botLevels = [
   { id: "standard", label: "标准", strength: 50 },
   { id: "expert", label: "高手", strength: 85 },
 ] as const;
+const scoringOptions: Array<{ mode: ScoringMode; label: string; hint: string }> = [
+  { mode: "single", label: "每局单算", hint: "只看这一局" },
+  { mode: "cumulative", label: "本桌累计", hint: "一直算到解散" },
+];
 const emit = defineEmits<{
   "open-rules": [];
   start: [];
@@ -294,6 +342,7 @@ const emit = defineEmits<{
   "remove-seat": [seatIndex: number];
   "leave-room": [];
   "dissolve-room": [];
+  "set-scoring-mode": [mode: ScoringMode];
 }>();
 const departureIntent = ref<"leave" | "dissolve" | null>(null);
 const fillRequested = ref(false);
@@ -329,6 +378,15 @@ const emptySeatCount = computed(() => seatSlots.value.filter((slot) => !slot.pla
 const showFillBots = computed(
   () => props.roomMode === "friends" && Boolean(props.roomId) && props.isHost && emptySeatCount.value > 0,
 );
+const cumulativeRanking = computed(() =>
+  [...props.players].sort((left, right) =>
+    right.cumulativeScore - left.cumulativeScore || left.seatIndex - right.seatIndex,
+  ),
+);
+
+function signedScore(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
 
 watch(
   () => [emptySeatCount.value, props.canStart, props.joinError] as const,
@@ -538,13 +596,95 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .mode-card,
 .seat-card,
-.invite-card {
+.invite-card,
+.scoring-card {
   border: 1px solid #334155;
   border-radius: 14px;
   background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
   color: #e2e8f0;
   padding: 0.9rem;
 }
+
+.scoring-card {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(16rem, 1.2fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.scoring-copy p {
+  margin: 0.28rem 0 0;
+  color: #bfdbfe;
+  font-size: 0.8rem;
+}
+
+.scoring-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.scoring-options button {
+  min-height: 50px;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #475569;
+  border-radius: 0.72rem;
+  background: #111827;
+  color: #e2e8f0;
+  display: grid;
+  gap: 0.08rem;
+  text-align: left;
+}
+
+.scoring-options button.active {
+  border-color: #fbbf24;
+  background: #713f12;
+  color: #fef3c7;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24);
+}
+
+.scoring-options button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.scoring-options button:not(.active):disabled {
+  opacity: 0.58;
+}
+
+.scoring-options small {
+  font-size: 0.75rem;
+}
+
+.cumulative-board {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.cumulative-board li {
+  min-width: 0;
+  padding: 0.38rem 0.5rem;
+  border-radius: 0.6rem;
+  background: rgba(15, 23, 42, 0.82);
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.cumulative-board li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cumulative-board strong.positive { color: #86efac; }
+.cumulative-board strong.negative { color: #fca5a5; }
 
 .mode-card {
   display: grid;
@@ -885,7 +1025,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .mode-card,
   .seat-card,
-  .invite-card {
+  .invite-card,
+  .scoring-card {
     padding: 0.62rem;
     border-radius: 11px;
   }
@@ -961,6 +1102,24 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+  }
+
+  .scoring-card {
+    grid-template-columns: minmax(6.5rem, 0.65fr) minmax(14rem, 1.35fr);
+    gap: 0.45rem;
+  }
+
+  .scoring-copy p {
+    display: none;
+  }
+
+  .scoring-options {
+    gap: 0.35rem;
+  }
+
+  .scoring-options button {
+    min-height: 42px;
+    padding: 0.28rem 0.42rem;
   }
 
   .invite-card p {

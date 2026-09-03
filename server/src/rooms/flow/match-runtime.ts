@@ -605,6 +605,12 @@ export function resetToLobby(context: LobbyResetContext): void {
   context.resetRuntime();
   context.botIds.clear();
 
+  const resetRoomScores = context.state.roomMode === "practice";
+  if (resetRoomScores) {
+    context.state.scoringMode = "single";
+    context.state.completedRounds = 0;
+  }
+
   const onlineSeatSet = new Set([...context.seatBySession.values()]);
   for (const seatId of context.playerOrder) {
     const player = context.state.players.get(seatId);
@@ -614,6 +620,9 @@ export function resetToLobby(context: LobbyResetContext): void {
     player.declaredKongs = 0;
     player.declaredReady = false;
     player.isAutoPlay = false;
+    if (resetRoomScores) {
+      player.cumulativeScore = 0;
+    }
     player.discardPile.clear();
     player.exposedArea.clear();
     player.exposedGroupSizes.clear();
@@ -744,6 +753,26 @@ export interface RoundResultPlayer {
   discardCount: number;
   scoreBreakdown: ScoreBreakdownItem[];
   totalScore: number;
+  cumulativeScore?: number;
+}
+
+/**
+ * 作用：在回合结算生成后，将分数一次性并入房间累计榜。
+ * 关键输入/输出：输入服务端状态与本局结算；返回附带累计分的结算副本。
+ * 副作用：completedRounds 加一；累计模式下更新对应座位累计分。
+ */
+export function finalizeRoomScores(state: GameState, players: RoundResultPlayer[]): RoundResultPlayer[] {
+  state.completedRounds = Math.max(0, Number(state.completedRounds ?? 0)) + 1;
+  return players.map((result) => {
+    const player = state.players.get(result.clientId);
+    if (player && state.scoringMode === "cumulative") {
+      player.cumulativeScore = Number(player.cumulativeScore ?? 0) + Number(result.totalScore ?? 0);
+    }
+    return {
+      ...result,
+      cumulativeScore: Number(player?.cumulativeScore ?? 0),
+    };
+  });
 }
 
 interface RoundResultView {
