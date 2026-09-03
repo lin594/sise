@@ -1206,7 +1206,7 @@ test.describe("compact landscape gameplay", () => {
     expect(waitingHandState.minimumOpacity).toBeGreaterThanOrEqual(0.95);
     expect(waitingHandState.labels.every((label) => label.endsWith("当前无需选牌"))).toBe(true);
     const visibleFlows = page.locator(".flow-card");
-    expect(await visibleFlows.count()).toBeGreaterThan(0);
+    await expect.poll(() => visibleFlows.count(), { timeout: 5_000 }).toBeGreaterThan(0);
     await expect(page.getByText("暂无流水", { exact: true })).toHaveCount(0);
     const flowMetrics = await visibleFlows.evaluateAll((flows) => flows.map((flow) => {
       const title = flow.querySelector<HTMLElement>("p")!;
