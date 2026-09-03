@@ -2230,16 +2230,6 @@ if (__VLS_ctx.showDealAnimation) {
     });
 }
 var __VLS_43;
-const __VLS_44 = {}.Transition;
-/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
-// @ts-ignore
-const __VLS_45 = __VLS_asFunctionalComponent(__VLS_44, new __VLS_44({
-    name: "dealer-reveal",
-}));
-const __VLS_46 = __VLS_45({
-    name: "dealer-reveal",
-}, ...__VLS_functionalComponentArgsRest(__VLS_45));
-__VLS_47.slots.default;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -2279,16 +2269,16 @@ if (__VLS_ctx.dealerReveal) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_44 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
         }));
-        const __VLS_49 = __VLS_48({
+        const __VLS_45 = __VLS_44({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_44));
     }
     if (__VLS_ctx.dealerCeremonyCard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
@@ -2303,17 +2293,16 @@ if (__VLS_ctx.dealerReveal) {
         (__VLS_ctx.dealerReveal.dealerName);
     }
 }
-var __VLS_47;
-const __VLS_51 = {}.Transition;
+const __VLS_47 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({
+const __VLS_48 = __VLS_asFunctionalComponent(__VLS_47, new __VLS_47({
     name: "dealer-flight",
 }));
-const __VLS_53 = __VLS_52({
+const __VLS_49 = __VLS_48({
     name: "dealer-flight",
-}, ...__VLS_functionalComponentArgsRest(__VLS_52));
-__VLS_54.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_48));
+__VLS_50.slots.default;
 if (__VLS_ctx.dealerFlight) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
@@ -2321,7 +2310,7 @@ if (__VLS_ctx.dealerFlight) {
         ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
     });
 }
-var __VLS_54;
+var __VLS_50;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-info-card" },
@@ -2372,16 +2361,16 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_56 = __VLS_55({
+            const __VLS_52 = __VLS_51({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_51));
         }
     }
     if (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs)) {
@@ -2534,22 +2523,22 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_59 = __VLS_58({
+        const __VLS_55 = __VLS_54({
             card: (card),
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_54));
     }
 }
 if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_61 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_57 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -2573,7 +2562,7 @@ if (props.state?.phase === 'playing') {
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
-    const __VLS_62 = __VLS_61({
+    const __VLS_58 = __VLS_57({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -2596,27 +2585,27 @@ if (props.state?.phase === 'playing') {
         decisionKey: (props.decisionKey ?? ''),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
-    let __VLS_64;
-    let __VLS_65;
-    let __VLS_66;
-    const __VLS_67 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+    let __VLS_60;
+    let __VLS_61;
+    let __VLS_62;
+    const __VLS_63 = {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
-    const __VLS_68 = {
+    const __VLS_64 = {
         onRequestMoreTime: (...[$event]) => {
             if (!(props.state?.phase === 'playing'))
                 return;
             __VLS_ctx.emit('requestMoreTime');
         }
     };
-    const __VLS_69 = {
+    const __VLS_65 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    const __VLS_70 = {
+    const __VLS_66 = {
         onSelectionChange: (__VLS_ctx.onSelectionChange)
     };
-    var __VLS_63;
+    var __VLS_59;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
@@ -2636,16 +2625,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_72 = __VLS_71({
+        const __VLS_68 = __VLS_67({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;

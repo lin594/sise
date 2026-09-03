@@ -420,18 +420,17 @@
         <div v-if="showDealAnimation" class="deal-overlay">发牌中...</div>
       </Transition>
 
-      <Transition name="dealer-reveal">
-        <div
-          v-if="dealerReveal"
-          :key="`dealer-${dealerReveal.id}`"
-          class="dealer-reveal"
-          :class="`stage-${dealerReveal.stage}`"
-          data-testid="dealer-ceremony"
-          role="status"
-          aria-live="polite"
-          :aria-label="dealerRevealAccessibleText"
-        >
-          <div class="dealer-reveal-panel">
+      <div
+        v-if="dealerReveal"
+        :key="`dealer-${dealerReveal.id}`"
+        class="dealer-reveal"
+        :class="`stage-${dealerReveal.stage}`"
+        data-testid="dealer-ceremony"
+        role="status"
+        aria-live="polite"
+        :aria-label="dealerRevealAccessibleText"
+      >
+        <div class="dealer-reveal-panel">
             <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
             <div class="dealer-reveal-tile">
               <div
@@ -453,9 +452,8 @@
             <small v-if="dealerReveal.dealerName" class="dealer-reveal-result">
               {{ dealerReveal.dealerName }}坐庄
             </small>
-          </div>
         </div>
-      </Transition>
+      </div>
 
       <Transition name="dealer-flight">
         <div
