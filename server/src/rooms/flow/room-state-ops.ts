@@ -392,8 +392,19 @@ export class RoomStateOps {
    * 副作用：无。
    */
   explainHuForSeat(seatId: SeatId, hand: Card[], responseCard: Card, wildcardCount: number) {
-    void seatId;
-    return explainHu(hand, responseCard, { wildcardCount });
+    const player = this.state.players.get(seatId);
+    let removedPending = false;
+    const handWithoutPending = hand.filter((card) => {
+      if (!removedPending && card.id === responseCard.id) {
+        removedPending = true;
+        return false;
+      }
+      return true;
+    });
+    return explainHu(handWithoutPending, responseCard, {
+      wildcardCount,
+      minimumHiddenTriplets: Math.max(0, Number(player?.declaredKongs ?? 0)),
+    });
   }
 
   /**

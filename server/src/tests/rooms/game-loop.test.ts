@@ -152,6 +152,32 @@ test("local_draw timeout exposes a special card instead of passing it", async ()
   assert.equal(player.wildcardPool.length, 0);
 });
 
+test("collective hu is disabled when it would split a declared hidden triplet", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  const player = room.state.players.get("B");
+  assert.ok(player);
+  player.declaredKongs = 1;
+  room.playerHands.set("B", [
+    mkCard("yzu1", "yellow", "zu", "upper"),
+    mkCard("yzu2", "yellow", "zu", "upper"),
+    mkCard("rzu1", "red", "zu", "upper"),
+    mkCard("gzu1", "green", "zu", "upper"),
+    mkCard("wzu1", "white", "zu", "upper"),
+    mkCard("wzu2", "white", "zu", "upper"),
+    mkCard("wzu3", "white", "zu", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("rj1", "red", "jiang", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+
+  const hu = room.getAvailableActions("B").find((action: { action: string }) => action.action === "hu");
+  assert.equal(hu?.enabled, false);
+});
+
 test("declaration time extension is available once per connected human", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.state.phase = "declaring";

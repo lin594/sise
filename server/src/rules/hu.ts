@@ -23,6 +23,7 @@ type ResolvedSolution = {
 export interface HuExplainOptions {
   wildcardCount?: number;
   wildcardPool?: Card[];
+  minimumHiddenTriplets?: number;
 }
 
 export interface GroupingAnalysis {
@@ -341,16 +342,103 @@ function dfs(counter: Counter, memo: Map<string, ResolvedSolution | null>): Reso
   return best;
 }
 
+function sameFaceGroupKey(cardToken: string, size: 3 | 4): string {
+  if (cardToken === "gold") {
+    return size === 4 ? "GoldQuad" : "GoldTriplet";
+  }
+  const parsed = splitKey(cardToken);
+  if (parsed?.type === "jiang") {
+    return size === 4 ? "JiangQuad" : "JiangTriplet";
+  }
+  return size === 4 ? "Quad" : "Triplet";
+}
+
+/**
+ * Resolve a winning decomposition while keeping the number of triplets that
+ * the player declared at the opening. A declared hidden triplet may stay a
+ * triplet or grow into a quad with the response card, but its three hand cards
+ * may not be split across pairs or mixed frames.
+ */
+function resolveKeepingHiddenTriplets(
+  hand: Card[],
+  responseCard: Card,
+  minimumHiddenTriplets: number,
+): ResolvedSolution | null {
+  const required = Math.max(0, Math.floor(minimumHiddenTriplets));
+  const allCounter = makeCounter([...hand, responseCard]);
+  if (required === 0) {
+    return dfs(allCounter, new Map());
+  }
+
+  const handCounter = makeCounter(hand);
+  const eligibleTokens: string[] = [];
+  for (const [cardToken, count] of handCounter.entries()) {
+    for (let index = 0; index < Math.floor(count / 3); index += 1) {
+      eligibleTokens.push(cardToken);
+    }
+  }
+  if (eligibleTokens.length < required) {
+    return null;
+  }
+
+  const remainderMemo = new Map<string, ResolvedSolution | null>();
+  let best: ResolvedSolution | null = null;
+
+  const search = (
+    startIndex: number,
+    remaining: number,
+    counter: Counter,
+    protectedItems: ResolvedCandidate[],
+  ): void => {
+    if (remaining === 0) {
+      const remainder = dfs(counter, remainderMemo);
+      if (!remainder) {
+        return;
+      }
+      const protectedScore = protectedItems.reduce((sum, item) => sum + groupingScore(item.key), 0);
+      best = pickBetterResolved(best, {
+        items: [...protectedItems, ...remainder.items],
+        score: protectedScore + remainder.score,
+        groupedCount:
+          protectedItems.reduce((sum, item) => sum + item.remove.length, 0) + remainder.groupedCount,
+      });
+      return;
+    }
+
+    for (let index = startIndex; index <= eligibleTokens.length - remaining; index += 1) {
+      const cardToken = eligibleTokens[index]!;
+      const available = counter.get(cardToken) ?? 0;
+      const groupSizes: Array<3 | 4> = available >= 4 ? [4, 3] : [3];
+      for (const size of groupSizes) {
+        const remove = Array.from({ length: size }, () => cardToken);
+        const next = take(counter, remove);
+        if (!next) {
+          continue;
+        }
+        search(index + 1, remaining - 1, next, [
+          ...protectedItems,
+          { key: sameFaceGroupKey(cardToken, size), remove },
+        ]);
+      }
+    }
+  };
+
+  search(0, required, allCounter, []);
+  return best;
+}
+
 function resolveOptions(arg?: number | HuExplainOptions): Required<HuExplainOptions> {
   if (typeof arg === "number") {
     return {
       wildcardCount: Math.max(0, arg),
       wildcardPool: [],
+      minimumHiddenTriplets: 0,
     };
   }
   return {
     wildcardCount: Math.max(0, Number(arg?.wildcardCount ?? 0)),
     wildcardPool: Array.isArray(arg?.wildcardPool) ? arg.wildcardPool : [],
+    minimumHiddenTriplets: Math.max(0, Math.floor(Number(arg?.minimumHiddenTriplets ?? 0))),
   };
 }
 
@@ -359,9 +447,9 @@ export function validateHu(hand: Card[], responseCard: Card, options?: number | 
 }
 
 export function explainHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): HuResult {
-  resolveOptions(options); // compatibility only: wildcard options are intentionally ignored.
+  const resolvedOptions = resolveOptions(options); // wildcard options are compatibility-only and intentionally ignored.
   const allCards = [...hand, responseCard];
-  const resolved = dfs(makeCounter(allCards), new Map());
+  const resolved = resolveKeepingHiddenTriplets(hand, responseCard, resolvedOptions.minimumHiddenTriplets);
   const cardBuckets = new Map<string, Card[]>();
   for (const card of allCards) {
     const key = token(card);

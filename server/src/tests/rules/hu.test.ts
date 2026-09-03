@@ -72,3 +72,48 @@ test("jiang forms a valid same-color jsx frame", () => {
   assert.equal(result.valid, true);
   assert.equal(result.groups.includes("FrameJSX"), true);
 });
+
+test("hu cannot split a declared white soldier triplet across mixed groups", () => {
+  const hand = [
+    c("yzu1", "yellow", "zu"),
+    c("yzu2", "yellow", "zu"),
+    c("rzu1", "red", "zu"),
+    c("gzu1", "green", "zu"),
+    c("wzu1", "white", "zu"),
+    c("wzu2", "white", "zu"),
+    c("wzu3", "white", "zu"),
+  ];
+  const response = c("rj1", "red", "jiang");
+
+  assert.equal(explainHu(hand, response).valid, true, "the unconstrained solver can split the white triplet");
+  assert.equal(explainHu(hand, response, { minimumHiddenTriplets: 1 }).valid, false);
+});
+
+test("hu remains valid when the declared triplet stays intact", () => {
+  const hand = [
+    c("yzu1", "yellow", "zu"),
+    c("rzu1", "red", "zu"),
+    c("gzu1", "green", "zu"),
+    c("wzu1", "white", "zu"),
+    c("wzu2", "white", "zu"),
+    c("wzu3", "white", "zu"),
+  ];
+  const result = explainHu(hand, c("rj1", "red", "jiang"), { minimumHiddenTriplets: 1 });
+
+  assert.equal(result.valid, true);
+  assert.equal(result.details?.some((group) =>
+    group.key === "Triplet" && group.cards.every((card) => card.color === "white" && card.type === "zu")
+  ), true);
+});
+
+test("a declared triplet may grow into a quad with the winning response", () => {
+  const hand = [
+    c("wzu1", "white", "zu"),
+    c("wzu2", "white", "zu"),
+    c("wzu3", "white", "zu"),
+  ];
+  const result = explainHu(hand, c("wzu4", "white", "zu"), { minimumHiddenTriplets: 1 });
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.groups, ["Quad"]);
+});
