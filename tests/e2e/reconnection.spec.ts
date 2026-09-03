@@ -249,4 +249,45 @@ test.describe("牌局断线恢复", () => {
     );
     await expect(replacementPage.getByTestId("player-self")).toHaveAttribute("data-player-id", originalSeatId!);
   });
+
+  test("个人退出后忽略迟到的旧房间私有状态", async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.goto("/");
+    await page.getByTestId("random-nickname").click();
+    await page.getByTestId("login-submit").click();
+    await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible({ timeout: 15_000 });
+
+    let releaseResponse = () => undefined;
+    let markCaptured = () => undefined;
+    const responseRelease = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const responseCaptured = new Promise<void>((resolve) => {
+      markCaptured = resolve;
+    });
+    await page.route("**/private-state?**", async (route) => {
+      const response = await route.fetch();
+      markCaptured();
+      await responseRelease;
+      await route.fulfill({ response });
+    });
+
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await responseCaptured;
+    await page.getByTestId("game-exit").click();
+    await page.getByTestId("confirm-exit").click();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+
+    releaseResponse();
+    await page.waitForTimeout(500);
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByTestId("resume-session-screen")).toHaveCount(0);
+    await expect(page.getByTestId("game-board")).toHaveCount(0);
+  });
 });

@@ -713,6 +713,11 @@ export function useRoom(playerName = "Player") {
     if (!roomId || !token) {
       return;
     }
+    const requestConnectionSeq = activeConnectionSeq;
+    const isCurrentRequest = () =>
+      requestConnectionSeq === activeConnectionSeq &&
+      activeRoomId.value.trim() === roomId &&
+      playerToken.value.trim() === token;
     try {
       const url = new URL(`${HTTP_URL}/private-state`);
       url.searchParams.set("roomId", roomId);
@@ -721,6 +726,9 @@ export function useRoom(playerName = "Player") {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
+      if (!isCurrentRequest()) {
+        return;
+      }
       if (!response.ok) {
         if (response.status === 429) {
           privateStateRetryAfterAt = Date.now() + retryAfterMilliseconds(response);
@@ -734,7 +742,7 @@ export function useRoom(playerName = "Player") {
         availableActions?: unknown;
         roundResult?: RoundResultPayload | null;
       };
-      if (!payload?.ok) {
+      if (!isCurrentRequest() || !payload?.ok) {
         return;
       }
       if (payload.seatId) {
