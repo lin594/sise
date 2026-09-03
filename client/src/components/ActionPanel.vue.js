@@ -88,6 +88,7 @@ const normalized = computed(() => {
 const selectionMode = computed(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const isEarlyCollectiveChoice = computed(() => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn);
 const waitingHeadline = computed(() => {
     const playerName = props.currentPlayerName.trim();
     const conciseName = playerName.replace(/（(?:机器人|电脑)）$/u, "");
@@ -101,7 +102,11 @@ const waitingAnnouncement = computed(() => {
 const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
     : null);
-const isUrgent = computed(() => !props.untimed && needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
+const isUrgent = computed(() => !props.untimed &&
+    !isEarlyCollectiveChoice.value &&
+    needsDecision.value &&
+    secondsLeft.value !== null &&
+    secondsLeft.value <= 5);
 const panelHint = computed(() => {
     if (props.pausedHint) {
         return props.pausedHint;
@@ -288,7 +293,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     role: "status",
     'aria-live': "polite",
 });
-(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.untimed ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : "");
+(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `${__VLS_ctx.isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${__VLS_ctx.untimed && !__VLS_ctx.isEarlyCollectiveChoice ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : "");
 if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "hint" },
@@ -307,13 +312,13 @@ if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
             ...{ class: "decision-line" },
         });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-        (__VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
-        if (__VLS_ctx.untimed) {
+        (__VLS_ctx.isEarlyCollectiveChoice ? "现在可以先选" : __VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
+        if (__VLS_ctx.untimed && !__VLS_ctx.isEarlyCollectiveChoice) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
                 ...{ class: "untimed-label" },
             });
         }
-        else if (__VLS_ctx.secondsLeft !== null) {
+        else if (!__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.secondsLeft !== null) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
             (__VLS_ctx.secondsLeft);
         }
@@ -322,7 +327,7 @@ if (__VLS_ctx.pausedHint || __VLS_ctx.needsDecision) {
         ...{ class: "instruction" },
     });
     (__VLS_ctx.panelHint);
-    if (__VLS_ctx.needsDecision && __VLS_ctx.canRequestMoreTime) {
+    if (__VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestMoreTime) },
             type: "button",
@@ -439,6 +444,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectionMode: selectionMode,
             panelLocked: panelLocked,
             needsDecision: needsDecision,
+            isEarlyCollectiveChoice: isEarlyCollectiveChoice,
             waitingHeadline: waitingHeadline,
             waitingAnnouncement: waitingAnnouncement,
             secondsLeft: secondsLeft,

@@ -216,6 +216,68 @@ test("a host refresh keeps ownership while a confirmed exit transfers it immedia
   }
 });
 
+test("a later friend can choose a collective response before their polling turn", async ({ browser }, testInfo) => {
+  const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
+  const guestContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+
+  try {
+    await host.goto("/?e2eDebug=1");
+    await host.getByTestId("nickname-input").fill("预选房主");
+    await host.getByTestId("login-submit").click();
+    await host.getByTestId("mode-friends").click();
+    await host.getByTestId("lobby-start").click();
+    await expect(host.getByTestId("seat-grid")).toBeVisible();
+    await expect.poll(() => host.url()).toContain("roomId=");
+    const inviteUrl = host.url();
+
+    await guest.goto(inviteUrl);
+    await guest.getByTestId("nickname-input").fill("先响应牌友");
+    await guest.getByTestId("login-submit").click();
+    await guest.getByTestId("claim-seat-1").click();
+    await host.getByTestId("claim-seat-3").click();
+    await host.getByTestId("fill-bots").click();
+    await expect(host.getByTestId("lobby-start")).toBeEnabled();
+    await host.getByTestId("lobby-start").click();
+    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+    await host.getByTestId("confirm-declaration").click();
+    await guest.getByTestId("confirm-declaration").click();
+    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+
+    await host.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: { setupScenario: (scenario: string) => void };
+      }).__siseLocalTest;
+      if (!bridge) {
+        throw new Error("Local test bridge is unavailable");
+      }
+      bridge.setupScenario("early_collective_choice");
+    });
+    await expect.poll(() =>
+      host.evaluate(() =>
+        (window as Window & {
+          __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
+        }).__siseLocalTest?.getLastResult() ?? null,
+      ),
+    ).toMatchObject({ scenario: "early_collective_choice", ok: true });
+
+    const guidance = host.getByTestId("action-guidance");
+    await expect(guidance).toContainText("现在可以先选");
+    await expect(guidance).not.toContainText("还剩");
+    await expect(host.getByTestId("action-peng")).toBeEnabled();
+    await expect(guest.getByTestId("action-guidance")).toContainText("该你操作了");
+    await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
+
+    await host.getByTestId("action-pass").click();
+    await expect(host.getByTestId("action-waiting")).toContainText("先响应牌友正在操作");
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+});
+
 test("legacy small waiting room keeps seats clear and allows a safe personal exit", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 568, height: 320 });

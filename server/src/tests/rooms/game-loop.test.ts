@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
-import { getAvailableActionsFlow } from "../../rooms/flow/playing-flow.js";
+import { decideActionDispatch, getAvailableActionsFlow } from "../../rooms/flow/playing-flow.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 import type { Card } from "../../rules/types.js";
 
@@ -343,4 +343,57 @@ test("collective action panel previews next-player chi without enabling it", () 
   const pass = actions.find((x) => x.action === "pass");
   assert.equal(pass?.enabled, true);
   assert.equal(pass?.deferred, true);
+});
+
+test("a later collective responder can see and queue a valid action early", () => {
+  const actions = getAvailableActionsFlow({
+    phase: "playing",
+    seatId: "C",
+    pending: { ownerId: "A", card: mkCard("p1", "red", "ju", "upper") },
+    responsePhase: "collective",
+    collectiveResponderId: "B",
+    allowCollectivePreselection: true,
+    awaitingDiscardOwnerId: null,
+    hand: [
+      mkCard("h1", "red", "ju", "upper"),
+      mkCard("h2", "red", "ju", "upper"),
+    ],
+    wildcardPool: [],
+    explainHuForSeat: () => ({ valid: false }),
+    logHuCheck: () => undefined,
+    getHandWithoutPending: (_seat, _pending) => [],
+    getNextPlayerId: () => "B",
+  });
+
+  assert.equal(actions.find((item) => item.action === "peng")?.enabled, true);
+  assert.equal(actions.find((item) => item.action === "pass")?.enabled, true);
+  assert.equal(
+    decideActionDispatch({
+      pendingOwnerId: "A",
+      seatId: "C",
+      action: "peng",
+      enabledActions: ["peng", "pass"],
+      responsePhase: "collective",
+      collectiveResponderId: "B",
+      canCollectivePreselect: true,
+      awaitingDiscardOwnerId: null,
+    }),
+    "collective_accept",
+  );
+});
+
+test("a later collective responder cannot act without preselection authority", () => {
+  assert.equal(
+    decideActionDispatch({
+      pendingOwnerId: "A",
+      seatId: "C",
+      action: "peng",
+      enabledActions: ["peng", "pass"],
+      responsePhase: "collective",
+      collectiveResponderId: "B",
+      canCollectivePreselect: false,
+      awaitingDiscardOwnerId: null,
+    }),
+    "ignore",
+  );
 });

@@ -139,7 +139,8 @@ ENABLE_MONITOR=0
 ### 服务端
 
 - `MIN_PLAYERS`：开始所需最少真人人数，默认 1。
-- `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人思考延时。
+- `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人执行吃牌、抓牌和出牌等可见动作的思考延时，默认 450–850ms。
+- `BOT_COLLECTIVE_THINK_MIN_MS` / `BOT_COLLECTIVE_THINK_MAX_MS`：机器人处理胡、开、碰或过等集体待响的短延时，默认 80–180ms，避免多名机器人依次等待。
 - `LOBBY_SEAT_HOLD_MS`：等待大厅断线座位保留时间。
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
 - `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。
@@ -152,7 +153,7 @@ ENABLE_MONITOR=0
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。
 - `TIME_EXTENSION_MS`：好友房真人每个声明或牌局决策窗口可主动增加的时间，默认 20000ms，服务端限制在 5000–60000ms；单人练习的在线真人不限时，不使用该值。
 - `RECONNECT_GRACE_MS`：活动牌局真人断线后等待重连、再启用机器人托管的宽限期，默认 5000ms；设为 0 可恢复立即托管。
-- `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时。
+- `LOCAL_TRANSITION_DELAY_MS`：无人胡、开、碰后进入本地吃/抓阶段的提示过渡，默认 250ms。
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。
 - `ROOM_LOG`、`HU_LOG`、`ROOM_TRACE`、`ROOM_TRACE_CARDS`：日志与追踪开关。
 - `ROOM_STATE_LOG_MODE`：`compact | all | off`。

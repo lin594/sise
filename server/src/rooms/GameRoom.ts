@@ -175,11 +175,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private awaitingDiscardOwnerId: string | null = null;
   private readonly botThinkMinMs = Math.max(
     0,
-    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 1800),
+    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 450),
   );
   private readonly botThinkMaxMs = Math.max(
     this.botThinkMinMs,
-    Number(process.env.BOT_THINK_MAX_MS ?? this.botThinkMinMs + 1400),
+    Number(process.env.BOT_THINK_MAX_MS ?? 850),
+  );
+  private readonly botCollectiveThinkMinMs = Math.max(
+    0,
+    Number(process.env.BOT_COLLECTIVE_THINK_MIN_MS ?? 80),
+  );
+  private readonly botCollectiveThinkMaxMs = Math.max(
+    this.botCollectiveThinkMinMs,
+    Number(process.env.BOT_COLLECTIVE_THINK_MAX_MS ?? 180),
   );
   private readonly operationTimeoutMs = Math.max(
     1000,
@@ -190,7 +198,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
-  private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 5000));
+  private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 1200));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
@@ -1370,7 +1378,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     decisionKey: string;
   } {
     const untimed = this.isPracticeDecisionUntimed(seatId);
-    const totalMs = untimed
+    const preselecting = this.canSeatPreselectCollective(seatId);
+    const totalMs = untimed || preselecting
       ? 0
       : this.state.phase === "declaring"
         ? this.declareTimerTotalMs || this.declareTimeoutMs
@@ -1382,7 +1391,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       canRequestMoreTime: this.canSeatRequestMoreTime(seatId),
       extensionSeconds: Math.ceil(this.timeExtensionMs / 1000),
       totalMs,
-      endsAt: untimed
+      endsAt: untimed || preselecting
         ? 0
         : this.state.phase === "declaring"
           ? this.state.declareEndsAt
@@ -1715,6 +1724,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const { action, candidateId } = parsed;
     const availableActions = this.getAvailableActions(seatId);
     const enabledActions = availableActions.filter((x) => x.enabled).map((x) => x.action);
+    const canCollectivePreselect = this.canSeatPreselectCollective(seatId);
     const decision = decideActionDispatch({
       pendingOwnerId: pending.ownerId,
       seatId,
@@ -1722,6 +1732,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       enabledActions,
       responsePhase: this.state.responsePhase,
       collectiveResponderId: this.collectiveResponderId,
+      canCollectivePreselect,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
     });
     const actionItem = availableActions.find((item) => item.action === action);
@@ -1740,15 +1751,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
 
     if (decision === "collective_accept") {
-      this.clearCollectiveTimer();
+      const isCurrentResponder = this.collectiveResponderId === seatId;
+      if (isCurrentResponder) {
+        this.clearCollectiveTimer();
+      }
       pending.collectives.set(seatId, {
         action: action === "pass" ? "pass" : action,
         candidateId: action === "pass" ? undefined : candidateId,
       });
-      this.collectiveCursor += 1;
-      this.traceStep("collective_accept", `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`);
-      if (this.state.responsePhase === "collective" && this.pendingResponse === pending) {
+      this.traceStep(
+        isCurrentResponder ? "collective_accept" : "collective_preselect",
+        `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
+      );
+      if (isCurrentResponder) {
+        this.collectiveCursor += 1;
+      }
+      if (isCurrentResponder && this.state.responsePhase === "collective" && this.pendingResponse === pending) {
         this.advanceCollectivePolling();
+      } else {
+        this.broadcastAvailableActions();
       }
       return;
     }
@@ -1865,6 +1886,17 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
     const acts = this.getAvailableActions(seatId, true);
     return acts.some((item) => Boolean(item.deferred) || (item.enabled && item.action !== "pass"));
+  }
+
+  private canSeatPreselectCollective(seatId: string): boolean {
+    return Boolean(
+      this.pendingResponse &&
+      this.state.responsePhase === "collective" &&
+      this.collectiveResponderId !== seatId &&
+      this.collectiveQueue.includes(seatId) &&
+      !this.pendingResponse.collectives.has(seatId) &&
+      !this.botIds.has(seatId),
+    );
   }
 
   private isEatResponder(ownerId: string, responderId: string): boolean {
@@ -2363,6 +2395,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
     const hand = this.playerHands.get(seatId) ?? [];
+    const allowCollectivePreselection = !probeCollectiveResponder && this.canSeatPreselectCollective(seatId);
     const entries = getAvailableActionsFlow({
       phase: this.state.phase,
       seatId,
@@ -2370,6 +2403,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       responsePhase: this.state.responsePhase,
       collectiveResponderId: this.collectiveResponderId,
       probeCollectiveResponder,
+      allowCollectivePreselection,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       hand,
       wildcardPool: [],
@@ -2380,10 +2414,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       getNextPlayerId: (seatIdArg) => this.getNextPlayerId(seatIdArg),
     });
     const pendingCard = this.pendingResponse?.card;
-    if (!pendingCard) {
-      return entries;
-    }
-    return entries.map((entry) => {
+    const filteredEntries = !pendingCard ? entries : entries.map((entry) => {
       if (entry.action === "pass") {
         return entry;
       }
@@ -2401,6 +2432,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         deferred: entry.deferred && filtered.length > 0,
       };
     });
+    if (
+      allowCollectivePreselection &&
+      !filteredEntries.some((entry) => Boolean(entry.deferred) || (entry.enabled && entry.action !== "pass"))
+    ) {
+      return filteredEntries.map((entry) => ({ ...entry, enabled: false, deferred: false }));
+    }
+    return filteredEntries;
   }
 
   // ===== 日志与广播 =====
@@ -3059,7 +3097,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：设置 `botTimer` 或立即执行 `runBotStepNow`。
    */
   private scheduleBotStep(): void {
-    if (this.botThinkMaxMs <= 0) {
+    const isCollective = this.state.responsePhase === "collective";
+    const minDelayMs = isCollective ? this.botCollectiveThinkMinMs : this.botThinkMinMs;
+    const maxDelayMs = isCollective ? this.botCollectiveThinkMaxMs : this.botThinkMaxMs;
+    if (maxDelayMs <= 0) {
       this.traceStep("schedule_bot_step:immediate");
       this.runBotStepNow();
       return;
@@ -3068,8 +3109,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.traceStep("schedule_bot_step:already_scheduled");
       return;
     }
-    const delayMs = this.randomBotThinkDelayMs();
-    this.traceStep("schedule_bot_step", `delayMs=${delayMs}`);
+    const delayMs = this.randomBotThinkDelayMs(minDelayMs, maxDelayMs);
+    this.traceStep("schedule_bot_step", `phase=${isCollective ? "collective" : "local"} delayMs=${delayMs}`);
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
       this.traceStep("bot_step_timer_fire");
@@ -3077,11 +3118,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }, delayMs);
   }
 
-  private randomBotThinkDelayMs(): number {
-    if (this.botThinkMaxMs <= this.botThinkMinMs) {
-      return this.botThinkMinMs;
+  private randomBotThinkDelayMs(minDelayMs = this.botThinkMinMs, maxDelayMs = this.botThinkMaxMs): number {
+    if (maxDelayMs <= minDelayMs) {
+      return minDelayMs;
     }
-    return this.botThinkMinMs + Math.floor(Math.random() * (this.botThinkMaxMs - this.botThinkMinMs + 1));
+    return minDelayMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1));
   }
 
   /**

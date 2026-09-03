@@ -87,6 +87,40 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = context.getPendingResponse()!.ownerId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
+  } else if (scenario === "early_collective_choice") {
+    const otherHumanId = context.playerOrder.find((id) => {
+      if (id === seatId) {
+        return false;
+      }
+      const candidate = context.state.players.get(id);
+      return Boolean(candidate?.connected && !candidate.isBot && !candidate.isConfiguredBot);
+    });
+    if (!otherHumanId) {
+      return false;
+    }
+    const otherHumanIndex = context.playerOrder.indexOf(otherHumanId);
+    const ownerId = context.playerOrder[
+      (otherHumanIndex - 1 + context.playerOrder.length) % context.playerOrder.length
+    ];
+    if (!ownerId) {
+      return false;
+    }
+    add("early-self-1", "red", "ju");
+    add("early-self-2", "red", "ju");
+    add("early-self-3", "yellow", "ma");
+    context.playerHands.set(otherHumanId, [
+      { id: "early-other-1", color: "red", type: "ju" },
+      { id: "early-other-2", color: "red", type: "ju" },
+      { id: "early-other-3", color: "green", type: "ma" },
+    ]);
+    context.setPendingResponse(
+      createPendingResponse(ownerId, { id: "early-response", color: "red", type: "ju" }, "upper"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: early_collective_choice#${seq}`;
   } else if (scenario === "waiting_other_turn") {
     add("wait1", "yellow", "ju");
     add("wait2", "red", "ma");
@@ -196,7 +230,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.resetCollectivePolling();
     return true;
   }
-  if (scenario === "collective_no_actions" || scenario === "hu_fail_case") {
+  if (scenario === "collective_no_actions" || scenario === "early_collective_choice" || scenario === "hu_fail_case") {
     context.startCollectivePolling();
     return true;
   }

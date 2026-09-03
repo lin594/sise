@@ -937,9 +937,6 @@ const displayTurnPlayerId = computed(() => {
   return state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
 });
 const isMyTurn = computed(() => {
-  if (state.value?.responsePhase === "collective") {
-    return false;
-  }
   if (!mySeatId.value || displayTurnPlayerId.value !== mySeatId.value) {
     return false;
   }

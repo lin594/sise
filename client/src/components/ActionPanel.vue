@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="panel" :class="{ locked: panelLocked }">
     <span class="sr-only" role="status" aria-live="polite">
-      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `该你操作了。${untimed ? "练习不限时。" : ""}${panelHint}` : "" }}
+      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `${isEarlyCollectiveChoice ? "现在可以先选。" : "该你操作了。"}${untimed && !isEarlyCollectiveChoice ? "练习不限时。" : ""}${panelHint}` : "" }}
     </span>
     <div
       v-if="pausedHint || needsDecision"
@@ -14,13 +14,13 @@
         <strong>操作已暂停</strong>
       </span>
       <span v-else-if="needsDecision" class="decision-line">
-        <strong>{{ isUrgent ? "抓紧操作" : "该你操作了" }}</strong>
-        <b v-if="untimed" class="untimed-label">练习不限时</b>
-        <b v-else-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
+        <strong>{{ isEarlyCollectiveChoice ? "现在可以先选" : isUrgent ? "抓紧操作" : "该你操作了" }}</strong>
+        <b v-if="untimed && !isEarlyCollectiveChoice" class="untimed-label">练习不限时</b>
+        <b v-else-if="!isEarlyCollectiveChoice && secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
       </span>
       <span class="instruction">{{ panelHint }}</span>
       <button
-        v-if="needsDecision && canRequestMoreTime"
+        v-if="needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
         type="button"
         class="more-time-button"
         data-testid="request-more-time"
@@ -218,6 +218,9 @@ const normalized = computed(() => {
 const selectionMode = computed<SelectionMode>(() => props.selectionMode ?? null);
 const panelLocked = computed(() => !props.canAct && !props.canDiscard);
 const needsDecision = computed(() => props.canAct || props.canDiscard);
+const isEarlyCollectiveChoice = computed(
+  () => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn,
+);
 const waitingHeadline = computed(() => {
   const playerName = props.currentPlayerName.trim();
   const conciseName = playerName.replace(/（(?:机器人|电脑)）$/u, "");
@@ -234,7 +237,12 @@ const secondsLeft = computed<number | null>(() =>
     : null,
 );
 const isUrgent = computed(
-  () => !props.untimed && needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5,
+  () =>
+    !props.untimed &&
+    !isEarlyCollectiveChoice.value &&
+    needsDecision.value &&
+    secondsLeft.value !== null &&
+    secondsLeft.value <= 5,
 );
 
 const panelHint = computed(() => {

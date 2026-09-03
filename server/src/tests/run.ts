@@ -1617,6 +1617,55 @@ t("room: human collective peng with candidateId is accepted", () => {
   assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "peng", candidateId });
 });
 
+t("room: later human may preselect without advancing or cancelling the current responder", () => {
+  const room = mkRoom(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [c("b1", "yellow", "ma")]);
+  room.playerHands.set("C", [c("c1", "red", "ju"), c("c2", "red", "ju")]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: c("resp", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.state.currentPlayerId = "B";
+  room.state.currentTurnPlayerId = "B";
+  room.state.responseEndsAt = Date.now() + 30_000;
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.seatBySession.set("sessC", "C");
+  let timerClearCount = 0;
+  let advanceCount = 0;
+  let broadcastCount = 0;
+  room.clearCollectiveTimer = () => {
+    timerClearCount += 1;
+  };
+  room.advanceCollectivePolling = () => {
+    advanceCount += 1;
+  };
+  room.broadcastAvailableActions = () => {
+    broadcastCount += 1;
+  };
+
+  const earlyActions = room.getAvailableActions("C");
+  const candidateId = earlyActions
+    .find((item: any) => item.action === "peng")
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+  assert.equal(earlyActions.find((item: any) => item.action === "peng")?.enabled, true);
+  assert.equal(room.buildDecisionTimerSnapshot("C").endsAt, 0);
+
+  room.handleAction({ sessionId: "sessC", send: () => {} }, { action: "peng", candidateId });
+
+  assert.deepEqual(room.pendingResponse.collectives.get("C"), { action: "peng", candidateId });
+  assert.equal(room.collectiveResponderId, "B");
+  assert.equal(room.collectiveCursor, 0);
+  assert.equal(timerClearCount, 0);
+  assert.equal(advanceCount, 0);
+  assert.equal(broadcastCount, 1);
+  assert.equal(room.getAvailableActions("C").some((item: any) => item.enabled || item.deferred), false);
+});
+
 t("room: human collective peng with invalid candidateId is rejected", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.playerHands.set("B", [c("rj1", "red", "ju"), c("rj2", "red", "ju")]);

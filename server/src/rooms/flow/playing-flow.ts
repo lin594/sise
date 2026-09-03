@@ -30,6 +30,7 @@ export interface ActionDispatchInput {
   enabledActions: ActionType[];
   responsePhase: "collective" | "local_upper" | "local_draw";
   collectiveResponderId: string | null;
+  canCollectivePreselect?: boolean;
   awaitingDiscardOwnerId: string | null;
 }
 
@@ -44,7 +45,9 @@ export function decideActionDispatch(input: ActionDispatchInput): ActionDecision
   }
 
   if (input.responsePhase === "collective") {
-    return input.seatId === input.collectiveResponderId ? "collective_accept" : "ignore";
+    return input.seatId === input.collectiveResponderId || input.canCollectivePreselect
+      ? "collective_accept"
+      : "ignore";
   }
 
   if (input.pendingOwnerId !== input.seatId) {
@@ -78,6 +81,7 @@ export interface ActionPanelInput {
   responsePhase: "collective" | "local_upper" | "local_draw";
   collectiveResponderId: SeatId | null;
   probeCollectiveResponder?: boolean;
+  allowCollectivePreselection?: boolean;
   awaitingDiscardOwnerId: SeatId | null;
   hand: Card[];
   wildcardPool: Card[];
@@ -116,7 +120,11 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
   const isCollective = input.responsePhase === "collective";
 
   if (isCollective) {
-    if (!input.probeCollectiveResponder && input.seatId !== input.collectiveResponderId) {
+    if (
+      !input.probeCollectiveResponder &&
+      !input.allowCollectivePreselection &&
+      input.seatId !== input.collectiveResponderId
+    ) {
       return disabled;
     }
     const huProbe = input.explainHuForSeat(input.seatId, input.hand, input.pending.card);
