@@ -1078,14 +1078,6 @@ onMounted(() => {
     countdownTimer = setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
-    if (openingDealIntroActive.value) {
-        visibleHandCount.value = 0;
-        window.setTimeout(() => {
-            if (openingDealIntroActive.value) {
-                triggerDealAnimation();
-            }
-        }, 0);
-    }
 });
 onUnmounted(() => {
     handResizeObserver?.disconnect();
@@ -1148,7 +1140,12 @@ watch(() => props.state?.lastAction, (action) => {
     if ((keyword === "ZHUA" || keyword === "TURN_DRAW" || keyword === "KONG_DRAW") && actor) {
         triggerDrawAnimation(actor);
     }
-});
+},
+// GameBoard is mounted when the waiting lobby changes into the dealer intro.
+// Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
+// mount hook incorrectly started a complete deal here and DEALER started a
+// second one a moment later.
+{ immediate: true });
 watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (!showDealAnimation.value && !openingDealIntroActive.value && props.state?.phase !== "waiting") {
         visibleHandCount.value = props.privateHand.length;
@@ -1221,6 +1218,15 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
@@ -1308,6 +1314,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
@@ -1327,6 +1337,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
@@ -1563,6 +1577,7 @@ if (__VLS_ctx.topPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip" },
+                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
@@ -1734,6 +1749,7 @@ if (__VLS_ctx.leftPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip" },
+                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
@@ -2013,6 +2029,7 @@ if (__VLS_ctx.rightPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip" },
+                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
@@ -2099,6 +2116,7 @@ if (__VLS_ctx.selfPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip" },
+                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;

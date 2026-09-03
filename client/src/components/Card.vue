@@ -1,14 +1,13 @@
 ﻿<template>
   <div
     class="card"
-    :class="[colorClass, `size-${sizeClass}`, `mode-${modeClass}`]"
+    :class="[colorClass, `size-${sizeClass}`, `mode-${modeClass}`, { 'response-card': isResponseCard }]"
     :data-card-mode="modeClass"
     role="img"
     :aria-label="accessibleLabel"
   >
     <span class="text text-top">{{ label }}</span>
     <span v-if="modeClass === 'long'" class="text text-bottom">{{ label }}</span>
-    <span v-if="isResponseCard" class="star" aria-hidden="true">★</span>
   </div>
 </template>
 
@@ -62,9 +61,9 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .size-xs.mode-long {
-  width: 1rem;
-  height: 2rem;
-  font-size: 0.58rem;
+  width: 1.3rem;
+  height: 2.25rem;
+  font-size: 0.74rem;
   border-radius: 0.34rem;
 }
 
@@ -76,9 +75,9 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .size-sm {
-  width: clamp(1rem, 1.4vw, 1.45rem);
-  height: clamp(2.7rem, 3.4vw, 3.6rem);
-  font-size: clamp(0.6rem, 0.72vw, 0.78rem);
+  width: clamp(1.45rem, 1.9vw, 2rem);
+  height: clamp(3rem, 4.1vw, 4.15rem);
+  font-size: clamp(0.76rem, 1vw, 1.06rem);
 }
 
 .size-sm.mode-large {
@@ -88,9 +87,9 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .size-md {
-  width: clamp(1.15rem, 1.65vw, 1.78rem);
-  height: clamp(3rem, 4vw, 4.1rem);
-  font-size: clamp(0.66rem, 0.8vw, 0.88rem);
+  width: clamp(1.65rem, 2.3vw, 2.45rem);
+  height: clamp(3.35rem, 4.7vw, 4.85rem);
+  font-size: clamp(0.84rem, 1.16vw, 1.22rem);
 }
 
 .size-md.mode-large {
@@ -100,9 +99,9 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .size-lg {
-  width: clamp(1.3rem, 2vw, 2rem);
-  height: clamp(3.5rem, 5vw, 5.2rem);
-  font-size: clamp(0.78rem, 1vw, 1rem);
+  width: clamp(2rem, 2.85vw, 3rem);
+  height: clamp(4rem, 5.7vw, 6rem);
+  font-size: clamp(1rem, 1.42vw, 1.5rem);
 }
 
 .size-lg.mode-large {
@@ -112,9 +111,9 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 }
 
 .size-xl {
-  width: clamp(1.35rem, 2.1vw, 2.1rem);
-  height: clamp(3.7rem, 5.4vw, 5.8rem);
-  font-size: clamp(0.82rem, 1vw, 1.02rem);
+  width: clamp(2.1rem, 3vw, 3.15rem);
+  height: clamp(4.25rem, 6vw, 6.35rem);
+  font-size: clamp(1.04rem, 1.48vw, 1.56rem);
 }
 
 .size-xl.mode-large {
@@ -149,14 +148,12 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   padding-bottom: 3px;
 }
 
-.star {
-  position: absolute;
-  right: 3px;
-  top: 2px;
-  color: #ffca28;
-  font-size: 1em;
-  font-weight: 800;
-  text-shadow: 0 0 4px rgba(250, 204, 21, 0.85);
+.response-card {
+  border-color: #082f49;
+  box-shadow:
+    inset 0 0 0 3px #38bdf8,
+    0 0 0 2px rgba(254, 243, 199, 0.92),
+    0 4px 12px rgba(2, 132, 199, 0.34);
 }
 
 .color-yellow {

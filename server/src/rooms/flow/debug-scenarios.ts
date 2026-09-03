@@ -163,6 +163,42 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       : scenario === "dealer_reveal_self"
         ? `DEALER_CARD ${seatId}`
         : `DEALER ${seatId}`;
+  } else if (scenario === "readable_exposed_groups") {
+    add(`readable-hand-${seq}`, "yellow", "ma");
+    for (const tablePlayer of context.state.players.values()) {
+      tablePlayer.exposedArea.clear();
+      tablePlayer.exposedGroupSizes.clear();
+      tablePlayer.exposedGroupKinds.clear();
+    }
+    const self = context.state.players.get(seatId)!;
+    self.exposedArea.push(
+      context.toSchemaCard({ id: `readable-self-ju-${seq}`, color: "red", type: "ju" }, true, "upper"),
+      context.toSchemaCard({ id: `readable-self-ma-${seq}`, color: "red", type: "ma" }, false, "upper"),
+      context.toSchemaCard({ id: `readable-self-pao-${seq}`, color: "red", type: "pao" }, false, "upper"),
+    );
+    self.exposedGroupSizes.push(3);
+    self.exposedGroupKinds.push("chi");
+    const oppositeId = context.getNextPlayerId(context.getNextPlayerId(seatId));
+    const opposite = context.state.players.get(oppositeId);
+    if (opposite) {
+      opposite.exposedArea.push(
+        context.toSchemaCard({ id: `readable-opposite-ju-${seq}`, color: "green", type: "ju" }, false, "upper"),
+        context.toSchemaCard({ id: `readable-opposite-ma-${seq}`, color: "green", type: "ma" }, false, "upper"),
+        context.toSchemaCard({ id: `readable-opposite-pao-${seq}`, color: "green", type: "pao" }, false, "upper"),
+      );
+      opposite.exposedGroupSizes.push(3);
+      opposite.exposedGroupKinds.push("chi");
+    }
+    const waitingSeatId = context.getNextPlayerId(seatId);
+    context.setPendingResponse(
+      createPendingResponse(waitingSeatId, { id: `readable-target-${seq}`, color: "white", type: "xiang" }, "draw"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_draw";
+    context.state.currentPlayerId = waitingSeatId;
+    context.state.currentTurnPlayerId = waitingSeatId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: readable_exposed_groups#${seq}`;
   } else if (scenario === "hu_fail_case") {
     context.publicGeneralPool.length = 0;
     for (const id of context.playerOrder) {
@@ -256,7 +292,8 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
 
   if (
     scenario === "discard_public" ||
-    scenario === "waiting_other_turn"
+    scenario === "waiting_other_turn" ||
+    scenario === "readable_exposed_groups"
   ) {
     context.resetCollectivePolling();
     return true;

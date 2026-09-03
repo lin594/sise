@@ -85,7 +85,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip">
+            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`top-group-card-${card.id}`"
@@ -179,7 +179,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip">
+            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`left-group-card-${card.id}`"
@@ -329,7 +329,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip">
+            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`right-group-card-${card.id}`"
@@ -380,7 +380,7 @@
               :class="group.tone"
             >
               <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-              <div class="mini-card-strip">
+              <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
                 <CardComp
                   v-for="card in group.cards"
                   :key="`self-exp-card-${card.id}`"
@@ -1929,14 +1929,6 @@ onMounted(() => {
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
-  if (openingDealIntroActive.value) {
-    visibleHandCount.value = 0;
-    window.setTimeout(() => {
-      if (openingDealIntroActive.value) {
-        triggerDealAnimation();
-      }
-    }, 0);
-  }
 });
 
 onUnmounted(() => {
@@ -1965,6 +1957,10 @@ onUnmounted(() => {
   }
 });
 
+// GameBoard is mounted when the waiting lobby changes into the dealer intro.
+// Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
+// mount hook incorrectly started a complete deal here and DEALER started a
+// second one a moment later.
 watch(
   () => props.state?.lastAction,
   (action) => {
@@ -2004,6 +2000,7 @@ watch(
       triggerDrawAnimation(actor);
     }
   },
+  { immediate: true },
 );
 
 watch(
@@ -2569,6 +2566,20 @@ watch(
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
+}
+
+.mini-card-strip.mode-long {
+  flex-wrap: nowrap;
+  gap: 0;
+  padding-right: 0.22rem;
+}
+
+.mini-card-strip.mode-long .mini-card + .mini-card {
+  margin-left: -0.32rem;
+}
+
+.mini-card-strip.mode-long .mini-card:nth-child(even) {
+  transform: translateY(2px);
 }
 
 .mini-card {
@@ -3694,6 +3705,13 @@ watch(
   .hand :deep(.size-xl.mode-long) {
     height: clamp(3rem, 4.3vw, 4.8rem);
   }
+
+  .discard-token.mode-long,
+  .mini-card.mode-long {
+    width: clamp(1.35rem, 1.75vw, 1.75rem);
+    height: clamp(2.75rem, 3.55vw, 3.55rem);
+    font-size: clamp(0.78rem, 0.96vw, 1rem);
+  }
 }
 
 @media (max-width: 1200px) {
@@ -3802,6 +3820,13 @@ watch(
     width: 1.55rem;
     height: 1.7rem;
     font-size: clamp(0.78rem, 3.4vh, 0.9rem);
+  }
+
+  .discard-token.mode-long,
+  .mini-card.mode-long {
+    width: 1.2rem;
+    height: 2.35rem;
+    font-size: 0.72rem;
   }
 
   .player-card,

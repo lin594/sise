@@ -28,7 +28,7 @@ let __VLS_directives;
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "card" },
-    ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, `mode-${__VLS_ctx.modeClass}`]) },
+    ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, `mode-${__VLS_ctx.modeClass}`, { 'response-card': __VLS_ctx.isResponseCard }]) },
     'data-card-mode': (__VLS_ctx.modeClass),
     role: "img",
     'aria-label': (__VLS_ctx.accessibleLabel),
@@ -43,18 +43,11 @@ if (__VLS_ctx.modeClass === 'long') {
     });
     (__VLS_ctx.label);
 }
-if (__VLS_ctx.isResponseCard) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "star" },
-        'aria-hidden': "true",
-    });
-}
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
-/** @type {__VLS_StyleScopedClasses['star']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {

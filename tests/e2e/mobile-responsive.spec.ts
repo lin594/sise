@@ -1386,6 +1386,69 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText("真人在线");
   });
 
+  test("keeps long exposed cards readable without covering their faces", async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("sise_game_display_preferences_v2", JSON.stringify({
+        ownCards: "adaptive",
+        tableCards: "long",
+        seatDirection: "counterclockwise",
+        turnAlert: "off",
+        keepScreenAwake: false,
+      }));
+    });
+    await enterLobby(page, "/?e2eDebug=1");
+    await page.getByTestId("lobby-start").click();
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await expect(page.locator(".fx-card")).toHaveCount(0, { timeout: 6_000 });
+
+    await page.setViewportSize({ width: 667, height: 375 });
+    await applyLocalDebugScenario(page, "readable_exposed_groups");
+    const strip = page.locator(".self-groups-card .mini-card-strip.mode-long").first();
+    const cards = strip.locator(".mini-card.mode-long");
+    await expect(strip).toBeVisible();
+    await expect(cards).toHaveCount(3);
+    await expect(strip.locator(".response-card")).toHaveCount(1);
+    await expect(strip.locator(".star")).toHaveCount(0);
+
+    const compactGeometry = await cards.evaluateAll((items) => items.map((item) => {
+      const rect = item.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        fontSize: Number.parseFloat(getComputedStyle(item).fontSize),
+      };
+    }));
+    expect(compactGeometry[0].width).toBeGreaterThanOrEqual(19);
+    expect(compactGeometry[0].height).toBeGreaterThanOrEqual(37);
+    expect(compactGeometry[0].fontSize).toBeGreaterThanOrEqual(11);
+    expect(compactGeometry[1].left).toBeLessThan(compactGeometry[0].right);
+    expect(compactGeometry[1].left).toBeGreaterThan(compactGeometry[0].left);
+    expect(compactGeometry[1].top).toBeGreaterThan(compactGeometry[0].top);
+    await page.screenshot({ path: testInfo.outputPath("long-exposed-cards-667x375.png") });
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const desktopCard = cards.first();
+    const desktopGeometry = await desktopCard.evaluate((item) => {
+      const rect = item.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        fontSize: Number.parseFloat(getComputedStyle(item).fontSize),
+      };
+    });
+    expect(desktopGeometry.width).toBeGreaterThanOrEqual(21);
+    expect(desktopGeometry.height).toBeGreaterThanOrEqual(44);
+    expect(desktopGeometry.fontSize).toBeGreaterThanOrEqual(12);
+    await page.screenshot({ path: testInfo.outputPath("long-exposed-cards-1280x720.png") });
+  });
+
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
