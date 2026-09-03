@@ -45,6 +45,7 @@ test("quick match groups humans, fixes their seats, and can start with computers
 
     await first.getByTestId("mode-quick_match").click();
     await first.getByTestId("lobby-start").click();
+    await expect(first.getByTestId("leave-waiting-room")).toHaveText("退出配桌");
     await expect(first.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
     await expect(first.getByTestId("match-countdown")).toContainText("秒后");
     await expect(first.getByTestId("leave-waiting-room")).toBeVisible();
@@ -84,26 +85,37 @@ test("quick match groups humans, fixes their seats, and can start with computers
   }
 });
 
-test("quick match keeps its countdown through refresh and auto-starts on a rotated legacy phone", async ({ page }) => {
+test("quick match keeps its countdown through refresh and auto-starts on a rotated legacy phone", async ({ browser }) => {
   test.setTimeout(45_000);
-  await page.setViewportSize({ width: 320, height: 568 });
-  await enterModeLobby(page, "守桌牌友");
-  await expect(page.locator(".layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
-  await page.getByTestId("mode-quick_match").click();
-  await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
-  const initialSeconds = Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]);
-  expect(initialSeconds).toBeGreaterThanOrEqual(8);
+  const context = await browser.newContext({
+    viewport: { width: 320, height: 568 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  try {
+    await enterModeLobby(page, "守桌牌友");
+    await expect(page.locator(".layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await page.getByTestId("mode-quick_match").click();
+    await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
+    await expect(page.getByTestId("match-countdown")).toContainText("秒后");
+    const initialSeconds = Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]);
+    expect(initialSeconds).toBeGreaterThanOrEqual(8);
 
-  await page.waitForTimeout(2_000);
-  await page.reload();
-  await expect(page.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
-  const restoredSeconds = Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]);
-  expect(restoredSeconds).toBeLessThan(initialSeconds);
-  expect(page.url()).not.toContain("roomId=");
+    await page.waitForTimeout(2_000);
+    await page.reload();
+    await expect(page.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
+    await expect(page.getByTestId("match-countdown")).toContainText("秒后");
+    const restoredSeconds = Number((await page.getByTestId("match-countdown").textContent())?.match(/\d+/)?.[0]);
+    expect(restoredSeconds).toBeLessThan(initialSeconds);
+    expect(page.url()).not.toContain("roomId=");
 
-  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+  } finally {
+    await context.close();
+  }
 });
 
 test("leaving quick-match waiting clears its local room identity", async ({ page }) => {

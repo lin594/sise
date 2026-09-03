@@ -978,14 +978,16 @@ const canPressStartGame = computed(
     Boolean(mySeatId.value) &&
     isWaiting.value &&
     isHost.value &&
-    (state.value?.roomMode !== "friends" ||
-      (players.value.length === 4 &&
-        players.value.every(
-          (player) =>
-            player.isConfiguredBot ||
-            (player.connected &&
-              (player.clientId === state.value?.hostPlayerId || player.lobbyReady)),
-        ))),
+    (state.value?.roomMode === "match"
+      ? players.value.every((player) => player.isConfiguredBot || player.connected)
+      : state.value?.roomMode !== "friends" ||
+        (players.value.length === 4 &&
+          players.value.every(
+            (player) =>
+              player.isConfiguredBot ||
+              (player.connected &&
+                (player.clientId === state.value?.hostPlayerId || player.lobbyReady)),
+          ))),
 );
 const canStartSelectedMode = computed(
   () =>
@@ -1043,9 +1045,12 @@ const lobbySubtitle = computed(() => {
   }
   if (state.value?.roomMode === "match") {
     const humanCount = players.value.filter((player) => !player.isConfiguredBot).length;
+    if (hasOfflineFriend.value) {
+      return "有牌友正在恢复连接，座位会为对方暂时保留。";
+    }
     return state.value.matchStartsAt > 0
       ? `已找到 ${humanCount} 位真人，${matchSecondsLeft.value} 秒后电脑补位自动开始。`
-      : "有牌友正在恢复连接，座位会为对方暂时保留。";
+      : "正在准备开局，请稍候。";
   }
   if (state.value?.roomMode !== "friends") {
     return "正在补齐机器人并准备开始单人练习。";
@@ -1090,6 +1095,9 @@ const lobbyStartHint = computed(() => {
   if (!hasLobbySession.value || !isWaiting.value) return "";
   if (!mySeatId.value) return "请先选择一个空座位";
   if (state.value?.roomMode === "match") {
+    if (hasOfflineFriend.value) {
+      return "有牌友正在恢复连接，暂不能开始";
+    }
     return isHost.value ? "不想等待时，可立即补齐电脑" : `约 ${matchSecondsLeft.value} 秒后自动开始`;
   }
   if (!isHost.value) return mePlayer.value?.lobbyReady ? "已准备，等待房主开始" : "请先确认准备";
@@ -1108,6 +1116,15 @@ const matchSecondsLeft = computed(() => {
   const startsAt = Number(state.value?.matchStartsAt ?? 0);
   return startsAt > 0 ? Math.max(0, Math.ceil((startsAt - nowMs.value) / 1000)) : 0;
 });
+watch(
+  () => state.value?.matchStartsAt,
+  () => {
+    // Keep the first rendered second aligned with the server deadline instead of
+    // reusing a timer sample that may already be almost half a second old.
+    nowMs.value = Date.now();
+  },
+  { flush: "sync" },
+);
 const displayTurnPlayerId = computed(() => {
   if (state.value?.responsePhase === "collective") {
     return (

@@ -23,7 +23,7 @@
           data-testid="leave-waiting-room"
           @click="requestLeaveRoom"
         >
-          离开房间
+          {{ roomMode === "match" ? "退出配桌" : "离开房间" }}
         </button>
         <button
           v-if="roomMode === 'friends' && roomId && isHost"
@@ -87,15 +87,23 @@
       <section
         v-if="roomMode === 'match' && roomId"
         class="match-status-card"
-        aria-live="polite"
         data-testid="match-status"
       >
         <div>
-          <strong data-testid="match-human-count">真人 {{ matchHumanCount }} / 4</strong>
+          <strong
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            data-testid="match-human-count"
+          >真人 {{ matchHumanCount }} / 4</strong>
           <span>先等真人，人数不足时电脑补位</span>
         </div>
-        <b data-testid="match-countdown">
-          {{ matchSecondsLeft > 0 ? `${matchSecondsLeft} 秒后自动开始` : "等待牌友恢复连接" }}
+        <b
+          role="timer"
+          :aria-label="matchHasOfflineHuman ? '等待牌友恢复连接' : `还有 ${matchSecondsLeft} 秒自动开始`"
+          data-testid="match-countdown"
+        >
+          {{ matchHasOfflineHuman ? "等待牌友恢复连接" : `${matchSecondsLeft} 秒后自动开始` }}
         </b>
       </section>
 
@@ -427,6 +435,9 @@ const seatSlots = computed(() =>
 const emptySeatCount = computed(() => seatSlots.value.filter((slot) => !slot.player).length);
 const matchHumanCount = computed(
   () => props.players.filter((player) => !player.isConfiguredBot).length,
+);
+const matchHasOfflineHuman = computed(
+  () => props.players.some((player) => !player.isConfiguredBot && !player.connected),
 );
 const myLobbyReady = computed(
   () => props.players.find((player) => player.clientId === props.mySeatId)?.lobbyReady ?? false,
