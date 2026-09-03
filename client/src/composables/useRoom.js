@@ -1592,7 +1592,11 @@ export function useRoom(playerName = "Player") {
     }
     function declareSetup(payload) {
         declareError.value = "";
-        safeRoomSend("declare_setup", payload);
+        if (!connected.value || !safeRoomSend("declare_setup", payload)) {
+            declareError.value = "网络连接不稳定，声明没有发出；恢复后请重新提交。";
+            return false;
+        }
+        return true;
     }
     function requestMoreTime() {
         const decisionKey = decisionTimer.value.decisionKey;

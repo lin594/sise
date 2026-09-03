@@ -32,7 +32,7 @@
             type="button"
             class="declare-more-time"
             data-testid="declare-request-more-time"
-            :disabled="moreTimeRequested"
+            :disabled="moreTimeRequested || !connectionReady"
             :aria-label="`需要更多时间，增加${moreTimeSeconds}秒`"
             @click="requestMoreTime"
           >
@@ -202,7 +202,7 @@
             <span class="untimed-dot"></span>{{ ultraCompact ? "上下滑调整 · 手牌可前后翻 · 练习不限时" : "不限时，请按自己的节奏确认" }}
           </p>
           <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
-          <p v-if="serverError" class="declare-error" role="alert">{{ serverError }}</p>
+          <p v-if="displayedError" class="declare-error" role="alert">{{ displayedError }}</p>
         </div>
         <button
           ref="confirmButtonRef"
@@ -212,10 +212,11 @@
           data-testid="confirm-declaration"
           @click="submit"
         >
-          <span v-if="submitted">已提交，等待其他玩家</span>
+          <span v-if="!connectionReady">等待网络恢复</span>
+          <span v-else-if="submitted">已提交，等待其他玩家</span>
           <span v-else-if="submitPending">提交中…</span>
           <span v-else>{{ confirmationText }}</span>
-          <small v-if="!submitted && !submitPending">确认后不可修改</small>
+          <small v-if="connectionReady && !submitted && !submitPending">确认后不可修改</small>
         </button>
       </footer>
     </div>
@@ -246,6 +247,7 @@ const props = defineProps<{
   untimed?: boolean;
   progressPercent: number;
   serverError: string;
+  connectionReady: boolean;
   compact: boolean;
   ultraCompact: boolean;
   cardMode: RenderedCardMode;
@@ -264,6 +266,7 @@ const selectedFishOptionIds = ref<Set<string>>(new Set());
 const declaredKongs = ref(0);
 const kongSelectionTouched = ref(false);
 const submitPending = ref(false);
+const localSubmitError = ref("");
 const moreTimeRequested = ref(false);
 const panelRef = ref<HTMLElement | null>(null);
 const confirmButtonRef = ref<HTMLButtonElement | null>(null);
@@ -273,12 +276,22 @@ const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
 let primaryFocusPlaced = false;
 let moreTimeRetryTimer: number | null = null;
+let submitRetryTimer: number | null = null;
 let handResizeObserver: ResizeObserver | null = null;
+
+const SUBMIT_CONFIRM_WAIT_MS = 3500;
 
 function clearMoreTimeRetryTimer(): void {
   if (moreTimeRetryTimer !== null) {
     window.clearTimeout(moreTimeRetryTimer);
     moreTimeRetryTimer = null;
+  }
+}
+
+function clearSubmitRetryTimer(): void {
+  if (submitRetryTimer !== null) {
+    window.clearTimeout(submitRetryTimer);
+    submitRetryTimer = null;
   }
 }
 
@@ -304,7 +317,15 @@ const recommendedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions
 const hiddenKongAnalysis = computed(() => analyzeHiddenKongs(props.hand, selectedFishCardIds.value));
 const recommendedKongCount = computed(() => analyzeHiddenKongs(props.hand, recommendedFishCardIds.value).count);
 const kongChoices = computed(() => Array.from({ length: hiddenKongAnalysis.value.count + 1 }, (_, index) => index));
-const isLocked = computed(() => !props.handReady || props.submitted || submitPending.value);
+const isLocked = computed(
+  () => !props.handReady || !props.connectionReady || props.submitted || submitPending.value,
+);
+const displayedError = computed(() => {
+  if (!props.connectionReady) {
+    return "网络已断开，恢复后可继续提交；刚才的选择还在。";
+  }
+  return props.serverError || localSubmitError.value;
+});
 const isAtRecommendation = computed(() => {
   if (declaredKongs.value !== recommendedKongCount.value) {
     return false;
@@ -415,11 +436,22 @@ function submit() {
   if (isLocked.value || !initialized.value) {
     return;
   }
+  localSubmitError.value = "";
+  clearSubmitRetryTimer();
   submitPending.value = true;
   emit("submit", {
     declaredKongs: declaredKongs.value,
     fishCardIds: [...selectedFishCardIds.value],
   });
+  submitRetryTimer = window.setTimeout(() => {
+    submitRetryTimer = null;
+    if (props.submitted) {
+      return;
+    }
+    submitPending.value = false;
+    localSubmitError.value = "暂未收到服务器确认，请重新提交。";
+    void nextTick(() => confirmButtonRef.value?.focus());
+  }, SUBMIT_CONFIRM_WAIT_MS);
 }
 
 function updateHandScrollState(): void {
@@ -483,7 +515,23 @@ watch(
   () => props.serverError,
   (error) => {
     if (error) {
+      clearSubmitRetryTimer();
       submitPending.value = false;
+    }
+  },
+);
+
+watch(
+  () => [props.connectionReady, props.submitted] as const,
+  ([connectionReady, submitted]) => {
+    if (connectionReady && !submitted) {
+      localSubmitError.value = "";
+      return;
+    }
+    clearSubmitRetryTimer();
+    submitPending.value = false;
+    if (submitted) {
+      localSubmitError.value = "";
     }
   },
 );
@@ -516,6 +564,7 @@ watch(handRailRef, observeHandScroller, { immediate: true });
 
 onBeforeUnmount(() => {
   clearMoreTimeRetryTimer();
+  clearSubmitRetryTimer();
   handResizeObserver?.disconnect();
   handResizeObserver = null;
 });

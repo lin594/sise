@@ -735,7 +735,7 @@ export declare function useRoom(playerName?: string): {
     declareSetup: (payload: {
         declaredKongs: number;
         fishCardIds: string[];
-    }) => void;
+    }) => boolean;
     requestMoreTime: () => void;
     debugSetup: (scenario: string) => void;
     startGame: () => void;

@@ -255,6 +255,7 @@
       :seconds-left="declareSecondsLeft"
       :progress-percent="declareProgressPercent"
       :server-error="declareError"
+      :connection-ready="connected"
       :compact="isCompactViewport"
       :ultra-compact="isUltraCompactViewport"
       :card-mode="resolvedOwnCardMode"
