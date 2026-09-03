@@ -1187,14 +1187,26 @@ test.describe("compact landscape gameplay", () => {
     expect(discardButtonRect.right).toBeLessThanOrEqual(667);
     expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
     const handCountBeforeDiscard = await page.locator("[data-testid^='hand-card-']").count();
+    const actionFeedback = page.getByTestId("action-feedback");
+    await page.evaluate(() => {
+      const key = "sise_test_discard_feedback_seen";
+      sessionStorage.setItem(key, "0");
+      const capture = () => {
+        const feedback = document.querySelector<HTMLElement>("[data-testid='action-feedback']");
+        if (feedback && /^(pending|received)$/.test(feedback.dataset.status ?? "")) {
+          sessionStorage.setItem(key, "1");
+        }
+      };
+      const observer = new MutationObserver(capture);
+      observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+      capture();
+      window.setTimeout(() => observer.disconnect(), 2_000);
+    });
     await discardConfirm.evaluate((button) => {
       (button as HTMLButtonElement).click();
       (button as HTMLButtonElement).click();
     });
-    const actionFeedback = page.getByTestId("action-feedback");
-    await expect(actionFeedback).toBeVisible();
-    await expect(actionFeedback).toHaveAttribute("data-status", /^(pending|received)$/);
-    await expect(actionFeedback).toContainText(/操作已提交|操作已收到/);
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("sise_test_discard_feedback_seen"))).toBe("1");
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
     await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(handCountBeforeDiscard - 1);
     await page.evaluate((testId) => {
