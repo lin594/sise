@@ -404,24 +404,32 @@ const seatCountdownSeconds = computed(() => {
         Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
         return null;
     }
-    const endsAt = Number(props.state?.responseEndsAt ?? 0);
+    const endsAt = playDecisionEndsAt.value;
     if (!endsAt || endsAt <= nowMs.value) {
         return null;
     }
-    return Math.max(0, Math.min(Math.ceil(OP_COUNTDOWN_MS / 1000), Math.ceil((endsAt - nowMs.value) / 1000)));
+    const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
+    return Math.max(0, Math.min(Math.ceil(totalMs / 1000), Math.ceil((endsAt - nowMs.value) / 1000)));
 });
 const seatCountdownPercent = computed(() => {
     if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
         Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
         return 0;
     }
-    const endsAt = Number(props.state?.responseEndsAt ?? 0);
+    const endsAt = playDecisionEndsAt.value;
     if (!endsAt || endsAt <= nowMs.value) {
         return 0;
     }
     const remain = endsAt - nowMs.value;
-    const raw = (remain / OP_COUNTDOWN_MS) * 100;
+    const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
+    const raw = (remain / totalMs) * 100;
     return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
+});
+const playDecisionEndsAt = computed(() => {
+    if (props.decisionKey?.startsWith("play:") && Number(props.decisionTimerEndsAt ?? 0) > 0) {
+        return Number(props.decisionTimerEndsAt);
+    }
+    return Number(props.state?.responseEndsAt ?? 0);
 });
 const compactCenterHint = computed(() => {
     if (effectiveInteractionPausedMessage.value) {
@@ -2355,6 +2363,7 @@ if (props.state?.phase === 'playing') {
     // @ts-ignore
     const __VLS_61 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
+        ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -2368,11 +2377,15 @@ if (props.state?.phase === 'playing') {
         currentPlayerName: (props.currentPlayerName ?? '-'),
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
+        canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
+        moreTimeSeconds: (props.moreTimeSeconds ?? 20),
+        decisionKey: (props.decisionKey ?? ''),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }));
     const __VLS_62 = __VLS_61({
         ...{ 'onConfirmDiscard': {} },
+        ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
         ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -2386,6 +2399,9 @@ if (props.state?.phase === 'playing') {
         currentPlayerName: (props.currentPlayerName ?? '-'),
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
+        canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
+        moreTimeSeconds: (props.moreTimeSeconds ?? 20),
+        decisionKey: (props.decisionKey ?? ''),
         selectionMode: (props.selectionMode ?? null),
         selectedCandidateId: (props.selectedCandidateId ?? null),
     }, ...__VLS_functionalComponentArgsRest(__VLS_61));
@@ -2396,9 +2412,16 @@ if (props.state?.phase === 'playing') {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
     const __VLS_68 = {
-        onSubmit: (__VLS_ctx.onSubmitAction)
+        onRequestMoreTime: (...[$event]) => {
+            if (!(props.state?.phase === 'playing'))
+                return;
+            __VLS_ctx.emit('requestMoreTime');
+        }
     };
     const __VLS_69 = {
+        onSubmit: (__VLS_ctx.onSubmitAction)
+    };
+    const __VLS_70 = {
         onSelectionChange: (__VLS_ctx.onSelectionChange)
     };
     var __VLS_63;
@@ -2421,16 +2444,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_71 = __VLS_70({
+        const __VLS_72 = __VLS_71({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_71));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2596,6 +2619,7 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             ActionPanel: ActionPanel,
             CardComp: CardComp,
+            emit: emit,
             selfPlayer: selfPlayer,
             topPlayer: topPlayer,
             rightPlayer: rightPlayer,

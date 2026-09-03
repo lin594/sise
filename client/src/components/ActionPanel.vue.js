@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 const props = withDefaults(defineProps(), {
     canAct: false,
     isCurrentTurn: false,
@@ -11,9 +11,42 @@ const props = withDefaults(defineProps(), {
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    canRequestMoreTime: false,
+    moreTimeSeconds: 20,
+    decisionKey: "",
 });
 const emit = defineEmits();
 const busy = ref(false);
+const moreTimeRequested = ref(false);
+let moreTimeRetryTimer = null;
+function clearMoreTimeRetryTimer() {
+    if (moreTimeRetryTimer !== null) {
+        window.clearTimeout(moreTimeRetryTimer);
+        moreTimeRetryTimer = null;
+    }
+}
+watch(() => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`, () => {
+    const available = props.canRequestMoreTime;
+    if (available) {
+        clearMoreTimeRetryTimer();
+        moreTimeRequested.value = false;
+    }
+});
+function requestMoreTime() {
+    if (!props.canRequestMoreTime || moreTimeRequested.value) {
+        return;
+    }
+    moreTimeRequested.value = true;
+    emit("requestMoreTime");
+    clearMoreTimeRetryTimer();
+    moreTimeRetryTimer = window.setTimeout(() => {
+        moreTimeRetryTimer = null;
+        if (props.canRequestMoreTime) {
+            moreTimeRequested.value = false;
+        }
+    }, 2500);
+}
+onBeforeUnmount(clearMoreTimeRetryTimer);
 const defaultOrder = ["hu", "kai", "peng", "chi", "pass"];
 const normalized = computed(() => {
     const map = new Map(props.actions.map((x) => [x.action, x]));
@@ -186,6 +219,9 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    canRequestMoreTime: false,
+    moreTimeSeconds: 20,
+    decisionKey: "",
 });
 const __VLS_ctx = {};
 let __VLS_components;
@@ -205,6 +241,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['urgent']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['locked']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
@@ -220,6 +258,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
@@ -266,6 +305,17 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     ...{ class: "instruction" },
 });
 (__VLS_ctx.panelHint);
+if (__VLS_ctx.needsDecision && __VLS_ctx.canRequestMoreTime) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.requestMoreTime) },
+        type: "button",
+        ...{ class: "more-time-button" },
+        'data-testid': "request-more-time",
+        disabled: (__VLS_ctx.moreTimeRequested),
+        'aria-label': (`需要更多时间，增加${__VLS_ctx.moreTimeSeconds}秒`),
+    });
+    (__VLS_ctx.moreTimeRequested ? "正在加时…" : `需要更多时间 +${__VLS_ctx.moreTimeSeconds}秒`);
+}
 if (__VLS_ctx.pausedHint) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "paused-state" },
@@ -325,6 +375,7 @@ else {
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['instruction']} */ ;
+/** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused-state']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused-symbol']} */ ;
 /** @type {__VLS_StyleScopedClasses['actions']} */ ;
@@ -337,6 +388,8 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             emit: emit,
             busy: busy,
+            moreTimeRequested: moreTimeRequested,
+            requestMoreTime: requestMoreTime,
             normalized: normalized,
             selectionMode: selectionMode,
             panelLocked: panelLocked,

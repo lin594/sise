@@ -17,6 +17,17 @@
         <b v-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
       </span>
       <span class="instruction">{{ panelHint }}</span>
+      <button
+        v-if="needsDecision && canRequestMoreTime"
+        type="button"
+        class="more-time-button"
+        data-testid="request-more-time"
+        :disabled="moreTimeRequested"
+        :aria-label="`需要更多时间，增加${moreTimeSeconds}秒`"
+        @click.stop="requestMoreTime"
+      >
+        {{ moreTimeRequested ? "正在加时…" : `需要更多时间 +${moreTimeSeconds}秒` }}
+      </button>
     </div>
     <div v-if="pausedHint" class="paused-state" data-testid="action-paused">
       <span class="paused-symbol" aria-hidden="true">↻</span>
@@ -53,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { ActionRequest, ActionType, AvailableAction } from "@/types/game";
 
 type SelectionMode = "kai" | "peng" | "chi" | null;
@@ -72,6 +83,9 @@ const props = withDefaults(
     hasDiscardSelection?: boolean;
     discardPending?: boolean;
     secondsLeft?: number | null;
+    canRequestMoreTime?: boolean;
+    moreTimeSeconds?: number;
+    decisionKey?: string;
   }>(),
   {
     canAct: false,
@@ -85,16 +99,57 @@ const props = withDefaults(
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    canRequestMoreTime: false,
+    moreTimeSeconds: 20,
+    decisionKey: "",
   },
 );
 
 const emit = defineEmits<{
   submit: [request: ActionRequest];
   confirmDiscard: [];
+  requestMoreTime: [];
   selectionChange: [payload: { mode: SelectionMode; selectedCandidateId: string | null }];
 }>();
 
 const busy = ref(false);
+const moreTimeRequested = ref(false);
+let moreTimeRetryTimer: number | null = null;
+
+function clearMoreTimeRetryTimer(): void {
+  if (moreTimeRetryTimer !== null) {
+    window.clearTimeout(moreTimeRetryTimer);
+    moreTimeRetryTimer = null;
+  }
+}
+
+watch(
+  () => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`,
+  () => {
+    const available = props.canRequestMoreTime;
+    if (available) {
+      clearMoreTimeRetryTimer();
+      moreTimeRequested.value = false;
+    }
+  },
+);
+
+function requestMoreTime(): void {
+  if (!props.canRequestMoreTime || moreTimeRequested.value) {
+    return;
+  }
+  moreTimeRequested.value = true;
+  emit("requestMoreTime");
+  clearMoreTimeRetryTimer();
+  moreTimeRetryTimer = window.setTimeout(() => {
+    moreTimeRetryTimer = null;
+    if (props.canRequestMoreTime) {
+      moreTimeRequested.value = false;
+    }
+  }, 2500);
+}
+
+onBeforeUnmount(clearMoreTimeRetryTimer);
 
 const defaultOrder: ActionType[] = ["hu", "kai", "peng", "chi", "pass"];
 type PanelAction = {
@@ -386,6 +441,29 @@ function onClick(item: PanelAction): void {
   color: #fff1f2;
 }
 
+.more-time-button {
+  justify-self: center;
+  min-height: 42px;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid rgba(125, 211, 252, 0.72);
+  border-radius: 999px;
+  background: #075985;
+  color: #f0f9ff;
+  font-size: clamp(0.72rem, 1.55vh, 0.86rem);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.more-time-button:focus-visible {
+  outline: 3px solid #fde047;
+  outline-offset: 2px;
+}
+
+.more-time-button:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
 @keyframes urgent-pulse {
   from { box-shadow: 0 0 0 rgba(251, 113, 133, 0); }
   to { box-shadow: 0 0 0.7rem rgba(251, 113, 133, 0.28); }
@@ -484,6 +562,12 @@ function onClick(item: PanelAction): void {
     padding: 0.08rem 0.2rem;
     font-size: clamp(0.75rem, 3.2vh, 0.84rem);
     line-height: 1.2;
+  }
+
+  .more-time-button {
+    min-height: 40px;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.72rem;
   }
 
   .decision-line {

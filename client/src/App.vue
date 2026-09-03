@@ -135,6 +135,11 @@
         :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
         :interaction-paused-message="interactionPausedMessage"
+        :can-request-more-time="decisionTimer.canRequestMoreTime"
+        :more-time-seconds="decisionTimer.extensionSeconds"
+        :decision-timer-total-ms="decisionTimer.totalMs"
+        :decision-timer-ends-at="decisionTimer.endsAt"
+        :decision-key="decisionTimer.decisionKey"
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
@@ -144,6 +149,7 @@
         :active-candidates="activeCandidates"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
+        @request-more-time="requestMoreTime"
         @selection-change="onPanelSelectionChange"
       />
     </template>
@@ -213,7 +219,11 @@
       :compact="isCompactViewport"
       :ultra-compact="isUltraCompactViewport"
       :card-mode="resolvedOwnCardMode"
+      :can-request-more-time="decisionTimer.canRequestMoreTime"
+      :more-time-seconds="decisionTimer.extensionSeconds"
+      :decision-key="decisionTimer.decisionKey"
       @submit="submitDeclaration"
+      @request-more-time="requestMoreTime"
     />
 
     <div v-if="showEndPanel" class="hu-mask">
@@ -572,11 +582,13 @@ const {
   joinError,
   declareError,
   actionLogs,
+  decisionTimer,
   clearActionLogs,
   debugSetup,
   sendAction,
   sendDiscardCard,
   declareSetup,
+  requestMoreTime,
   startGame,
   nextRound,
   returnLobby,
@@ -1080,14 +1092,23 @@ const declareSecondsLeft = computed(() => {
   if (declareDealIntroActive.value) {
     return 0;
   }
-  const endsAt = Number(state.value?.declareEndsAt ?? 0);
+  const endsAt = declareDecisionEndsAt.value;
   if (!endsAt) {
     return 0;
   }
   const configuredSeconds = Math.ceil(declareTotalMs.value / 1000);
   return Math.max(0, Math.min(configuredSeconds, Math.ceil((endsAt - nowMs.value) / 1000)));
 });
+const declareDecisionEndsAt = computed(() => {
+  if (decisionTimer.value.decisionKey.startsWith("declare:") && decisionTimer.value.endsAt > 0) {
+    return decisionTimer.value.endsAt;
+  }
+  return Number(state.value?.declareEndsAt ?? 0);
+});
 const declareTotalMs = computed(() => {
+  if (decisionTimer.value.totalMs > 0) {
+    return decisionTimer.value.totalMs;
+  }
   const action = String(state.value?.lastAction ?? "");
   const match = action.match(/DECLARING\s+(\d+)ms/);
   if (match) {
@@ -1096,7 +1117,7 @@ const declareTotalMs = computed(() => {
   return 45000;
 });
 const declareProgressPercent = computed(() => {
-  const endsAt = Number(state.value?.declareEndsAt ?? 0);
+  const endsAt = declareDecisionEndsAt.value;
   if (!endsAt) {
     return 0;
   }

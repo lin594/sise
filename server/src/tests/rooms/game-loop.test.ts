@@ -151,6 +151,104 @@ test("local_draw timeout exposes a special card instead of passing it", async ()
   assert.equal(player.wildcardPool.length, 0);
 });
 
+test("declaration time extension is available once per connected human", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.phase = "declaring";
+  room.declareTimeoutMs = 1_000;
+  room.timeExtensionMs = 5_000;
+  room.declareTimerTotalMs = 1_000;
+  room.declareDecisionWindowId = 7;
+  room.state.declareEndsAt = Date.now() + 1_000;
+  room.broadcastAvailableActions = () => undefined;
+  for (const seatId of ["A", "B"]) {
+    room.state.players.get(seatId).connected = true;
+    room.seatBySession.set(`session-${seatId}`, seatId);
+  }
+  const clientA = { sessionId: "session-A", send: () => undefined };
+  const clientB = { sessionId: "session-B", send: () => undefined };
+  const decisionKey = room.buildDecisionTimerSnapshot("A").decisionKey;
+
+  const beforeA = room.state.declareEndsAt;
+  room.handleRequestMoreTime(clientA, { decisionKey });
+  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
+  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, true);
+  assert.equal(room.buildDecisionTimerSnapshot("A").totalMs, 6_000);
+  assert.equal(room.buildDecisionTimerSnapshot("A").endsAt, room.state.declareEndsAt);
+  assert.equal(room.state.declareEndsAt >= beforeA + 4_900, true);
+
+  const afterA = room.state.declareEndsAt;
+  room.handleRequestMoreTime(clientA, { decisionKey });
+  assert.equal(room.state.declareEndsAt, afterA);
+
+  room.handleRequestMoreTime(clientB, { decisionKey });
+  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
+  assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 11_000);
+  room.clearDeclareTimer();
+});
+
+test("stale time-extension request cannot extend the next decision window", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveTimeoutMs = 1_000;
+  room.localTimeoutMs = 1_000;
+  room.operationTimeoutMs = 1_000;
+  room.timeExtensionMs = 5_000;
+  room.state.players.get("A").connected = true;
+  room.seatBySession.set("session-A", "A");
+  room.broadcastAvailableActions = () => undefined;
+  const clientA = { sessionId: "session-A", send: () => undefined };
+
+  room.pendingResponse = {
+    ownerId: "B",
+    card: mkCard("first", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "A";
+  room.scheduleCollectiveTimeout();
+  const oldDecisionKey = room.buildDecisionTimerSnapshot("A").decisionKey;
+  room.handleRequestMoreTime(clientA, { decisionKey: oldDecisionKey });
+  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
+
+  room.clearCollectiveTimer();
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("second", "yellow", "ma", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.awaitingDiscardOwnerId = "A";
+  room.scheduleCollectiveTimeout();
+  const nextDecision = room.buildDecisionTimerSnapshot("A");
+  assert.notEqual(nextDecision.decisionKey, oldDecisionKey);
+  assert.equal(nextDecision.canRequestMoreTime, true);
+
+  const beforeStaleRequest = room.state.responseEndsAt;
+  room.handleRequestMoreTime(clientA, { decisionKey: oldDecisionKey });
+  assert.equal(room.state.responseEndsAt, beforeStaleRequest);
+  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, true);
+
+  room.handleRequestMoreTime(clientA, { decisionKey: nextDecision.decisionKey });
+  assert.equal(room.state.responseEndsAt >= beforeStaleRequest + 4_900, true);
+  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
+  assert.equal(room.buildDecisionTimerSnapshot("A").totalMs, 6_000);
+  assert.equal(room.buildDecisionTimerSnapshot("A").endsAt, room.state.responseEndsAt);
+  room.clearCollectiveTimer();
+});
+
+test("bots and disconnected players cannot request more decision time", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.phase = "declaring";
+  room.declareDecisionWindowId = 1;
+  room.state.declareEndsAt = Date.now() + 1_000;
+  room.state.players.get("A").connected = false;
+  room.state.players.get("B").connected = true;
+  room.state.players.get("B").isBot = true;
+  room.botIds.add("B");
+
+  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
+  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
+});
+
 test("local_upper action panel does not enable chi via wildcard pool", () => {
   const actions = getAvailableActionsFlow({
     phase: "playing",

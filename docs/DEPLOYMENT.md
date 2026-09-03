@@ -151,6 +151,7 @@ ENABLE_MONITOR=0
 - `PRIVATE_STATE_RATE_LIMIT`：同一客户端每窗口恢复私有状态次数，默认 180；默认值允许同一家庭网络下多名玩家正常轮询。
 - `OP_TIMEOUT_MS`：真人响应和出牌默认超时，默认 30000ms；`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS` 未设置时继承该值。
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。
+- `TIME_EXTENSION_MS`：真人每个声明或牌局决策窗口可主动增加的时间，默认 20000ms，服务端限制在 5000–60000ms。
 - `RECONNECT_GRACE_MS`：活动牌局真人断线后等待重连、再启用机器人托管的宽限期，默认 5000ms；设为 0 可恢复立即托管。
 - `LOCAL_TRANSITION_DELAY_MS`：本地阶段转移延时。
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。

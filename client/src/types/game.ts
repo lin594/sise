@@ -98,6 +98,14 @@ export interface AvailableAction {
   deferred?: boolean;
 }
 
+export interface DecisionTimerState {
+  canRequestMoreTime: boolean;
+  extensionSeconds: number;
+  totalMs: number;
+  endsAt: number;
+  decisionKey: string;
+}
+
 export interface ActionCandidate {
   id: string;
   action: "kai" | "peng" | "chi";

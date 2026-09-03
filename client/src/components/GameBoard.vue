@@ -563,9 +563,13 @@
       :current-player-name="props.currentPlayerName ?? '-'"
       :paused-hint="effectiveInteractionPausedMessage"
       :seconds-left="seatCountdownSeconds"
+      :can-request-more-time="Boolean(props.canRequestMoreTime)"
+      :more-time-seconds="props.moreTimeSeconds ?? 20"
+      :decision-key="props.decisionKey ?? ''"
       :selection-mode="props.selectionMode ?? null"
       :selected-candidate-id="props.selectedCandidateId ?? null"
       @confirm-discard="confirmDiscard"
+      @request-more-time="emit('requestMoreTime')"
       @submit="onSubmitAction"
       @selection-change="onSelectionChange"
     />
@@ -649,6 +653,11 @@ const props = defineProps<{
   currentPlayerName?: string;
   turnHint?: string;
   interactionPausedMessage?: string;
+  canRequestMoreTime?: boolean;
+  moreTimeSeconds?: number;
+  decisionTimerTotalMs?: number;
+  decisionTimerEndsAt?: number;
+  decisionKey?: string;
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
@@ -661,6 +670,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
+  requestMoreTime: [];
   selectionChange: [payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }];
 }>();
 
@@ -1125,13 +1135,14 @@ const seatCountdownSeconds = computed<number | null>(() => {
   ) {
     return null;
   }
-  const endsAt = Number(props.state?.responseEndsAt ?? 0);
+  const endsAt = playDecisionEndsAt.value;
   if (!endsAt || endsAt <= nowMs.value) {
     return null;
   }
+  const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
   return Math.max(
     0,
-    Math.min(Math.ceil(OP_COUNTDOWN_MS / 1000), Math.ceil((endsAt - nowMs.value) / 1000)),
+    Math.min(Math.ceil(totalMs / 1000), Math.ceil((endsAt - nowMs.value) / 1000)),
   );
 });
 
@@ -1142,13 +1153,21 @@ const seatCountdownPercent = computed<number>(() => {
   ) {
     return 0;
   }
-  const endsAt = Number(props.state?.responseEndsAt ?? 0);
+  const endsAt = playDecisionEndsAt.value;
   if (!endsAt || endsAt <= nowMs.value) {
     return 0;
   }
   const remain = endsAt - nowMs.value;
-  const raw = (remain / OP_COUNTDOWN_MS) * 100;
+  const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
+  const raw = (remain / totalMs) * 100;
   return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
+});
+
+const playDecisionEndsAt = computed(() => {
+  if (props.decisionKey?.startsWith("play:") && Number(props.decisionTimerEndsAt ?? 0) > 0) {
+    return Number(props.decisionTimerEndsAt);
+  }
+  return Number(props.state?.responseEndsAt ?? 0);
 });
 
 const compactCenterHint = computed(() => {

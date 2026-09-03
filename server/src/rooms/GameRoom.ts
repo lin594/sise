@@ -135,6 +135,7 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
 export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
 export const DEFAULT_RECONNECT_GRACE_MS = 5_000;
+export const DEFAULT_TIME_EXTENSION_MS = 20_000;
 
 export function isDebugScenarioFeatureEnabled(nodeEnv: unknown, rawFlag: unknown): boolean {
   return String(nodeEnv ?? "").trim().toLowerCase() !== "production" && String(rawFlag ?? "").trim() === "1";
@@ -197,6 +198,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     1000,
     Number(process.env.DECLARE_TIMEOUT_MS ?? DEFAULT_DECLARE_TIMEOUT_MS),
   );
+  private readonly timeExtensionMs = Math.min(
+    60_000,
+    Math.max(5_000, Number(process.env.TIME_EXTENSION_MS ?? DEFAULT_TIME_EXTENSION_MS)),
+  );
   private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
   private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
   private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));
@@ -229,6 +234,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
   private readonly pendingFishDeclarations = new Map<string, Card[]>();
   private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly declareTimeExtensionUsedBy = new Set<string>();
+  private responseTimeExtensionUsed = false;
+  private declareTimerTotalMs = 0;
+  private responseTimerTotalMs = 0;
+  private declareDecisionWindowId = 0;
+  private responseDecisionWindowId = 0;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
@@ -304,6 +315,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
       this.submitDeclaration(seatId, payload ?? {});
+    });
+
+    this.onMessage("request_more_time", (client, payload: { decisionKey?: unknown } | undefined) => {
+      this.handleRequestMoreTime(client, payload);
     });
 
     this.onMessage("action", (client, payload: ActionRequest) => {
@@ -1156,6 +1171,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private startDeclaringPhase(): void {
     this.clearDeclareIntroTimer();
     this.state.responseEndsAt = 0;
+    this.declareTimeExtensionUsedBy.clear();
+    this.declareTimerTotalMs = this.declareTimeoutMs;
+    this.declareDecisionWindowId += 1;
     this.state.declareEndsAt = Date.now() + this.declareTimeoutMs;
     startDeclaringFlow({
       playerOrder: this.playerOrder,
@@ -1174,7 +1192,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：设置 `declareTimer`，超时后强制提交未声明玩家。
    */
-  private scheduleDeclareTimeout(): void {
+  private scheduleDeclareTimeout(delayMs = this.declareTimeoutMs): void {
     this.clearDeclareTimer();
     this.declareTimer = setTimeout(() => {
       this.declareTimer = null;
@@ -1188,7 +1206,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         allReady: () => this.areAllDeclarationsReady(),
         finishDeclaringPhase: () => this.finishDeclaringPhase(),
       });
-    }, this.declareTimeoutMs);
+    }, Math.max(1, delayMs));
   }
 
   /**
@@ -1214,6 +1232,107 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       clearTimeout(this.declareIntroTimer);
       this.declareIntroTimer = null;
     }
+  }
+
+  private canSeatRequestMoreTime(seatId: string): boolean {
+    const player = this.state.players.get(seatId);
+    if (!player || !player.connected || player.isBot || this.botIds.has(seatId)) {
+      return false;
+    }
+    const now = Date.now();
+    if (this.state.phase === "declaring") {
+      return (
+        !this.declareTimeExtensionUsedBy.has(seatId) &&
+        !player.declaredReady &&
+        this.state.declareEndsAt > now
+      );
+    }
+    if (
+      this.state.phase !== "playing" ||
+      this.responseTimeExtensionUsed ||
+      this.state.responseEndsAt <= now ||
+      !this.pendingResponse
+    ) {
+      return false;
+    }
+    if (this.state.responsePhase === "collective") {
+      return (
+        this.collectiveResponderId === seatId &&
+        !this.pendingResponse.collectives.has(seatId)
+      );
+    }
+    return (
+      this.pendingResponse.ownerId === seatId &&
+      (this.state.currentPlayerId === seatId || this.awaitingDiscardOwnerId === seatId)
+    );
+  }
+
+  private buildDecisionTimerSnapshot(seatId: string): {
+    canRequestMoreTime: boolean;
+    extensionSeconds: number;
+    totalMs: number;
+    endsAt: number;
+    decisionKey: string;
+  } {
+    const totalMs =
+      this.state.phase === "declaring"
+        ? this.declareTimerTotalMs || this.declareTimeoutMs
+        : this.state.phase === "playing"
+          ? this.responseTimerTotalMs || this.operationTimeoutMs
+          : 0;
+    return {
+      canRequestMoreTime: this.canSeatRequestMoreTime(seatId),
+      extensionSeconds: Math.ceil(this.timeExtensionMs / 1000),
+      totalMs,
+      endsAt:
+        this.state.phase === "declaring"
+          ? this.state.declareEndsAt
+          : this.state.phase === "playing"
+            ? this.state.responseEndsAt
+            : 0,
+      decisionKey:
+        this.state.phase === "declaring"
+          ? `declare:${this.declareDecisionWindowId}`
+          : this.state.phase === "playing"
+            ? `play:${this.responseDecisionWindowId}`
+            : "",
+    };
+  }
+
+  private handleRequestMoreTime(client: Client, payload?: { decisionKey?: unknown }): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    const requestedDecisionKey = typeof payload?.decisionKey === "string" ? payload.decisionKey.trim() : "";
+    const currentDecisionKey = seatId ? this.buildDecisionTimerSnapshot(seatId).decisionKey : "";
+    if (
+      !seatId ||
+      !requestedDecisionKey ||
+      requestedDecisionKey !== currentDecisionKey ||
+      !this.canSeatRequestMoreTime(seatId)
+    ) {
+      if (seatId) {
+        this.sendAvailableActionsToClient(client, seatId);
+      }
+      return;
+    }
+
+    const now = Date.now();
+    if (this.state.phase === "declaring") {
+      const remainingMs = Math.max(1, this.state.declareEndsAt - now);
+      this.declareTimeExtensionUsedBy.add(seatId);
+      this.declareTimerTotalMs = Math.max(this.declareTimeoutMs, this.declareTimerTotalMs) + this.timeExtensionMs;
+      this.state.declareEndsAt = now + remainingMs + this.timeExtensionMs;
+      this.scheduleDeclareTimeout(remainingMs + this.timeExtensionMs);
+      this.traceStep("declare_time_extended", `seat=${seatId} ms=${this.timeExtensionMs}`);
+      this.broadcastAvailableActions();
+      return;
+    }
+
+    const remainingMs = Math.max(1, this.state.responseEndsAt - now);
+    this.responseTimeExtensionUsed = true;
+    this.responseTimerTotalMs = Math.max(1, this.responseTimerTotalMs) + this.timeExtensionMs;
+    this.scheduleCollectiveTimeout(remainingMs + this.timeExtensionMs, true);
+    this.traceStep("response_time_extended", `seat=${seatId} ms=${this.timeExtensionMs}`);
+    this.broadcastAvailableActions();
   }
 
   /**
@@ -2176,10 +2295,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       // 每个客户端都需要拿到自己的私有快照，否则一旦 `private_hand`
       // 消息因时序错过，前端就只能看到公共桌面状态而看不到自己的手牌。
       client.send("room_snapshot", this.buildClientRoomSnapshot(seatId));
-      client.send("available_actions", {
-        items: this.getAvailableActions(seatId),
-      });
+      this.sendAvailableActionsToClient(client, seatId);
     }
+  }
+
+  private sendAvailableActionsToClient(client: Client, seatId: string): void {
+    client.send("available_actions", {
+      items: this.getAvailableActions(seatId),
+      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
+    });
   }
 
   private buildCardSnapshot(card: CardSchema | null | undefined): {
@@ -2296,6 +2420,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         isHidden: false,
       })),
       availableActions: this.getAvailableActions(seatId),
+      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
     };
   }
@@ -2313,6 +2438,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         isHidden: false,
       })),
       availableActions: this.getAvailableActions(seatId),
+      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
     };
   }
@@ -2497,9 +2623,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.sendSessionToken(client, seatId, token, true);
     }
     client.send("room_snapshot", this.buildClientRoomSnapshot(seatId));
-    client.send("available_actions", {
-      items: this.getAvailableActions(seatId),
-    });
+    this.sendAvailableActionsToClient(client, seatId);
     const hand = this.playerHands.get(seatId) ?? [];
     if (this.logEnabled) {
       console.log(
@@ -2668,10 +2792,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：设置 `collectiveTimer`，超时后写入 pass 并推进游标。
    */
-  private scheduleCollectiveTimeout(): void {
-    this.clearCollectiveTimer();
+  private scheduleCollectiveTimeout(timeoutOverrideMs?: number, preserveExtensionState = false): void {
     const isCollectivePhase = this.state.responsePhase === "collective";
-    const timeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
+    const baseTimeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
+    const timeoutMs = Math.max(1, timeoutOverrideMs ?? baseTimeoutMs);
+    if (this.collectiveTimer) {
+      clearTimeout(this.collectiveTimer);
+      this.collectiveTimer = null;
+    }
+    if (!preserveExtensionState) {
+      this.responseTimeExtensionUsed = false;
+      this.responseTimerTotalMs = baseTimeoutMs;
+      this.responseDecisionWindowId += 1;
+    }
     this.state.responseEndsAt = Date.now() + timeoutMs;
     this.traceStep(
       "schedule_collective_timeout",

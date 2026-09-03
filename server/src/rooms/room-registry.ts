@@ -9,6 +9,13 @@ export type PrivateStateSnapshot = {
     isResponseCard?: boolean;
   }>;
   availableActions: unknown[];
+  decisionTimer: {
+    canRequestMoreTime: boolean;
+    extensionSeconds: number;
+    totalMs: number;
+    endsAt: number;
+    decisionKey: string;
+  };
   roundResult?: unknown;
 };
 

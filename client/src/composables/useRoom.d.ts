@@ -1,4 +1,4 @@
-import type { ActionRequest, ActionType, AvailableAction, Card, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
+import type { ActionRequest, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
 type ConnectOptions = {
     nameOverride?: string;
     roomId?: string;
@@ -678,6 +678,19 @@ export declare function useRoom(playerName?: string): {
         isSystem: boolean;
         cardLabel?: string | undefined;
     }[]>;
+    decisionTimer: import("vue").Ref<{
+        canRequestMoreTime: boolean;
+        extensionSeconds: number;
+        totalMs: number;
+        endsAt: number;
+        decisionKey: string;
+    }, DecisionTimerState | {
+        canRequestMoreTime: boolean;
+        extensionSeconds: number;
+        totalMs: number;
+        endsAt: number;
+        decisionKey: string;
+    }>;
     connect: (options?: string | ConnectOptions) => Promise<boolean>;
     retryConnection: () => void;
     clearActionLogs: () => void;
@@ -688,6 +701,7 @@ export declare function useRoom(playerName?: string): {
         declaredKongs: number;
         fishCardIds: string[];
     }) => void;
+    requestMoreTime: () => void;
     debugSetup: (scenario: string) => void;
     startGame: () => void;
     nextRound: () => void;

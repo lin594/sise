@@ -19,6 +19,7 @@ import {
   DEFAULT_DECLARE_TIMEOUT_MS,
   DEFAULT_OPERATION_TIMEOUT_MS,
   DEFAULT_RECONNECT_GRACE_MS,
+  DEFAULT_TIME_EXTENSION_MS,
   FourColorGameRoom,
   canUseDebugScenario,
   isDebugScenarioFeatureEnabled,
@@ -61,6 +62,7 @@ t("accessibility: default human decisions allow extra reading and touch time", (
   assert.equal(DEFAULT_OPERATION_TIMEOUT_MS, 30_000);
   assert.equal(DEFAULT_DECLARE_TIMEOUT_MS, 45_000);
   assert.equal(DEFAULT_RECONNECT_GRACE_MS, 5_000);
+  assert.equal(DEFAULT_TIME_EXTENSION_MS, 20_000);
 });
 
 t("identity: legacy room tokens remain accepted during migration", () => {

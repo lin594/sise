@@ -6,6 +6,7 @@ import type {
   ActionType,
   AvailableAction,
   Card,
+  DecisionTimerState,
   ParsedActionLog,
   PlayerState,
   RoomStateSnapshot,
@@ -437,6 +438,13 @@ export function useRoom(playerName = "Player") {
   const joinError = ref("");
   const declareError = ref("");
   const actionLogs = ref<ParsedActionLog[]>([]);
+  const decisionTimer = ref<DecisionTimerState>({
+    canRequestMoreTime: false,
+    extensionSeconds: 20,
+    totalMs: 0,
+    endsAt: 0,
+    decisionKey: "",
+  });
 
   let logSeq = 0;
   let lastFingerprint = "";
@@ -759,6 +767,7 @@ export function useRoom(playerName = "Player") {
         seatId?: string;
         privateHand?: unknown;
         availableActions?: unknown;
+        decisionTimer?: unknown;
         roundResult?: RoundResultPayload | null;
       };
       if (!isCurrentRequest() || !payload?.ok) {
@@ -772,6 +781,7 @@ export function useRoom(playerName = "Player") {
       const nextActions = normalizeAvailableActions(payload.availableActions);
       privateHand.value = nextHand;
       availableActions.value = nextActions;
+      applyDecisionTimer(payload.decisionTimer);
       privateHandFingerprint = buildCardIdFingerprint(nextHand);
       availableActionsFingerprint = buildAvailableActionsFingerprint(nextActions);
       if (payload.roundResult && state.value?.phase === "ended") {
@@ -818,6 +828,13 @@ export function useRoom(playerName = "Player") {
     roundResult.value = null;
     debugApplied.value = null;
     declareError.value = "";
+    decisionTimer.value = {
+      canRequestMoreTime: false,
+      extensionSeconds: 20,
+      totalMs: 0,
+      endsAt: 0,
+      decisionKey: "",
+    };
     myId.value = "";
     mySeatId.value = "";
     stateSyncFingerprint = "";
@@ -868,6 +885,7 @@ export function useRoom(playerName = "Player") {
       snapshot.pollOriginPlayerId,
       snapshot.activeResponderId,
       String(snapshot.responseEndsAt),
+      String(snapshot.declareEndsAt),
       snapshot.lastAction,
       String(snapshot.deckCount),
       snapshot.targetCard?.id ?? "",
@@ -898,6 +916,20 @@ export function useRoom(playerName = "Player") {
       .join(";");
   }
 
+  function applyDecisionTimer(input: unknown): void {
+    if (!input || typeof input !== "object") {
+      return;
+    }
+    const raw = input as Partial<DecisionTimerState>;
+    decisionTimer.value = {
+      canRequestMoreTime: Boolean(raw.canRequestMoreTime),
+      extensionSeconds: Math.max(1, Math.ceil(Number(raw.extensionSeconds) || 20)),
+      totalMs: Math.max(0, Number(raw.totalMs) || 0),
+      endsAt: Math.max(0, Number(raw.endsAt) || 0),
+      decisionKey: typeof raw.decisionKey === "string" ? raw.decisionKey.trim() : "",
+    };
+  }
+
   function applySnapshot(next: unknown) {
     // Access Proxy properties directly without calling toJSON() to avoid circular reference
     const rawSnapshot = next as any;
@@ -909,6 +941,7 @@ export function useRoom(playerName = "Player") {
       privateStateAuthoritySeq += 1;
     }
     const normalized = normalizeSnapshot(next);
+    applyDecisionTimer(rawSnapshot?.decisionTimer);
     const previousSnapshot = state.value;
     if (
       !normalized.dealerCard &&
@@ -1269,14 +1302,18 @@ export function useRoom(playerName = "Player") {
           startMissingHandSyncTimer();
         }
       });
-      joined.onMessage("available_actions", (payload: AvailableAction[] | { items?: AvailableAction[] }) => {
+      joined.onMessage(
+        "available_actions",
+        (payload: AvailableAction[] | { items?: AvailableAction[]; decisionTimer?: unknown }) => {
         if (!isCurrentJoinedRoom()) {
           return;
         }
         privateStateAuthoritySeq += 1;
         availableActions.value = normalizeAvailableActions(payload);
+        applyDecisionTimer(Array.isArray(payload) ? undefined : payload?.decisionTimer);
         availableActionsFingerprint = buildAvailableActionsFingerprint(availableActions.value);
-      });
+        },
+      );
       joined.onMessage("action_rejected", (payload: { reason?: string }) => {
         if (!isCurrentJoinedRoom()) {
           return;
@@ -1499,6 +1536,14 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("declare_setup", payload);
   }
 
+  function requestMoreTime() {
+    const decisionKey = decisionTimer.value.decisionKey;
+    if (!decisionTimer.value.canRequestMoreTime || !decisionKey) {
+      return;
+    }
+    safeRoomSend("request_more_time", { decisionKey });
+  }
+
   function debugSetup(scenario: string) {
     safeRoomSend("debug_setup", scenario);
   }
@@ -1611,6 +1656,7 @@ export function useRoom(playerName = "Player") {
     joinError,
     declareError,
     actionLogs,
+    decisionTimer,
     connect,
     retryConnection,
     clearActionLogs,
@@ -1618,6 +1664,7 @@ export function useRoom(playerName = "Player") {
     sendDiscardCard,
     declareKongs,
     declareSetup,
+    requestMoreTime,
     debugSetup,
     startGame,
     nextRound,

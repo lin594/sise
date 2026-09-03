@@ -13,9 +13,23 @@
           <h2 id="declare-title">声明亮鱼与暗坎</h2>
           <p>系统已选好推荐方案；点击牌组或数字即可调整。</p>
         </div>
-        <div class="declare-timer" :class="{ urgent: secondsLeft <= 10 }" aria-label="声明剩余时间">
-          <strong>{{ secondsLeft }}</strong>
-          <span>秒</span>
+        <div class="declare-timer-tools">
+          <div class="declare-timer" :class="{ urgent: secondsLeft <= 10 }" aria-label="声明剩余时间">
+            <strong>{{ secondsLeft }}</strong>
+            <span>秒</span>
+          </div>
+          <button
+            v-if="canRequestMoreTime && !submitted"
+            type="button"
+            class="declare-more-time"
+            data-testid="declare-request-more-time"
+            :disabled="moreTimeRequested"
+            :aria-label="`需要更多时间，增加${moreTimeSeconds}秒`"
+            @click="requestMoreTime"
+          >
+            <span class="more-time-prefix">需要更多时间</span>
+            <strong>{{ moreTimeRequested ? "加时中…" : `+${moreTimeSeconds}秒` }}</strong>
+          </button>
         </div>
       </header>
 
@@ -170,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import type { Card, RenderedCardMode } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
@@ -194,10 +208,14 @@ const props = defineProps<{
   compact: boolean;
   ultraCompact: boolean;
   cardMode: RenderedCardMode;
+  canRequestMoreTime: boolean;
+  moreTimeSeconds: number;
+  decisionKey: string;
 }>();
 
 const emit = defineEmits<{
   submit: [payload: { declaredKongs: number; fishCardIds: string[] }];
+  requestMoreTime: [];
 }>();
 
 const initialized = ref(false);
@@ -205,6 +223,30 @@ const selectedFishOptionIds = ref<Set<string>>(new Set());
 const declaredKongs = ref(0);
 const kongSelectionTouched = ref(false);
 const submitPending = ref(false);
+const moreTimeRequested = ref(false);
+let moreTimeRetryTimer: number | null = null;
+
+function clearMoreTimeRetryTimer(): void {
+  if (moreTimeRetryTimer !== null) {
+    window.clearTimeout(moreTimeRetryTimer);
+    moreTimeRetryTimer = null;
+  }
+}
+
+function requestMoreTime(): void {
+  if (!props.canRequestMoreTime || moreTimeRequested.value || props.submitted) {
+    return;
+  }
+  moreTimeRequested.value = true;
+  emit("requestMoreTime");
+  clearMoreTimeRetryTimer();
+  moreTimeRetryTimer = window.setTimeout(() => {
+    moreTimeRetryTimer = null;
+    if (props.canRequestMoreTime) {
+      moreTimeRequested.value = false;
+    }
+  }, 2500);
+}
 
 const fishOptions = computed(() => buildFishOptions(props.hand));
 const recommendedFishOptionIds = computed(() => getRecommendedFishOptionIds(fishOptions.value));
@@ -295,6 +337,19 @@ watch(
     }
   },
 );
+
+watch(
+  () => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`,
+  () => {
+    const available = props.canRequestMoreTime;
+    if (available) {
+      clearMoreTimeRetryTimer();
+      moreTimeRequested.value = false;
+    }
+  },
+);
+
+onBeforeUnmount(clearMoreTimeRetryTimer);
 </script>
 
 <style scoped>
@@ -376,6 +431,13 @@ watch(
   font-size: 0.82rem;
 }
 
+.declare-timer-tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
 .declare-timer {
   flex: 0 0 auto;
   min-width: 4.6rem;
@@ -402,6 +464,28 @@ watch(
 
 .declare-timer.urgent {
   animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.declare-more-time {
+  min-height: 3.45rem;
+  padding: 0.35rem 0.72rem;
+  border: 1px solid #0e7490;
+  border-radius: 14px;
+  background: #ecfeff;
+  color: #155e75;
+  display: grid;
+  place-content: center;
+  gap: 0.08rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.declare-more-time span {
+  font-size: 0.68rem;
+}
+
+.declare-more-time strong {
+  font-size: 0.92rem;
 }
 
 .declare-progress {
@@ -848,6 +932,20 @@ button:focus-visible {
 .declare-panel.compact .declare-timer {
   min-width: 4.1rem;
   min-height: 2.8rem;
+}
+
+.declare-panel.compact .declare-timer-tools {
+  gap: 0.3rem;
+}
+
+.declare-panel.compact .declare-more-time {
+  min-width: 4.5rem;
+  min-height: 2.8rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.declare-panel.compact .more-time-prefix {
+  display: none;
 }
 
 .declare-panel.compact .declare-timer strong {
