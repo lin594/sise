@@ -22,12 +22,14 @@ test("multiple meld choices keep focus inside a safely cancellable dialog", asyn
   });
   await expect(declaration).toBeDisabled();
   await expect(page.getByText("正在同步完整手牌", { exact: true })).toBeVisible();
+  await expect(page.locator(".declare-panel")).toBeFocused();
   await page.evaluate(() => {
     (window as Window & {
       __siseLocalTest?: { setPrivateHandReadyOverride: (ready: boolean | null) => void };
     }).__siseLocalTest?.setPrivateHandReadyOverride(null);
   });
   await expect(declaration).toBeEnabled();
+  await expect(declaration).toBeFocused();
   await expect(page.getByText("正在同步完整手牌", { exact: true })).toHaveCount(0);
   await declaration.click();
   await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });

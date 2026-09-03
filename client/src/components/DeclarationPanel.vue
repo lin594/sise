@@ -1,17 +1,22 @@
 ﻿<template>
   <div class="declare-mask">
     <div
+      ref="panelRef"
       class="declare-panel"
       :class="{ compact, 'ultra-compact': ultraCompact }"
       role="dialog"
       aria-modal="true"
       aria-labelledby="declare-title"
+      aria-describedby="declare-description"
+      tabindex="-1"
+      @keydown.tab="trapFocus"
     >
+      <span id="declare-description" class="sr-only">系统已经按规则选好推荐方案。可以直接开始游戏，也可以查看手牌并调整亮鱼和暗坎。</span>
       <header class="declare-header">
         <div class="declare-heading">
           <span class="declare-kicker">开局标识</span>
           <h2 id="declare-title">声明亮鱼与暗坎</h2>
-          <p>系统已选好推荐方案；点击牌组或数字即可调整。</p>
+          <p aria-hidden="true">系统已选好推荐方案；点击牌组或数字即可调整。</p>
         </div>
         <div class="declare-timer-tools">
           <div
@@ -167,11 +172,14 @@
           >
             恢复系统建议
           </button>
-          <p v-if="untimed" class="untimed-message"><span class="untimed-dot"></span>不限时，请按自己的节奏确认</p>
+          <p v-if="untimed" class="untimed-message">
+            <span class="untimed-dot"></span>{{ ultraCompact ? "上滑可调整 · 练习不限时" : "不限时，请按自己的节奏确认" }}
+          </p>
           <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
           <p v-if="serverError" class="declare-error" role="alert">{{ serverError }}</p>
         </div>
         <button
+          ref="confirmButtonRef"
           class="confirm-declaration"
           type="button"
           :disabled="isLocked || !initialized"
@@ -189,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import type { Card, RenderedCardMode } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
@@ -198,6 +206,7 @@ import {
   buildFishOptions,
   getRecommendedFishOptionIds,
   getSelectedFishCardIds,
+  getDeclarationStartLabel,
   reconcileDeclaredKongs,
   toggleFishOptionId,
   type FishOption,
@@ -230,6 +239,9 @@ const declaredKongs = ref(0);
 const kongSelectionTouched = ref(false);
 const submitPending = ref(false);
 const moreTimeRequested = ref(false);
+const panelRef = ref<HTMLElement | null>(null);
+const confirmButtonRef = ref<HTMLButtonElement | null>(null);
+let primaryFocusPlaced = false;
 let moreTimeRetryTimer: number | null = null;
 
 function clearMoreTimeRetryTimer(): void {
@@ -272,12 +284,66 @@ const isAtRecommendation = computed(() => {
   return [...recommendedFishOptionIds.value].every((id) => selectedFishOptionIds.value.has(id));
 });
 const confirmationText = computed(() => {
-  const fishCount = selectedFishOptionIds.value.size;
-  if (fishCount === 0 && declaredKongs.value === 0) {
-    return "确认不声明";
-  }
-  return `确认：亮鱼 ${fishCount} 组 · 暗坎 ${declaredKongs.value} 个`;
+  return getDeclarationStartLabel(selectedFishOptionIds.value.size, declaredKongs.value);
 });
+
+function focusableControls(): HTMLElement[] {
+  const panel = panelRef.value;
+  if (!panel) {
+    return [];
+  }
+  return Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((element) => !element.hasAttribute("hidden"));
+}
+
+function trapFocus(event: KeyboardEvent): void {
+  const panel = panelRef.value;
+  if (!panel) {
+    return;
+  }
+  const focusable = focusableControls();
+  if (!focusable.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusable[0]!;
+  const last = focusable[focusable.length - 1]!;
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function placeInitialFocus(): void {
+  const panel = panelRef.value;
+  if (!panel) {
+    return;
+  }
+  if (props.submitted) {
+    panel.focus();
+    return;
+  }
+  if (!props.handReady) {
+    primaryFocusPlaced = false;
+    panel.focus();
+    return;
+  }
+  if (initialized.value && !isLocked.value && !primaryFocusPlaced) {
+    confirmButtonRef.value?.focus();
+    primaryFocusPlaced = true;
+    return;
+  }
+  if (!panel.contains(document.activeElement)) {
+    panel.focus();
+  }
+}
 
 function fishOptionTitle(option: FishOption): string {
   if (option.kind !== "regular") {
@@ -355,10 +421,30 @@ watch(
   },
 );
 
+watch(
+  () => [props.handReady, props.submitted, initialized.value, submitPending.value] as const,
+  () => {
+    void nextTick(placeInitialFocus);
+  },
+  { immediate: true },
+);
+
 onBeforeUnmount(clearMoreTimeRetryTimer);
 </script>
 
 <style scoped>
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .declare-mask {
   position: fixed;
   inset: 0;

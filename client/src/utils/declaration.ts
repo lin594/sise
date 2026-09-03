@@ -138,3 +138,12 @@ export function reconcileDeclaredKongs(current: number, nextMaximum: number, was
   }
   return Math.min(maximum, Math.max(0, Math.floor(current)));
 }
+
+export function getDeclarationStartLabel(fishCount: number, kongCount: number): string {
+  const fish = Math.max(0, Math.trunc(fishCount));
+  const kongs = Math.max(0, Math.trunc(kongCount));
+  if (fish === 0 && kongs === 0) {
+    return "无需声明，开始游戏";
+  }
+  return `开始游戏 · 亮鱼 ${fish} 组 · 暗坎 ${kongs} 个`;
+}

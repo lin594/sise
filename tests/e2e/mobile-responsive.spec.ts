@@ -286,12 +286,20 @@ test.describe("compact landscape gameplay", () => {
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
     await expect(page.getByRole("heading", { name: "声明亮鱼与暗坎" })).toBeVisible();
+    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/系统已经按规则选好推荐方案/);
     const handPreview = page.getByTestId("declare-hand-preview");
     await expect(handPreview).toBeVisible();
     await expect(handPreview.locator("[data-card-mode='large']").first()).toBeVisible();
     await expect(handPreview.locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
-    await expect(confirmDeclaration).toContainText(/确认/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^(?:无需声明，开始游戏|开始游戏 · 亮鱼 \d+ 组 · 暗坎 \d+ 个)$/);
+    await expect(confirmDeclaration).toBeFocused();
+    const declarationPanel = page.locator(".declare-panel");
+    const firstDeclarationControl = declarationPanel.locator("button:not(:disabled)").first();
+    await page.keyboard.press("Tab");
+    await expect(firstDeclarationControl).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(confirmDeclaration).toBeFocused();
     await expect(page.locator(".declare-timer")).toContainText("不限时");
     await expect(page.locator(".declare-timer")).toContainText("练习模式");
 
@@ -919,6 +927,10 @@ test.describe("legacy small landscape gameplay", () => {
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await expect(confirmDeclaration).toBeFocused();
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^(?:无需声明，开始游戏|开始游戏 · 亮鱼 \d+ 组 · 暗坎 \d+ 个)$/);
+    await expect(page.locator(".untimed-message")).toHaveText("上滑可调整 · 练习不限时");
     const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
       const rect = panel.getBoundingClientRect();
       return {
@@ -931,6 +943,7 @@ test.describe("legacy small landscape gameplay", () => {
     expect(declarationGeometry.width).toBeLessThanOrEqual(568);
     expect(declarationGeometry.height).toBeLessThanOrEqual(320);
     expect(declarationGeometry.scrollHeight).toBeGreaterThanOrEqual(declarationGeometry.clientHeight);
+    await page.screenshot({ path: testInfo.outputPath("iphone-5-declaration.png") });
     await confirmDeclaration.click();
 
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
