@@ -1119,8 +1119,13 @@ test.describe("compact landscape gameplay", () => {
     expect(discardButtonRect.height).toBeLessThanOrEqual(48);
     expect(discardButtonRect.right).toBeLessThanOrEqual(667);
     expect(discardButtonRect.bottom).toBeLessThanOrEqual(375);
-    await discardConfirm.click();
+    const handCountBeforeDiscard = await page.locator("[data-testid^='hand-card-']").count();
+    await discardConfirm.evaluate((button) => {
+      (button as HTMLButtonElement).click();
+      (button as HTMLButtonElement).click();
+    });
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
+    await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(handCountBeforeDiscard - 1);
     await page.evaluate((testId) => {
       const key = "sise_test_stale_private_card_reappeared";
       sessionStorage.setItem(key, "0");
