@@ -83,7 +83,7 @@ test("single-player practice lets the human decide without a countdown", async (
   await expect(declarationConfirm).toBeEnabled({ timeout: 20_000 });
   await expect(page.locator(".declare-timer")).toContainText("不限时");
   await expect(page.locator(".declare-timer")).toContainText("练习模式");
-  await expect(page.getByText("上滑可调整 · 练习不限时")).toBeVisible();
+  await expect(page.getByText("上下滑调整 · 手牌可前后翻 · 练习不限时")).toBeVisible();
   await expect(page.getByTestId("declare-request-more-time")).toHaveCount(0);
 
   await declarationConfirm.click();

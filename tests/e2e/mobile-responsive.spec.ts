@@ -395,6 +395,42 @@ test.describe("phone portrait landscape canvas", () => {
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await expect(page.getByTestId("declare-hand-scroll-tools")).toBeVisible();
+    const declarationGeometry = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>(".declare-panel")!;
+      const panelRect = panel.getBoundingClientRect();
+      const hand = document.querySelector<HTMLElement>("[data-testid='declare-hand-preview']")!;
+      const card = hand.querySelector<HTMLElement>(".hand-preview-card .card")!;
+      const glyph = card.querySelector<HTMLElement>(".text-top")!;
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("[data-testid='declare-hand-scroll-tools'] button"),
+      );
+      return {
+        panelInsideViewport:
+          panelRect.left >= -1 &&
+          panelRect.top >= -1 &&
+          panelRect.right <= innerWidth + 1 &&
+          panelRect.bottom <= innerHeight + 1,
+        logicalWidth: panel.offsetWidth,
+        logicalHeight: panel.offsetHeight,
+        cardWidth: card.offsetWidth,
+        cardHeight: card.offsetHeight,
+        glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
+        handOverflows: hand.scrollWidth > hand.clientWidth,
+        minimumButtonWidth: Math.min(...buttons.map((button) => button.offsetWidth)),
+        minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
+      };
+    });
+    expect(declarationGeometry.panelInsideViewport).toBe(true);
+    expect(declarationGeometry.logicalWidth).toBeLessThanOrEqual(568);
+    expect(declarationGeometry.logicalHeight).toBeLessThanOrEqual(320);
+    expect(declarationGeometry.cardWidth).toBeGreaterThanOrEqual(40);
+    expect(declarationGeometry.cardHeight).toBeGreaterThanOrEqual(44);
+    expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(22);
+    expect(declarationGeometry.handOverflows).toBe(true);
+    expect(declarationGeometry.minimumButtonWidth).toBeGreaterThanOrEqual(44);
+    expect(declarationGeometry.minimumButtonHeight).toBeGreaterThanOrEqual(34);
+    await page.screenshot({ path: testInfo.outputPath("declaration-rotated-320x568.png") });
 
     const settingsButton = page.getByTestId("game-settings");
     await expect(settingsButton).toBeEnabled();
@@ -1108,7 +1144,18 @@ test.describe("compact landscape gameplay", () => {
       top: await page.getByTestId("player-top").getAttribute("data-player-id"),
     };
     await page.getByTestId("card-mode-own-long").click();
-    await expect(page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first()).toBeVisible();
+    const longDeclarationCard = page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first();
+    await expect(longDeclarationCard).toBeVisible();
+    const longDeclarationCardGeometry = await longDeclarationCard.evaluate((card) => ({
+      width: (card as HTMLElement).offsetWidth,
+      height: (card as HTMLElement).offsetHeight,
+      glyphFontSize: Number.parseFloat(
+        getComputedStyle(card.querySelector<HTMLElement>(".text-top")!).fontSize,
+      ),
+    }));
+    expect(longDeclarationCardGeometry.width).toBeGreaterThanOrEqual(28);
+    expect(longDeclarationCardGeometry.height).toBeGreaterThanOrEqual(52);
+    expect(longDeclarationCardGeometry.glyphFontSize).toBeGreaterThanOrEqual(16);
     await page.getByTestId("card-mode-table-long").click();
     await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
     await page.getByTestId("seat-direction-clockwise").click();
@@ -1170,19 +1217,91 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
     await expect(confirmDeclaration.locator("span")).toHaveText(/^(?:无需声明，开始游戏|开始游戏 · 亮鱼 \d+ 组 · 暗坎 \d+ 个)$/);
-    await expect(page.locator(".untimed-message")).toHaveText("上滑可调整 · 练习不限时");
+    await expect(page.locator(".untimed-message")).toHaveText("上下滑调整 · 手牌可前后翻 · 练习不限时");
+    const declarationHand = page.getByTestId("declare-hand-preview");
+    const declarationHandTools = page.getByTestId("declare-hand-scroll-tools");
+    const declarationHandPrev = page.getByTestId("declare-hand-scroll-prev");
+    const declarationHandNext = page.getByTestId("declare-hand-scroll-next");
+    await expect(declarationHandTools).toBeVisible();
+    await expect(declarationHandPrev).toBeDisabled();
+    await expect(declarationHandNext).toBeEnabled();
+    const declarationHandBefore = await declarationHand.locator(".card").evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute("aria-label")),
+    );
+    const declarationSelectionsBefore = await page.evaluate(() => ({
+      fish: document.querySelectorAll(".hand-preview-card.fish").length,
+      kong: document.querySelectorAll(".hand-preview-card.kong").length,
+      declaredKong: document.querySelector(".kong-choice[aria-checked='true']")?.textContent?.trim() ?? "",
+    }));
     const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
       const rect = panel.getBoundingClientRect();
+      const hand = panel.querySelector<HTMLElement>("[data-testid='declare-hand-preview']")!;
+      const card = hand.querySelector<HTMLElement>(".hand-preview-card .card")!;
+      const glyph = card.querySelector<HTMLElement>(".text-top")!;
+      const pagerButtons = Array.from(
+        panel.querySelectorAll<HTMLButtonElement>("[data-testid='declare-hand-scroll-tools'] button"),
+      );
+      const primaryLabels = Array.from(
+        panel.querySelectorAll<HTMLElement>(".section-heading h3, .fish-option-copy strong, .empty-option strong"),
+      );
+      const helperLabels = Array.from(
+        panel.querySelectorAll<HTMLElement>(".section-result, .fish-option-copy small, .empty-option span, .untimed-message"),
+      );
+      const cardRect = card.getBoundingClientRect();
       return {
         width: Math.round(rect.width),
         height: Math.round(rect.height),
         scrollHeight: panel.scrollHeight,
         clientHeight: panel.clientHeight,
+        handClientWidth: hand.clientWidth,
+        handScrollWidth: hand.scrollWidth,
+        cardWidth: Math.round(cardRect.width),
+        cardHeight: Math.round(cardRect.height),
+        glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
+        minimumPagerWidth: Math.min(...pagerButtons.map((button) => button.offsetWidth)),
+        minimumPagerHeight: Math.min(...pagerButtons.map((button) => button.offsetHeight)),
+        minimumPrimaryLabelFontSize: Math.min(
+          ...primaryLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)),
+        ),
+        minimumHelperLabelFontSize: Math.min(
+          ...helperLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)),
+        ),
       };
     });
     expect(declarationGeometry.width).toBeLessThanOrEqual(568);
     expect(declarationGeometry.height).toBeLessThanOrEqual(320);
     expect(declarationGeometry.scrollHeight).toBeGreaterThanOrEqual(declarationGeometry.clientHeight);
+    expect(declarationGeometry.handScrollWidth).toBeGreaterThan(declarationGeometry.handClientWidth);
+    expect(declarationGeometry.cardWidth).toBeGreaterThanOrEqual(40);
+    expect(declarationGeometry.cardHeight).toBeGreaterThanOrEqual(44);
+    expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(22);
+    expect(declarationGeometry.minimumPagerWidth).toBeGreaterThanOrEqual(44);
+    expect(declarationGeometry.minimumPagerHeight).toBeGreaterThanOrEqual(34);
+    expect(declarationGeometry.minimumPrimaryLabelFontSize).toBeGreaterThanOrEqual(14);
+    expect(declarationGeometry.minimumHelperLabelFontSize).toBeGreaterThanOrEqual(12);
+
+    for (let attempt = 0; attempt < 8 && await declarationHandNext.isEnabled(); attempt += 1) {
+      await declarationHandNext.click();
+      await page.waitForTimeout(380);
+    }
+    await expect(declarationHandNext).toBeDisabled();
+    await expect(declarationHandPrev).toBeEnabled();
+    expect(await declarationHand.locator(".card").evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute("aria-label")),
+    )).toEqual(declarationHandBefore);
+    expect(await page.evaluate(() => ({
+      fish: document.querySelectorAll(".hand-preview-card.fish").length,
+      kong: document.querySelectorAll(".hand-preview-card.kong").length,
+      declaredKong: document.querySelector(".kong-choice[aria-checked='true']")?.textContent?.trim() ?? "",
+    }))).toEqual(declarationSelectionsBefore);
+
+    for (let attempt = 0; attempt < 8 && await declarationHandPrev.isEnabled(); attempt += 1) {
+      await declarationHandPrev.click();
+      await page.waitForTimeout(380);
+    }
+    await expect(declarationHandPrev).toBeDisabled();
+    await expect(declarationHandNext).toBeEnabled();
+    expect(await declarationHand.evaluate((hand) => hand.scrollLeft)).toBeLessThanOrEqual(2);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-declaration.png") });
     await confirmDeclaration.click();
 

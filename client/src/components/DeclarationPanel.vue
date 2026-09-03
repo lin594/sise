@@ -62,12 +62,38 @@
               <span class="section-index">01</span>
               <h3 id="declare-hand-title">查看手牌</h3>
             </div>
-            <div class="legend" aria-label="手牌标记说明">
-              <span class="legend-item fish"><i></i>已选亮鱼</span>
-              <span class="legend-item kong"><i></i>可成暗坎</span>
+            <div class="hand-heading-tools">
+              <span class="hand-total">共 {{ hand.length }} 张</span>
+              <div class="legend" aria-label="手牌标记说明">
+                <span class="legend-item fish"><i></i>已选亮鱼</span>
+                <span class="legend-item kong"><i></i>可成暗坎</span>
+              </div>
+              <div v-if="handHasOverflow" class="declare-hand-scroll-tools" data-testid="declare-hand-scroll-tools">
+                <button
+                  type="button"
+                  data-testid="declare-hand-scroll-prev"
+                  aria-label="向前翻看声明手牌"
+                  :disabled="!handCanScrollBackward"
+                  @click="scrollHandPreview('backward')"
+                >‹ 前翻</button>
+                <button
+                  type="button"
+                  data-testid="declare-hand-scroll-next"
+                  aria-label="向后翻看更多声明手牌"
+                  :disabled="!handCanScrollForward"
+                  @click="scrollHandPreview('forward')"
+                >后翻 ›</button>
+              </div>
             </div>
           </div>
-          <div class="hand-rail" data-testid="declare-hand-preview" aria-label="完整手牌预览">
+          <div
+            ref="handRailRef"
+            class="hand-rail"
+            data-testid="declare-hand-preview"
+            :aria-label="`完整手牌预览，共 ${hand.length} 张`"
+            tabindex="0"
+            @scroll.passive="updateHandScrollState"
+          >
             <div
               v-for="card in hand"
               :key="`declare-preview-${card.id}`"
@@ -173,7 +199,7 @@
             恢复系统建议
           </button>
           <p v-if="untimed" class="untimed-message">
-            <span class="untimed-dot"></span>{{ ultraCompact ? "上滑可调整 · 练习不限时" : "不限时，请按自己的节奏确认" }}
+            <span class="untimed-dot"></span>{{ ultraCompact ? "上下滑调整 · 手牌可前后翻 · 练习不限时" : "不限时，请按自己的节奏确认" }}
           </p>
           <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
           <p v-if="serverError" class="declare-error" role="alert">{{ serverError }}</p>
@@ -241,8 +267,13 @@ const submitPending = ref(false);
 const moreTimeRequested = ref(false);
 const panelRef = ref<HTMLElement | null>(null);
 const confirmButtonRef = ref<HTMLButtonElement | null>(null);
+const handRailRef = ref<HTMLElement | null>(null);
+const handHasOverflow = ref(false);
+const handCanScrollBackward = ref(false);
+const handCanScrollForward = ref(false);
 let primaryFocusPlaced = false;
 let moreTimeRetryTimer: number | null = null;
+let handResizeObserver: ResizeObserver | null = null;
 
 function clearMoreTimeRetryTimer(): void {
   if (moreTimeRetryTimer !== null) {
@@ -391,12 +422,59 @@ function submit() {
   });
 }
 
+function updateHandScrollState(): void {
+  const rail = handRailRef.value;
+  if (!rail) {
+    handHasOverflow.value = false;
+    handCanScrollBackward.value = false;
+    handCanScrollForward.value = false;
+    return;
+  }
+  const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  handHasOverflow.value = maxScrollLeft > 2;
+  handCanScrollBackward.value = rail.scrollLeft > 2;
+  handCanScrollForward.value = rail.scrollLeft < maxScrollLeft - 2;
+}
+
+function scrollHandPreview(direction: "backward" | "forward"): void {
+  const rail = handRailRef.value;
+  if (!rail) {
+    return;
+  }
+  const distance = Math.max(120, Math.round(rail.clientWidth * 0.72));
+  rail.scrollBy({
+    left: direction === "forward" ? distance : -distance,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+  });
+  window.setTimeout(updateHandScrollState, 320);
+}
+
+function observeHandScroller(rail: HTMLElement | null): void {
+  handResizeObserver?.disconnect();
+  handResizeObserver = null;
+  if (!rail) {
+    updateHandScrollState();
+    return;
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    handResizeObserver = new ResizeObserver(updateHandScrollState);
+    handResizeObserver.observe(rail);
+  }
+  void nextTick(updateHandScrollState);
+}
+
 watch(
   () => `${props.handReady ? "ready" : "waiting"}|${props.hand.map((card) => card.id).join("|")}`,
   () => {
     if (props.handReady && props.hand.length > 0 && !props.submitted && !submitPending.value) {
       restoreRecommendation();
     }
+    void nextTick(() => {
+      if (handRailRef.value) {
+        handRailRef.value.scrollLeft = 0;
+      }
+      updateHandScrollState();
+    });
   },
   { immediate: true },
 );
@@ -429,7 +507,18 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(clearMoreTimeRetryTimer);
+watch(
+  () => props.cardMode,
+  () => void nextTick(updateHandScrollState),
+);
+
+watch(handRailRef, observeHandScroller, { immediate: true });
+
+onBeforeUnmount(() => {
+  clearMoreTimeRetryTimer();
+  handResizeObserver?.disconnect();
+  handResizeObserver = null;
+});
 </script>
 
 <style scoped>
@@ -690,6 +779,49 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.hand-heading-tools {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.hand-total {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.declare-hand-scroll-tools {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.declare-hand-scroll-tools button {
+  min-width: 3rem;
+  height: 2.25rem;
+  padding: 0 0.5rem;
+  border: 1px solid #0f766e;
+  border-radius: 0.5rem;
+  background: #0f766e;
+  color: #f0fdfa;
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.declare-hand-scroll-tools button:disabled {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #64748b;
+  opacity: 0.78;
 }
 
 .legend-item {
@@ -1079,6 +1211,49 @@ button:focus-visible {
 
 .declare-panel.compact .section-heading {
   margin-bottom: 0.35rem;
+}
+
+.declare-panel.compact .section-index,
+.declare-panel.compact .section-result,
+.declare-panel.compact .hand-total,
+.declare-panel.compact .declare-timer span,
+.declare-panel.compact .declare-more-time span,
+.declare-panel.compact .fish-option-copy small,
+.declare-panel.compact .empty-option span,
+.declare-panel.compact .kong-choice span,
+.declare-panel.compact .footer-meta p,
+.declare-panel.compact .confirm-declaration small {
+  font-size: max(0.75rem, 12px);
+}
+
+.declare-panel.compact .section-heading h3,
+.declare-panel.compact .fish-option-copy strong,
+.declare-panel.compact .empty-option strong,
+.declare-panel.compact .declare-more-time strong {
+  font-size: max(0.875rem, 14px);
+}
+
+.declare-panel.compact .declare-hand-scroll-tools button {
+  min-width: 44px;
+  height: 34px;
+  padding: 0 0.42rem;
+  font-size: max(0.8125rem, 13px);
+}
+
+.declare-panel.compact .hand-rail {
+  gap: 2px;
+}
+
+.declare-panel.compact .hand-preview-card :deep(.card.size-sm.mode-large) {
+  width: 40px;
+  height: 44px;
+  font-size: 17px;
+}
+
+.declare-panel.compact .hand-preview-card :deep(.card.size-sm.mode-long) {
+  width: 28px;
+  height: 52px;
+  font-size: 16px;
 }
 
 .declare-panel.compact .declare-controls {
