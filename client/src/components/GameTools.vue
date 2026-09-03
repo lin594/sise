@@ -86,7 +86,7 @@
           </div>
           <button type="button" aria-label="关闭最近操作" data-testid="close-history" @click="closeHistory()">×</button>
         </header>
-        <p id="history-panel-description" class="history-description">本局最新记录排在最前，关闭后不会影响牌局。</p>
+        <p id="history-panel-description" class="history-description">本局最新记录排在最前；查看时牌局计时仍会继续。</p>
         <ol v-if="historyItems.length" class="history-list">
           <li
             v-for="item in historyItems"

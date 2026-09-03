@@ -85,17 +85,38 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   const geometry = await page.evaluate(() => {
     const headerElement = document.querySelector<HTMLElement>('[data-testid="game-control-header"]');
     const boardElement = document.querySelector<HTMLElement>('[data-testid="game-board"]');
-    if (!headerElement || !boardElement) {
+    const brandElement = headerElement?.querySelector<HTMLElement>(".brand-lockup");
+    const toolsElement = headerElement?.querySelector<HTMLElement>("[data-testid='game-tools']");
+    const toolButtons = Array.from(headerElement?.querySelectorAll<HTMLElement>(".tool-button") ?? []);
+    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 3) {
       throw new Error("Game header or board is missing");
     }
     const headerRect = headerElement.getBoundingClientRect();
     const boardRect = boardElement.getBoundingClientRect();
+    const brandRect = brandElement.getBoundingClientRect();
+    const toolsRect = toolsElement.getBoundingClientRect();
+    const buttonRects = toolButtons.map((button) => button.getBoundingClientRect());
     return {
       headerBottom: Math.round(headerRect.bottom),
       boardTop: Math.round(boardRect.top),
+      brandRight: brandRect.right,
+      toolsLeft: toolsRect.left,
+      controlsInsideHeader: buttonRects.every(
+        (rect) =>
+          rect.left >= headerRect.left &&
+          rect.right <= headerRect.right &&
+          rect.top >= headerRect.top &&
+          rect.bottom <= headerRect.bottom,
+      ),
+      minimumControlWidth: Math.min(...buttonRects.map((rect) => rect.width)),
+      minimumControlHeight: Math.min(...buttonRects.map((rect) => rect.height)),
     };
   });
   expect(geometry.boardTop).toBeGreaterThanOrEqual(geometry.headerBottom);
+  expect(geometry.brandRight).toBeLessThanOrEqual(geometry.toolsLeft);
+  expect(geometry.controlsInsideHeader).toBe(true);
+  expect(geometry.minimumControlWidth).toBeGreaterThanOrEqual(40);
+  expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(32);
 }
 
 async function reachDiscardConfirmation(page: Page): Promise<void> {
@@ -344,8 +365,12 @@ test.describe("compact landscape gameplay", () => {
     await expect(historyPanel).toBeVisible();
     await expect(historyPanel).toHaveAttribute("aria-modal", "true");
     await expect(historyPanel).toBeFocused();
+    await expect(historyPanel).toContainText("牌局计时仍会继续");
     await expect(page.getByTestId("history-entry").first()).toBeVisible();
     await expect(page.getByTestId("history-entry").first()).not.toContainText(/seat_|bot_|DISCARD|DEALER|PASS/);
+    await expect(page.getByTestId("history-entry").first()).toContainText(
+      /[红黄绿白](?:帥|將|仕|士|相|象|俥|車|傌|馬|炮|包|兵|卒|公|侯|伯|子|男)/,
+    );
     const historyGeometry = await historyPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();
       const headerRect = document.querySelector<HTMLElement>('[data-testid="game-control-header"]')!.getBoundingClientRect();
@@ -897,6 +922,7 @@ test.describe("legacy small landscape gameplay", () => {
     await confirmDeclaration.click();
 
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await expectDedicatedGameHeader(page);
     await expect(page.getByTestId("bot-identity")).toHaveCount(3);
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
