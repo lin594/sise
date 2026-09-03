@@ -244,7 +244,7 @@
       </section>
     </Transition>
 
-    <Teleport to="body">
+    <Teleport to=".layout">
       <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="cancelExit">
         <section
           ref="exitDialogRef"
@@ -1012,7 +1012,9 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .exit-confirm {
-  width: min(22rem, calc(100dvw - 1.4rem));
+  width: min(22rem, calc(100% - 1.4rem));
+  max-height: calc(100% - 1.4rem);
+  overflow: auto;
   padding: 1.1rem;
   border-radius: 1.15rem;
   border: 1px solid rgba(148, 163, 184, 0.46);
@@ -1040,13 +1042,13 @@ onBeforeUnmount(removeSettingsOutsideListener);
 }
 
 .exit-confirm h2 {
-  font-size: 1.15rem;
+  font-size: max(1.25rem, 20px);
 }
 
 .exit-confirm p {
   margin-top: 0.45rem;
   color: #cbd5e1;
-  font-size: 0.86rem;
+  font-size: max(0.95rem, 16px);
   line-height: 1.55;
 }
 
@@ -1063,6 +1065,7 @@ onBeforeUnmount(removeSettingsOutsideListener);
   border: 1px solid #475569;
   background: #1e293b;
   color: #f8fafc;
+  font-size: max(0.95rem, 16px);
   font-weight: 750;
 }
 

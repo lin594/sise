@@ -135,6 +135,22 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
   };
 
   while (Date.now() < deadline) {
+    const nextRound = page.getByRole("button", { name: "下一局（房主）" });
+    if ((await nextRound.isVisible().catch(() => false)) && (await nextRound.isEnabled().catch(() => false))) {
+      await nextRound.click();
+      await page.waitForTimeout(180);
+      continue;
+    }
+    if (await page.locator(".hu-panel").isVisible().catch(() => false)) {
+      await page.waitForTimeout(180);
+      continue;
+    }
+    const declaration = page.getByTestId("confirm-declaration");
+    if ((await declaration.isVisible().catch(() => false)) && (await declaration.isEnabled().catch(() => false))) {
+      await declaration.click();
+      await page.waitForTimeout(180);
+      continue;
+    }
     if (await confirm.isVisible().catch(() => false)) {
       return;
     }
@@ -183,6 +199,39 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     await page.waitForTimeout(acted ? 300 : 180);
   }
   throw new Error("Timed out before the player received a discard confirmation turn");
+}
+
+async function expectFiveButtonActionGrid(page: Page): Promise<void> {
+  const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
+    const first = element.querySelector<HTMLButtonElement>(".btn");
+    if (!first) {
+      throw new Error("Action dock rendered without action buttons");
+    }
+    const hadDiscardMode = element.classList.contains("discard-mode");
+    element.classList.remove("discard-mode");
+    const clones: HTMLButtonElement[] = [];
+    while (element.querySelectorAll(".btn").length < 5) {
+      const clone = first.cloneNode(true) as HTMLButtonElement;
+      clone.textContent = `测试${clones.length + 1}`;
+      element.appendChild(clone);
+      clones.push(clone);
+    }
+    const buttons = Array.from(element.querySelectorAll<HTMLElement>(".btn")).slice(0, 5);
+    const sizes = buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return { width: Math.round(rect.width), height: Math.round(rect.height) };
+    });
+    const rows = new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().y))).size;
+    clones.forEach((clone) => clone.remove());
+    if (hadDiscardMode) {
+      element.classList.add("discard-mode");
+    }
+    return { sizes, rows };
+  });
+  expect(actionMetrics.rows).toBe(2);
+  expect(Math.min(...actionMetrics.sizes.map((size) => size.width))).toBeGreaterThanOrEqual(40);
+  expect(Math.min(...actionMetrics.sizes.map((size) => size.height))).toBeGreaterThanOrEqual(40);
+  expect(Math.max(...actionMetrics.sizes.map((size) => size.height))).toBeLessThanOrEqual(46);
 }
 
 test.describe("phone portrait landscape canvas", () => {
@@ -259,6 +308,79 @@ test.describe("phone portrait landscape canvas", () => {
       rectWidth: 320,
       rectHeight: 568,
     });
+  });
+
+  test("keeps the in-game exit confirmation inside the rotated canvas", async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await enterLobby(page);
+    await page.getByTestId("lobby-start").click();
+
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+
+    const layout = page.locator(".layout");
+    await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    const exitButton = page.getByTestId("game-exit");
+    await exitButton.click();
+
+    const dialog = page.getByRole("dialog", { name: "退出当前牌局？" });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    const geometry = await page.evaluate(() => {
+      const layoutElement = document.querySelector<HTMLElement>(".layout")!;
+      const mask = document.querySelector<HTMLElement>(".exit-confirm-mask")!;
+      const dialogElement = document.querySelector<HTMLElement>(".exit-confirm")!;
+      const title = dialogElement.querySelector<HTMLElement>("h2")!;
+      const description = dialogElement.querySelector<HTMLElement>("p")!;
+      const buttons = Array.from(dialogElement.querySelectorAll<HTMLButtonElement>("button"));
+      const maskRect = mask.getBoundingClientRect();
+      const dialogRect = dialogElement.getBoundingClientRect();
+      return {
+        layoutContainsMask: layoutElement.contains(mask),
+        maskOffsetWidth: mask.offsetWidth,
+        maskOffsetHeight: mask.offsetHeight,
+        maskInsideViewport:
+          maskRect.left >= 0 &&
+          maskRect.top >= 0 &&
+          maskRect.right <= innerWidth &&
+          maskRect.bottom <= innerHeight,
+        dialogInsideViewport:
+          dialogRect.left >= 0 &&
+          dialogRect.top >= 0 &&
+          dialogRect.right <= innerWidth &&
+          dialogRect.bottom <= innerHeight,
+        dialogWidth: Math.round(dialogRect.width),
+        dialogHeight: Math.round(dialogRect.height),
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        descriptionFontSize: Number.parseFloat(getComputedStyle(description).fontSize),
+        minimumButtonFontSize: Math.min(...buttons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize))),
+        minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
+      };
+    });
+    expect(geometry.layoutContainsMask).toBe(true);
+    expect(geometry.maskOffsetWidth).toBe(568);
+    expect(geometry.maskOffsetHeight).toBe(320);
+    expect(geometry.maskInsideViewport).toBe(true);
+    expect(geometry.dialogInsideViewport).toBe(true);
+    expect(geometry.dialogHeight).toBeGreaterThan(geometry.dialogWidth);
+    expect(geometry.titleFontSize).toBeGreaterThanOrEqual(20);
+    expect(geometry.descriptionFontSize).toBeGreaterThanOrEqual(16);
+    expect(geometry.minimumButtonFontSize).toBeGreaterThanOrEqual(16);
+    expect(geometry.minimumButtonHeight).toBeGreaterThanOrEqual(42);
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByTestId("confirm-exit")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath("in-game-exit-confirm-rotated-320x568.png") });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(exitButton).toBeFocused();
   });
 });
 
@@ -364,6 +486,7 @@ test.describe("compact landscape gameplay", () => {
     expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await expectFiveButtonActionGrid(page);
     const gameHistory = page.getByTestId("game-history");
     await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
       .toBeGreaterThan(0);
@@ -685,32 +808,6 @@ test.describe("compact landscape gameplay", () => {
     expect(pendingGeometry.deckCenterX).toBeLessThan(pendingGeometry.pendingCenterX);
     expect(Math.abs(pendingGeometry.deckCenterY - pendingGeometry.pendingCenterY)).toBeLessThanOrEqual(2);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-pending-card.png") });
-
-    const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
-      const first = element.querySelector<HTMLButtonElement>(".btn");
-      if (!first) {
-        throw new Error("Action dock rendered without action buttons");
-      }
-      const clones: HTMLButtonElement[] = [];
-      while (element.querySelectorAll(".btn").length < 5) {
-        const clone = first.cloneNode(true) as HTMLButtonElement;
-        clone.textContent = `测试${clones.length + 1}`;
-        element.appendChild(clone);
-        clones.push(clone);
-      }
-      const buttons = Array.from(element.querySelectorAll<HTMLElement>(".btn")).slice(0, 5);
-      const sizes = buttons.map((button) => {
-        const rect = button.getBoundingClientRect();
-        return { width: Math.round(rect.width), height: Math.round(rect.height) };
-      });
-      const rows = new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().y))).size;
-      clones.forEach((clone) => clone.remove());
-      return { sizes, rows };
-    });
-    expect(actionMetrics.rows).toBe(2);
-    expect(Math.min(...actionMetrics.sizes.map((size) => size.width))).toBeGreaterThanOrEqual(40);
-    expect(Math.min(...actionMetrics.sizes.map((size) => size.height))).toBeGreaterThanOrEqual(40);
-    expect(Math.max(...actionMetrics.sizes.map((size) => size.height))).toBeLessThanOrEqual(46);
 
     const pageOverflow = await page.evaluate(() => ({
       width: document.body.scrollWidth,
