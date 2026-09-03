@@ -102,7 +102,15 @@
           <template v-if="slot.player">
             <p class="player-name">{{ slot.player.name }}</p>
             <small v-if="slot.player.isConfiguredBot">机器人 · {{ botLevelForStrength(slot.player.botStrength).label }}</small>
-            <small v-else>{{ slot.player.connected ? "真人在线" : "真人离线（座位暂留）" }}</small>
+            <small v-else class="human-seat-status">
+              {{ slot.player.connected ? "真人在线" : "真人离线（座位暂留）" }}
+              <strong
+                v-if="slot.player.clientId !== hostPlayerId"
+                class="ready-state"
+                :class="{ ready: slot.player.lobbyReady }"
+                :data-testid="`seat-ready-${slot.seatIndex}`"
+              >{{ slot.player.lobbyReady ? "已准备" : "未准备" }}</strong>
+            </small>
 
             <template v-if="slot.player.isConfiguredBot && isHost">
               <div
@@ -221,6 +229,18 @@
           {{ fillRequested ? "正在补齐…" : `补齐 ${emptySeatCount} 位电脑` }}
         </button>
         <button
+          v-if="showReadyAction"
+          class="primary ready-toggle"
+          :class="{ active: myLobbyReady }"
+          type="button"
+          data-testid="lobby-ready"
+          :aria-pressed="myLobbyReady"
+          @click="$emit('set-lobby-ready', !myLobbyReady)"
+        >
+          {{ myLobbyReady ? "取消准备" : "我准备好了" }}
+        </button>
+        <button
+          v-else
           ref="startButtonRef"
           class="primary"
           type="button"
@@ -295,6 +315,7 @@ type LobbyPlayer = {
   botStrength: number;
   cumulativeScore: number;
   connected: boolean;
+  lobbyReady: boolean;
 };
 
 const props = defineProps<{
@@ -343,6 +364,7 @@ const emit = defineEmits<{
   "leave-room": [];
   "dissolve-room": [];
   "set-scoring-mode": [mode: ScoringMode];
+  "set-lobby-ready": [ready: boolean];
 }>();
 const departureIntent = ref<"leave" | "dissolve" | null>(null);
 const fillRequested = ref(false);
@@ -375,6 +397,16 @@ const seatSlots = computed(() =>
   })),
 );
 const emptySeatCount = computed(() => seatSlots.value.filter((slot) => !slot.player).length);
+const myLobbyReady = computed(
+  () => props.players.find((player) => player.clientId === props.mySeatId)?.lobbyReady ?? false,
+);
+const showReadyAction = computed(
+  () =>
+    props.roomMode === "friends" &&
+    Boolean(props.roomId) &&
+    Boolean(props.mySeatId) &&
+    !props.isHost,
+);
 const showFillBots = computed(
   () => props.roomMode === "friends" && Boolean(props.roomId) && props.isHost && emptySeatCount.value > 0,
 );
@@ -750,6 +782,29 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   font-size: 0.75rem;
 }
 
+.human-seat-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+  color: #cbd5e1;
+}
+
+.ready-state {
+  padding: 0.12rem 0.38rem;
+  border: 1px solid #fb7185;
+  border-radius: 999px;
+  color: #fecdd3;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.ready-state.ready {
+  border-color: #4ade80;
+  background: rgba(20, 83, 45, 0.72);
+  color: #dcfce7;
+}
+
 .seat-actions {
   margin-top: auto;
   flex-wrap: wrap;
@@ -819,6 +874,17 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .primary:disabled {
   opacity: 0.56;
   cursor: not-allowed;
+}
+
+.ready-toggle {
+  min-width: min(18rem, 100%);
+  font-size: 1rem;
+}
+
+.ready-toggle.active {
+  border: 1px solid #86efac;
+  background: #14532d;
+  color: #dcfce7;
 }
 
 .ghost {

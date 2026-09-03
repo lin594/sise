@@ -67,7 +67,9 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");
     await expect(guest.getByTestId("seat-1").locator(".player-name")).toHaveText("同名牌友（2）");
-    await expect(guest.getByText("你已入座；等待房主开始，也可以换到其他空座位。")).toBeVisible();
+    await expect(guest.getByText("确认座位和设置后，请点击“我准备好了”。")).toBeVisible();
+    await expect(guest.getByTestId("lobby-ready")).toHaveText("我准备好了");
+    await expect(guest.getByTestId("seat-ready-1")).toHaveText("未准备");
     await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
     await expect(host.getByTestId("seat-1")).toContainText("真人在线");
 
@@ -109,6 +111,13 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByTestId("seat-1").locator(".player-name")).toHaveText("同名牌友（2）");
     await expect(host.getByTestId("seat-2")).toContainText("机器人 · 标准");
     await expect(host.getByTestId("seat-3")).toContainText("房主 · 你");
+    await expect(host.getByTestId("lobby-start")).toBeDisabled();
+    await expect(host.getByRole("heading", { name: "还有 1 位牌友未准备" })).toBeVisible();
+
+    await guest.getByTestId("lobby-ready").click();
+    await expect(guest.getByTestId("lobby-ready")).toHaveText("取消准备");
+    await expect(guest.getByTestId("lobby-ready")).toHaveAttribute("aria-pressed", "true");
+    await expect(host.getByTestId("seat-ready-1")).toHaveText("已准备");
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
 
     await host.getByTestId("lobby-start").click();
@@ -386,6 +395,8 @@ test("a later friend can choose a collective response before their polling turn"
     await guest.getByTestId("claim-seat-1").click();
     await host.getByTestId("claim-seat-3").click();
     await host.getByTestId("fill-bots").click();
+    await expect(host.getByTestId("lobby-start")).toBeDisabled();
+    await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });

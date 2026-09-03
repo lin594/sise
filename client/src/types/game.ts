@@ -39,6 +39,7 @@ export interface PlayerState {
   handCount?: number;
   declaredKongs: number;
   declaredReady: boolean;
+  lobbyReady: boolean;
   isBot: boolean;
   isAutoPlay: boolean;
   isConfiguredBot: boolean;

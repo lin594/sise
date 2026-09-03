@@ -15,6 +15,7 @@ export class PlayerState extends Schema {
   @type("number") handCount: number = 0;
   @type("number") declaredKongs: number = 0;
   @type("boolean") declaredReady: boolean = false;
+  @type("boolean") lobbyReady: boolean = false;
   @type("boolean") isBot: boolean = false;
   // A connected human who explicitly asked the computer to act for them.
   // Keep this separate from isBot so the UI and future identity system still

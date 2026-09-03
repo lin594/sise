@@ -88,11 +88,15 @@ test("only a waiting friend-room host can select scoring before the first round"
   const guest = { sessionId: "guest-session", send: (event: string, payload: unknown) => sent.push({ event, payload }) };
   const host = { sessionId: "host-session", send: (event: string, payload: unknown) => sent.push({ event, payload }) };
 
+  addPlayers(room.state, ["seat_0", "seat_1"]);
+  room.state.players.get("seat_1")!.lobbyReady = true;
+
   room.handleSetScoringMode(guest, { mode: "cumulative" });
   assert.equal(room.state.scoringMode, "single");
 
   room.handleSetScoringMode(host, { mode: "cumulative" });
   assert.equal(room.state.scoringMode, "cumulative");
+  assert.equal(room.state.players.get("seat_1")?.lobbyReady, false);
 
   room.state.completedRounds = 1;
   room.handleSetScoringMode(host, { mode: "single" });

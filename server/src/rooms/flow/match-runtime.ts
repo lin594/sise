@@ -619,6 +619,9 @@ export function resetToLobby(context: LobbyResetContext): void {
     }
     player.declaredKongs = 0;
     player.declaredReady = false;
+    if (!player.isConfiguredBot) {
+      player.lobbyReady = false;
+    }
     player.isAutoPlay = false;
     if (resetRoomScores) {
       player.cumulativeScore = 0;

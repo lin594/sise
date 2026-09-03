@@ -119,6 +119,7 @@
       @leave-room="handleLeaveRoom"
       @dissolve-room="dissolveRoom"
       @set-scoring-mode="setScoringMode"
+      @set-lobby-ready="setLobbyReady"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -705,6 +706,7 @@ const {
   returnLobby,
   dissolveRoom,
   setScoringMode,
+  setLobbyReady,
   setAutoPlay,
   leaveRoom,
   claimSeat,
@@ -849,6 +851,7 @@ const isDeclaring = computed(() => state.value?.phase === "declaring");
 const isPlaying = computed(() => state.value?.phase === "playing");
 const isEnded = computed(() => state.value?.phase === "ended");
 const isHost = computed(() => Boolean(mySeatId.value) && state.value?.hostPlayerId === mySeatId.value);
+const mePlayer = computed(() => players.value.find((player) => player.clientId === mySeatId.value) ?? null);
 const hasLobbySession = computed(() => Boolean(connected.value || state.value || mySeatId.value));
 const isConnectingWithoutState = computed(
   () =>
@@ -880,7 +883,13 @@ const canPressStartGame = computed(
     isWaiting.value &&
     isHost.value &&
     (state.value?.roomMode !== "friends" ||
-      (players.value.length === 4 && players.value.every((player) => player.isConfiguredBot || player.connected))),
+      (players.value.length === 4 &&
+        players.value.every(
+          (player) =>
+            player.isConfiguredBot ||
+            (player.connected &&
+              (player.clientId === state.value?.hostPlayerId || player.lobbyReady)),
+        ))),
 );
 const canStartSelectedMode = computed(
   () =>
@@ -890,6 +899,15 @@ const canStartSelectedMode = computed(
 const remainingFriendSeats = computed(() => Math.max(0, 4 - players.value.length));
 const hasOfflineFriend = computed(() =>
   players.value.some((player) => !player.isConfiguredBot && !player.connected),
+);
+const unreadyFriendCount = computed(
+  () =>
+    players.value.filter(
+      (player) =>
+        !player.isConfiguredBot &&
+        player.clientId !== state.value?.hostPlayerId &&
+        !player.lobbyReady,
+    ).length,
 );
 const lobbyTitle = computed(() => {
   if (!isWaiting.value) {
@@ -906,6 +924,14 @@ const lobbyTitle = computed(() => {
   }
   if (remainingFriendSeats.value > 0) {
     return isHost.value ? `还差 ${remainingFriendSeats.value} 位即可开局` : "等待房主安排座位";
+  }
+  if (unreadyFriendCount.value > 0) {
+    if (isHost.value) {
+      return `还有 ${unreadyFriendCount.value} 位牌友未准备`;
+    }
+    return mePlayer.value?.lobbyReady
+      ? `等待 ${unreadyFriendCount.value} 位牌友准备`
+      : "请确认准备";
   }
   return isHost.value ? "四席已就绪" : "等待房主开始";
 });
@@ -926,9 +952,15 @@ const lobbySubtitle = computed(() => {
     if (remainingFriendSeats.value > 0) {
       return `把邀请链接发给朋友，或点击“补齐 ${remainingFriendSeats.value} 位电脑”后开始。`;
     }
+    if (unreadyFriendCount.value > 0) {
+      return `请等 ${unreadyFriendCount.value} 位真人牌友点击“我准备好了”。`;
+    }
     return "四个座位都准备好了，请确认后开始好友对局。";
   }
-  return "你已入座；等待房主开始，也可以换到其他空座位。";
+  if (!mePlayer.value?.lobbyReady) {
+    return "确认座位和设置后，请点击“我准备好了”。";
+  }
+  return "你已准备；等待房主开始，如需调整可取消准备。";
 });
 const lobbyStartLabel = computed(() => {
   if (!hasLobbySession.value) {
@@ -945,10 +977,11 @@ const lobbyStartLabel = computed(() => {
 const lobbyStartHint = computed(() => {
   if (!hasLobbySession.value || !isWaiting.value) return "";
   if (!mySeatId.value) return "请先选择一个空座位";
-  if (!isHost.value) return "座位配置完成后由房主开始";
+  if (!isHost.value) return mePlayer.value?.lobbyReady ? "已准备，等待房主开始" : "请先确认准备";
   if (state.value?.roomMode !== "friends") return "";
   if (players.value.length < 4) return `还差 ${4 - players.value.length} 个座位，可一键补电脑`;
   if (players.value.some((player) => !player.isConfiguredBot && !player.connected)) return "仍有真人玩家离线";
+  if (unreadyFriendCount.value > 0) return `还有 ${unreadyFriendCount.value} 位牌友未准备`;
   return "四席已就绪，请点开始好友对局";
 });
 const hasFriendInvite = computed(
@@ -1129,7 +1162,6 @@ watch(
   },
   { immediate: true },
 );
-const mePlayer = computed(() => players.value.find((x) => x.clientId === mySeatId.value) ?? null);
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
 const shouldShowDeclarePanel = computed(
   () =>

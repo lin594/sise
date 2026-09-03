@@ -183,6 +183,7 @@ function normalizePlayer(raw) {
         handCount: Number(raw?.handCount ?? 0),
         declaredKongs: Number(raw?.declaredKongs ?? 0),
         declaredReady: Boolean(raw?.declaredReady),
+        lobbyReady: Boolean(raw?.lobbyReady),
         isBot: Boolean(raw?.isBot),
         isAutoPlay: Boolean(raw?.isAutoPlay),
         isConfiguredBot: Boolean(raw?.isConfiguredBot),
@@ -820,6 +821,7 @@ export function useRoom(playerName = "Player") {
             player.declaredKongs ?? 0,
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
+            player.lobbyReady ? 1 : 0,
             player.isAutoPlay ? 1 : 0,
             player.cumulativeScore,
             player.discardPile.map((card) => card.id).join(","),
@@ -1479,6 +1481,10 @@ export function useRoom(playerName = "Player") {
         joinError.value = "";
         safeRoomSend("set_scoring_mode", { mode });
     }
+    function setLobbyReady(ready) {
+        joinError.value = "";
+        safeRoomSend("set_lobby_ready", { ready });
+    }
     function setAutoPlay(enabled) {
         safeRoomSend("set_auto_play", { enabled });
     }
@@ -1585,6 +1591,7 @@ export function useRoom(playerName = "Player") {
         returnLobby,
         dissolveRoom,
         setScoringMode,
+        setLobbyReady,
         setAutoPlay,
         leaveRoom,
         claimSeat,

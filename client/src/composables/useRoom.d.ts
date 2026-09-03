@@ -78,6 +78,7 @@ export declare function useRoom(playerName?: string): {
             handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
+            lobbyReady: boolean;
             isBot: boolean;
             isAutoPlay: boolean;
             isConfiguredBot: boolean;
@@ -284,6 +285,7 @@ export declare function useRoom(playerName?: string): {
             handCount?: number | undefined;
             declaredKongs: number;
             declaredReady: boolean;
+            lobbyReady: boolean;
             isBot: boolean;
             isAutoPlay: boolean;
             isConfiguredBot: boolean;
@@ -730,6 +732,7 @@ export declare function useRoom(playerName?: string): {
     returnLobby: () => void;
     dissolveRoom: () => void;
     setScoringMode: (mode: "single" | "cumulative") => void;
+    setLobbyReady: (ready: boolean) => void;
     setAutoPlay: (enabled: boolean) => void;
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => void;

@@ -307,6 +307,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.handleSetScoringMode(client, payload);
     });
 
+    this.onMessage("set_lobby_ready", (client, payload: { ready?: unknown } | undefined) => {
+      this.handleSetLobbyReady(client, payload);
+    });
+
     this.onMessage("claim_seat", (client, payload: { seatIndex?: number }) => {
       this.handleClaimSeat(client, payload);
     });
@@ -681,8 +685,43 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.state.scoringMode = mode;
     for (const player of this.state.players.values()) {
       player.cumulativeScore = 0;
+      if (!player.isConfiguredBot && player.clientId !== this.state.hostPlayerId) {
+        player.lobbyReady = false;
+      }
     }
     this.state.lastAction = `SCORING_MODE ${mode}`;
+    this.broadcastAvailableActions();
+  }
+
+  /**
+   * 作用：记录好友房非房主真人在等待大厅的明确准备状态。
+   * 关键输入/输出：输入布尔准备值；无返回值。
+   * 副作用：更新公开座位状态并刷新大厅，供房主开局校验使用。
+   */
+  private handleSetLobbyReady(client: Client, payload?: { ready?: unknown }): void {
+    const seatId = this.seatBySession.get(client.sessionId);
+    const player = seatId ? this.state.players.get(seatId) : undefined;
+    if (this.state.roomMode !== "friends" || this.state.phase !== "waiting") {
+      this.sendLobbyError(client, "cannot_ready", "只有好友房等待阶段可以准备。");
+      return;
+    }
+    if (!seatId || !player || player.isConfiguredBot || !player.connected) {
+      this.sendLobbyError(client, "not_seated", "请先选择座位，再确认准备。");
+      return;
+    }
+    if (seatId === this.state.hostPlayerId) {
+      this.sendLobbyError(client, "host_does_not_ready", "房主点击开始就是最终确认，无需单独准备。");
+      return;
+    }
+    if (typeof payload?.ready !== "boolean") {
+      this.sendLobbyError(client, "invalid_ready", "准备状态无效，请重试。");
+      return;
+    }
+    if (player.lobbyReady === payload.ready) {
+      return;
+    }
+    player.lobbyReady = payload.ready;
+    this.state.lastAction = `LOBBY_READY ${seatId} ${payload.ready ? "ON" : "OFF"}`;
     this.broadcastAvailableActions();
   }
 
@@ -793,6 +832,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
 
     player.name = this.baseNameBySeat.get(targetSeatId) || requestedName;
+    if (currentSeatId !== targetSeatId) {
+      player.lobbyReady = false;
+    }
     player.connected = true;
     player.isBot = false;
     player.isAutoPlay = false;
@@ -1071,7 +1113,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       const player = this.state.players.get(seatId);
       return Boolean(player && !player.isConfiguredBot && !player.connected);
     });
-    return hasOfflineHuman ? "仍有真人玩家离线，请等待其重连或由房主移除。" : "";
+    if (hasOfflineHuman) {
+      return "仍有真人玩家离线，请等待其重连或由房主移除。";
+    }
+    const unreadyHumanCount = this.playerOrder.filter((seatId) => {
+      const player = this.state.players.get(seatId);
+      return Boolean(
+        player &&
+          seatId !== this.state.hostPlayerId &&
+          !player.isConfiguredBot &&
+          !player.lobbyReady,
+      );
+    }).length;
+    return unreadyHumanCount > 0 ? `还有 ${unreadyHumanCount} 位牌友未准备。` : "";
   }
 
   private removeUnseatedClientsForGameStart(): void {
@@ -2760,6 +2814,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           handCount: player.handCount,
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
+          lobbyReady: player.lobbyReady,
           isBot: player.isBot,
           isAutoPlay: player.isAutoPlay,
           isConfiguredBot: player.isConfiguredBot,
