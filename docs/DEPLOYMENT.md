@@ -89,6 +89,8 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 `VITE_SERVER_URL` 与 `VITE_SERVER_HTTP_URL` 是前端构建参数，修改后必须重新构建 web 镜像，仅重启容器不会更新静态资源。
 
+正式页面通过 HTTPS 提供时，浏览器链路必须分别是 HTTPS API 和 WSS，不能配置 `http://` 或 `ws://` 造成混合内容。客户端在只设置其中一项时会从相同主机、端口和路径推导另一项，例如 `https://sise-api.example.com` 对应 `wss://sise-api.example.com`；正式部署仍建议像上例一样同时显式填写，便于上线前审阅。地址中的查询参数、片段和尾部斜杠不会进入运行时基础地址。
+
 ## 6. iMac 试玩环境
 
 试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。普通 `docker-compose.yml` 直接映射端口，因此当前访问地址为：
