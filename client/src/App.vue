@@ -325,7 +325,7 @@
                     </small>
                   </span>
                   <span class="settlement-result">
-                    <small class="score-caption">本局</small>
+                    <small v-if="isCumulativeSettlement" class="score-caption">本局</small>
                     <strong class="score-total" :class="scoreToneClass(p.totalScore)">{{ signedScore(p.totalScore) }}分</strong>
                     <small v-if="isCumulativeSettlement" class="cumulative-total" :class="scoreToneClass(p.cumulativeScore)">
                       累计 {{ signedScore(p.cumulativeScore) }}分

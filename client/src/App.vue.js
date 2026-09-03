@@ -2662,9 +2662,11 @@ if (__VLS_ctx.showEndPanel) {
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "settlement-result" },
                 });
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
-                    ...{ class: "score-caption" },
-                });
+                if (__VLS_ctx.isCumulativeSettlement) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
+                        ...{ class: "score-caption" },
+                    });
+                }
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
                     ...{ class: "score-total" },
                     ...{ class: (__VLS_ctx.scoreToneClass(p.totalScore)) },

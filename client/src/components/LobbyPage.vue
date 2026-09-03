@@ -83,46 +83,6 @@
         </div>
       </div>
 
-      <section v-if="roomMode === 'friends' && roomId" class="scoring-card" data-testid="scoring-mode-card">
-        <div class="scoring-copy">
-          <strong>计分方式</strong>
-          <p v-if="completedRounds > 0">本桌已完成 {{ completedRounds }} 局，计分方式已锁定到解散。</p>
-          <p v-else>{{ isHost ? "开局前选择；开始后整桌保持不变。" : "由房主在开局前选择。" }}</p>
-        </div>
-        <div class="scoring-options" role="radiogroup" aria-label="好友房计分方式">
-          <button
-            v-for="option in scoringOptions"
-            :key="option.mode"
-            type="button"
-            role="radio"
-            :data-testid="`scoring-mode-${option.mode}`"
-            :aria-checked="scoringMode === option.mode"
-            :class="{ active: scoringMode === option.mode }"
-            :disabled="!isHost || completedRounds > 0"
-            @click="$emit('set-scoring-mode', option.mode)"
-          >
-            <strong>{{ option.label }}</strong>
-            <small>{{ option.hint }}</small>
-          </button>
-        </div>
-        <ol
-          v-if="scoringMode === 'cumulative' && completedRounds > 0"
-          class="cumulative-board"
-          data-testid="cumulative-scoreboard"
-          aria-label="本桌累计积分"
-        >
-          <li v-for="player in cumulativeRanking" :key="`score-${player.clientId}`">
-            <span>{{ player.name }}<small v-if="player.clientId === mySeatId">（你）</small></span>
-            <strong
-              :class="{ positive: player.cumulativeScore > 0, negative: player.cumulativeScore < 0 }"
-              :data-testid="`cumulative-score-${player.clientId}`"
-            >
-              {{ signedScore(player.cumulativeScore) }}分
-            </strong>
-          </li>
-        </ol>
-      </section>
-
       <div v-if="roomId" class="seat-grid" data-testid="seat-grid">
         <article
           v-for="slot in seatSlots"
@@ -204,6 +164,46 @@
           </template>
         </article>
       </div>
+
+      <section v-if="roomMode === 'friends' && roomId" class="scoring-card" data-testid="scoring-mode-card">
+        <div class="scoring-copy">
+          <strong>计分方式</strong>
+          <p v-if="completedRounds > 0">本桌已完成 {{ completedRounds }} 局，计分方式已锁定到解散。</p>
+          <p v-else>{{ isHost ? "开局前选择；开始后整桌保持不变。" : "由房主在开局前选择。" }}</p>
+        </div>
+        <div class="scoring-options" role="radiogroup" aria-label="好友房计分方式">
+          <button
+            v-for="option in scoringOptions"
+            :key="option.mode"
+            type="button"
+            role="radio"
+            :data-testid="`scoring-mode-${option.mode}`"
+            :aria-checked="scoringMode === option.mode"
+            :class="{ active: scoringMode === option.mode }"
+            :disabled="!isHost || completedRounds > 0"
+            @click="$emit('set-scoring-mode', option.mode)"
+          >
+            <strong>{{ option.label }}</strong>
+            <small>{{ option.hint }}</small>
+          </button>
+        </div>
+        <ol
+          v-if="scoringMode === 'cumulative' && completedRounds > 0"
+          class="cumulative-board"
+          data-testid="cumulative-scoreboard"
+          aria-label="本桌累计积分"
+        >
+          <li v-for="player in cumulativeRanking" :key="`score-${player.clientId}`">
+            <span>{{ player.name }}<small v-if="player.clientId === mySeatId">（你）</small></span>
+            <strong
+              :class="{ positive: player.cumulativeScore > 0, negative: player.cumulativeScore < 0 }"
+              :data-testid="`cumulative-score-${player.clientId}`"
+            >
+              {{ signedScore(player.cumulativeScore) }}分
+            </strong>
+          </li>
+        </ol>
+      </section>
 
       <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
     </div>
