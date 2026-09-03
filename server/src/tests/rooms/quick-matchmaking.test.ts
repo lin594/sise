@@ -113,6 +113,26 @@ test("quick-match countdown starts once and accelerates when four humans arrive"
   room.clearMatchStartTimer();
 });
 
+test("quick-match countdown snapshots pair the deadline with server time", () => {
+  const { room } = createMatchRoom();
+  room.matchWaitMs = 12_000;
+  addHuman(room, 0);
+  const snapshots: Array<{ matchStartsAt: number; serverNow: number }> = [];
+  room.broadcastAvailableActions = () => {
+    snapshots.push(room.buildRoomSnapshot());
+  };
+
+  const before = Date.now();
+  room.onMatchRosterChanged();
+  const snapshot = snapshots.at(-1);
+  const after = Date.now();
+
+  assert.ok(snapshot);
+  assert.equal(snapshot.matchStartsAt, room.state.matchStartsAt);
+  assert.ok(snapshot.serverNow >= before && snapshot.serverNow <= after);
+  room.clearMatchStartTimer();
+});
+
 test("quick-match deadline fills standard bots and closes only matchmaking", () => {
   const { room, metadata } = createMatchRoom();
   addHuman(room, 0);

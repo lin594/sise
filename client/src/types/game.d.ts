@@ -50,6 +50,7 @@ export interface RoomStateSnapshot {
     scoringMode: ScoringMode;
     completedRounds: number;
     phase: string;
+    serverNow?: number;
     matchStartsAt: number;
     hostPlayerId: string;
     dealerId: string;

@@ -781,6 +781,7 @@ const {
   declareError,
   actionLogs,
   actionFeedback,
+  matchClockSync,
   decisionTimer,
   clearActionLogs,
   debugSetup,
@@ -1049,7 +1050,7 @@ const lobbySubtitle = computed(() => {
     if (hasOfflineFriend.value) {
       return "有牌友正在恢复连接，座位会为对方暂时保留。";
     }
-    return state.value.matchStartsAt > 0
+    return matchSecondsLeft.value > 0
       ? `已找到 ${humanCount} 位真人，${matchSecondsLeft.value} 秒后电脑补位自动开始。`
       : "正在准备开局，请稍候。";
   }
@@ -1099,7 +1100,10 @@ const lobbyStartHint = computed(() => {
     if (hasOfflineFriend.value) {
       return "有牌友正在恢复连接，暂不能开始";
     }
-    return isHost.value ? "不想等待时，可立即补齐电脑" : `约 ${matchSecondsLeft.value} 秒后自动开始`;
+    if (isHost.value) return "不想等待时，可立即补齐电脑";
+    return matchSecondsLeft.value > 0
+      ? `约 ${matchSecondsLeft.value} 秒后自动开始`
+      : "正在准备自动开始";
   }
   if (!isHost.value) return mePlayer.value?.lobbyReady ? "已准备，等待房主开始" : "请先确认准备";
   if (state.value?.roomMode !== "friends") return "";
@@ -1115,7 +1119,11 @@ const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友�
 const nowMs = ref(Date.now());
 const matchSecondsLeft = computed(() => {
   const startsAt = Number(state.value?.matchStartsAt ?? 0);
-  return startsAt > 0 ? Math.max(0, Math.ceil((startsAt - nowMs.value) / 1000)) : 0;
+  if (startsAt <= 0 || matchClockSync.value.deadline !== startsAt) {
+    return 0;
+  }
+  const estimatedServerNow = nowMs.value + matchClockSync.value.offsetMs;
+  return Math.max(0, Math.ceil((startsAt - estimatedServerNow) / 1000));
 });
 watch(
   () => state.value?.matchStartsAt,

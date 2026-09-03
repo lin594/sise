@@ -403,6 +403,7 @@ export function useRoom(playerName = "Player") {
     const declareError = ref("");
     const actionLogs = ref([]);
     const actionFeedback = ref(null);
+    const matchClockSync = ref({ deadline: 0, offsetMs: 0 });
     const decisionTimer = ref({
         untimed: false,
         canRequestMoreTime: false,
@@ -969,6 +970,13 @@ export function useRoom(playerName = "Player") {
             privateStateAuthoritySeq += 1;
         }
         const normalized = normalizeSnapshot(next);
+        const snapshotServerNow = Number(rawSnapshot?.serverNow ?? 0);
+        if (Number.isFinite(snapshotServerNow) && snapshotServerNow > 0) {
+            matchClockSync.value = {
+                deadline: normalized.matchStartsAt,
+                offsetMs: snapshotServerNow - Date.now(),
+            };
+        }
         if (normalized.phase !== "playing") {
             clearActionFeedback();
         }
@@ -1750,6 +1758,7 @@ export function useRoom(playerName = "Player") {
         declareError,
         actionLogs,
         actionFeedback,
+        matchClockSync,
         decisionTimer,
         connect,
         retryConnection,

@@ -75,6 +75,11 @@ import {
 import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
 import { registerRoom, unregisterRoom, type PrivateStateSnapshot } from "./room-registry.js";
 import { chooseBotAction, chooseBotDiscard } from "./bot-strategy.js";
+import { normalizeGuestProfileToken } from "../profiles/guest-profile-store.js";
+import {
+  recordActiveGuestRoundResults,
+  touchGuestProfile,
+} from "../profiles/guest-profile-runtime.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -106,6 +111,7 @@ interface RoomCreateOptions {
 interface RoomJoinOptions {
   name?: string;
   playerToken?: string;
+  profileToken?: string;
   hostKey?: string;
 }
 
@@ -166,6 +172,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private baseNameBySeat = new Map<string, string>(); // seatId -> human display name
   private pendingNameBySession = new Map<string, string>(); // connected lobby guests that have not claimed a seat
   private pendingTokenBySession = new Map<string, string>(); // preserves a guest's room-scoped token until seat claim
+  private pendingProfileTokenBySession = new Map<string, string>(); // device profile pending friend-room seat claim
+  private profileTokenBySeat = new Map<string, string>(); // private, cross-room profile token for human settlement stats
   private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly takeoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -411,10 +419,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.clearRoomIdleTimer();
     const inputName = normalizeNameUtil(options?.name);
     const inputToken = normalizeTokenUtil(options?.playerToken);
+    const inputProfileToken = normalizeGuestProfileToken(options?.profileToken);
 
     if (inputToken && this.seatByToken.has(inputToken)) {
       const seatId = this.seatByToken.get(inputToken)!;
-      this.reclaimSeat(client, seatId, inputToken, inputName);
+      this.reclaimSeat(client, seatId, inputToken, inputName, inputProfileToken);
       return;
     }
 
@@ -431,6 +440,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (mayClaimHostSeat) {
       this.hostKeyConsumed = true;
       this.pendingNameBySession.set(client.sessionId, inputName);
+      this.rememberPendingProfile(client.sessionId, inputProfileToken);
       this.claimSeatForClient(client, 0, inputToken || generateTokenUtil());
       return;
     }
@@ -456,6 +466,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
       this.pendingNameBySession.set(client.sessionId, inputName);
+      this.rememberPendingProfile(client.sessionId, inputProfileToken);
       this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil());
       return;
     }
@@ -468,6 +479,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
       this.pendingNameBySession.set(client.sessionId, inputName);
+      this.rememberPendingProfile(client.sessionId, inputProfileToken);
       if (this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil())) {
         this.onMatchRosterChanged();
       }
@@ -476,6 +488,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.pendingNameBySession.set(client.sessionId, inputName || "玩家");
     this.pendingTokenBySession.set(client.sessionId, inputToken || generateTokenUtil());
+    this.rememberPendingProfile(client.sessionId, inputProfileToken);
     client.send("lobby_presence", { roomId: this.roomId, seated: false });
     this.broadcastAvailableActions();
   }
@@ -489,6 +502,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const seatId = this.seatBySession.get(client.sessionId);
     this.pendingNameBySession.delete(client.sessionId);
     this.pendingTokenBySession.delete(client.sessionId);
+    this.pendingProfileTokenBySession.delete(client.sessionId);
     if (!seatId) {
       this.scheduleRoomIdleIfEmpty();
       return;
@@ -693,6 +707,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       target.send("room_dissolved", { reason });
     }
     this.seatByToken.clear();
+    this.profileTokenBySeat.clear();
+    this.pendingProfileTokenBySession.clear();
     await this.disconnect(4110);
   }
 
@@ -830,6 +846,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private claimSeatForClient(client: Client, seatIndex: number, token: string): boolean {
     const targetSeatId = this.seatIdForIndex(seatIndex);
     const currentSeatId = this.seatBySession.get(client.sessionId);
+    const profileToken = this.pendingProfileTokenBySession.get(client.sessionId)
+      || (currentSeatId ? this.profileTokenBySeat.get(currentSeatId) : "")
+      || "";
     const movingHost = Boolean(currentSeatId && currentSeatId === this.state.hostPlayerId);
     if (this.state.players.has(targetSeatId) && currentSeatId !== targetSeatId) {
       this.sendLobbyError(client, "seat_occupied", "该座位刚刚已被占用，请选择其他空位。");
@@ -844,6 +863,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.state.players.delete(currentSeatId);
       this.playerHands.delete(currentSeatId);
       this.baseNameBySeat.delete(currentSeatId);
+      this.profileTokenBySeat.delete(currentSeatId);
       this.playerOrder = this.playerOrder.filter((id) => id !== currentSeatId);
       player.clientId = targetSeatId;
       player.seatIndex = seatIndex;
@@ -894,6 +914,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.sortPlayerOrder();
     this.pendingNameBySession.delete(client.sessionId);
     this.pendingTokenBySession.delete(client.sessionId);
+    this.pendingProfileTokenBySession.delete(client.sessionId);
+    this.bindGuestProfile(targetSeatId, profileToken, requestedName);
     this.clearSeatReleaseTimer(targetSeatId);
     if (movingHost || !this.state.hostPlayerId) {
       this.state.hostPlayerId = targetSeatId;
@@ -1059,6 +1081,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.state.players.delete(seatId);
     this.playerHands.delete(seatId);
     this.baseNameBySeat.delete(seatId);
+    this.profileTokenBySeat.delete(seatId);
     this.botIds.delete(seatId);
     this.configuredBotIds.delete(seatId);
     this.playerOrder = this.playerOrder.filter((id) => id !== seatId);
@@ -1193,6 +1216,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       this.pendingNameBySession.delete(client.sessionId);
       this.pendingTokenBySession.delete(client.sessionId);
+      this.pendingProfileTokenBySession.delete(client.sessionId);
       client.send("lobby_error", { code: "game_started", message: "牌局已经开始，本局不开放旁观。" });
       client.leave(4105);
     }
@@ -1293,6 +1317,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     const roomIsFull = this.state.players.size >= this.targetSeats;
     this.scheduleMatchStart(roomIsFull ? this.matchFullStartMs : this.matchWaitMs);
+    // Pair the absolute deadline with a fresh server clock sample. Client
+    // device clocks are not guaranteed to match the host that runs this room.
+    this.broadcastAvailableActions();
   }
 
   private attemptMatchStart(): void {
@@ -1321,7 +1348,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：输入客户端、seat/token/name；输出无返回值。
    * 副作用：更新在线态、会话映射并触发动作刷新。
    */
-  private reclaimSeat(client: Client, seatId: string, token: string, rawName: string): void {
+  private reclaimSeat(
+    client: Client,
+    seatId: string,
+    token: string,
+    rawName: string,
+    profileToken = "",
+  ): void {
     this.clearSeatReleaseTimer(seatId);
     this.clearTakeoverTimer(seatId);
     for (const [sessionId, mappedSeat] of this.seatBySession.entries()) {
@@ -1362,6 +1395,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       player.botStrength = 50;
     }
     this.pendingNameBySession.delete(client.sessionId);
+    this.pendingProfileTokenBySession.delete(client.sessionId);
+    this.bindGuestProfile(seatId, profileToken || this.profileTokenBySeat.get(seatId) || "", rawName);
     if (!this.state.hostPlayerId) {
       this.state.hostPlayerId = seatId;
     }
@@ -1387,6 +1422,23 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       seatIndex: this.seatIndexFromId(seatId),
       reclaimed,
     });
+  }
+
+  private rememberPendingProfile(sessionId: string, token: string): void {
+    if (token) {
+      this.pendingProfileTokenBySession.set(sessionId, token);
+    } else {
+      this.pendingProfileTokenBySession.delete(sessionId);
+    }
+  }
+
+  private bindGuestProfile(seatId: string, token: string, nickname: string): void {
+    const normalized = normalizeGuestProfileToken(token);
+    if (!normalized) {
+      return;
+    }
+    this.profileTokenBySeat.set(seatId, normalized);
+    void touchGuestProfile(normalized, nickname);
   }
 
   private findTokenBySeatId(seatId: string): string {
@@ -2830,6 +2882,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
               scoringMode: this.state.scoringMode,
               roundNumber: this.state.completedRounds,
             };
+            recordActiveGuestRoundResults(
+              `${this.roomId}:${this.state.completedRounds}`,
+              winnerId,
+              completedPlayers,
+              this.profileTokenBySeat,
+            );
             this.broadcast(event, this.lastRoundResult);
             return;
           }
@@ -2974,6 +3032,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       scoringMode: this.state.scoringMode,
       completedRounds: this.state.completedRounds,
       phase: this.state.phase,
+      serverNow: Date.now(),
       matchStartsAt: this.state.matchStartsAt,
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,

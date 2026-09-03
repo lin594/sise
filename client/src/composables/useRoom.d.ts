@@ -24,6 +24,7 @@ export declare function useRoom(playerName?: string): {
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
         phase: string;
+        serverNow?: number | undefined;
         matchStartsAt: number;
         hostPlayerId: string;
         dealerId: string;
@@ -232,6 +233,7 @@ export declare function useRoom(playerName?: string): {
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
         phase: string;
+        serverNow?: number | undefined;
         matchStartsAt: number;
         hostPlayerId: string;
         dealerId: string;
@@ -715,6 +717,16 @@ export declare function useRoom(playerName?: string): {
         decisionKey: string;
         visible?: boolean | undefined;
     } | null>;
+    matchClockSync: import("vue").Ref<{
+        deadline: number;
+        offsetMs: number;
+    }, {
+        deadline: number;
+        offsetMs: number;
+    } | {
+        deadline: number;
+        offsetMs: number;
+    }>;
     decisionTimer: import("vue").Ref<{
         untimed: boolean;
         canRequestMoreTime: boolean;

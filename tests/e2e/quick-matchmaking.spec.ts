@@ -94,6 +94,10 @@ test("quick match keeps its countdown through refresh and auto-starts on a rotat
   });
   const page = await context.newPage();
   try {
+    await page.addInitScript(() => {
+      const actualNow = Date.now.bind(Date);
+      Date.now = () => actualNow() - 60_000;
+    });
     await enterModeLobby(page, "守桌牌友");
     await expect(page.locator(".layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
     await page.getByTestId("mode-quick_match").click();
