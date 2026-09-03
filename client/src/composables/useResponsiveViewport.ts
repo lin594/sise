@@ -5,6 +5,8 @@ const COMPACT_WIDTH_MAX = 960;
 const COMPACT_HEIGHT_MAX = 500;
 const ULTRA_COMPACT_WIDTH_MAX = 720;
 const ULTRA_COMPACT_HEIGHT_MAX = 380;
+const LEGACY_COMPACT_WIDTH_MAX = 600;
+const LEGACY_COMPACT_HEIGHT_MAX = 340;
 
 export function useResponsiveViewport() {
   const viewportWidth = ref(typeof window === "undefined" ? 1280 : window.innerWidth);
@@ -52,6 +54,11 @@ export function useResponsiveViewport() {
       effectiveWidth.value <= ULTRA_COMPACT_WIDTH_MAX ||
       effectiveHeight.value <= ULTRA_COMPACT_HEIGHT_MAX,
   );
+  const isLegacyCompactViewport = computed(
+    () =>
+      effectiveWidth.value <= LEGACY_COMPACT_WIDTH_MAX &&
+      effectiveHeight.value <= LEGACY_COMPACT_HEIGHT_MAX,
+  );
 
   onMounted(() => {
     coarsePointerQuery = window.matchMedia("(pointer: coarse)");
@@ -76,6 +83,7 @@ export function useResponsiveViewport() {
     effectiveHeight,
     effectiveWidth,
     isCompactViewport,
+    isLegacyCompactViewport,
     isPhoneLike,
     isRotatedPhonePortrait,
     isUltraCompactViewport,

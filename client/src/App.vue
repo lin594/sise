@@ -5,6 +5,7 @@
       playing: isPlaying,
       'compact-viewport': isCompactViewport,
       'ultra-compact-viewport': isUltraCompactViewport,
+      'legacy-compact-viewport': isLegacyCompactViewport,
       'compact-landscape': isCompactViewport && isPlaying,
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
@@ -96,6 +97,7 @@
       @add-bot="addBot($event, 50)"
       @update-bot="updateBot"
       @remove-seat="removeSeat"
+      @leave-room="handleLeaveRoom"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -987,6 +989,7 @@ const {
   effectiveHeight,
   effectiveWidth,
   isCompactViewport,
+  isLegacyCompactViewport,
   isRotatedPhonePortrait,
   isUltraCompactViewport,
 } = useResponsiveViewport();

@@ -269,7 +269,7 @@ test.describe("compact landscape gameplay", () => {
     test.setTimeout(120_000);
     await enterLobby(page);
 
-    const lobbyMetrics = await page.locator(".lobby").evaluate((element) => ({
+    const lobbyMetrics = await page.getByTestId("lobby-scroll").evaluate((element) => ({
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
       overflowY: getComputedStyle(element).overflowY,

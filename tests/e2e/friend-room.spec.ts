@@ -45,6 +45,11 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByText("请选择一个写着“等待入座”的空座位；入座后等待房主开始。")).toBeVisible();
     await expect(guest.getByTestId("lobby-start")).toHaveText("请先选择座位");
+    await guest.getByTestId("leave-waiting-room").click();
+    await expect(guest.getByRole("dialog", { name: "离开当前好友房？" })).toContainText("你还没有入座，将返回游戏模式大厅。");
+    await expect(guest.getByTestId("cancel-waiting-leave")).toBeFocused();
+    await guest.keyboard.press("Escape");
+    await expect(guest.getByTestId("leave-waiting-room")).toBeFocused();
     const friendLobbyGeometry = await guest.evaluate(() => {
       const invite = document.querySelector<HTMLElement>(".invite-card")!.getBoundingClientRect();
       const firstSeat = document.querySelector<HTMLElement>('[data-testid="seat-0"]')!.getBoundingClientRect();
@@ -146,6 +151,138 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await guestContext.close();
     await hostContext.close();
   }
+});
+
+test("legacy small waiting room keeps seats clear and allows a safe personal exit", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("小屏房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+
+  const seatGrid = page.getByTestId("seat-grid");
+  const leaveButton = page.getByTestId("leave-waiting-room");
+  await expect(seatGrid).toBeVisible();
+  await expect(leaveButton).toBeVisible();
+  await expect(leaveButton).toHaveText("离开房间");
+
+  const geometry = await page.evaluate(() => {
+    const lobby = document.querySelector<HTMLElement>(".lobby")!;
+    const header = lobby.querySelector<HTMLElement>(".lobby-head")!;
+    const scroll = lobby.querySelector<HTMLElement>("[data-testid='lobby-scroll']")!;
+    const actions = lobby.querySelector<HTMLElement>(".lobby-actions")!;
+    const invite = lobby.querySelector<HTMLElement>(".invite-card")!;
+    const firstSeat = lobby.querySelector<HTMLElement>("[data-testid='seat-0']")!;
+    const controls = Array.from(
+      lobby.querySelectorAll<HTMLElement>(".lobby-head-actions button, [data-testid='copy-invite'], [data-testid='lobby-start']"),
+    ).map((element) => element.getBoundingClientRect());
+    const lobbyRect = lobby.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const scrollRect = scroll.getBoundingClientRect();
+    const actionRect = actions.getBoundingClientRect();
+    const firstSeatRect = firstSeat.getBoundingClientRect();
+    return {
+      lobbyInsideViewport:
+        lobbyRect.left >= 0 && lobbyRect.top >= 0 && lobbyRect.right <= innerWidth && lobbyRect.bottom <= innerHeight,
+      headerBeforeScroll: headerRect.bottom <= scrollRect.top + 1,
+      scrollBeforeActions: scrollRect.bottom <= actionRect.top + 1,
+      visibleFirstSeatHeight:
+        Math.min(firstSeatRect.bottom, scrollRect.bottom) - Math.max(firstSeatRect.top, scrollRect.top),
+      lobbyHeight: lobbyRect.height,
+      headerHeight: headerRect.height,
+      scrollHeight: scrollRect.height,
+      actionHeight: actionRect.height,
+      inviteHeight: invite.getBoundingClientRect().height,
+      minimumControlHeight: Math.min(...controls.map((rect) => rect.height)),
+      bodyWidth: document.body.scrollWidth,
+      bodyHeight: document.body.scrollHeight,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+    };
+  });
+  expect(geometry.lobbyInsideViewport).toBe(true);
+  expect(geometry.headerBeforeScroll).toBe(true);
+  expect(geometry.scrollBeforeActions).toBe(true);
+  expect(geometry.visibleFirstSeatHeight, JSON.stringify(geometry)).toBeGreaterThanOrEqual(80);
+  expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(42);
+  expect(geometry.bodyWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.bodyHeight).toBeLessThanOrEqual(geometry.viewportHeight);
+  await page.screenshot({ path: testInfo.outputPath("friend-waiting-room-568.png") });
+
+  await leaveButton.click();
+  const leaveDialog = page.getByRole("dialog", { name: "离开当前好友房？" });
+  const cancel = page.getByTestId("cancel-waiting-leave");
+  const confirm = page.getByTestId("confirm-waiting-leave");
+  await expect(leaveDialog).toBeVisible();
+  await expect(leaveDialog).toContainText("房主会自动转交");
+  await expect(cancel).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("friend-waiting-leave-confirm-568.png") });
+  await page.keyboard.press("Shift+Tab");
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(leaveDialog).toHaveCount(0);
+  await expect(leaveButton).toBeFocused();
+
+  await leaveButton.click();
+  await page.getByTestId("waiting-leave-mask").click({ position: { x: 2, y: 2 } });
+  await expect(leaveDialog).toHaveCount(0);
+  await expect(leaveButton).toBeFocused();
+
+  const departingRoomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
+  expect(departingRoomId).toBeTruthy();
+  await leaveButton.click();
+  await confirm.click();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await page.waitForTimeout(1_200);
+  await expect(seatGrid).toHaveCount(0);
+  const leaveState = await page.evaluate((roomId) => ({
+    roomId: localStorage.getItem("four_room_id"),
+    token: roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null,
+    queryRoomId: new URL(location.href).searchParams.get("roomId"),
+  }), departingRoomId);
+  expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
+});
+
+test.describe("rotated legacy friend waiting room", () => {
+  test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
+
+  test("keeps the leave confirmation inside the rotated canvas", async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    await page.goto("/");
+    await page.getByTestId("nickname-input").fill("竖屏牌友");
+    await page.getByTestId("login-submit").click();
+    await page.getByTestId("mode-friends").click();
+    await page.getByTestId("lobby-start").click();
+
+    const layout = page.locator(".layout");
+    await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await page.getByTestId("leave-waiting-room").click();
+    const leaveDialog = page.getByRole("dialog", { name: "离开当前好友房？" });
+    await expect(leaveDialog).toBeVisible();
+    await expect(page.getByTestId("cancel-waiting-leave")).toBeFocused();
+
+    const geometry = await page.evaluate(() => {
+      const mask = document.querySelector<HTMLElement>("[data-testid='waiting-leave-mask']")!.getBoundingClientRect();
+      const dialog = document.querySelector<HTMLElement>(".waiting-leave-dialog")!.getBoundingClientRect();
+      return {
+        maskInsideViewport:
+          mask.left >= 0 && mask.top >= 0 && mask.right <= innerWidth && mask.bottom <= innerHeight,
+        dialogInsideViewport:
+          dialog.left >= 0 && dialog.top >= 0 && dialog.right <= innerWidth && dialog.bottom <= innerHeight,
+      };
+    });
+    expect(geometry.maskInsideViewport).toBe(true);
+    expect(geometry.dialogInsideViewport).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("friend-waiting-leave-confirm-rotated-320x568.png") });
+    await page.keyboard.press("Escape");
+    await expect(leaveDialog).toHaveCount(0);
+    await expect(page.getByTestId("leave-waiting-room")).toBeFocused();
+  });
 });
 
 test("copies an invite link on an insecure LAN deployment", async ({ page }) => {
