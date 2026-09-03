@@ -1002,7 +1002,8 @@ const declareSecondsLeft = computed(() => {
   if (!endsAt) {
     return 0;
   }
-  return Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000));
+  const configuredSeconds = Math.ceil(declareTotalMs.value / 1000);
+  return Math.max(0, Math.min(configuredSeconds, Math.ceil((endsAt - nowMs.value) / 1000)));
 });
 const declareTotalMs = computed(() => {
   const action = String(state.value?.lastAction ?? "");

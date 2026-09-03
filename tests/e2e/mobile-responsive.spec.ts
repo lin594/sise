@@ -292,6 +292,12 @@ test.describe("compact landscape gameplay", () => {
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await expect.poll(async () => {
+      const label = (await page.locator(".discard-tip").textContent()) ?? "";
+      const match = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);
+      return Boolean(match && !match[2] && (await page.locator("[data-testid^='hand-card-']").count()) === Number(match[1]));
+    }).toBe(true);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-guidance")).toContainText(/还剩 \d+ 秒/);
     const decisionSecondsMatch = (await page.getByTestId("action-guidance").textContent())?.match(/还剩\s*(\d+)\s*秒/);
@@ -536,7 +542,18 @@ test.describe("compact landscape gameplay", () => {
 
     await page.getByTestId("game-exit").click();
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByTestId("confirm-exit")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toHaveCount(0);
+    await expect(page.getByTestId("game-exit")).toBeFocused();
+
+    await page.getByTestId("game-exit").click();
     await page.getByTestId("cancel-exit").click();
+    await expect(page.getByTestId("game-exit")).toBeFocused();
     await expect(page.getByTestId("game-board")).toBeVisible();
     const departingRoomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
     await page.getByTestId("game-exit").click();

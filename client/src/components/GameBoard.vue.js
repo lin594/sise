@@ -396,7 +396,7 @@ const seatCountdownSeconds = computed(() => {
     if (!endsAt || endsAt <= nowMs.value) {
         return null;
     }
-    return Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000));
+    return Math.max(0, Math.min(Math.ceil(OP_COUNTDOWN_MS / 1000), Math.ceil((endsAt - nowMs.value) / 1000)));
 });
 const seatCountdownPercent = computed(() => {
     if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&

@@ -18,12 +18,13 @@
         <span>{{ decisionActive ? "先操作" : "设置" }}</span>
       </button>
       <button
+        ref="exitButtonRef"
         class="tool-button exit"
         type="button"
         aria-label="退出牌局"
         title="退出牌局"
         data-testid="game-exit"
-        @click="confirmingExit = true; settingsOpen = false"
+        @click="requestExit"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M10 5H5v14h5" />
@@ -164,13 +165,23 @@
     </Transition>
 
     <Teleport to="body">
-      <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="confirmingExit = false">
-        <section class="exit-confirm" role="dialog" aria-modal="true" aria-labelledby="exit-confirm-title">
+      <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="cancelExit">
+        <section
+          ref="exitDialogRef"
+          class="exit-confirm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-confirm-title"
+          aria-describedby="exit-confirm-description"
+          tabindex="-1"
+          @keydown.esc.stop.prevent="cancelExit"
+          @keydown.tab="trapExitFocus"
+        >
           <div class="exit-symbol" aria-hidden="true">↗</div>
           <h2 id="exit-confirm-title">退出当前牌局？</h2>
-          <p>退出后你的座位会由机器人接管，你将返回游戏模式大厅。</p>
+          <p id="exit-confirm-description">退出后你的座位会由机器人接管，你将返回游戏模式大厅。</p>
           <div class="exit-actions">
-            <button type="button" data-testid="cancel-exit" @click="confirmingExit = false">继续游戏</button>
+            <button ref="cancelExitButtonRef" type="button" data-testid="cancel-exit" @click="cancelExit">继续游戏</button>
             <button class="danger" type="button" data-testid="confirm-exit" @click="confirmExit">确认退出</button>
           </div>
         </section>
@@ -180,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import type { CardDisplayMode, GameDisplayPreferences, SeatDirection, TurnAlertMode } from "@/types/game";
 
 const props = defineProps<{
@@ -196,6 +207,10 @@ const emit = defineEmits<{
 
 const settingsOpen = ref(false);
 const confirmingExit = ref(false);
+const exitButtonRef = ref<HTMLButtonElement | null>(null);
+const exitDialogRef = ref<HTMLElement | null>(null);
+const cancelExitButtonRef = ref<HTMLButtonElement | null>(null);
+let exitReturnFocus: HTMLElement | null = null;
 const cardModes: Array<{ value: CardDisplayMode; label: string; sample: string }> = [
   { value: "large", label: "大字", sample: "帅" },
   { value: "adaptive", label: "自适应", sample: "自" },
@@ -237,8 +252,53 @@ function openRules(): void {
   emit("openRules");
 }
 
+async function requestExit(): Promise<void> {
+  exitReturnFocus = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : exitButtonRef.value;
+  settingsOpen.value = false;
+  confirmingExit.value = true;
+  await nextTick();
+  // “继续游戏” is intentionally first: an accidental Enter cannot confirm
+  // the destructive action, and keyboard/switch users land on the safe choice.
+  cancelExitButtonRef.value?.focus();
+}
+
+async function cancelExit(): Promise<void> {
+  confirmingExit.value = false;
+  await nextTick();
+  const target = exitReturnFocus?.isConnected ? exitReturnFocus : exitButtonRef.value;
+  target?.focus();
+  exitReturnFocus = null;
+}
+
+function trapExitFocus(event: KeyboardEvent): void {
+  const dialog = exitDialogRef.value;
+  if (!dialog) {
+    return;
+  }
+  const focusable = Array.from(
+    dialog.querySelectorAll<HTMLElement>("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"),
+  );
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function confirmExit(): void {
   confirmingExit.value = false;
+  exitReturnFocus = null;
   emit("exit");
 }
 </script>
