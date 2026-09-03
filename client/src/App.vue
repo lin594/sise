@@ -136,6 +136,7 @@
         :turn-hint="turnHint"
         :interaction-paused-message="interactionPausedMessage"
         :can-request-more-time="decisionTimer.canRequestMoreTime"
+        :decision-untimed="decisionTimer.untimed"
         :more-time-seconds="decisionTimer.extensionSeconds"
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
@@ -226,6 +227,7 @@
       :ultra-compact="isUltraCompactViewport"
       :card-mode="resolvedOwnCardMode"
       :can-request-more-time="decisionTimer.canRequestMoreTime"
+      :untimed="decisionTimer.untimed"
       :more-time-seconds="decisionTimer.extensionSeconds"
       :decision-key="decisionTimer.decisionKey"
       @submit="submitDeclaration"
@@ -1169,7 +1171,7 @@ const decisionAlertKey = computed(() => {
   return [
     activeRoomId.value,
     state.value?.responsePhase ?? "",
-    state.value?.responseEndsAt ?? 0,
+    decisionTimer.value.decisionKey || state.value?.responseEndsAt || 0,
     canDiscard.value ? "discard" : "action",
   ].join("|");
 });

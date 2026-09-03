@@ -99,6 +99,7 @@ export interface AvailableAction {
 }
 
 export interface DecisionTimerState {
+  untimed: boolean;
   canRequestMoreTime: boolean;
   extensionSeconds: number;
   totalMs: number;

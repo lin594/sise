@@ -14,9 +14,13 @@
           <p>系统已选好推荐方案；点击牌组或数字即可调整。</p>
         </div>
         <div class="declare-timer-tools">
-          <div class="declare-timer" :class="{ urgent: secondsLeft <= 10 }" aria-label="声明剩余时间">
-            <strong>{{ secondsLeft }}</strong>
-            <span>秒</span>
+          <div
+            class="declare-timer"
+            :class="{ urgent: !untimed && secondsLeft <= 10, untimed }"
+            :aria-label="untimed ? '练习模式声明不限时' : '声明剩余时间'"
+          >
+            <strong>{{ untimed ? "不限时" : secondsLeft }}</strong>
+            <span>{{ untimed ? "练习模式" : "秒" }}</span>
           </div>
           <button
             v-if="canRequestMoreTime && !submitted"
@@ -33,7 +37,7 @@
         </div>
       </header>
 
-      <div class="declare-progress" aria-hidden="true">
+      <div v-if="!untimed" class="declare-progress" aria-hidden="true">
         <div class="declare-progress-fill" :style="{ width: `${progressPercent}%` }"></div>
       </div>
 
@@ -163,7 +167,8 @@
           >
             恢复系统建议
           </button>
-          <p><span class="timeout-dot"></span>超时将按系统建议提交</p>
+          <p v-if="untimed" class="untimed-message"><span class="untimed-dot"></span>不限时，请按自己的节奏确认</p>
+          <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
           <p v-if="serverError" class="declare-error" role="alert">{{ serverError }}</p>
         </div>
         <button
@@ -203,6 +208,7 @@ const props = defineProps<{
   handReady: boolean;
   submitted: boolean;
   secondsLeft: number;
+  untimed?: boolean;
   progressPercent: number;
   serverError: string;
   compact: boolean;
@@ -853,6 +859,33 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   background: #dc2626;
 }
 
+.untimed-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.25rem;
+  border-radius: 50%;
+  background: #059669;
+}
+
+.footer-meta .untimed-message {
+  color: #065f46;
+  font-size: max(0.75rem, 12px);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.declare-timer.untimed {
+  min-width: 5.7rem;
+  border-color: #6ee7b7;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.declare-timer.untimed strong {
+  font-size: clamp(1rem, 3.4vh, 1.35rem);
+}
+
 .reset-recommendation {
   min-height: 42px;
   padding: 0.35rem 0.75rem;
@@ -1001,7 +1034,7 @@ button:focus-visible {
 
 .declare-panel.ultra-compact .declare-kicker,
 .declare-panel.ultra-compact .legend,
-.declare-panel.ultra-compact .footer-meta p:not(.declare-error),
+.declare-panel.ultra-compact .footer-meta p:not(.declare-error):not(.untimed-message),
 .declare-panel.ultra-compact .confirm-declaration small {
   display: none;
 }

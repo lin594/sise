@@ -1030,6 +1030,7 @@ function mkRoom(seats: string[]) {
   }
   room.state = state;
   room.playerOrder = [...seats];
+  state.roomMode = "friends";
   room.state.phase = "playing";
   room.collectiveTimeoutMs = 5;
   room.localTimeoutMs = 5;

@@ -1172,9 +1172,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.clearDeclareIntroTimer();
     this.state.responseEndsAt = 0;
     this.declareTimeExtensionUsedBy.clear();
-    this.declareTimerTotalMs = this.declareTimeoutMs;
+    const practiceUntimed = this.playerOrder.some((seatId) => this.isPracticeDecisionUntimed(seatId));
+    this.declareTimerTotalMs = practiceUntimed ? 0 : this.declareTimeoutMs;
     this.declareDecisionWindowId += 1;
-    this.state.declareEndsAt = Date.now() + this.declareTimeoutMs;
+    this.state.declareEndsAt = practiceUntimed ? 0 : Date.now() + this.declareTimeoutMs;
     startDeclaringFlow({
       playerOrder: this.playerOrder,
       getPlayer: (seatId) => this.state.players.get(seatId),
@@ -1183,7 +1184,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       allReady: () => this.areAllDeclarationsReady(),
       finishDeclaringPhase: () => this.finishDeclaringPhase(),
-      scheduleDeclareTimeout: () => this.scheduleDeclareTimeout(),
+      scheduleDeclareTimeout: () => {
+        if (!practiceUntimed) {
+          this.scheduleDeclareTimeout();
+        }
+      },
     });
   }
 
@@ -1239,6 +1244,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!player || !player.connected || player.isBot || this.botIds.has(seatId)) {
       return false;
     }
+    if (this.isPracticeDecisionUntimed(seatId)) {
+      return false;
+    }
     const now = Date.now();
     if (this.state.phase === "declaring") {
       return (
@@ -1268,24 +1276,29 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private buildDecisionTimerSnapshot(seatId: string): {
+    untimed: boolean;
     canRequestMoreTime: boolean;
     extensionSeconds: number;
     totalMs: number;
     endsAt: number;
     decisionKey: string;
   } {
-    const totalMs =
-      this.state.phase === "declaring"
+    const untimed = this.isPracticeDecisionUntimed(seatId);
+    const totalMs = untimed
+      ? 0
+      : this.state.phase === "declaring"
         ? this.declareTimerTotalMs || this.declareTimeoutMs
         : this.state.phase === "playing"
           ? this.responseTimerTotalMs || this.operationTimeoutMs
           : 0;
     return {
+      untimed,
       canRequestMoreTime: this.canSeatRequestMoreTime(seatId),
       extensionSeconds: Math.ceil(this.timeExtensionMs / 1000),
       totalMs,
-      endsAt:
-        this.state.phase === "declaring"
+      endsAt: untimed
+        ? 0
+        : this.state.phase === "declaring"
           ? this.state.declareEndsAt
           : this.state.phase === "playing"
             ? this.state.responseEndsAt
@@ -1297,6 +1310,34 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
             ? `play:${this.responseDecisionWindowId}`
             : "",
     };
+  }
+
+  /**
+   * 作用：判断某座位当前是否享有单人练习的真人不限时决策。
+   * 关键输入/输出：输入座位 ID；仅在线真人且正轮到其声明、响应或出牌时返回 true。
+   * 副作用：无。机器人与断线托管永远保持计时，以免无人牌局停滞。
+   */
+  private isPracticeDecisionUntimed(seatId: string): boolean {
+    if (this.state.roomMode !== "practice") {
+      return false;
+    }
+    const player = this.state.players.get(seatId);
+    if (!player || !player.connected || player.isBot || this.botIds.has(seatId)) {
+      return false;
+    }
+    if (this.state.phase === "declaring") {
+      return !player.declaredReady;
+    }
+    if (this.state.phase !== "playing" || !this.pendingResponse) {
+      return false;
+    }
+    if (this.state.responsePhase === "collective") {
+      return this.collectiveResponderId === seatId && !this.pendingResponse.collectives.has(seatId);
+    }
+    return (
+      this.pendingResponse.ownerId === seatId &&
+      (this.state.currentPlayerId === seatId || this.awaitingDiscardOwnerId === seatId)
+    );
   }
 
   private handleRequestMoreTime(client: Client, payload?: { decisionKey?: unknown }): void {
@@ -2804,6 +2845,16 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.responseTimeExtensionUsed = false;
       this.responseTimerTotalMs = baseTimeoutMs;
       this.responseDecisionWindowId += 1;
+    }
+    const decisionSeatId = isCollectivePhase ? this.collectiveResponderId ?? "" : this.pendingResponse?.ownerId ?? "";
+    if (decisionSeatId && this.isPracticeDecisionUntimed(decisionSeatId)) {
+      this.responseTimerTotalMs = 0;
+      this.state.responseEndsAt = 0;
+      this.traceStep(
+        "practice_human_untimed",
+        `phase=${this.state.responsePhase} seat=${decisionSeatId} awaiting=${this.awaitingDiscardOwnerId ?? "-"}`,
+      );
+      return;
     }
     this.state.responseEndsAt = Date.now() + timeoutMs;
     this.traceStep(

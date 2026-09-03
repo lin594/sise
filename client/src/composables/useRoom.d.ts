@@ -679,12 +679,14 @@ export declare function useRoom(playerName?: string): {
         cardLabel?: string | undefined;
     }[]>;
     decisionTimer: import("vue").Ref<{
+        untimed: boolean;
         canRequestMoreTime: boolean;
         extensionSeconds: number;
         totalMs: number;
         endsAt: number;
         decisionKey: string;
     }, DecisionTimerState | {
+        untimed: boolean;
         canRequestMoreTime: boolean;
         extensionSeconds: number;
         totalMs: number;

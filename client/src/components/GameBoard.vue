@@ -563,6 +563,7 @@
       :current-player-name="props.currentPlayerName ?? '-'"
       :paused-hint="effectiveInteractionPausedMessage"
       :seconds-left="seatCountdownSeconds"
+      :untimed="Boolean(props.decisionUntimed)"
       :can-request-more-time="Boolean(props.canRequestMoreTime)"
       :more-time-seconds="props.moreTimeSeconds ?? 20"
       :decision-key="props.decisionKey ?? ''"
@@ -654,6 +655,7 @@ const props = defineProps<{
   turnHint?: string;
   interactionPausedMessage?: string;
   canRequestMoreTime?: boolean;
+  decisionUntimed?: boolean;
   moreTimeSeconds?: number;
   decisionTimerTotalMs?: number;
   decisionTimerEndsAt?: number;

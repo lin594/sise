@@ -11,6 +11,7 @@ const props = withDefaults(defineProps(), {
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    untimed: false,
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
@@ -90,7 +91,7 @@ const needsDecision = computed(() => props.canAct || props.canDiscard);
 const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
     : null);
-const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
+const isUrgent = computed(() => !props.untimed && needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
 const panelHint = computed(() => {
     if (props.pausedHint) {
         return props.pausedHint;
@@ -219,6 +220,7 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    untimed: false,
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
@@ -231,6 +233,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
@@ -277,7 +280,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     role: "status",
     'aria-live': "polite",
 });
-(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.panelHint}` : "");
+(__VLS_ctx.pausedHint ? `操作已暂停。${__VLS_ctx.pausedHint}` : __VLS_ctx.needsDecision ? `该你操作了。${__VLS_ctx.untimed ? "练习不限时。" : ""}${__VLS_ctx.panelHint}` : "");
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "hint" },
     ...{ class: ({ active: __VLS_ctx.needsDecision, urgent: __VLS_ctx.isUrgent, paused: Boolean(__VLS_ctx.pausedHint) }) },
@@ -296,7 +299,12 @@ else if (__VLS_ctx.needsDecision) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.isUrgent ? "抓紧操作" : "该你操作了");
-    if (__VLS_ctx.secondsLeft !== null) {
+    if (__VLS_ctx.untimed) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({
+            ...{ class: "untimed-label" },
+        });
+    }
+    else if (__VLS_ctx.secondsLeft !== null) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.b, __VLS_intrinsicElements.b)({});
         (__VLS_ctx.secondsLeft);
     }
@@ -374,6 +382,7 @@ else {
 /** @type {__VLS_StyleScopedClasses['hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['untimed-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['instruction']} */ ;
 /** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['paused-state']} */ ;

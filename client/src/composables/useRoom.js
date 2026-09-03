@@ -383,6 +383,7 @@ export function useRoom(playerName = "Player") {
     const declareError = ref("");
     const actionLogs = ref([]);
     const decisionTimer = ref({
+        untimed: false,
         canRequestMoreTime: false,
         extensionSeconds: 20,
         totalMs: 0,
@@ -743,6 +744,7 @@ export function useRoom(playerName = "Player") {
         debugApplied.value = null;
         declareError.value = "";
         decisionTimer.value = {
+            untimed: false,
             canRequestMoreTime: false,
             extensionSeconds: 20,
             totalMs: 0,
@@ -827,6 +829,7 @@ export function useRoom(playerName = "Player") {
         }
         const raw = input;
         decisionTimer.value = {
+            untimed: Boolean(raw.untimed),
             canRequestMoreTime: Boolean(raw.canRequestMoreTime),
             extensionSeconds: Math.max(1, Math.ceil(Number(raw.extensionSeconds) || 20)),
             totalMs: Math.max(0, Number(raw.totalMs) || 0),

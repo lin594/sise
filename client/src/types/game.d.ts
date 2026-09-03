@@ -83,6 +83,7 @@ export interface AvailableAction {
     deferred?: boolean;
 }
 export interface DecisionTimerState {
+    untimed: boolean;
     canRequestMoreTime: boolean;
     extensionSeconds: number;
     totalMs: number;

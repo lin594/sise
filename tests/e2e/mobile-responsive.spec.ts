@@ -292,9 +292,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(handPreview.locator("button")).toHaveCount(0);
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(confirmDeclaration).toContainText(/确认/);
-    const declarationSeconds = Number(await page.locator(".declare-timer strong").textContent());
-    expect(declarationSeconds).toBeGreaterThanOrEqual(40);
-    expect(declarationSeconds).toBeLessThanOrEqual(45);
+    await expect(page.locator(".declare-timer")).toContainText("不限时");
+    await expect(page.locator(".declare-timer")).toContainText("练习模式");
 
     const declarationMetrics = await page.locator(".declare-panel").evaluate((panel) => {
       const confirm = panel.querySelector<HTMLElement>(".confirm-declaration");
@@ -414,10 +413,10 @@ test.describe("compact landscape gameplay", () => {
       return Boolean(match && !match[2] && (await page.locator("[data-testid^='hand-card-']").count()) === Number(match[1]));
     }).toBe(true);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
-    await expect(page.getByTestId("action-guidance")).toContainText(/还剩 \d+ 秒/);
-    const decisionSecondsMatch = (await page.getByTestId("action-guidance").textContent())?.match(/还剩\s*(\d+)\s*秒/);
-    expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeGreaterThanOrEqual(22);
-    expect(Number(decisionSecondsMatch?.[1] ?? 0)).toBeLessThanOrEqual(30);
+    await expect(page.getByTestId("action-guidance")).toContainText("练习不限时");
+    await expect(page.getByTestId("action-guidance")).not.toContainText(/还剩 \d+ 秒/);
+    await expect(page.getByTestId("action-guidance")).toHaveAttribute("data-urgent", "false");
+    await expect(page.getByTestId("request-more-time")).toHaveCount(0);
     const guidanceMetrics = await page.getByTestId("action-guidance").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();

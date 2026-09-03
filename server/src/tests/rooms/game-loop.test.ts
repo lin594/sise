@@ -20,6 +20,7 @@ function mkRoomWithSeats(seats: string[]) {
   }
   (room as any).state = state;
   (room as any).playerOrder = [...seats];
+  state.roomMode = "friends";
   state.phase = "playing";
   (room as any).collectiveTimeoutMs = 5;
   (room as any).localTimeoutMs = 5;
@@ -247,6 +248,49 @@ test("bots and disconnected players cannot request more decision time", () => {
 
   assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
   assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
+});
+
+test("practice keeps connected human decisions untimed while bot decisions still advance", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.roomMode = "practice";
+  room.state.phase = "declaring";
+  room.state.players.get("A").connected = true;
+  for (const seatId of ["B", "C", "D"]) {
+    room.state.players.get(seatId).isBot = true;
+    room.botIds.add(seatId);
+  }
+
+  room.startDeclaringPhase();
+  const declareTimer = room.buildDecisionTimerSnapshot("A");
+  assert.equal(declareTimer.untimed, true);
+  assert.equal(declareTimer.canRequestMoreTime, false);
+  assert.equal(declareTimer.endsAt, 0);
+  assert.equal(room.declareTimer, null);
+
+  room.state.phase = "playing";
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("human-turn", "green", "ma", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "local_draw";
+  room.state.currentPlayerId = "A";
+  room.awaitingDiscardOwnerId = "A";
+  room.scheduleCollectiveTimeout();
+  const humanTurn = room.buildDecisionTimerSnapshot("A");
+  assert.equal(humanTurn.untimed, true);
+  assert.equal(humanTurn.endsAt, 0);
+  assert.equal(room.collectiveTimer, null);
+
+  room.state.players.get("A").connected = false;
+  room.state.players.get("A").isBot = true;
+  room.botIds.add("A");
+  room.scheduleCollectiveTimeout();
+  const botTurn = room.buildDecisionTimerSnapshot("A");
+  assert.equal(botTurn.untimed, false);
+  assert.equal(botTurn.endsAt > Date.now(), true);
+  assert.notEqual(room.collectiveTimer, null);
+  room.clearCollectiveTimer();
 });
 
 test("local_upper action panel does not enable chi via wildcard pool", () => {

@@ -516,7 +516,7 @@ const decisionAlertKey = computed(() => {
     return [
         activeRoomId.value,
         state.value?.responsePhase ?? "",
-        state.value?.responseEndsAt ?? 0,
+        decisionTimer.value.decisionKey || state.value?.responseEndsAt || 0,
         canDiscard.value ? "discard" : "action",
     ].join("|");
 });
@@ -1985,6 +1985,7 @@ else {
         turnHint: (__VLS_ctx.turnHint),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
+        decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
@@ -2015,6 +2016,7 @@ else {
         turnHint: (__VLS_ctx.turnHint),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
+        decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
@@ -2213,6 +2215,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         cardMode: (__VLS_ctx.resolvedOwnCardMode),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
+        untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }));
@@ -2229,6 +2232,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         ultraCompact: (__VLS_ctx.isUltraCompactViewport),
         cardMode: (__VLS_ctx.resolvedOwnCardMode),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
+        untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }, ...__VLS_functionalComponentArgsRest(__VLS_63));

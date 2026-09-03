@@ -98,6 +98,7 @@ function runOneGame(): { phase: string; lastAction: string; deckRemaining: numbe
   const { room, hostClient } = createBotGameRoom();
 
   // Mark the host seat as bot too, so everything auto-plays
+  room.state.players.get("seat_1").isBot = true;
   room.botIds.add("seat_1");
 
   // Start the game - this fills bots for seats 2-4, bootstraps round, and begins play

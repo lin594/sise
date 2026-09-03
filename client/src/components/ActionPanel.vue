@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="panel" :class="{ locked: panelLocked }">
     <span class="sr-only" role="status" aria-live="polite">
-      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `该你操作了。${panelHint}` : "" }}
+      {{ pausedHint ? `操作已暂停。${pausedHint}` : needsDecision ? `该你操作了。${untimed ? "练习不限时。" : ""}${panelHint}` : "" }}
     </span>
     <div
       class="hint"
@@ -14,7 +14,8 @@
       </span>
       <span v-else-if="needsDecision" class="decision-line">
         <strong>{{ isUrgent ? "抓紧操作" : "该你操作了" }}</strong>
-        <b v-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
+        <b v-if="untimed" class="untimed-label">练习不限时</b>
+        <b v-else-if="secondsLeft !== null">还剩 {{ secondsLeft }} 秒</b>
       </span>
       <span class="instruction">{{ panelHint }}</span>
       <button
@@ -83,6 +84,7 @@ const props = withDefaults(
     hasDiscardSelection?: boolean;
     discardPending?: boolean;
     secondsLeft?: number | null;
+    untimed?: boolean;
     canRequestMoreTime?: boolean;
     moreTimeSeconds?: number;
     decisionKey?: string;
@@ -99,6 +101,7 @@ const props = withDefaults(
     hasDiscardSelection: false,
     discardPending: false,
     secondsLeft: null,
+    untimed: false,
     canRequestMoreTime: false,
     moreTimeSeconds: 20,
     decisionKey: "",
@@ -205,7 +208,9 @@ const secondsLeft = computed<number | null>(() =>
     ? Math.max(0, Math.ceil(props.secondsLeft))
     : null,
 );
-const isUrgent = computed(() => needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5);
+const isUrgent = computed(
+  () => !props.untimed && needsDecision.value && secondsLeft.value !== null && secondsLeft.value <= 5,
+);
 
 const panelHint = computed(() => {
   if (props.pausedHint) {
@@ -428,6 +433,10 @@ function onClick(item: PanelAction): void {
   color: #f8fafc;
   font-variant-numeric: tabular-nums;
   font-size: 0.92em;
+}
+
+.decision-line .untimed-label {
+  color: #bbf7d0;
 }
 
 .hint.urgent {
