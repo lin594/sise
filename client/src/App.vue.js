@@ -496,6 +496,9 @@ function closeRulesForDecision() {
     }
 }
 function focusReadyGameControl() {
+    if (document.querySelector("[aria-modal='true']")) {
+        return;
+    }
     document
         .querySelector(".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)")
         ?.focus();

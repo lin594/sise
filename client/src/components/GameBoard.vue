@@ -1919,6 +1919,9 @@ watch(
       return;
     }
     void nextTick(() => {
+      if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
+        return;
+      }
       const board = boardRef.value;
       const target = canDiscard.value
         ? board?.querySelector<HTMLElement>(".hand-card.playable")
@@ -3468,7 +3471,7 @@ watch(
 @media (max-width: 960px), (max-height: 500px) {
   .board {
     grid-template-columns: clamp(6rem, 15vw, 7.5rem) minmax(0, 1fr) clamp(8.4rem, 21vw, 10.5rem);
-    grid-template-rows: minmax(0, 1fr) clamp(6.75rem, 31dvh, 7.5rem);
+    grid-template-rows: minmax(0, 1fr) var(--compact-board-self-row-height, clamp(6.75rem, 31dvh, 7.5rem));
     gap: 0.4vh;
   }
 
@@ -3479,7 +3482,7 @@ watch(
     padding: 0.45vh;
     border-radius: 1.6vh;
     grid-template-columns: minmax(0, 22%) minmax(0, 1fr) minmax(0, 22%);
-    grid-template-rows: minmax(3.1rem, 0.65fr) minmax(6.15rem, 1.4fr) minmax(3.1rem, 0.65fr);
+    grid-template-rows: minmax(0, 0.8fr) minmax(4.4rem, 1.2fr) minmax(0, 0.8fr);
     grid-template-areas:
       "flowtl top flowtr"
       "left center right"

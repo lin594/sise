@@ -1150,6 +1150,9 @@ function closeRulesForDecision(): void {
 }
 
 function focusReadyGameControl(): void {
+  if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
+    return;
+  }
   document
     .querySelector<HTMLElement>(
       ".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)",
@@ -2227,6 +2230,7 @@ watch(
 .layout {
   --effective-viewport-width: 100dvw;
   --effective-viewport-height: 100dvh;
+  --compact-board-self-row-height: clamp(6.75rem, 31dvh, 7.5rem);
   --game-header-height: 3rem;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -2247,6 +2251,7 @@ watch(
 .layout.rotated-phone-portrait {
   --effective-viewport-width: 100dvh;
   --effective-viewport-height: 100dvw;
+  --compact-board-self-row-height: clamp(6.75rem, 31dvw, 7.5rem);
   --safe-top: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-right, 0px);

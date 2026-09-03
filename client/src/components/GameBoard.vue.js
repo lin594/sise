@@ -1112,6 +1112,9 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
         return;
     }
     void nextTick(() => {
+        if (document.querySelector("[aria-modal='true']")) {
+            return;
+        }
         const board = boardRef.value;
         const target = canDiscard.value
             ? board?.querySelector(".hand-card.playable")

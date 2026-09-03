@@ -163,7 +163,7 @@ server/src/rules/                     牌堆、动作候选、胡牌拆解
 server/src/schema/                    公开同步 Schema
 ```
 
-触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布，并通过 `--effective-viewport-width`、`--effective-viewport-height` 向下游组件提供唯一尺寸来源。根布局内的设置、记录和确认层必须使用这组变量或容器百分比，不能直接假定 `100dvw/100dvh` 与游戏坐标轴一致。
+触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布，并通过 `--effective-viewport-width`、`--effective-viewport-height` 向下游组件提供唯一尺寸来源。根布局内的设置、记录和确认层必须使用这组变量或容器百分比，不能直接假定 `100dvw/100dvh` 与游戏坐标轴一致。紧凑牌桌的底部手牌操作行由根布局提供 `--compact-board-self-row-height`：横持按 `dvh`、自动旋转时按对应的 `dvw` 计算，`GameBoard` 不再直接把物理高度当成游戏高度。牌桌内部三行只能分配实际剩余空间，内容溢出由各牌区自行滚动，牌桌根网格不得产生被 `overflow: hidden` 裁掉的行。
 
 ## 8. 当前边界
 

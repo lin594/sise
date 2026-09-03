@@ -119,6 +119,50 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(36);
 }
 
+async function expectCompactTableContained(page: Page): Promise<{
+  tableHeight: number;
+  selfRowHeight: number;
+}> {
+  const geometry = await page.evaluate(() => {
+    const table = document.querySelector<HTMLElement>(".table")!;
+    const selfHand = document.querySelector<HTMLElement>(".self-hand-card")!;
+    const tableRect = table.getBoundingClientRect();
+    const zones = [
+      "[data-testid='player-top']",
+      "[data-testid='player-left']",
+      ".center",
+      "[data-testid='player-right']",
+      ".self-groups-card",
+    ].map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector)!;
+      const rect = element.getBoundingClientRect();
+      return {
+        selector,
+        logicalHeight: element.offsetHeight,
+        inside:
+          rect.left >= tableRect.left - 1 &&
+          rect.top >= tableRect.top - 1 &&
+          rect.right <= tableRect.right + 1 &&
+          rect.bottom <= tableRect.bottom + 1,
+      };
+    });
+    return {
+      tableHeight: table.offsetHeight,
+      tableClientHeight: table.clientHeight,
+      tableScrollHeight: table.scrollHeight,
+      selfRowHeight: selfHand.offsetHeight,
+      zones,
+    };
+  });
+  expect(geometry.tableScrollHeight).toBeLessThanOrEqual(geometry.tableClientHeight + 1);
+  expect(geometry.zones.every((zone) => zone.inside)).toBe(true);
+  expect(Math.min(...geometry.zones.map((zone) => zone.logicalHeight))).toBeGreaterThan(0);
+  return {
+    tableHeight: geometry.tableHeight,
+    selfRowHeight: geometry.selfRowHeight,
+  };
+}
+
 async function reachDiscardConfirmation(page: Page): Promise<void> {
   const deadline = Date.now() + 60_000;
   const confirm = page.getByTestId("discard-confirm");
@@ -635,6 +679,12 @@ test.describe("compact landscape gameplay", () => {
     expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(48);
     expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
 
+    const selectedFishOptions = page.locator(".fish-option.selected");
+    while (await selectedFishOptions.count()) {
+      await selectedFishOptions.first().click();
+    }
+    await page.getByTestId("kong-count-0").click();
+    await expect(confirmDeclaration.locator("span")).toHaveText("无需声明，开始游戏");
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
@@ -999,6 +1049,8 @@ test.describe("compact landscape gameplay", () => {
 
     await page.getByTestId("game-exit").click();
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    await page.waitForTimeout(500);
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(page.getByTestId("confirm-exit")).toBeFocused();
@@ -1370,6 +1422,7 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.minimumCardFontSize).toBeGreaterThanOrEqual(22);
     expect(metrics.minimumDockButtonWidth).toBeGreaterThanOrEqual(40);
     expect(metrics.minimumDockButtonHeight).toBeGreaterThanOrEqual(40);
+    const landscapeTableGeometry = await expectCompactTableContained(page);
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");
     const handScrollNext = page.getByTestId("hand-scroll-next");
@@ -1385,6 +1438,35 @@ test.describe("legacy small landscape gameplay", () => {
     expect(Math.min(...handScrollSizes.map((size) => size.width))).toBeGreaterThanOrEqual(44);
     expect(Math.min(...handScrollSizes.map((size) => size.height))).toBeGreaterThanOrEqual(34);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game.png") });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    const layout = page.locator(".layout");
+    await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await page.waitForTimeout(200);
+    const rotatedTableGeometry = await expectCompactTableContained(page);
+    expect(Math.abs(rotatedTableGeometry.tableHeight - landscapeTableGeometry.tableHeight)).toBeLessThanOrEqual(1);
+    expect(Math.abs(rotatedTableGeometry.selfRowHeight - landscapeTableGeometry.selfRowHeight)).toBeLessThanOrEqual(1);
+    const rotatedControls = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>(".hand-card"));
+      const buttons = Array.from(document.querySelectorAll<HTMLElement>(".action-dock button"))
+        .filter((button) => button.offsetWidth > 0 && button.offsetHeight > 0);
+      return {
+        minimumCardWidth: Math.min(...cards.map((card) => card.offsetWidth)),
+        minimumCardHeight: Math.min(...cards.map((card) => card.offsetHeight)),
+        minimumGlyphFontSize: Math.min(
+          ...cards.map((card) => Number.parseFloat(getComputedStyle(card.querySelector<HTMLElement>(".text-top")!).fontSize)),
+        ),
+        minimumButtonWidth: Math.min(...buttons.map((button) => button.offsetWidth)),
+        minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
+      };
+    });
+    expect(rotatedControls.minimumCardWidth).toBeGreaterThanOrEqual(40);
+    expect(rotatedControls.minimumCardHeight).toBeGreaterThanOrEqual(52);
+    expect(rotatedControls.minimumGlyphFontSize).toBeGreaterThanOrEqual(22);
+    expect(rotatedControls.minimumButtonWidth).toBeGreaterThanOrEqual(40);
+    expect(rotatedControls.minimumButtonHeight).toBeGreaterThanOrEqual(40);
+    await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game-rotated.png") });
   });
 });
 
