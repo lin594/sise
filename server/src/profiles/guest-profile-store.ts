@@ -121,6 +121,24 @@ export class InMemoryGuestProfileStore implements GuestProfileStore {
     return copyProfile(updated);
   }
 
+  /**
+   * Replaces the volatile mirror with a profile returned by the authoritative
+   * store. Recovery code may also register round event ids that are known to
+   * have completed so a later degraded retry remains idempotent.
+   */
+  hydrate(token: string, profile: GuestProfile, recordedEventIds: string[] = []): GuestProfile {
+    const digest = this.requireDigest(token);
+    const hydrated = copyProfile(profile);
+    this.profiles.set(digest, hydrated);
+    for (const rawEventId of recordedEventIds) {
+      const eventId = String(rawEventId ?? "").trim();
+      if (eventId) {
+        this.recordedEvents.add(`${digest}:${guestProfileTokenDigest(eventId)}`);
+      }
+    }
+    return copyProfile(hydrated);
+  }
+
   private requireDigest(token: string): string {
     const normalized = normalizeGuestProfileToken(token);
     if (!normalized) {
@@ -129,4 +147,3 @@ export class InMemoryGuestProfileStore implements GuestProfileStore {
     return guestProfileTokenDigest(normalized);
   }
 }
-

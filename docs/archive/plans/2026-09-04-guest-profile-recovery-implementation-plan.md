@@ -75,4 +75,3 @@ Expected: 全部通过且无格式错误。
 **Step 3: Commit**
 
 分别提交设计和实现/测试/文档，推送当前分支；随后在 iMac 执行 `git pull --ff-only`、`docker compose up --build -d` 并检查健康接口和容器日志。
-
