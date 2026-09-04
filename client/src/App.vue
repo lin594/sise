@@ -2742,6 +2742,9 @@ async function enterLobby() {
       exposeRoomIdInUrl: true,
     });
     if (!ok) {
+      if (connectionState.value === "closed") {
+        return;
+      }
       throw new Error(joinError.value || "加入好友房失败");
     }
   } catch (error) {
