@@ -1824,10 +1824,10 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("debug_setup", scenario);
   }
 
-  function startGame() {
+  function startGame(): boolean {
     clearActionLogs();
     joinError.value = "";
-    safeRoomSend("start_game");
+    return safeRoomSend("start_game");
   }
 
   function nextRound() {

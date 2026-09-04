@@ -1653,7 +1653,7 @@ export function useRoom(playerName = "Player") {
     function startGame() {
         clearActionLogs();
         joinError.value = "";
-        safeRoomSend("start_game");
+        return safeRoomSend("start_game");
     }
     function nextRound() {
         clearActionLogs();

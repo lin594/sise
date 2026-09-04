@@ -126,6 +126,8 @@ const restoringStoredSession = ref(false);
 const joiningFriendInvite = ref(false);
 const startingRoomMode = ref(null);
 const pendingPracticeAutoStart = ref(false);
+const roundStartPending = ref(false);
+let roundStartReceiptTimer = null;
 const selectedLobbyMode = ref("practice_bots");
 watch(state, (nextState) => {
     if (nextState && startingRoomMode.value !== null) {
@@ -336,6 +338,7 @@ const canPressStartGame = computed(() => Boolean(connected.value) &&
                     (player.connected &&
                         (player.clientId === state.value?.hostPlayerId || player.lobbyReady))))));
 const canStartSelectedMode = computed(() => !enteringLobby.value &&
+    !roundStartPending.value &&
     ((!hasLobbySession.value &&
         (selectedLobbyMode.value === "practice_bots" ||
             selectedLobbyMode.value === "quick_match" ||
@@ -422,6 +425,11 @@ const lobbyStartLabel = computed(() => {
             return "创建好友房";
         return selectedLobbyMode.value === "quick_match" ? "开始快速配桌" : "开始单人练习";
     }
+    if (roundStartPending.value) {
+        if (state.value?.roomMode === "match")
+            return "正在补齐并开局…";
+        return state.value?.roomMode === "friends" ? "正在开始好友对局…" : "正在开始练习…";
+    }
     if (pendingPracticeAutoStart.value) {
         return "正在自动开始...";
     }
@@ -436,6 +444,8 @@ const lobbyStartLabel = computed(() => {
 const lobbyStartHint = computed(() => {
     if (!hasLobbySession.value)
         return enteringLobby.value ? "请稍候，不用重复点击" : "";
+    if (roundStartPending.value)
+        return "开局请求已发送，请稍候";
     if (!isWaiting.value)
         return "";
     if (!mySeatId.value)
@@ -1135,6 +1145,7 @@ function clearSelection(restoreFocus = false) {
 async function handleLeaveRoom() {
     globalError.value = "";
     pendingPracticeAutoStart.value = false;
+    clearRoundStartPending();
     clearSelection();
     await leaveRoom();
     entryInviteRoomId.value = "";
@@ -1363,15 +1374,56 @@ onUnmounted(() => {
         window.clearTimeout(globalNoticeTimer);
         globalNoticeTimer = null;
     }
+    clearRoundStartPending();
 });
 watch(globalError, (message) => {
     if (message) {
         clearGlobalNotice();
     }
 });
+watch(joinError, (message) => {
+    if (message && roundStartPending.value) {
+        clearRoundStartPending();
+    }
+});
+watch(connected, (isConnected) => {
+    if (!isConnected && roundStartPending.value) {
+        clearRoundStartPending();
+    }
+});
 watch(displayPreferences, (preferences) => {
     writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
 }, { deep: true });
+function clearRoundStartPending() {
+    roundStartPending.value = false;
+    if (roundStartReceiptTimer !== null) {
+        window.clearTimeout(roundStartReceiptTimer);
+        roundStartReceiptTimer = null;
+    }
+}
+function requestRoundStart() {
+    if (roundStartPending.value) {
+        return false;
+    }
+    globalError.value = "";
+    if (!startGame()) {
+        globalError.value = "网络未连接，暂时无法开始，请稍候重试。";
+        return false;
+    }
+    roundStartPending.value = true;
+    const requestedRoomId = activeRoomId.value;
+    roundStartReceiptTimer = window.setTimeout(() => {
+        roundStartReceiptTimer = null;
+        if (!roundStartPending.value ||
+            state.value?.phase !== "waiting" ||
+            activeRoomId.value !== requestedRoomId) {
+            return;
+        }
+        roundStartPending.value = false;
+        globalError.value = "暂未确认开局，请再点一次。";
+    }, 8_000);
+    return true;
+}
 function maybeAutoStartPractice() {
     if (!pendingPracticeAutoStart.value || !canPressStartGame.value) {
         return;
@@ -1379,14 +1431,18 @@ function maybeAutoStartPractice() {
     // 单人练习应该在房间准备就绪后立刻发 start_game，
     // 不能只依赖“ready 从 false 变 true”的 watcher，
     // 否则当 ready 先成立、pending 后置为 true 时会永远卡住。
-    startGame();
-    pendingPracticeAutoStart.value = false;
+    if (requestRoundStart()) {
+        pendingPracticeAutoStart.value = false;
+    }
 }
 watch(() => [canPressStartGame.value, pendingPracticeAutoStart.value], () => {
     maybeAutoStartPractice();
 }, { immediate: true });
 // 一旦房间离开 waiting 阶段（即已成功开局），清除自动开局标记以阻止后续重试。
 watch(() => state.value?.phase, (phase) => {
+    if (phase && phase !== "waiting") {
+        clearRoundStartPending();
+    }
     if (phase && phase !== "waiting" && pendingPracticeAutoStart.value) {
         pendingPracticeAutoStart.value = false;
     }
@@ -1901,7 +1957,7 @@ function startSelectedMode() {
         return;
     }
     if (state.value?.roomMode === "friends" || state.value?.roomMode === "match") {
-        startGame();
+        requestRoundStart();
     }
     else {
         requestPracticeAutoStart();
@@ -2165,6 +2221,7 @@ watch(() => state.value?.phase, (phase) => {
 });
 watch(activeRoomId, (roomId, previousRoomId) => {
     if (roomId !== previousRoomId) {
+        clearRoundStartPending();
         closeInviteQr(false);
     }
     if (previousRoomId && !roomId) {
@@ -2746,7 +2803,7 @@ else if (__VLS_ctx.showModeLobby) {
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
         startHint: (__VLS_ctx.lobbyStartHint),
-        startPending: (__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession),
+        startPending: ((__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession) || __VLS_ctx.roundStartPending),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -2788,7 +2845,7 @@ else if (__VLS_ctx.showModeLobby) {
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
         startHint: (__VLS_ctx.lobbyStartHint),
-        startPending: (__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession),
+        startPending: ((__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession) || __VLS_ctx.roundStartPending),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -4030,6 +4087,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,
+            roundStartPending: roundStartPending,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
             abandonSessionResume: abandonSessionResume,
