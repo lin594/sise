@@ -1,6 +1,6 @@
 import type { ActionType, Card } from "../rules/types.js";
 
-export const ROOM_RECOVERY_VERSION = 1;
+export const ROOM_RECOVERY_VERSION = 2;
 export const ACTIVE_ROOM_SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1_000;
 export const ENDED_ROOM_SNAPSHOT_TTL_MS = 6 * 60 * 60 * 1_000;
 
@@ -12,6 +12,7 @@ export interface RecoveryPendingResponse {
 }
 
 export interface RoomRecoveryPrivateState {
+  roomIdleExpiresAt: number;
   deck: Card[];
   playerHands: Array<[string, Card[]]>;
   playerOrder: string[];
@@ -91,6 +92,9 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
     return false;
   }
   return (
+    isFiniteInteger(privateState.roomIdleExpiresAt) &&
+    privateState.roomIdleExpiresAt >= 0 &&
+    (privateState.roomIdleExpiresAt === 0 || privateState.roomIdleExpiresAt <= value.expiresAt) &&
     Array.isArray(privateState.deck) &&
     isEntryArray(privateState.playerHands) &&
     Array.isArray(privateState.playerOrder) &&
@@ -124,4 +128,3 @@ export function assertRoomRecoverySnapshot(value: unknown): asserts value is Roo
 export function cloneRoomRecoverySnapshot(snapshot: RoomRecoverySnapshot): RoomRecoverySnapshot {
   return JSON.parse(JSON.stringify(snapshot)) as RoomRecoverySnapshot;
 }
-

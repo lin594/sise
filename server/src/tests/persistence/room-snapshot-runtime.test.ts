@@ -12,6 +12,7 @@ function snapshot(roomId: string, savedAt: number): RoomRecoverySnapshot {
     expiresAt: savedAt + 60_000,
     state: { phase: "waiting", roomMode: "practice", players: {} },
     privateState: {
+      roomIdleExpiresAt: 0,
       deck: [], playerHands: [], playerOrder: [], botIds: [], configuredBotIds: [], seatByToken: [],
       baseNameBySeat: [], profileTokenBySeat: [], hostKey: "", hostKeyConsumed: false, pendingResponse: null,
       publicGeneralPool: [], dealerCard: null, dealerPickerId: null, nextRoundSetup: null,

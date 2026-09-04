@@ -204,3 +204,24 @@ test("MatchMaker indexes a recovered room under its original room id", async () 
 
   await restored?.disconnect();
 });
+
+test("an already empty room keeps its original idle expiry across repeated restarts", () => {
+  const source = createRecoverableRoom();
+  const now = Date.now();
+  const originalIdleExpiry = now + 60_000;
+  source.seatBySession.clear();
+  source.roomIdleExpiresAt = originalIdleExpiry;
+
+  const snapshot = source.exportRecoverySnapshot(now);
+  source.onDispose();
+
+  assert.equal(snapshot.expiresAt, originalIdleExpiry);
+  assert.equal((snapshot.privateState as any).roomIdleExpiresAt, originalIdleExpiry);
+
+  const restored = new FourColorGameRoom() as any;
+  restored.roomId = "temporary-id";
+  restored.onCreate({ recoverySnapshot: snapshot });
+  assert.equal(restored.roomIdleExpiresAt, originalIdleExpiry);
+  assert.equal(restored.exportRecoverySnapshot(now + 10_000).expiresAt, originalIdleExpiry);
+  restored.onDispose();
+});

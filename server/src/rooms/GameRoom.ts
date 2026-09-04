@@ -189,6 +189,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly takeoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  private roomIdleExpiresAt = 0;
   private hostKey = "";
   private hostKeyConsumed = false;
   private pendingResponse: PendingResponse | null = null;
@@ -622,13 +623,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.updatePublicHandCounts();
     const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
     const ttlMs = this.state.phase === "ended" ? ENDED_ROOM_SNAPSHOT_TTL_MS : ACTIVE_ROOM_SNAPSHOT_TTL_MS;
+    const roomIsEmpty = this.seatBySession.size === 0 && this.pendingNameBySession.size === 0;
+    const idleExpiry = roomIsEmpty && this.roomIdleExpiresAt > 0
+      ? Math.max(now + 1, this.roomIdleExpiresAt)
+      : 0;
+    const expiresAt = idleExpiry > 0 ? Math.min(now + ttlMs, idleExpiry) : now + ttlMs;
     return {
       version: ROOM_RECOVERY_VERSION,
       roomId: this.roomId,
       savedAt: now,
-      expiresAt: now + ttlMs,
+      expiresAt,
       state: JSON.parse(JSON.stringify(this.state)) as Record<string, unknown>,
       privateState: {
+        roomIdleExpiresAt: idleExpiry,
         deck: cloneCards(this.deck),
         playerHands: [...this.playerHands].map(([seatId, cards]) => [seatId, cloneCards(cards)]),
         playerOrder: [...this.playerOrder],
@@ -675,6 +682,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
     const privateState = snapshot.privateState;
     const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
+    this.roomIdleExpiresAt = privateState.roomIdleExpiresAt;
     this.deck = cloneCards(privateState.deck);
     this.playerHands = new Map(
       privateState.playerHands.map(([seatId, cards]) => [seatId, cloneCards(cards)]),
@@ -754,6 +762,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private resumeRecoveredRoom(): void {
+    const recoveredIdleExpiresAt = this.roomIdleExpiresAt;
+    this.roomIdleTimer = null;
+    this.scheduleRoomIdleIfEmpty(recoveredIdleExpiresAt > 0 ? recoveredIdleExpiresAt : undefined);
     this.state.matchStartsAt = 0;
     this.state.declareEndsAt = 0;
     this.state.responseEndsAt = 0;
@@ -782,7 +793,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.responseDecisionWindowId += 1;
       this.tickBots();
     }
-    this.scheduleRoomIdleIfEmpty();
   }
 
   // ===== 房间生命周期与消息入口 =====
@@ -1429,19 +1439,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       clearTimeout(this.roomIdleTimer);
       this.roomIdleTimer = null;
     }
+    this.roomIdleExpiresAt = 0;
   }
 
-  private scheduleRoomIdleIfEmpty(): void {
+  private scheduleRoomIdleIfEmpty(expiresAtOverride?: number): void {
     if (this.seatBySession.size > 0 || this.pendingNameBySession.size > 0 || this.roomIdleTimer) {
       return;
     }
-    const timeoutMs = this.state.phase === "waiting" ? this.waitingRoomIdleMs : this.activeRoomIdleMs;
+    const now = Date.now();
+    const defaultTimeoutMs = this.state.phase === "waiting" ? this.waitingRoomIdleMs : this.activeRoomIdleMs;
+    this.roomIdleExpiresAt = expiresAtOverride ?? now + defaultTimeoutMs;
+    const timeoutMs = Math.max(1, this.roomIdleExpiresAt - now);
     this.roomIdleTimer = setTimeout(() => {
       this.roomIdleTimer = null;
+      this.roomIdleExpiresAt = 0;
       if (this.seatBySession.size === 0 && this.pendingNameBySession.size === 0) {
         void this.disconnect(4000);
       }
     }, timeoutMs);
+    scheduleRoomSnapshot(this.exportRecoverySnapshot(now));
   }
 
   private connectedMatchHumanCount(): number {

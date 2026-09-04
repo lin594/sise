@@ -18,6 +18,7 @@ function snapshot(roomId: string, savedAt: number, expiresAt = savedAt + 60_000)
     expiresAt,
     state: { phase: "waiting", roomMode: "practice", players: {} },
     privateState: {
+      roomIdleExpiresAt: 0,
       deck: [],
       playerHands: [],
       playerOrder: [],
@@ -151,7 +152,7 @@ test("Redis snapshot loading removes corrupt, incompatible, missing and expired 
   client.strings.set(valueKey("room-corrupt"), "not-json");
   client.strings.set(valueKey("room-version"), JSON.stringify({
     ...snapshot("room-version", 1_000),
-    version: ROOM_RECOVERY_VERSION + 1,
+    version: ROOM_RECOVERY_VERSION - 1,
   }));
   client.strings.set(valueKey("room-expired"), JSON.stringify(snapshot("room-expired", 0, 500)));
 
