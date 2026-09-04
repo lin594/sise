@@ -1,5 +1,7 @@
 # Readable Turn Signals Implementation Plan
 
+> 已实施并归档；当前规范以 `docs/README.md` 所列权威文档为准。
+
 **Goal:** Make every decision-critical turn marker legible to older players on the 568×320 effective canvas without adding table clutter.
 
 ### Task 1: Add measurable regression coverage
