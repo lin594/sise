@@ -497,6 +497,12 @@ watch(() => state.value?.matchStartsAt, () => {
     // reusing a timer sample that may already be almost half a second old.
     nowMs.value = Date.now();
 }, { flush: "sync" });
+watch(() => [matchClockSync.value.deadline, matchClockSync.value.offsetMs], () => {
+    // A full snapshot can enrich the clock after its same-revision Schema
+    // patch has already updated the room state. Refresh the local sample too,
+    // otherwise the old sample plus the new offset can briefly add a second.
+    nowMs.value = Date.now();
+}, { flush: "sync" });
 const displayTurnPlayerId = computed(() => {
     if (state.value?.responsePhase === "collective") {
         return (state.value?.currentTurnPlayerId ||
