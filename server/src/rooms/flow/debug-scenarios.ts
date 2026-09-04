@@ -150,6 +150,35 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = ownerId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: early_collective_choice#${seq}`;
+  } else if (scenario === "upper_peng_xiang") {
+    context.state.publicDiscardPile.clear();
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id)!;
+      seat.declaredKongs = 0;
+      seat.exposedArea.clear(); seat.exposedGroupSizes.clear(); seat.exposedGroupKinds.clear();
+      seat.generalArea.clear(); seat.fishArea.clear(); seat.discardPile.clear();
+      if (id !== seatId) context.playerHands.set(id, [{ id: `other-${id}-${seq}`, color: "white", type: "shi" }]);
+    }
+    add("red-xiang-1", "red", "xiang");
+    add("red-xiang-2", "red", "xiang");
+    add("yellow-ma-spare", "yellow", "ma");
+    const seatIndex = context.playerOrder.indexOf(seatId);
+    const ownerId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
+    if (!ownerId) return false;
+    const response: Card = { id: `upper-red-xiang-${seq}`, color: "red", type: "xiang", source: "upper" };
+    context.state.players.get(ownerId)!.discardPile.push(context.toSchemaCard(response, false, "upper"));
+    context.state.publicDiscardPile.push(context.toSchemaCard(response, false, "upper"));
+    context.setPendingResponse(createPendingResponse(ownerId, response, "upper"));
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.state.currentTurnPlayerId = ownerId;
+    context.state.previousPlayerId = ownerId;
+    context.state.pollOriginPlayerId = ownerId;
+    context.state.tableTransitionsJson = "[]";
+    context.state.presentationUntil = 0;
+    context.setResponseCard(response, "upper");
+    context.state.lastAction = `${ownerId} DISCARD`;
   } else if (scenario === "waiting_other_turn") {
     add("wait1", "yellow", "ju");
     add("wait2", "red", "ma");
@@ -319,7 +348,10 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   context.playerHands.set(seatId, hand);
   context.updatePublicHandCounts();
   context.syncAllPrivateHands();
-  if (scenario.startsWith("draw_")) { context.startCollectivePolling(); return true; }
+  if (scenario.startsWith("draw_") || scenario === "upper_peng_xiang") {
+    context.startCollectivePolling();
+    return true;
+  }
   context.broadcastAvailableActions();
 
   if (

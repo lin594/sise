@@ -67,7 +67,6 @@ const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver = null;
 const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
-const selfOpenCompactRef = ref(null);
 const seatRefMap = new Map();
 let dealerRevealSeq = 0;
 let dealerFlightSeq = 0;
@@ -298,9 +297,29 @@ const presentationTick = ref(Date.now());
 let presentationFrame = null;
 const presentationNow = computed(() => presentationTick.value + Number(props.state?.presentationClockOffsetMs ?? 0));
 const tableEvents = computed(() => props.state?.tableTransitions ?? []);
+const lastCardRects = new Map();
+const tableFlightSources = new Map();
+const missingDestinationTicks = new Map();
+let presentationScopeKey = "";
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
+    const nextScopeKey = `${String(props.state?.roomId ?? "")}:${Number(props.state?.completedRounds ?? 0)}`;
+    if (nextScopeKey !== presentationScopeKey) {
+        presentationScopeKey = nextScopeKey;
+        lastCardRects.clear();
+        tableFlightSources.clear();
+        missingDestinationTicks.clear();
+    }
+    const currentMoveKeys = new Set(tableEvents.value.flatMap((event) => event.moves.map((_, index) => `${event.round}:${event.id}:${index}`)));
+    for (const key of tableFlightSources.keys()) {
+        if (!currentMoveKeys.has(key))
+            tableFlightSources.delete(key);
+    }
+    for (const key of missingDestinationTicks.keys()) {
+        if (!currentMoveKeys.has(key))
+            missingDestinationTicks.delete(key);
+    }
     const render = () => {
         presentationTick.value = Date.now();
         presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
@@ -322,13 +341,14 @@ const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-red
 const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
 onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
 onUnmounted(() => motionQuery?.removeEventListener("change", updateMotionPreference));
-const lastCardPoints = new Map();
 onBeforeUpdate(() => {
-    boardRef.value?.querySelectorAll(".hand [data-card-id]").forEach((element) => {
-        const point = pointFromElement(element);
-        if (point && element.dataset.cardId)
-            lastCardPoints.set(element.dataset.cardId, point);
+    boardRef.value?.querySelectorAll(".response-card-face[data-face-id], .hand [data-face-id], .discard-strip [data-face-id], .group-block-list [data-face-id]").forEach((element) => {
+        const rect = rectFromElement(element);
+        if (rect && element.dataset.faceId)
+            lastCardRects.set(element.dataset.faceId, rect);
     });
+    while (lastCardRects.size > 256)
+        lastCardRects.delete(lastCardRects.keys().next().value);
 });
 function isMovingCard(id) {
     return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
@@ -337,35 +357,119 @@ function isMovingCard(id) {
 function movingCardStyle(id) {
     return isMovingCard(id) ? { visibility: "hidden" } : {};
 }
-function tableLocationPoint(location, cardId, destination) {
+function tableLocationContainer(location) {
     if (location.zone === "deck")
-        return dealStartPoint();
+        return deckAnchorRef.value;
     if (location.zone === "center")
-        return responseLandingPoint();
-    let container = null;
+        return responseLandingRef.value;
     if (location.zone === "flow") {
         const receiver = getNextPlayer(location.playerId ?? "")?.clientId;
-        container = Array.from(boardRef.value?.querySelectorAll("[data-flow-receiver-id]") ?? []).find((el) => el.dataset.flowReceiverId === receiver) ?? null;
+        return Array.from(boardRef.value?.querySelectorAll("[data-flow-receiver-id]") ?? [])
+            .find((el) => el.dataset.flowReceiverId === receiver) ?? null;
     }
-    else if (location.zone === "meld") {
-        container = location.playerId === props.mySeatId ? selfOpenCompactRef.value ?? selfOpenRef.value : seatRefMap.get(location.playerId ?? "") ?? null;
+    if (location.zone === "meld") {
+        return location.playerId === props.mySeatId
+            ? selfOpenRef.value
+            : seatRefMap.get(location.playerId ?? "") ?? null;
     }
-    else if (location.playerId === props.mySeatId) {
-        container = selfHandRef.value;
+    if (location.zone === "hand") {
+        return location.playerId === props.mySeatId
+            ? selfHandRef.value
+            : seatRefMap.get(location.playerId ?? "") ?? null;
     }
-    const cardEl = Array.from(container?.querySelectorAll("[data-face-id], button[data-card-id]") ?? []).find((el) => (el.dataset.faceId ?? el.dataset.cardId) === cardId);
-    return (!destination && location.zone === "hand" ? lastCardPoints.get(cardId) : null) ?? pointFromElement(cardEl ?? null) ?? pointFromElement(container) ?? targetForPlayer(location.playerId ?? "");
+    return null;
 }
-const tableFlightSources = new Map();
-const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.map((move, index) => {
+function tableLocationCardElement(location, cardId) {
+    const container = tableLocationContainer(location);
+    if (!container)
+        return null;
+    const selector = location.zone === "center"
+        ? ".response-card-face[data-face-id]"
+        : location.zone === "hand"
+            ? ".hand-card [data-face-id]"
+            : location.zone === "flow"
+                ? ".discard-strip [data-face-id]"
+                : location.zone === "meld"
+                    ? ".group-block-list [data-face-id]"
+                    : "";
+    if (!selector)
+        return null;
+    return Array.from(container.querySelectorAll(selector))
+        .find((element) => element.dataset.faceId === cardId) ?? null;
+}
+function tableLocationExactRect(location, cardId) {
+    return rectFromElement(tableLocationCardElement(location, cardId));
+}
+function tableLocationAnchorElement(location) {
+    const container = tableLocationContainer(location);
+    if (location.zone !== "meld" || !container)
+        return container;
+    const publicGroups = container.querySelector(".group-block-list");
+    // The self meld section is itself the dedicated public-card zone even while
+    // empty. Opponent seat containers also include private seat chrome, so wait
+    // for their public group list instead of drifting to the seat center.
+    return publicGroups ?? (location.playerId === props.mySeatId ? container : null);
+}
+function cardRectAtPoint(point, size) {
+    if (!point)
+        return null;
+    return {
+        left: point.x - size.width / 2,
+        top: point.y - size.height / 2,
+        width: size.width,
+        height: size.height,
+    };
+}
+function tableLocationAnchorRect(location, size) {
+    return cardRectAtPoint(pointFromElement(tableLocationAnchorElement(location)), size);
+}
+function defaultTableCardRect() {
+    return props.tableCardMode === "long"
+        ? { width: 32, height: 84 }
+        : { width: 44, height: 50 };
+}
+function interpolateRect(start, end, progress) {
+    const interpolate = (from, to) => from + (to - from) * progress;
+    return {
+        left: interpolate(start.left, end.left),
+        top: interpolate(start.top, end.top),
+        width: interpolate(start.width, end.width),
+        height: interpolate(start.height, end.height),
+    };
+}
+const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
     const key = `${event.round}:${event.id}:${index}`;
-    // The source node disappears when a claim commits. Keep its original point
-    // for the whole flight instead of jumping to the now-empty lane's center.
-    const start = tableFlightSources.get(key) ?? tableLocationPoint(move.from, move.card.id, false) ?? responseLandingPoint() ?? { x: 0, y: 0 };
+    const exactEnd = tableLocationExactRect(move.to, move.card.id);
+    const fallbackSize = exactEnd ?? defaultTableCardRect();
+    // Source nodes can disappear in the same authoritative patch that creates
+    // their destination. Freeze the last real card rectangle per move so later
+    // frames cannot drift back to a container center.
+    const start = tableFlightSources.get(key)
+        ?? lastCardRects.get(move.card.id)
+        ?? tableLocationExactRect(move.from, move.card.id)
+        ?? tableLocationAnchorRect(move.from, fallbackSize);
+    if (!start)
+        return [];
     tableFlightSources.set(key, start);
-    if (tableFlightSources.size > 128)
+    while (tableFlightSources.size > 128)
         tableFlightSources.delete(tableFlightSources.keys().next().value);
-    const end = tableLocationPoint(move.to, move.card.id, true) ?? start;
+    let end = exactEnd;
+    if (!end) {
+        // Normal moves publish a hidden real destination in the same patch. Give
+        // Vue one paint to mount it before using a semantic zone fallback. Hu can
+        // legitimately have no table target because settlement owns the result.
+        const missedAt = missingDestinationTicks.get(key);
+        if (event.kind !== "hu" && (missedAt === undefined || missedAt === presentationTick.value)) {
+            missingDestinationTicks.set(key, presentationTick.value);
+            return [];
+        }
+        end = tableLocationAnchorRect(move.to, start);
+    }
+    else {
+        missingDestinationTicks.delete(key);
+    }
+    if (!end)
+        return [];
     const elapsed = presentationNow.value - event.startsAt;
     const draw = event.kind === "draw";
     const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
@@ -373,13 +477,16 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
     const flipping = draw && elapsed >= 700;
     const back = draw && elapsed < 950 && !reducedTableMotion.value;
     const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
-    const width = props.tableCardMode === "long" ? 32 : 44;
-    const height = props.tableCardMode === "long" ? 84 : 50;
-    return { key, card: move.card, kind: event.kind,
-        back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
-        stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
-        style: { width: `${width}px`, height: `${height}px`, transform: `translate3d(${start.x + (end.x - start.x) * eased - width / 2}px, ${start.y + (end.y - start.y) * eased - height / 2}px, 0)` },
-    };
+    const current = interpolateRect(start, end, eased);
+    return [{ key, card: move.card, kind: event.kind,
+            back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
+            stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
+            style: {
+                width: `${Math.max(1, current.width)}px`,
+                height: `${Math.max(1, current.height)}px`,
+                transform: `translate3d(${current.left}px, ${current.top}px, 0)`,
+            },
+        }];
 })));
 function flowCardCount(playerId) {
     return flowCards(playerId).length;
@@ -888,17 +995,29 @@ function resolvePlayerPosition(playerId) {
     return "self";
 }
 function pointFromElement(el) {
-    if (!el) {
+    const rect = rectFromElement(el);
+    if (!rect)
         return null;
-    }
-    const rect = el.getBoundingClientRect();
     return {
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
     };
 }
+function rectFromElement(el) {
+    if (!el)
+        return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0)
+        return null;
+    return {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+    };
+}
 function openAreaTargetForSelf() {
-    return pointFromElement(selfOpenCompactRef.value) ?? pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
+    return pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
 }
 function targetForPlayer(playerId) {
     if (!playerId) {
@@ -1726,6 +1845,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['resp-move-enter-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;

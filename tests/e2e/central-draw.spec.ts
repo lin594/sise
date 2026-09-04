@@ -1,6 +1,24 @@
 import { expect, test, type Page } from "@playwright/test";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
+
+type RectSnapshot = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+type MeldHandoff = {
+  done: boolean;
+  histories: Record<string, RectSnapshot[]>;
+  lastFlights: Record<string, RectSnapshot>;
+  targets: Record<string, RectSnapshot>;
+  handCounts: Record<string, number>;
+  visibleCounts: Record<string, number>;
+  targetModes: Record<string, string | null>;
+};
+
 async function start(page: Page, scenario: string) {
   await page.goto("/?e2eDebug=1");
   await page.getByTestId("random-nickname").click();
@@ -18,6 +36,129 @@ async function start(page: Page, scenario: string) {
     (window as any).__siseLocalTest.setupScenario(name);
   }, scenario);
 }
+
+async function selectTableCardMode(page: Page, mode: "large" | "long") {
+  await page.getByTestId("game-settings").click();
+  await page.getByTestId(`card-mode-table-${mode}`).click();
+  await page.getByRole("button", { name: "关闭设置" }).click();
+  await expect(page.getByTestId("pending-card").locator(`[data-card-mode="${mode}"]`)).toBeVisible();
+}
+
+async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<MeldHandoff> {
+  await page.evaluate((ids) => {
+    const trackingWindow = window as any;
+    const result: MeldHandoff & { seen: boolean } = {
+      seen: false,
+      done: false,
+      histories: {},
+      lastFlights: {},
+      targets: {},
+      handCounts: {},
+      visibleCounts: {},
+      targetModes: {},
+    };
+    trackingWindow.__siseMeldHandoff = result;
+
+    const rectOf = (element: Element): RectSnapshot => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    };
+    const elementsWithId = (selector: string, id: string): HTMLElement[] =>
+      Array.from(document.querySelectorAll<HTMLElement>(selector))
+        .filter((element) => element.dataset.faceId === id);
+    const isVisible = (element: HTMLElement): boolean => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== "none"
+        && style.visibility !== "hidden"
+        && Number(style.opacity) > 0
+        && rect.width > 0
+        && rect.height > 0;
+    };
+
+    const sample = () => {
+      const flights = Array.from(document.querySelectorAll<HTMLElement>('[data-transition-kind="meld"]'));
+      if (flights.length > 0) {
+        result.seen = true;
+        for (const flight of flights) {
+          const id = flight.dataset.transitionCardId;
+          if (!id || !ids.includes(id)) continue;
+          const snapshot = rectOf(flight);
+          (result.histories[id] ??= []).push(snapshot);
+          result.lastFlights[id] = snapshot;
+        }
+      } else if (result.seen) {
+        for (const id of ids) {
+          const targets = elementsWithId(".self-groups-card .group-block-list [data-face-id]", id);
+          if (targets[0]) {
+            result.targets[id] = rectOf(targets[0]);
+            result.targetModes[id] = targets[0].dataset.cardMode ?? null;
+          }
+          result.handCounts[id] = elementsWithId(".hand-card [data-face-id]", id).length;
+          result.visibleCounts[id] = elementsWithId("[data-face-id]", id).filter(isVisible).length;
+        }
+        result.done = true;
+        return;
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }, expectedIds);
+
+  await page.getByTestId("action-peng").click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as any).__siseMeldHandoff?.done))).toBe(true);
+  return page.evaluate(() => (window as any).__siseMeldHandoff as MeldHandoff);
+}
+
+function expectRectClose(actual: RectSnapshot, expected: RectSnapshot) {
+  for (const key of ["left", "top", "width", "height"] as const) {
+    expect(Math.abs(actual[key] - expected[key]), `${key} handoff delta`).toBeLessThanOrEqual(1);
+  }
+}
+
+function expectSizeConverges(history: RectSnapshot[], target: RectSnapshot) {
+  expect(history.length).toBeGreaterThan(2);
+  for (const key of ["width", "height"] as const) {
+    const direction = Math.sign(target[key] - history[0][key]);
+    for (let index = 1; index < history.length; index += 1) {
+      const step = history[index][key] - history[index - 1][key];
+      expect(direction === 0 ? Math.abs(step) : step * direction, `${key} frame ${index}`).toBeGreaterThanOrEqual(-0.5);
+    }
+  }
+}
+
+async function expectRedXiangPengHandoff(page: Page, mode: "large" | "long") {
+  await start(page, "upper_peng_xiang");
+  await selectTableCardMode(page, mode);
+  await expect(page.getByTestId("action-peng")).toBeEnabled();
+  const responseId = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState().responseCard.id as string);
+  const expectedIds = [responseId, "red-xiang-1", "red-xiang-2"];
+  const handoff = await recordPengHandoff(page, expectedIds);
+
+  expect(Object.keys(handoff.lastFlights).sort()).toEqual([...expectedIds].sort());
+  expect(Object.keys(handoff.targets).sort()).toEqual([...expectedIds].sort());
+  for (const id of expectedIds) {
+    expectRectClose(handoff.lastFlights[id], handoff.targets[id]);
+    expectSizeConverges(handoff.histories[id], handoff.targets[id]);
+    expect(handoff.handCounts[id], `${id} must not remain in hand`).toBe(0);
+    expect(handoff.visibleCounts[id], `${id} must have one visible instance`).toBe(1);
+    expect(handoff.targetModes[id]).toBe(mode);
+  }
+  await expect(page.locator(".self-groups-card .group-block-list [data-face-id]")).toHaveCount(3);
+  await expect(page.locator('.hand-card [data-face-id="yellow-ma-spare"]')).toBeVisible();
+}
+
+test("red Xiang Peng hands off all three large cards to the public meld without a geometry jump", async ({ page }) => {
+  await expectRedXiangPengHandoff(page, "large");
+});
+
+test.describe("desktop long-card meld handoff", () => {
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false });
+
+  test("red Xiang Peng converges to long-card meld geometry", async ({ page }) => {
+    await expectRedXiangPengHandoff(page, "long");
+  });
+});
 
 test("draw flies face down, pauses, flips, then accepts B's eat with real cards", async ({ page }, testInfo) => {
   await start(page, "draw_choice");
@@ -87,12 +228,31 @@ test("reduced motion reveals at the central landing point without flight or flip
   const flight = page.locator('[data-transition-kind="draw"]');
   await expect(flight).toBeVisible();
   await expect(flight.locator(".card-back")).toHaveCount(0);
-  const position = await flight.boundingBox();
+  const readGeometry = () => page.evaluate(() => {
+    const read = (element: Element | null): RectSnapshot | null => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    };
+    return {
+      position: read(document.querySelector('[data-transition-kind="draw"]')),
+      landing: read(document.querySelector('[data-testid="pending-card"] .response-card-face')),
+    };
+  });
+  await expect.poll(async () => {
+    const geometry = await readGeometry();
+    if (!geometry.position || !geometry.landing) return Number.POSITIVE_INFINITY;
+    return Math.max(...(["left", "top", "width", "height"] as const)
+      .map((key) => Math.abs(geometry.position![key] - geometry.landing![key])));
+  }).toBeLessThanOrEqual(1);
+  const { position, landing } = await readGeometry();
   expect(position).not.toBeNull();
-  expect(position!.x).toBeGreaterThanOrEqual(0);
-  expect(position!.y).toBeGreaterThanOrEqual(0);
-  expect(position!.x + position!.width).toBeLessThanOrEqual(320);
-  expect(position!.y + position!.height).toBeLessThanOrEqual(568);
+  expect(landing).not.toBeNull();
+  expect(position!.left).toBeGreaterThanOrEqual(0);
+  expect(position!.top).toBeGreaterThanOrEqual(0);
+  expect(position!.left + position!.width).toBeLessThanOrEqual(320);
+  expect(position!.top + position!.height).toBeLessThanOrEqual(568);
+  expectRectClose(position!, landing!);
   await expect(flight.locator(".table-flight-turn")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
   await expect(page.getByTestId("action-chi")).toBeEnabled();
 });

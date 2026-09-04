@@ -707,6 +707,13 @@ type CardFlight = {
   delay: number;
 };
 
+type CardRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 type DealerFlight = {
   id: number;
   sx: number;
@@ -844,7 +851,6 @@ const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver: ResizeObserver | null = null;
 const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
-const selfOpenCompactRef = ref<HTMLElement | null>(null);
 const seatRefMap = new Map<string, HTMLElement>();
 
 let dealerRevealSeq = 0;
@@ -1104,8 +1110,28 @@ const presentationTick = ref(Date.now());
 let presentationFrame: number | null = null;
 const presentationNow = computed(() => presentationTick.value + Number(props.state?.presentationClockOffsetMs ?? 0));
 const tableEvents = computed<TableTransition[]>(() => props.state?.tableTransitions ?? []);
+const lastCardRects = new Map<string, CardRect>();
+const tableFlightSources = new Map<string, CardRect>();
+const missingDestinationTicks = new Map<string, number>();
+let presentationScopeKey = "";
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions] as const, () => {
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
+  const nextScopeKey = `${String(props.state?.roomId ?? "")}:${Number(props.state?.completedRounds ?? 0)}`;
+  if (nextScopeKey !== presentationScopeKey) {
+    presentationScopeKey = nextScopeKey;
+    lastCardRects.clear();
+    tableFlightSources.clear();
+    missingDestinationTicks.clear();
+  }
+  const currentMoveKeys = new Set(tableEvents.value.flatMap((event) =>
+    event.moves.map((_, index) => `${event.round}:${event.id}:${index}`),
+  ));
+  for (const key of tableFlightSources.keys()) {
+    if (!currentMoveKeys.has(key)) tableFlightSources.delete(key);
+  }
+  for (const key of missingDestinationTicks.keys()) {
+    if (!currentMoveKeys.has(key)) missingDestinationTicks.delete(key);
+  }
   const render = () => {
     presentationTick.value = Date.now();
     presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
@@ -1125,12 +1151,14 @@ const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-red
 const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
 onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
 onUnmounted(() => motionQuery?.removeEventListener("change", updateMotionPreference));
-const lastCardPoints = new Map<string, { x: number; y: number }>();
 onBeforeUpdate(() => {
-  boardRef.value?.querySelectorAll<HTMLElement>(".hand [data-card-id]").forEach((element) => {
-    const point = pointFromElement(element);
-    if (point && element.dataset.cardId) lastCardPoints.set(element.dataset.cardId, point);
+  boardRef.value?.querySelectorAll<HTMLElement>(
+    ".response-card-face[data-face-id], .hand [data-face-id], .discard-strip [data-face-id], .group-block-list [data-face-id]",
+  ).forEach((element) => {
+    const rect = rectFromElement(element);
+    if (rect && element.dataset.faceId) lastCardRects.set(element.dataset.faceId, rect);
   });
+  while (lastCardRects.size > 256) lastCardRects.delete(lastCardRects.keys().next().value!);
 });
 function isMovingCard(id: string): boolean {
   return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
@@ -1139,30 +1167,119 @@ function isMovingCard(id: string): boolean {
 function movingCardStyle(id: string): Record<string, string> {
   return isMovingCard(id) ? { visibility: "hidden" } : {};
 }
-function tableLocationPoint(location: TableLocation, cardId: string, destination: boolean): { x: number; y: number } | null {
-  if (location.zone === "deck") return dealStartPoint();
-  if (location.zone === "center") return responseLandingPoint();
-  let container: HTMLElement | null = null;
+function tableLocationContainer(location: TableLocation): HTMLElement | null {
+  if (location.zone === "deck") return deckAnchorRef.value;
+  if (location.zone === "center") return responseLandingRef.value;
   if (location.zone === "flow") {
     const receiver = getNextPlayer(location.playerId ?? "")?.clientId;
-    container = Array.from(boardRef.value?.querySelectorAll<HTMLElement>("[data-flow-receiver-id]") ?? []).find((el) => el.dataset.flowReceiverId === receiver) ?? null;
-  } else if (location.zone === "meld") {
-    container = location.playerId === props.mySeatId ? selfOpenCompactRef.value ?? selfOpenRef.value : seatRefMap.get(location.playerId ?? "") ?? null;
-  } else if (location.playerId === props.mySeatId) {
-    container = selfHandRef.value;
+    return Array.from(boardRef.value?.querySelectorAll<HTMLElement>("[data-flow-receiver-id]") ?? [])
+      .find((el) => el.dataset.flowReceiverId === receiver) ?? null;
   }
-  const cardEl = Array.from(container?.querySelectorAll<HTMLElement>("[data-face-id], button[data-card-id]") ?? []).find((el) => (el.dataset.faceId ?? el.dataset.cardId) === cardId);
-  return (!destination && location.zone === "hand" ? lastCardPoints.get(cardId) : null) ?? pointFromElement(cardEl ?? null) ?? pointFromElement(container) ?? targetForPlayer(location.playerId ?? "");
+  if (location.zone === "meld") {
+    return location.playerId === props.mySeatId
+      ? selfOpenRef.value
+      : seatRefMap.get(location.playerId ?? "") ?? null;
+  }
+  if (location.zone === "hand") {
+    return location.playerId === props.mySeatId
+      ? selfHandRef.value
+      : seatRefMap.get(location.playerId ?? "") ?? null;
+  }
+  return null;
 }
-const tableFlightSources = new Map<string, { x: number; y: number }>();
-const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.map((move, index) => {
+
+function tableLocationCardElement(location: TableLocation, cardId: string): HTMLElement | null {
+  const container = tableLocationContainer(location);
+  if (!container) return null;
+  const selector = location.zone === "center"
+    ? ".response-card-face[data-face-id]"
+    : location.zone === "hand"
+      ? ".hand-card [data-face-id]"
+      : location.zone === "flow"
+        ? ".discard-strip [data-face-id]"
+        : location.zone === "meld"
+          ? ".group-block-list [data-face-id]"
+          : "";
+  if (!selector) return null;
+  return Array.from(container.querySelectorAll<HTMLElement>(selector))
+    .find((element) => element.dataset.faceId === cardId) ?? null;
+}
+
+function tableLocationExactRect(location: TableLocation, cardId: string): CardRect | null {
+  return rectFromElement(tableLocationCardElement(location, cardId));
+}
+
+function tableLocationAnchorElement(location: TableLocation): HTMLElement | null {
+  const container = tableLocationContainer(location);
+  if (location.zone !== "meld" || !container) return container;
+  const publicGroups = container.querySelector<HTMLElement>(".group-block-list");
+  // The self meld section is itself the dedicated public-card zone even while
+  // empty. Opponent seat containers also include private seat chrome, so wait
+  // for their public group list instead of drifting to the seat center.
+  return publicGroups ?? (location.playerId === props.mySeatId ? container : null);
+}
+
+function cardRectAtPoint(point: { x: number; y: number } | null, size: Pick<CardRect, "width" | "height">): CardRect | null {
+  if (!point) return null;
+  return {
+    left: point.x - size.width / 2,
+    top: point.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function tableLocationAnchorRect(location: TableLocation, size: Pick<CardRect, "width" | "height">): CardRect | null {
+  return cardRectAtPoint(pointFromElement(tableLocationAnchorElement(location)), size);
+}
+
+function defaultTableCardRect(): Pick<CardRect, "width" | "height"> {
+  return props.tableCardMode === "long"
+    ? { width: 32, height: 84 }
+    : { width: 44, height: 50 };
+}
+
+function interpolateRect(start: CardRect, end: CardRect, progress: number): CardRect {
+  const interpolate = (from: number, to: number) => from + (to - from) * progress;
+  return {
+    left: interpolate(start.left, end.left),
+    top: interpolate(start.top, end.top),
+    width: interpolate(start.width, end.width),
+    height: interpolate(start.height, end.height),
+  };
+}
+
+const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
   const key = `${event.round}:${event.id}:${index}`;
-  // The source node disappears when a claim commits. Keep its original point
-  // for the whole flight instead of jumping to the now-empty lane's center.
-  const start = tableFlightSources.get(key) ?? tableLocationPoint(move.from, move.card.id, false) ?? responseLandingPoint() ?? { x: 0, y: 0 };
+  const exactEnd = tableLocationExactRect(move.to, move.card.id);
+  const fallbackSize = exactEnd ?? defaultTableCardRect();
+  // Source nodes can disappear in the same authoritative patch that creates
+  // their destination. Freeze the last real card rectangle per move so later
+  // frames cannot drift back to a container center.
+  const start = tableFlightSources.get(key)
+    ?? lastCardRects.get(move.card.id)
+    ?? tableLocationExactRect(move.from, move.card.id)
+    ?? tableLocationAnchorRect(move.from, fallbackSize);
+  if (!start) return [];
   tableFlightSources.set(key, start);
-  if (tableFlightSources.size > 128) tableFlightSources.delete(tableFlightSources.keys().next().value!);
-  const end = tableLocationPoint(move.to, move.card.id, true) ?? start;
+  while (tableFlightSources.size > 128) tableFlightSources.delete(tableFlightSources.keys().next().value!);
+
+  let end = exactEnd;
+  if (!end) {
+    // Normal moves publish a hidden real destination in the same patch. Give
+    // Vue one paint to mount it before using a semantic zone fallback. Hu can
+    // legitimately have no table target because settlement owns the result.
+    const missedAt = missingDestinationTicks.get(key);
+    if (event.kind !== "hu" && (missedAt === undefined || missedAt === presentationTick.value)) {
+      missingDestinationTicks.set(key, presentationTick.value);
+      return [];
+    }
+    end = tableLocationAnchorRect(move.to, start);
+  } else {
+    missingDestinationTicks.delete(key);
+  }
+  if (!end) return [];
+
   const elapsed = presentationNow.value - event.startsAt;
   const draw = event.kind === "draw";
   const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
@@ -1170,13 +1287,16 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
   const flipping = draw && elapsed >= 700;
   const back = draw && elapsed < 950 && !reducedTableMotion.value;
   const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
-  const width = props.tableCardMode === "long" ? 32 : 44;
-  const height = props.tableCardMode === "long" ? 84 : 50;
-  return { key, card: move.card, kind: event.kind,
+  const current = interpolateRect(start, end, eased);
+  return [{ key, card: move.card, kind: event.kind,
     back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
     stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
-    style: { width: `${width}px`, height: `${height}px`, transform: `translate3d(${start.x + (end.x - start.x) * eased - width / 2}px, ${start.y + (end.y - start.y) * eased - height / 2}px, 0)` },
-  };
+    style: {
+      width: `${Math.max(1, current.width)}px`,
+      height: `${Math.max(1, current.height)}px`,
+      transform: `translate3d(${current.left}px, ${current.top}px, 0)`,
+    },
+  }];
 })));
 
 function flowCardCount(playerId: string): number {
@@ -1753,18 +1873,28 @@ function resolvePlayerPosition(playerId: string): "top" | "left" | "right" | "se
 }
 
 function pointFromElement(el: HTMLElement | null): { x: number; y: number } | null {
-  if (!el) {
-    return null;
-  }
-  const rect = el.getBoundingClientRect();
+  const rect = rectFromElement(el);
+  if (!rect) return null;
   return {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
 }
 
+function rectFromElement(el: HTMLElement | null): CardRect | null {
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
 function openAreaTargetForSelf(): { x: number; y: number } | null {
-  return pointFromElement(selfOpenCompactRef.value) ?? pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
+  return pointFromElement(selfOpenRef.value) ?? pointFromElement(selfZoneRef.value);
 }
 
 function targetForPlayer(playerId: string): { x: number; y: number } | null {
@@ -4525,6 +4655,8 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .resp-move-enter-active,
+  .resp-move-leave-active,
   .dealer-reveal,
   .dealer-reveal-panel,
   .dealer-reveal-back,
