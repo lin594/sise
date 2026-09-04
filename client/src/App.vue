@@ -184,6 +184,7 @@
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
+        :reduce-motion="displayPreferences.reduceMotion"
         :selection-mode="selectionMode"
         :selected-candidate-id="selectedCandidateId"
         :active-candidates="activeCandidates"
@@ -666,9 +667,9 @@
         <section class="rules-section">
           <h3>轮到你时怎么做</h3>
           <ul class="rules-list">
-            <li>全局先轮询胡、开、碰；如果没人响应，当前玩家再处理自己面前的牌。</li>
-            <li>当前玩家的基本顺序是：能吃就吃，不能吃就抓；抓出来的新牌再重新轮询一次胡、开、碰。</li>
-            <li>如果重新轮询后仍然没人响应，这张牌会继续作为你打给下家的牌，进入对应的流水。</li>
+            <li>新牌先放中央，优先处理胡、开、碰；抓牌者也可在这一轮选择吃。</li>
+            <li>面对上家流水牌，可以吃或抓；抓出来的新牌从牌堆飞到中央，翻开后只轮询一次。</li>
+            <li>抓出的普通牌无人取得且你不吃时，自动进入你打给下家的流水，只由下家决定吃或抓。将和金条必须保留处理。</li>
           </ul>
         </section>
 
@@ -903,6 +904,7 @@ type LocalTestBridgeWindow = Window & {
       source?: "schema" | "explicit",
     ) => void;
     getRoomState: () => RoomStateSnapshot | null;
+    getRoundResult: () => typeof roundResult.value;
     getDecisionTimer: () => typeof decisionTimer.value;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
   };
@@ -922,6 +924,7 @@ function installLocalTestBridge(): void {
     submitAction: (request) => sendAction(request),
     applyRoomSnapshot: (patch, source) => debugApplyRoomSnapshot(patch, source),
     getRoomState: () => state.value,
+    getRoundResult: () => roundResult.value,
     getDecisionTimer: () => decisionTimer.value,
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
@@ -1378,11 +1381,13 @@ const openingDealSecondsLeft = computed(() => {
   }
   return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
+const tablePresentationActive = computed(() => Number(state.value?.presentationUntil ?? 0) > nowMs.value + Number(state.value?.presentationClockOffsetMs ?? 0));
 const pendingActionDecision = computed(
   () =>
     connected.value &&
     !mePlayer.value?.isAutoPlay &&
     !openingDealActive.value &&
+    !tablePresentationActive.value &&
     isPlaying.value &&
     availableActions.value.some((x) => x.enabled || x.deferred),
 );
@@ -1390,6 +1395,7 @@ const pendingDiscardDecision = computed(
   () =>
     connected.value &&
     !openingDealActive.value &&
+    !tablePresentationActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
     state.value?.responsePhase === "local_draw" &&
@@ -2341,7 +2347,7 @@ function onPanelSubmit(request: ActionRequest) {
     clearSelection();
     return;
   }
-  if (state.value?.responsePhase === "collective" && action === "chi") {
+  if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
     const candidateId = candidateIdFromRequest(request);
     if (candidateId) {
       pendingDeferredChiCandidateId.value = candidateId;
@@ -2815,10 +2821,10 @@ function settlementBadge(cards: Card[], kind = ""): string | undefined {
     return undefined;
   }
   const head = cards[0];
-  if (kind === "peng") {
+  if (kind === "peng" || kind === "Peng") {
     return "碰";
   }
-  if (kind === "kai") {
+  if (kind === "kai" || ["Quad", "JiangQuad", "GoldQuad"].includes(kind)) {
     return "开";
   }
   if (head.color === "gold" && cards.length >= 3) {
@@ -2858,10 +2864,10 @@ function settlementGroupLabel(cards: Card[], kind = ""): string | undefined {
       return "金条单张";
     }
   }
-  if (kind === "peng") {
+  if (kind === "peng" || kind === "Peng") {
     return `${cardLabel(head)}碰`;
   }
-  if (kind === "kai") {
+  if (kind === "kai" || ["Quad", "JiangQuad", "GoldQuad"].includes(kind)) {
     return `${cardLabel(head)}开`;
   }
   if (isSameSettlementFace(cards)) {
@@ -2919,8 +2925,8 @@ function settlementGroupBlocks(player: RoundResultPlayer): SettlementGroupBlock[
     blocks.push({
       id: `winning-${index}-${group.cards.map((card) => card.id).join("-")}`,
       cards: group.cards,
-      badge: settlementBadge(group.cards),
-      label: settlementGroupLabel(group.cards),
+      badge: settlementBadge(group.cards, group.key),
+      label: settlementGroupLabel(group.cards, group.key),
       tone: settlementTone(group.cards),
     });
   });
@@ -2959,8 +2965,8 @@ function settlementHandBlocks(player: RoundResultPlayer): SettlementGroupBlock[]
     return (player.resolvedHandGroups ?? []).map((group, index) => ({
       id: `hand-${index}-${group.cards.map((card) => card.id).join("-")}`,
       cards: group.cards,
-      badge: settlementBadge(group.cards),
-      label: settlementGroupLabel(group.cards),
+      badge: settlementBadge(group.cards, group.key),
+      label: settlementGroupLabel(group.cards, group.key),
       tone: settlementTone(group.cards),
     }));
   }

@@ -48,6 +48,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "card" },
     ...{ class: ([__VLS_ctx.colorClass, `size-${__VLS_ctx.sizeClass}`, `mode-${__VLS_ctx.modeClass}`, { 'response-card': __VLS_ctx.isResponseCard }]) },
     'data-card-mode': (__VLS_ctx.modeClass),
+    'data-face-id': (__VLS_ctx.card.id),
     role: "img",
     'aria-label': (__VLS_ctx.accessibleLabel),
 });

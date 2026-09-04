@@ -76,6 +76,10 @@ export interface RoomStateSnapshot {
   activeResponderId?: string;
   responsePhase: string;
   responseEndsAt: number;
+  tablePresentationVersion?: number;
+  tableTransitions?: TableTransition[];
+  presentationUntil?: number;
+  presentationClockOffsetMs?: number;
   lastAction: string;
   deckCount: number;
   isMoCard: boolean;
@@ -191,4 +195,17 @@ export interface RoundResultPayload {
   remainingDeck?: Card[];
   scoringMode: ScoringMode;
   roundNumber: number;
+}
+
+export interface TableLocation {
+  zone: "deck" | "center" | "hand" | "flow" | "meld";
+  playerId?: string;
+}
+export interface TableTransition {
+  id: number;
+  round: number;
+  kind: "draw" | "discard" | "flow" | "meld" | "hu";
+  startsAt: number;
+  endsAt: number;
+  moves: Array<{ card: Card; from: TableLocation; to: TableLocation }>;
 }

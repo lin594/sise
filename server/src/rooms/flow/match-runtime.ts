@@ -1,6 +1,6 @@
 import type { MapSchema } from "@colyseus/schema";
 import { CardSchema, GameState, PlayerState } from "../../schema/game-state.schema.js";
-import { explainHu } from "../../rules/hu.js";
+import { explainHu, explainHand } from "../../rules/hu.js";
 import type { Card } from "../../rules/types.js";
 import { normalizeName } from "./support.js";
 
@@ -1603,11 +1603,11 @@ export function buildRoundResultPlayers(
     const discardCount = player?.discardPile.length ?? 0;
     const resolvedGroups =
       winnerId && seatId === winnerId && winnerResponseCard
-        ? (explainHu(hand, winnerResponseCard).details ?? []).map((detail) => ({
+        ? (explainHu(hand, winnerResponseCard, { minimumHiddenTriplets: declaredKongs }).details ?? []).map((detail) => ({
             key: detail.key,
             cards: detail.cards,
           }))
-        : [];
+        : winnerId === seatId ? (explainHand(hand).details ?? []) : [];
     const splitGroups =
       winnerId && seatId === winnerId ? splitWinnerResponseGroups(resolvedGroups, winnerResponseCard) : { winningGroups: [], remainingGroups: resolvedGroups };
     const winningGroups =

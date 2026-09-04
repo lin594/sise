@@ -130,8 +130,8 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
       for (const record of records) {
         for (const node of record.addedNodes) {
           if (!(node instanceof Element)) continue;
-          if (node.matches(".fx-card.discard")) trackingWindow.__siseDiscardFlightCount += 1;
-          trackingWindow.__siseDiscardFlightCount += node.querySelectorAll(".fx-card.discard").length;
+          if (node.matches("[data-transition-kind=discard]")) trackingWindow.__siseDiscardFlightCount += 1;
+          trackingWindow.__siseDiscardFlightCount += node.querySelectorAll("[data-transition-kind=discard]").length;
         }
       }
     });
@@ -154,6 +154,10 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
       responseCard,
       targetCard: responseCard,
       lastAction: action,
+      serverNow: Date.now(),
+      presentationUntil: Date.now() + 350,
+      tableTransitions: [{ id: 100, round: current.completedRounds + 1, kind: "discard", startsAt: Date.now(), endsAt: Date.now() + 350,
+        moves: [{ card: responseCard, from: { zone: "hand", playerId: selfId }, to: { zone: "center" } }] }],
       players: current.players,
     }, "explicit");
     bridge.applyRoomSnapshot({ stateRevision: revision + 2, lastAction: action }, "schema");
@@ -162,6 +166,8 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
   }, { revision: setup.revision, selfId });
   await expect.poll(() => page.evaluate(() => (window as any).__siseDiscardFlightCount)).toBe(1);
   await page.waitForTimeout(450);
+  await expect(page.getByTestId("pending-card")).toBeVisible();
+  await expect(page.locator(`.discard-token[data-face-id="stable-flow-${selfId}"]`)).toHaveCount(0);
   expect(await page.evaluate(() => {
     const trackingWindow = window as any;
     trackingWindow.__siseDiscardObserver.disconnect();

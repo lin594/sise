@@ -241,3 +241,26 @@ test("an already empty room keeps its original idle expiry across repeated resta
   assert.equal(restored.exportRecoverySnapshot(now + 10_000).expiresAt, originalIdleExpiry);
   restored.onDispose();
 });
+
+
+test("recovery keeps the presentation timeline and pending terminal action", () => {
+  const source = createRecoverableRoom();
+  const event = { id: 7, round: 1, kind: "hu", startsAt: Date.now(), endsAt: Date.now() + 350,
+    moves: [{ card: { id: "draw-1", color: "green", type: "jiang" }, from: { zone: "center" }, to: { zone: "meld", playerId: "seat_0" } }] };
+  source.state.tableTransitionsJson = JSON.stringify([event]);
+  source.state.tableEventSeq = 7;
+  source.state.presentationUntil = event.endsAt;
+  source.pendingPresentationEnd = { lastAction: "seat_0 HU", winnerId: "seat_0", groups: ["SingleJiang"] };
+  const snapshot = source.exportRecoverySnapshot();
+  source.onDispose();
+  const restored = new FourColorGameRoom() as any;
+  restored.roomId = "temporary-id";
+  restored.onCreate({ recoverySnapshot: snapshot });
+  assert.equal(restored.state.tableTransitionsJson, JSON.stringify([event]));
+  assert.equal(restored.state.presentationUntil, event.endsAt);
+  assert.deepEqual(restored.pendingPresentationEnd, snapshot.privateState.pendingPresentationEnd);
+  const publicState = restored.buildRoomSnapshot();
+  assert.deepEqual(publicState.tableTransitions, [event]);
+  assert.equal("pendingPresentationEnd" in publicState, false);
+  restored.onDispose();
+});

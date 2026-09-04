@@ -45,7 +45,32 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
   const seq = context.nextDebugSeq();
 
-  if (scenario === "hu_ready_mode2" || scenario === "hu_ready_local_draw") {
+  if (scenario === "draw_choice" || scenario === "draw_gold_settlement" || scenario === "draw_peng_settlement") {
+    context.state.publicDiscardPile.clear();
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id)!;
+      seat.declaredKongs = 0;
+      seat.exposedArea.clear(); seat.exposedGroupSizes.clear(); seat.exposedGroupKinds.clear();
+      seat.generalArea.clear(); seat.fishArea.clear(); seat.discardPile.clear();
+      if (id !== seatId) context.playerHands.set(id, [{ id: `other-${id}-${seq}`, color: "white", type: "shi" }]);
+    }
+    if (scenario === "draw_gold_settlement") {
+      add("gold-bo", "gold", "bo"); add("gold-zi", "gold", "zi");
+    } else if (scenario === "draw_peng_settlement") {
+      add("red-ma-1", "red", "ma"); add("red-ma-2", "red", "ma");
+    } else {
+      add("red-ju", "red", "ju"); add("red-pao", "red", "pao"); add("yellow-ma", "yellow", "ma");
+    }
+    const card: Card = scenario === "draw_gold_settlement" ? { id: `draw-gong-${seq}`, color: "gold", type: "gong" } : { id: `draw-ma-${seq}`, color: "red", type: "ma" };
+    context.setPendingResponse(createPendingResponse(seatId, card, "draw"));
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.state.pollOriginPlayerId = seatId;
+    context.setResponseCard(card, "draw");
+    context.state.lastAction = `${seatId} ZHUA`;
+  } else if (scenario === "hu_ready_mode2" || scenario === "hu_ready_local_draw") {
     add("h1", "red", "ju");
     add("h2", "red", "ma");
     add("h3", "red", "pao");
@@ -294,6 +319,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   context.playerHands.set(seatId, hand);
   context.updatePublicHandCounts();
   context.syncAllPrivateHands();
+  if (scenario.startsWith("draw_")) { context.startCollectivePolling(); return true; }
   context.broadcastAvailableActions();
 
   if (

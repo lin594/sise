@@ -231,6 +231,10 @@ function normalizeSnapshot(next) {
     return {
         roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
         stateRevision: Math.max(0, Number(rawState?.stateRevision ?? 0) || 0),
+        tablePresentationVersion: rawState?.tablePresentationVersion || (typeof rawState?.tableTransitionsJson === "string" ? 1 : undefined),
+        tableTransitions: Array.isArray(rawState?.tableTransitions) ? rawState.tableTransitions : JSON.parse(rawState?.tableTransitionsJson || "[]"),
+        presentationUntil: Number(rawState?.presentationUntil ?? 0),
+        presentationClockOffsetMs: rawState?.serverNow ? Number(rawState.serverNow) - Date.now() : 0,
         roomMode: rawState?.roomMode === "friends" || rawState?.roomMode === "match"
             ? rawState.roomMode
             : "practice",
@@ -917,6 +921,8 @@ export function useRoom(playerName = "Player") {
             String(snapshot.responseEndsAt),
             String(snapshot.declareEndsAt),
             snapshot.lastAction,
+            String(snapshot.presentationUntil ?? 0),
+            JSON.stringify(snapshot.tableTransitions ?? []),
             String(snapshot.deckCount),
             snapshot.isMoCard ? "1" : "0",
             cardMark(snapshot.targetCard),
@@ -1014,6 +1020,11 @@ export function useRoom(playerName = "Player") {
                 offsetMs: snapshotServerNow - Date.now(),
             };
         }
+        // Schema messages do not carry serverNow. Reuse the last measured offset,
+        // including when an explicit message only enriches the same revision.
+        normalized.presentationClockOffsetMs = matchClockSync.value.offsetMs;
+        if (previousSnapshot)
+            previousSnapshot.presentationClockOffsetMs = normalized.presentationClockOffsetMs;
         applyDecisionTimer(rawSnapshot?.decisionTimer);
         const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
         const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);

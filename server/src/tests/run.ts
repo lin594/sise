@@ -1272,11 +1272,11 @@ t("room: local upper pass draws new target without adding to hand", () => {
   assert.equal((room.playerHands.get("B") ?? []).length, before);
   assert.equal(room.pendingResponse?.card.id, "draw1");
   assert.equal(room.pendingResponse?.card.source, "upper");
-  assert.equal(room.pendingResponse?.ownerId, "B");
-  assert.equal(room.pendingResponse?.responsePhaseAfterNoResponse, "local_draw");
-  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
-  assert.equal(room.state.currentPlayerId, "B");
-  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.pendingResponse?.ownerId, "C");
+  assert.equal(room.pendingResponse?.responsePhaseAfterNoResponse, undefined);
+  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 1);
+  assert.equal(room.state.currentPlayerId, "C");
+  assert.equal(room.state.responsePhase, "local_upper");
 });
 
 t("room: bots force-take every grabbed general and gold card", () => {
@@ -1378,28 +1378,20 @@ t("room: deferred grabbed general chi consumes shi-xiang before discard", () => 
   room.onDispose();
 });
 
-t("room: local draw pass_to_next keeps recipient as next local upper owner", () => {
+t("room: declining a draw enters the next local opportunity without polling again", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
-  room.pendingResponse = {
-    ownerId: "B",
-    card: c("pass1", "white", "ju", "upper"),
-    collectives: new Map(),
-  };
+  room.pendingResponse = { ownerId: "B", card: c("pass1", "white", "ju", "draw"), collectives: new Map() };
   room.state.responsePhase = "local_draw";
-
+  room.startCollectivePolling = () => { throw new Error("must not poll the same draw twice"); };
   room.executePassToNext("B");
-
-  assert.equal(room.pendingResponse?.ownerId, "B");
-  assert.equal(room.state.responsePhase, "collective");
-  assert.equal(room.state.currentPlayerId, "C");
-  assert.equal(room.getAvailableActions("C").find((item: any) => item.action === "pass")?.deferred, true);
-
-  room.seatBySession.set("sessC", "C");
-  room.handleAction({ sessionId: "sessC", send: () => {} }, "pass");
-
   assert.equal(room.pendingResponse?.ownerId, "C");
   assert.equal(room.state.responsePhase, "local_upper");
   assert.equal(room.state.currentPlayerId, "C");
+  assert.equal(room.state.pollOriginPlayerId, "B");
+  assert.equal(room.state.players.get("B")?.discardPile[0]?.id, "pass1");
+  assert.equal(room.getAvailableActions("C").find((item: any) => item.action === "pass")?.enabled, true);
+  for (const seat of ["A", "B", "D"]) assert.equal(room.getAvailableActions(seat).some((item: any) => item.enabled), false);
+  room.clearCollectiveTimer();
 });
 
 t("room: collective kai enters discard stage instead of kong draw", () => {

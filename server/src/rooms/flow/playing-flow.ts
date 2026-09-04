@@ -149,11 +149,11 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
       { action: "peng", enabled: pengCandidates.length > 0, candidates: pengCandidates },
       {
         action: "chi",
-        enabled: false,
+        enabled: input.pending.card.source === "draw" && previewChiCandidates.length > 0,
         candidates: previewChiCandidates,
-        deferred: previewChiCandidates.length > 0,
+        deferred: input.pending.card.source !== "draw" && previewChiCandidates.length > 0,
       },
-      { action: "pass", enabled: true, deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId },
+      { action: "pass", enabled: !(input.pending.card.source === "draw" && isOwner && isDiscardRestricted(input.pending.card)), deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId },
     ];
   }
 

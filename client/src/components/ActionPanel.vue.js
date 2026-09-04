@@ -67,7 +67,7 @@ const normalized = computed(() => {
             candidates: item?.candidates ?? [],
         };
     })
-        .filter((item) => !(item.action === "chi" && isCollective && !item.deferred))
+        .filter((item) => !(item.action === "chi" && isCollective && !item.deferred && !item.enabled))
         .filter((item) => !(item.action === "pass" && isPendingForMe));
     if (isPendingForMe) {
         ordered.push({
@@ -168,6 +168,9 @@ const panelHint = computed(() => {
         return (specialChi.candidates?.length ?? 0) > 1
             ? "请选择一种吃法"
             : "这张牌不能过，请点吃";
+    }
+    if (props.responsePhase === "collective" && normalized.value.some((item) => item.action === "chi" && item.enabled)) {
+        return "可选择吃；过后无人取得就交给下家";
     }
     if (props.responsePhase === "collective" && !props.isCurrentTurn) {
         if (normalized.value.some((item) => item.key === "deferred-pass")) {

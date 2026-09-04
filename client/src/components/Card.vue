@@ -3,6 +3,7 @@
     class="card"
     :class="[colorClass, `size-${sizeClass}`, `mode-${modeClass}`, { 'response-card': isResponseCard }]"
     :data-card-mode="modeClass"
+    :data-face-id="card.id"
     role="img"
     :aria-label="accessibleLabel"
   >

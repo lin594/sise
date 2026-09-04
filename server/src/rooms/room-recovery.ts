@@ -41,6 +41,7 @@ export interface RoomRecoveryPrivateState {
   collectiveResponderId: string | null;
   debugSeq: number;
   roundDealerId: string | null;
+  pendingPresentationEnd?: { lastAction: string; winnerId: string | null; groups: string[] } | null;
   lastRoundResult: unknown | null;
 }
 

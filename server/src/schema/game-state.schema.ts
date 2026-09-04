@@ -65,6 +65,9 @@ export class GameState extends Schema {
   @type("string") pollOriginPlayerId: string = "";
   // Remaining response time for current poll (ms epoch).
   @type("number") responseEndsAt: number = 0;
+  @type("string") tableTransitionsJson: string = "[]";
+  @type("number") tableEventSeq: number = 0;
+  @type("number") presentationUntil: number = 0;
   @type(CardSchema) responseCard: CardSchema = new CardSchema();
   @type(CardSchema) dealerCard: CardSchema = new CardSchema();
 }

@@ -63,11 +63,17 @@ async function expectOpeningHandGate(page: Page): Promise<void> {
   const samples: number[] = [];
   const deadline = Date.now() + 4_000;
   while (Date.now() < deadline) {
-    if (await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) {
-      break;
-    }
-    const count = await page.locator("[data-testid^='hand-card-']").count();
-    samples.push(count);
+    // Read both values in one browser task: the declaration can appear
+    // between separate Playwright visibility/count calls.
+    const sample = await page.evaluate(() => {
+      const button = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
+      return {
+        declaring: Boolean(button && button.getClientRects().length && getComputedStyle(button).visibility !== "hidden"),
+        count: document.querySelectorAll("[data-testid^='hand-card-']").length,
+      };
+    });
+    if (sample.declaring) break;
+    samples.push(sample.count);
     await page.waitForTimeout(40);
   }
   await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });

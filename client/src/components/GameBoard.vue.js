@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
@@ -207,6 +207,8 @@ const responseCard = computed(() => {
     if (props.state?.responsePhase === "collective" && directTarget?.id) {
         return directTarget;
     }
+    if (props.state?.tablePresentationVersion)
+        return null;
     const collective = props.state?.responsePhase === "collective";
     if (collective) {
         const publicCount = props.state?.publicDiscardPile?.length ?? 0;
@@ -275,7 +277,7 @@ const activeFlowTargetPlayerId = computed(() => {
 });
 function shouldAppendPendingToFlow(playerId) {
     const pending = responseCard.value;
-    if (!pending || pending.source !== "upper") {
+    if (!pending || pending.source !== "upper" || (props.state?.tablePresentationVersion && props.state?.responsePhase !== "local_upper")) {
         return false;
     }
     if (activeFlowTargetPlayerId.value !== playerId) {
@@ -286,12 +288,99 @@ function shouldAppendPendingToFlow(playerId) {
 }
 function flowCards(playerId) {
     const owner = flowOwner(playerId);
-    const cards = owner?.discardPile ? [...owner.discardPile] : [];
+    const cards = owner?.discardPile ? [...owner.discardPile].filter((card) => !(props.state?.tablePresentationVersion && props.state?.responsePhase === "collective" && responseCard.value?.id === card.id)) : [];
     if (shouldAppendPendingToFlow(playerId) && responseCard.value) {
         cards.push(responseCard.value);
     }
     return cards;
 }
+const presentationTick = ref(Date.now());
+let presentationFrame = null;
+const presentationNow = computed(() => presentationTick.value + Number(props.state?.presentationClockOffsetMs ?? 0));
+const tableEvents = computed(() => props.state?.tableTransitions ?? []);
+watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions], () => {
+    if (presentationFrame !== null)
+        cancelAnimationFrame(presentationFrame);
+    const render = () => {
+        presentationTick.value = Date.now();
+        presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
+            ? requestAnimationFrame(render) : null;
+    };
+    render();
+}, { immediate: true });
+const activeTableEvents = computed(() => tableEvents.value.filter((event) => event.startsAt <= presentationNow.value && event.endsAt > presentationNow.value));
+const centerCardVisible = computed(() => {
+    if (!props.state?.tablePresentationVersion)
+        return true;
+    if (props.state?.phase === "ended" || props.state?.responsePhase === "local_upper")
+        return false;
+    return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === responseCard.value?.id));
+});
+const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
+const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
+onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
+onUnmounted(() => motionQuery?.removeEventListener("change", updateMotionPreference));
+const lastCardPoints = new Map();
+onBeforeUpdate(() => {
+    boardRef.value?.querySelectorAll(".hand [data-card-id]").forEach((element) => {
+        const point = pointFromElement(element);
+        if (point && element.dataset.cardId)
+            lastCardPoints.set(element.dataset.cardId, point);
+    });
+});
+function isMovingCard(id) {
+    return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
+        || (props.state?.phase === "playing" && tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === id)));
+}
+function movingCardStyle(id) {
+    return isMovingCard(id) ? { visibility: "hidden" } : {};
+}
+function tableLocationPoint(location, cardId, destination) {
+    if (location.zone === "deck")
+        return dealStartPoint();
+    if (location.zone === "center")
+        return responseLandingPoint();
+    let container = null;
+    if (location.zone === "flow") {
+        const receiver = getNextPlayer(location.playerId ?? "")?.clientId;
+        container = Array.from(boardRef.value?.querySelectorAll("[data-flow-receiver-id]") ?? []).find((el) => el.dataset.flowReceiverId === receiver) ?? null;
+    }
+    else if (location.zone === "meld") {
+        container = location.playerId === props.mySeatId ? selfOpenCompactRef.value ?? selfOpenRef.value : seatRefMap.get(location.playerId ?? "") ?? null;
+    }
+    else if (location.playerId === props.mySeatId) {
+        container = selfHandRef.value;
+    }
+    const cardEl = Array.from(container?.querySelectorAll("[data-face-id], button[data-card-id]") ?? []).find((el) => (el.dataset.faceId ?? el.dataset.cardId) === cardId);
+    return (!destination && location.zone === "hand" ? lastCardPoints.get(cardId) : null) ?? pointFromElement(cardEl ?? null) ?? pointFromElement(container) ?? targetForPlayer(location.playerId ?? "");
+}
+const tableFlightSources = new Map();
+const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.map((move, index) => {
+    const key = `${event.round}:${event.id}:${index}`;
+    // The source node disappears when a claim commits. Keep its original point
+    // for the whole flight instead of jumping to the now-empty lane's center.
+    const start = tableFlightSources.get(key) ?? tableLocationPoint(move.from, move.card.id, false) ?? responseLandingPoint() ?? { x: 0, y: 0 };
+    tableFlightSources.set(key, start);
+    if (tableFlightSources.size > 128)
+        tableFlightSources.delete(tableFlightSources.keys().next().value);
+    const end = tableLocationPoint(move.to, move.card.id, true) ?? start;
+    const elapsed = presentationNow.value - event.startsAt;
+    const draw = event.kind === "draw";
+    const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const flipping = draw && elapsed >= 700;
+    const back = draw && elapsed < 950 && !reducedTableMotion.value;
+    const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
+    const width = props.tableCardMode === "long" ? 32 : 44;
+    const height = props.tableCardMode === "long" ? 84 : 50;
+    return { key, card: move.card, kind: event.kind,
+        back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
+        stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
+        style: { width: `${width}px`, height: `${height}px`, transform: `translate3d(${start.x + (end.x - start.x) * eased - width / 2}px, ${start.y + (end.y - start.y) * eased - height / 2}px, 0)` },
+    };
+})));
 function flowCardCount(playerId) {
     return flowCards(playerId).length;
 }
@@ -702,7 +791,7 @@ function confirmDiscard() {
         clearTimeout(localDiscardAckTimer);
         localDiscardAckTimer = null;
     }
-    if (cardElement) {
+    if (cardElement && !props.state?.tablePresentationVersion) {
         triggerDiscardAnimationFromElement(cardElement, picked);
         locallyAnimatedDiscardCardId.value = cardId;
         localDiscardAckTimer = setTimeout(() => {
@@ -1214,6 +1303,8 @@ onMounted(() => {
     }, 500);
 });
 onUnmounted(() => {
+    if (presentationFrame !== null)
+        cancelAnimationFrame(presentationFrame);
     handResizeObserver?.disconnect();
     handResizeObserver = null;
     clearDealAnimationRuntime();
@@ -1282,6 +1373,8 @@ watch(() => [
     if (props.state?.phase === "declaring" && /^DECLARING\b/.test(String(action ?? ""))) {
         clearDealAnimationRuntime(true);
     }
+    if (props.state?.tablePresentationVersion)
+        return;
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {
         triggerActorFlash(actor);
@@ -1366,6 +1459,8 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
@@ -1395,6 +1490,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
@@ -1500,6 +1596,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
@@ -1672,6 +1769,7 @@ if (__VLS_ctx.flowTopLeftPlayer) {
         const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-top-left-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -1681,6 +1779,7 @@ if (__VLS_ctx.flowTopLeftPlayer) {
         const __VLS_1 = __VLS_0({
             key: (`flow-top-left-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -1809,6 +1908,7 @@ if (__VLS_ctx.topPlayer) {
                 const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`top-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -1817,6 +1917,7 @@ if (__VLS_ctx.topPlayer) {
                 const __VLS_7 = __VLS_6({
                     key: (`top-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -1847,6 +1948,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
         const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-top-right-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -1856,6 +1958,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
         const __VLS_10 = __VLS_9({
             key: (`flow-top-right-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -1984,6 +2087,7 @@ if (__VLS_ctx.leftPlayer) {
                 const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`left-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -1992,6 +2096,7 @@ if (__VLS_ctx.leftPlayer) {
                 const __VLS_16 = __VLS_15({
                     key: (`left-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -2069,15 +2174,15 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElement
 __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "response-slot" },
+    ref: "responseLandingRef",
 });
-if (__VLS_ctx.responseCard) {
+/** @type {typeof __VLS_ctx.responseLandingRef} */ ;
+if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "pending-inline response-focus" },
-        ...{ class: ({ 'draw-pending-hidden': __VLS_ctx.isResponseCardDrawHidden }) },
-        ref: "responseLandingRef",
+        ...{ class: ({ 'draw-pending-hidden': __VLS_ctx.isResponseCardDrawHidden || __VLS_ctx.isMovingCard(__VLS_ctx.responseCard.id) }) },
         'data-testid': "pending-card",
     });
-    /** @type {typeof __VLS_ctx.responseLandingRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "response-caption" },
     });
@@ -2264,6 +2369,7 @@ if (__VLS_ctx.rightPlayer) {
                 const __VLS_28 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`right-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -2272,6 +2378,7 @@ if (__VLS_ctx.rightPlayer) {
                 const __VLS_29 = __VLS_28({
                     key: (`right-group-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -2302,6 +2409,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
         const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -2311,6 +2419,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
         const __VLS_32 = __VLS_31({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -2354,6 +2463,7 @@ if (__VLS_ctx.selfPlayer) {
                 const __VLS_34 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`self-exp-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -2362,6 +2472,7 @@ if (__VLS_ctx.selfPlayer) {
                 const __VLS_35 = __VLS_34({
                     key: (`self-exp-card-${card.id}`),
                     card: (card),
+                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
                     mode: (props.tableCardMode),
                     size: "xs",
                     ...{ class: "mini-card" },
@@ -2392,6 +2503,7 @@ if (__VLS_ctx.flowBottomRightPlayer) {
         const __VLS_37 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -2401,6 +2513,7 @@ if (__VLS_ctx.flowBottomRightPlayer) {
         const __VLS_38 = __VLS_37({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
@@ -2732,11 +2845,13 @@ if (__VLS_ctx.selfPlayer) {
         // @ts-ignore
         const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
         const __VLS_55 = __VLS_54({
             card: (card),
+            ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }, ...__VLS_functionalComponentArgsRest(__VLS_54));
@@ -2816,6 +2931,51 @@ if (props.state?.phase === 'playing') {
     };
     var __VLS_59;
 }
+const __VLS_67 = {}.Teleport;
+/** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
+// @ts-ignore
+const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({
+    to: "body",
+}));
+const __VLS_69 = __VLS_68({
+    to: "body",
+}, ...__VLS_functionalComponentArgsRest(__VLS_68));
+__VLS_70.slots.default;
+for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        key: (flight.key),
+        ...{ class: "table-flight" },
+        ...{ style: (flight.style) },
+        'data-transition-kind': (flight.kind),
+        'data-transition-card-id': (flight.card.id),
+        'data-transition-stage': (flight.stage),
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "table-flight-turn" },
+        ...{ style: ({ transform: `rotateY(${flight.rotation}deg)` }) },
+    });
+    if (flight.back) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "card-back" },
+        });
+    }
+    else {
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (flight.card),
+            mode: (props.tableCardMode),
+            size: "lg",
+        }));
+        const __VLS_72 = __VLS_71({
+            card: (flight.card),
+            mode: (props.tableCardMode),
+            size: "lg",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+    }
+}
+var __VLS_70;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -2834,16 +2994,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_74 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_68 = __VLS_67({
+        const __VLS_75 = __VLS_74({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_74));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3014,6 +3174,9 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;
@@ -3058,6 +3221,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             responseCard: responseCard,
             flowTitle: flowTitle,
             flowAccessibleTitle: flowAccessibleTitle,
+            centerCardVisible: centerCardVisible,
+            isMovingCard: isMovingCard,
+            movingCardStyle: movingCardStyle,
+            tableFlights: tableFlights,
             flowCardCount: flowCardCount,
             visibleFlowCards: visibleFlowCards,
             isActiveDiscardCard: isActiveDiscardCard,

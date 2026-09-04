@@ -20,6 +20,7 @@
             v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
             :card="card"
+            :style="movingCardStyle(card.id)"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
@@ -93,6 +94,7 @@
                 v-for="card in group.cards"
                 :key="`top-group-card-${card.id}`"
                 :card="card"
+                :style="movingCardStyle(card.id)"
                 :mode="props.tableCardMode"
                 size="xs"
                 class="mini-card"
@@ -117,6 +119,7 @@
             v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
             :card="card"
+            :style="movingCardStyle(card.id)"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
@@ -190,6 +193,7 @@
                 v-for="card in group.cards"
                 :key="`left-group-card-${card.id}`"
                 :card="card"
+                :style="movingCardStyle(card.id)"
                 :mode="props.tableCardMode"
                 size="xs"
                 class="mini-card"
@@ -234,12 +238,11 @@
                   </span>
                 </div>
               </div>
-              <div class="response-slot">
+              <div class="response-slot" ref="responseLandingRef">
                 <div
-                  v-if="responseCard"
+                  v-if="centerCardVisible && responseCard"
                   class="pending-inline response-focus"
-                  :class="{ 'draw-pending-hidden': isResponseCardDrawHidden }"
-                  ref="responseLandingRef"
+                  :class="{ 'draw-pending-hidden': isResponseCardDrawHidden || isMovingCard(responseCard.id) }"
                   data-testid="pending-card"
                 >
                   <span class="response-caption">待响</span>
@@ -340,6 +343,7 @@
                 v-for="card in group.cards"
                 :key="`right-group-card-${card.id}`"
                 :card="card"
+                :style="movingCardStyle(card.id)"
                 :mode="props.tableCardMode"
                 size="xs"
                 class="mini-card"
@@ -364,6 +368,7 @@
             v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
             :card="card"
+            :style="movingCardStyle(card.id)"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
@@ -394,6 +399,7 @@
                   v-for="card in group.cards"
                   :key="`self-exp-card-${card.id}`"
                   :card="card"
+                  :style="movingCardStyle(card.id)"
                   :mode="props.tableCardMode"
                   size="xs"
                   class="mini-card"
@@ -419,6 +425,7 @@
             v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
             :card="card"
+            :style="movingCardStyle(card.id)"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
@@ -595,7 +602,8 @@
               class="discard-protected-badge"
               aria-hidden="true"
             >留</span>
-            <CardComp :card="card" :mode="props.ownCardMode" size="xl" />
+            <CardComp :card="card"
+            :style="movingCardStyle(card.id)" :mode="props.ownCardMode" size="xl" />
           </button>
         </div>
       </div>
@@ -628,6 +636,16 @@
       @selection-change="onSelectionChange"
     />
 
+    <Teleport to="body">
+      <div v-for="flight in tableFlights" :key="flight.key" class="table-flight"
+        :style="flight.style" :data-transition-kind="flight.kind" :data-transition-card-id="flight.card.id"
+        :data-transition-stage="flight.stage" aria-hidden="true">
+        <div class="table-flight-turn" :style="{ transform: `rotateY(${flight.rotation}deg)` }">
+          <div v-if="flight.back" class="card-back"></div>
+          <CardComp v-else :card="flight.card" :mode="props.tableCardMode" size="lg" />
+        </div>
+      </div>
+    </Teleport>
     <div class="fx-layer">
       <div
         v-for="flight in flights"
@@ -644,7 +662,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import type {
@@ -656,6 +674,8 @@ import type {
   PlayerState,
   RenderedCardMode,
   SeatDirection,
+  TableTransition,
+  TableLocation,
 } from "@/types/game";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 
@@ -728,6 +748,7 @@ const props = defineProps<{
   ownCardMode?: RenderedCardMode;
   tableCardMode?: RenderedCardMode;
   seatDirection?: SeatDirection;
+  reduceMotion?: boolean;
   selectionMode?: "kai" | "peng" | "chi" | null;
   selectedCandidateId?: string | null;
   activeCandidates?: ActionCandidate[];
@@ -981,6 +1002,7 @@ const responseCard = computed<Card | null>(() => {
     return directTarget as Card;
   }
 
+  if (props.state?.tablePresentationVersion) return null;
   const collective = props.state?.responsePhase === "collective";
   if (collective) {
     const publicCount = props.state?.publicDiscardPile?.length ?? 0;
@@ -1059,7 +1081,7 @@ const activeFlowTargetPlayerId = computed(() => {
 
 function shouldAppendPendingToFlow(playerId: string): boolean {
   const pending = responseCard.value;
-  if (!pending || pending.source !== "upper") {
+  if (!pending || pending.source !== "upper" || (props.state?.tablePresentationVersion && props.state?.responsePhase !== "local_upper")) {
     return false;
   }
   if (activeFlowTargetPlayerId.value !== playerId) {
@@ -1071,12 +1093,91 @@ function shouldAppendPendingToFlow(playerId: string): boolean {
 
 function flowCards(playerId: string): Card[] {
   const owner = flowOwner(playerId);
-  const cards = owner?.discardPile ? [...owner.discardPile] : [];
+  const cards = owner?.discardPile ? [...owner.discardPile].filter((card) => !(props.state?.tablePresentationVersion && props.state?.responsePhase === "collective" && responseCard.value?.id === card.id)) : [];
   if (shouldAppendPendingToFlow(playerId) && responseCard.value) {
     cards.push(responseCard.value);
   }
   return cards;
 }
+
+const presentationTick = ref(Date.now());
+let presentationFrame: number | null = null;
+const presentationNow = computed(() => presentationTick.value + Number(props.state?.presentationClockOffsetMs ?? 0));
+const tableEvents = computed<TableTransition[]>(() => props.state?.tableTransitions ?? []);
+watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions] as const, () => {
+  if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
+  const render = () => {
+    presentationTick.value = Date.now();
+    presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
+      ? requestAnimationFrame(render) : null;
+  };
+  render();
+}, { immediate: true });
+const activeTableEvents = computed(() => tableEvents.value.filter((event) => event.startsAt <= presentationNow.value && event.endsAt > presentationNow.value));
+const centerCardVisible = computed(() => {
+  if (!props.state?.tablePresentationVersion) return true;
+  if (props.state?.phase === "ended" || props.state?.responsePhase === "local_upper") return false;
+  return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === responseCard.value?.id));
+});
+const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
+const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
+onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
+onUnmounted(() => motionQuery?.removeEventListener("change", updateMotionPreference));
+const lastCardPoints = new Map<string, { x: number; y: number }>();
+onBeforeUpdate(() => {
+  boardRef.value?.querySelectorAll<HTMLElement>(".hand [data-card-id]").forEach((element) => {
+    const point = pointFromElement(element);
+    if (point && element.dataset.cardId) lastCardPoints.set(element.dataset.cardId, point);
+  });
+});
+function isMovingCard(id: string): boolean {
+  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
+    || (props.state?.phase === "playing" && tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === id)));
+}
+function movingCardStyle(id: string): Record<string, string> {
+  return isMovingCard(id) ? { visibility: "hidden" } : {};
+}
+function tableLocationPoint(location: TableLocation, cardId: string, destination: boolean): { x: number; y: number } | null {
+  if (location.zone === "deck") return dealStartPoint();
+  if (location.zone === "center") return responseLandingPoint();
+  let container: HTMLElement | null = null;
+  if (location.zone === "flow") {
+    const receiver = getNextPlayer(location.playerId ?? "")?.clientId;
+    container = Array.from(boardRef.value?.querySelectorAll<HTMLElement>("[data-flow-receiver-id]") ?? []).find((el) => el.dataset.flowReceiverId === receiver) ?? null;
+  } else if (location.zone === "meld") {
+    container = location.playerId === props.mySeatId ? selfOpenCompactRef.value ?? selfOpenRef.value : seatRefMap.get(location.playerId ?? "") ?? null;
+  } else if (location.playerId === props.mySeatId) {
+    container = selfHandRef.value;
+  }
+  const cardEl = Array.from(container?.querySelectorAll<HTMLElement>("[data-face-id], button[data-card-id]") ?? []).find((el) => (el.dataset.faceId ?? el.dataset.cardId) === cardId);
+  return (!destination && location.zone === "hand" ? lastCardPoints.get(cardId) : null) ?? pointFromElement(cardEl ?? null) ?? pointFromElement(container) ?? targetForPlayer(location.playerId ?? "");
+}
+const tableFlightSources = new Map<string, { x: number; y: number }>();
+const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.map((move, index) => {
+  const key = `${event.round}:${event.id}:${index}`;
+  // The source node disappears when a claim commits. Keep its original point
+  // for the whole flight instead of jumping to the now-empty lane's center.
+  const start = tableFlightSources.get(key) ?? tableLocationPoint(move.from, move.card.id, false) ?? responseLandingPoint() ?? { x: 0, y: 0 };
+  tableFlightSources.set(key, start);
+  if (tableFlightSources.size > 128) tableFlightSources.delete(tableFlightSources.keys().next().value!);
+  const end = tableLocationPoint(move.to, move.card.id, true) ?? start;
+  const elapsed = presentationNow.value - event.startsAt;
+  const draw = event.kind === "draw";
+  const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
+  const eased = 1 - Math.pow(1 - progress, 3);
+  const flipping = draw && elapsed >= 700;
+  const back = draw && elapsed < 950 && !reducedTableMotion.value;
+  const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
+  const width = props.tableCardMode === "long" ? 32 : 44;
+  const height = props.tableCardMode === "long" ? 84 : 50;
+  return { key, card: move.card, kind: event.kind,
+    back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
+    stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
+    style: { width: `${width}px`, height: `${height}px`, transform: `translate3d(${start.x + (end.x - start.x) * eased - width / 2}px, ${start.y + (end.y - start.y) * eased - height / 2}px, 0)` },
+  };
+})));
 
 function flowCardCount(playerId: string): number {
   return flowCards(playerId).length;
@@ -1546,7 +1647,7 @@ function confirmDiscard(): void {
     clearTimeout(localDiscardAckTimer);
     localDiscardAckTimer = null;
   }
-  if (cardElement) {
+  if (cardElement && !props.state?.tablePresentationVersion) {
     triggerDiscardAnimationFromElement(cardElement, picked);
     locallyAnimatedDiscardCardId.value = cardId;
     localDiscardAckTimer = setTimeout(() => {
@@ -2105,6 +2206,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   handResizeObserver?.disconnect();
   handResizeObserver = null;
   clearDealAnimationRuntime();
@@ -2176,6 +2278,7 @@ watch(
     if (props.state?.phase === "declaring" && /^DECLARING\b/.test(String(action ?? ""))) {
       clearDealAnimationRuntime(true);
     }
+    if (props.state?.tablePresentationVersion) return;
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {
       triggerActorFlash(actor);
@@ -2283,6 +2386,10 @@ watch(
 </script>
 
 <style scoped>
+.table-flight { position: fixed; left: 0; top: 0; pointer-events: none; perspective: 600px; z-index: 90; }
+.table-flight-turn { width: 100%; height: 100%; }
+.table-flight-turn > :deep(.card), .table-flight-turn > .card-back { width: 100%; height: 100%; box-sizing: border-box; }
+
 .board {
   flex: 1;
   min-height: 0;

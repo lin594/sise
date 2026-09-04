@@ -37,6 +37,33 @@ export declare function useRoom(playerName?: string): {
         activeResponderId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
+        tablePresentationVersion?: number | undefined;
+        tableTransitions?: {
+            id: number;
+            round: number;
+            kind: "draw" | "discard" | "flow" | "meld" | "hu";
+            startsAt: number;
+            endsAt: number;
+            moves: {
+                card: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                };
+                from: {
+                    zone: "deck" | "center" | "hand" | "flow" | "meld";
+                    playerId?: string | undefined;
+                };
+                to: {
+                    zone: "deck" | "center" | "hand" | "flow" | "meld";
+                    playerId?: string | undefined;
+                };
+            }[];
+        }[] | undefined;
+        presentationUntil?: number | undefined;
+        presentationClockOffsetMs?: number | undefined;
         lastAction: string;
         deckCount: number;
         isMoCard: boolean;
@@ -247,6 +274,33 @@ export declare function useRoom(playerName?: string): {
         activeResponderId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
+        tablePresentationVersion?: number | undefined;
+        tableTransitions?: {
+            id: number;
+            round: number;
+            kind: "draw" | "discard" | "flow" | "meld" | "hu";
+            startsAt: number;
+            endsAt: number;
+            moves: {
+                card: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                };
+                from: {
+                    zone: "deck" | "center" | "hand" | "flow" | "meld";
+                    playerId?: string | undefined;
+                };
+                to: {
+                    zone: "deck" | "center" | "hand" | "flow" | "meld";
+                    playerId?: string | undefined;
+                };
+            }[];
+        }[] | undefined;
+        presentationUntil?: number | undefined;
+        presentationClockOffsetMs?: number | undefined;
         lastAction: string;
         deckCount: number;
         isMoCard: boolean;

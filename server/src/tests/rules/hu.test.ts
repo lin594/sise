@@ -33,13 +33,13 @@ test("numeric wildcardCount option stays backward compatible", () => {
   assert.equal(validateHu(hand, response, 1), false);
 });
 
-test("jiang triplet and quad are valid groups", () => {
+test("a response jiang stays single or completes a quad", () => {
   const triplet = explainHu(
     [c("rj1", "red", "jiang"), c("rj2", "red", "jiang")],
     c("rj3", "red", "jiang"),
   );
   assert.equal(triplet.valid, true);
-  assert.ok(triplet.groups.includes("JiangTriplet"));
+  assert.deepEqual(triplet.groups, ["SingleJiang", "SingleJiang", "SingleJiang"]);
 
   const quad = explainHu(
     [c("rj1", "red", "jiang"), c("rj2", "red", "jiang"), c("rj3", "red", "jiang")],
@@ -116,4 +116,27 @@ test("a declared triplet may grow into a quad with the winning response", () => 
 
   assert.equal(result.valid, true);
   assert.deepEqual(result.groups, ["Quad"]);
+});
+
+
+test("drawn gong cannot turn two hand golds into a hidden triplet", () => {
+  const result = explainHu([c("bo", "gold", "bo"), c("zi", "gold", "zi")], c("gong", "gold", "gong"));
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.groups, ["SingleGold", "SingleGold", "SingleGold"]);
+  assert.deepEqual(result.details?.[0]?.cards.map((card) => card.id), ["gong"]);
+  assert.equal(new Set(result.details?.flatMap((group) => group.cards.map((card) => card.id))).size, 3);
+});
+
+test("ordinary response triplet is Peng while a hand triplet stays hidden", () => {
+  const hand = [c("r1", "red", "ju"), c("r2", "red", "ju"), c("w1", "white", "ma"), c("w2", "white", "ma"), c("w3", "white", "ma")];
+  const result = explainHu(hand, c("r3", "red", "ju"), { minimumHiddenTriplets: 1 });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.groups, ["Peng", "Triplet"]);
+  assert.ok(result.details?.[0]?.cards.some((card) => card.id === "r3"));
+});
+
+test("an existing gold kan is preserved when another gold wins as a single", () => {
+  const result = explainHu([c("g1", "gold", "bo"), c("g2", "gold", "zi"), c("g3", "gold", "hou")], c("g4", "gold", "gong"), { minimumHiddenTriplets: 1 });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.groups, ["GoldQuad"]);
 });

@@ -10,6 +10,7 @@ type Candidate = {
 };
 
 type ResolvedCandidate = {
+  response?: boolean;
   key: string;
   remove: string[];
 };
@@ -185,6 +186,7 @@ function groupingScore(key: string): number {
       return 3;
     case "SingleJiang":
       return 1;
+    case "Peng":
     case "FrameJMP":
     case "FrameJSX":
     case "TripleZu":
@@ -365,65 +367,47 @@ function resolveKeepingHiddenTriplets(
   minimumHiddenTriplets: number,
 ): ResolvedSolution | null {
   const required = Math.max(0, Math.floor(minimumHiddenTriplets));
-  const allCounter = makeCounter([...hand, responseCard]);
-  if (required === 0) {
-    return dfs(allCounter, new Map());
-  }
-
   const handCounter = makeCounter(hand);
-  const eligibleTokens: string[] = [];
-  for (const [cardToken, count] of handCounter.entries()) {
-    for (let index = 0; index < Math.floor(count / 3); index += 1) {
-      eligibleTokens.push(cardToken);
-    }
-  }
-  if (eligibleTokens.length < required) {
-    return null;
-  }
-
-  const remainderMemo = new Map<string, ResolvedSolution | null>();
+  const responseToken = token(responseCard);
+  const allCounter = makeCounter([...hand, responseCard]);
   let best: ResolvedSolution | null = null;
 
-  const search = (
-    startIndex: number,
-    remaining: number,
-    counter: Counter,
-    protectedItems: ResolvedCandidate[],
-  ): void => {
-    if (remaining === 0) {
-      const remainder = dfs(counter, remainderMemo);
-      if (!remainder) {
+  // Choose the response group first: its provenance affects both legality and
+  // score. Remaining groups consist entirely of cards already in the hand.
+  for (const candidate of listCandidatesForPivot(allCounter, responseToken)) {
+    if (candidate.key === "GoldTriplet" || candidate.key === "JiangTriplet") continue;
+    const handRemove = [...candidate.remove];
+    handRemove.splice(handRemove.indexOf(responseToken), 1);
+    const remainder = take(handCounter, handRemove);
+    if (!remainder) continue;
+    const responseKey = candidate.key === "Triplet" ? "Peng" : candidate.key;
+    const opensKan = candidate.remove.length === 4 && candidate.remove.every((key) => key === responseToken);
+    const stillRequired = Math.max(0, required - (opensKan ? 1 : 0));
+    const eligible = [...remainder.entries()].filter(([, count]) => count >= 3).map(([key]) => key);
+    const memo = new Map<string, ResolvedSolution | null>();
+    const search = (start: number, needed: number, counter: Counter, protectedItems: ResolvedCandidate[]): void => {
+      if (needed === 0) {
+        const rest = dfs(counter, memo);
+        if (!rest) return;
+        const items = [{ key: responseKey, remove: candidate.remove, response: true }, ...protectedItems, ...rest.items];
+        best = pickBetterResolved(best, {
+          items,
+          score: items.reduce((total, item) => total + groupingScore(item.key), 0),
+          groupedCount: items.reduce((total, item) => total + item.remove.length, 0),
+        });
         return;
       }
-      const protectedScore = protectedItems.reduce((sum, item) => sum + groupingScore(item.key), 0);
-      best = pickBetterResolved(best, {
-        items: [...protectedItems, ...remainder.items],
-        score: protectedScore + remainder.score,
-        groupedCount:
-          protectedItems.reduce((sum, item) => sum + item.remove.length, 0) + remainder.groupedCount,
-      });
-      return;
-    }
-
-    for (let index = startIndex; index <= eligibleTokens.length - remaining; index += 1) {
-      const cardToken = eligibleTokens[index]!;
-      const available = counter.get(cardToken) ?? 0;
-      const groupSizes: Array<3 | 4> = available >= 4 ? [4, 3] : [3];
-      for (const size of groupSizes) {
-        const remove = Array.from({ length: size }, () => cardToken);
-        const next = take(counter, remove);
-        if (!next) {
-          continue;
+      for (let index = start; index <= eligible.length - needed; index += 1) {
+        const key = eligible[index]!;
+        for (const size of [4, 3] as const) {
+          const remove = Array.from({ length: size }, () => key);
+          const next = take(counter, remove);
+          if (next) search(index + 1, needed - 1, next, [...protectedItems, { key: sameFaceGroupKey(key, size), remove }]);
         }
-        search(index + 1, remaining - 1, next, [
-          ...protectedItems,
-          { key: sameFaceGroupKey(cardToken, size), remove },
-        ]);
       }
-    }
-  };
-
-  search(0, required, allCounter, []);
+    };
+    search(0, stillRequired, remainder, []);
+  }
   return best;
 }
 
@@ -448,7 +432,7 @@ export function validateHu(hand: Card[], responseCard: Card, options?: number | 
 
 export function explainHu(hand: Card[], responseCard: Card, options?: number | HuExplainOptions): HuResult {
   const resolvedOptions = resolveOptions(options); // wildcard options are compatibility-only and intentionally ignored.
-  const allCards = [...hand, responseCard];
+  const allCards = hand;
   const resolved = resolveKeepingHiddenTriplets(hand, responseCard, resolvedOptions.minimumHiddenTriplets);
   const cardBuckets = new Map<string, Card[]>();
   for (const card of allCards) {
@@ -458,9 +442,14 @@ export function explainHu(hand: Card[], responseCard: Card, options?: number | H
     cardBuckets.set(key, list);
   }
   const details =
-    resolved?.items.map(({ key, remove }) => {
-      const cards: Card[] = [];
+    resolved?.items.map(({ key, remove, response }) => {
+      const cards: Card[] = response ? [responseCard] : [];
+      let responseUsed = false;
       for (const removeKey of remove) {
+        if (response && !responseUsed && removeKey === token(responseCard)) {
+          responseUsed = true;
+          continue;
+        }
         const bucket = cardBuckets.get(removeKey) ?? [];
         const picked = bucket.shift();
         if (picked) {
@@ -483,4 +472,13 @@ export function analyzeCardGrouping(cards: Card[]): GroupingAnalysis {
     leftoverCount: resolved.leftoverCount,
     score: resolved.score,
   };
+}
+
+/** Decompose cards already in the hand, without inventing a winning response. */
+export function explainHand(hand: Card[]): HuResult {
+  const resolved = dfs(makeCounter(hand), new Map());
+  const buckets = new Map<string, Card[]>();
+  for (const card of hand) buckets.set(token(card), [...(buckets.get(token(card)) ?? []), card]);
+  const details = resolved?.items.map((item) => ({ key: item.key, cards: item.remove.map((key) => buckets.get(key)!.shift()!) })) ?? [];
+  return { valid: Boolean(resolved), groups: details.map((item) => item.key), details };
 }

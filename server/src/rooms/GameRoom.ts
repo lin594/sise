@@ -1,4 +1,5 @@
 ﻿import { Room, Client, CloseCode } from "@colyseus/core";
+import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -59,8 +60,6 @@ import {
   enterOwnerLocalPhaseAfterNoResponseFlow,
   executeEatFlow,
   executeGrabFlow,
-  executePassToNextFlow,
-  advanceToNextOwnerFlow,
   beginCollectiveFromDiscardFlow,
   discardFromAndCollectiveFlow,
   drawForOwnerFlow,
@@ -174,6 +173,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private readonly minPlayersToStart = Math.max(1, Number(process.env.MIN_PLAYERS ?? 1));
   private readonly targetSeats = 4;
 
+  private presentationTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPresentationEnd: { lastAction: string; winnerId: string | null; groups: string[] } | null = null;
   private deck: Card[] = [];
   private playerHands = new Map<string, Card[]>(); // seatId -> cards
   private playerOrder: string[] = []; // seatIds in round order
@@ -600,6 +601,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   onDispose(): void {
+    this.clearPresentation();
     unregisterRoom(this.roomId);
     void removeRoomSnapshot(this.roomId);
     this.clearBotTimer();
@@ -673,6 +675,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         collectiveResponderId: this.collectiveResponderId,
         debugSeq: this.debugSeq,
         roundDealerId: this.roundDealerId,
+        pendingPresentationEnd: this.pendingPresentationEnd,
         lastRoundResult: this.lastRoundResult
           ? JSON.parse(JSON.stringify(this.lastRoundResult)) as typeof this.lastRoundResult
           : null,
@@ -682,6 +685,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
     const privateState = snapshot.privateState;
+    this.pendingPresentationEnd = privateState.pendingPresentationEnd ?? null;
     const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
     this.roomIdleExpiresAt = privateState.roomIdleExpiresAt;
     this.deck = cloneCards(privateState.deck);
@@ -1800,6 +1804,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：重置局内状态，写入手牌/庄家/声明倒计时并进入声明阶段。
    */
   private bootstrapRound(): void {
+    this.clearPresentation();
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
     this.state.phase = "declaring";
@@ -2420,6 +2425,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!seatId || this.botIds.has(seatId)) {
       return;
     }
+    if (this.state.presentationUntil > Date.now()) {
+      this.rejectAction(client, "action_unavailable", seatId);
+      this.sendAvailableActionsToClient(client, seatId);
+      return;
+    }
 
     if (!this.pendingResponse || this.state.phase !== "playing") {
       this.rejectAction(client, "action_unavailable", seatId);
@@ -2522,6 +2532,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private handleDiscardCard(client: Client, payload: DiscardCardRequest): void {
     const seatId = this.seatBySession.get(client.sessionId);
     if (!seatId || this.botIds.has(seatId)) {
+      return;
+    }
+    if (this.state.presentationUntil > Date.now()) {
+      this.rejectAction(client, "action_unavailable", seatId);
+      this.sendAvailableActionsToClient(client, seatId);
       return;
     }
 
@@ -2675,7 +2690,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "kai", pendingCard, candidateId)) {
             return false;
           }
+          const before = [...(this.playerHands.get(seatId) ?? [])];
           const ok = tryExecuteKai(operationDeps, seatId, pendingCard, candidateId);
+          if (ok) this.recordMeld(seatId, pendingCard, before);
           if (ok) {
             this.consumeDeclaredKongForKai(seatId);
           }
@@ -2685,7 +2702,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "peng", pendingCard, candidateId)) {
             return false;
           }
-          return tryExecutePeng(operationDeps, seatId, pendingCard, candidateId);
+          const before = [...(this.playerHands.get(seatId) ?? [])];
+          const ok = tryExecutePeng(operationDeps, seatId, pendingCard, candidateId);
+          if (ok) this.recordMeld(seatId, pendingCard, before);
+          return ok;
         },
         executeChiOperation: (seatId, pendingCard, candidateId) => {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(seatId, "chi", pendingCard, candidateId)) {
@@ -2701,7 +2721,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         startTurn: (ownerId, tag) => this.startTurn(ownerId, tag),
         enterDiscardStage: (ownerId, tag) => this.enterDiscardStage(ownerId, tag),
         enterNoResponsePath: () => this.enterNoResponsePath(),
-        endRound: (lastAction, winnerIdArg, groups) => this.endRound(lastAction, winnerIdArg, groups),
+        endRound: (lastAction, winnerIdArg, groups) => {
+          if (winnerIdArg) {
+            const result = this.ops.explainHuForSeat(winnerIdArg, this.playerHands.get(winnerIdArg) ?? [], pending.card, 0);
+            const group = result.details?.find((item) => item.cards.some((card) => card.id === pending.card.id));
+            this.recordMeld(winnerIdArg, pending.card, group?.cards.filter((card) => card.id !== pending.card.id) ?? [], "hu");
+          }
+          this.endRound(lastAction, winnerIdArg, groups);
+        },
       },
       pending,
       winnerId,
@@ -2763,6 +2790,26 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：可能重绑 pending.owner，并更新 local 阶段状态字段。
    */
   private enterOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
+    const pending = this.pendingResponse;
+    if (pending?.card.source === "draw" && pending.ownerId === ownerId) {
+      const choice = pending.collectives.get(ownerId);
+      this.state.responsePhase = "local_draw";
+      this.state.currentPlayerId = ownerId;
+      this.state.currentTurnPlayerId = ownerId;
+      this.state.loopStage = "local_poll";
+      this.resetCollectivePolling();
+      if (choice?.action === "chi" && this.executeEat(ownerId, choice.candidateId)) return;
+      if (isDiscardRestricted(pending.card)) {
+        if (choice?.action === "pass") { this.retainPendingSpecial(ownerId); return; }
+        this.tickBots();
+      } else {
+        this.executePassToNext(ownerId);
+      }
+      return;
+    }
+    if (pending?.card.source === "upper") {
+      this.recordTableTransition("flow", [{ card: pending.card, from: { zone: "center" }, to: { zone: "flow", playerId: ownerId } }]);
+    }
     enterOwnerLocalPhaseAfterNoResponseFlow({
       pending: this.pendingResponse,
       ownerId,
@@ -2809,7 +2856,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           if (!candidateId || !this.preservesDeclaredKongsAfterAction(ownerIdArg, "chi", pendingCard, candidateId)) {
             return { ok: false };
           }
+          const before = [...(this.playerHands.get(ownerIdArg) ?? [])];
           const result = tryExecuteChi(operationDeps, ownerIdArg, pendingCard, candidateId);
+          if (result.ok) this.recordMeld(ownerIdArg, pendingCard, before);
           if (result.ok && pendingCard.source === "upper" && this.pendingResponse) {
             const sourceOwnerId = String(this.state.pollOriginPlayerId || this.pendingResponse.ownerId || "");
             this.ops.consumePendingDiscard(sourceOwnerId, pendingCard);
@@ -2843,6 +2892,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return false;
     }
     this.ops.pushExposedGroup(ownerId, [pending.card], true, "chi");
+    this.recordMeld(ownerId, pending.card, []);
     this.state.lastAction = `${ownerId} FORCE_TAKE`;
     this.enterDiscardStage(ownerId, "FORCE_TAKE");
     this.traceStep("retain_pending_special", `owner=${ownerId} card=${this.formatTraceCard(pending.card)}`);
@@ -2867,15 +2917,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         },
         setupCollectiveAfterGrab: (ownerIdArg, card) => {
           const previousPlayerId = this.getPreviousPlayerId(ownerIdArg);
-          this.pendingResponse = createPendingResponse(previousPlayerId, card, "upper", "local_draw");
+          this.pendingResponse = createPendingResponse(ownerIdArg, card, "draw");
           this.state.responsePhase = "collective";
-          this.ops.setResponseCard(card, "upper");
+          this.ops.setResponseCard(card, "draw");
           this.state.currentPlayerId = ownerIdArg;
           this.state.currentTurnPlayerId = ownerIdArg;
           this.state.previousPlayerId = previousPlayerId;
           this.state.loopStage = "global_poll";
           this.state.activeResponderId = "";
-          this.state.pollOriginPlayerId = previousPlayerId;
+          this.state.pollOriginPlayerId = ownerIdArg;
           this.state.responseEndsAt = 0;
         },
         setLastAction: (action) => {
@@ -2889,73 +2939,33 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   /**
-   * 作用：执行 local_draw 的 pass_to_next 路径。
+   * 作用：中央轮询后，将未取得的普通摸牌直接放入摸牌者的下行流水。
    * 关键输入/输出：输入 ownerId；输出无返回值。
-   * 副作用：将响应牌入弃牌并推进到下家。
+   * 副作用：保留原出牌归属，只开放下家的本地吃／抓，不重新轮询。
    */
   private executePassToNext(ownerId: string): void {
-    this.traceStep("execute_pass_to_next", `owner=${ownerId}`);
-    executePassToNextFlow(
-      {
-        pending: this.pendingResponse,
-        pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
-        setLastAction: (action) => {
-          this.state.lastAction = action;
-        },
-        advanceToNextOwner: (ownerIdArg, card) => this.advanceToNextOwner(ownerIdArg, card),
-      },
-      ownerId,
-    );
-  }
-
-  /**
-   * 作用：将当前响应牌交给下家并启动新的 collective。
-   * 关键输入/输出：输入当前牌主和待传递牌；输出无返回值。
-   * 副作用：重建 pending、切换 current/previous/pollOrigin 并开始轮询。
-   */
-  private advanceToNextOwner(currentOwnerId: string, cardToNext: Card): void {
-    this.traceStep("advance_to_next_owner", `from=${currentOwnerId} card=${this.formatTraceCard(cardToNext)}`);
-    advanceToNextOwnerFlow(
-      {
-        getNextPlayerId: (ownerId) => this.getNextPlayerId(ownerId),
-        createPendingResponse: ({ ownerId, card, source }) => createPendingResponse(ownerId, card, source),
-        setPendingResponse: (pending) => {
-          this.pendingResponse = pending;
-        },
-        setCurrentPlayer: (ownerId) => {
-          this.state.currentPlayerId = ownerId;
-        },
-        setResponsePhaseCollective: () => {
-          this.state.responsePhase = "collective";
-        },
-        setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
-        setCurrentTurnPlayer: (ownerId) => {
-          this.state.currentTurnPlayerId = ownerId;
-        },
-        setPreviousPlayer: (ownerId) => {
-          this.state.previousPlayerId = ownerId;
-        },
-        setLoopStageGlobal: () => {
-          this.state.loopStage = "global_poll";
-        },
-        clearActiveResponder: () => {
-          this.state.activeResponderId = "";
-        },
-        clearResponseEndsAt: () => {
-          this.state.responseEndsAt = 0;
-        },
-        setPollOriginPlayer: (ownerId) => {
-          this.state.pollOriginPlayerId = ownerId;
-        },
-        syncAllPrivateHands: () => this.syncAllPrivateHands(),
-        startCollectivePolling: () => this.startCollectivePolling(),
-      },
-      currentOwnerId,
-      cardToNext,
-    );
+    const pending = this.pendingResponse;
+    if (!pending || isDiscardRestricted(pending.card)) return;
+    this.ops.pushDiscard(ownerId, pending.card);
+    const nextId = this.getNextPlayerId(ownerId);
+    this.pendingResponse = createPendingResponse(nextId, pending.card, "upper");
+    this.state.pollOriginPlayerId = ownerId;
+    this.state.previousPlayerId = ownerId;
+    this.state.currentPlayerId = nextId;
+    this.state.currentTurnPlayerId = nextId;
+    this.state.responsePhase = "local_upper";
+    this.state.loopStage = "local_poll";
+    this.ops.setResponseCard(pending.card, "upper");
+    this.resetCollectivePolling();
+    this.state.lastAction = `${ownerId} PASS`;
+    this.recordTableTransition("flow", [{ card: pending.card, from: { zone: "center" }, to: { zone: "flow", playerId: ownerId } }]);
+    this.syncAllPrivateHands();
+    this.tickBots();
   }
 
   private buildRoundResultPlayers(winnerId: string | null, groups: string[]): RoundResultPlayer[] {
+    const response = this.pendingResponse?.card;
+    const alreadyExposed = winnerId && this.state.players.get(winnerId)?.exposedArea.some((card) => card.id === response?.id);
     return buildRoundResultPlayersFlow(
       this.playerOrder,
       this.state.players,
@@ -2963,7 +2973,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       (card) => this.ops.toPlainCard(card),
       winnerId,
       groups,
-      this.pendingResponse?.card ? { ...this.pendingResponse.card } : null,
+      response && !alreadyExposed ? { ...response } : null,
     );
   }
 
@@ -3052,6 +3062,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       seatByToken: this.seatByToken,
       targetSeats: this.targetSeats,
       resetRuntime: () => {
+        this.clearPresentation();
         this.clearAllTakeoverTimers();
         this.clearBotTimer();
         this.clearDeclareTimer();
@@ -3093,6 +3104,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
+    if (this.state.presentationUntil > Date.now()) {
+      this.pendingPresentationEnd = { lastAction, winnerId, groups };
+      this.waitForPresentation();
+      return;
+    }
     // Multiple asynchronous paths can observe the same terminal move. Only the
     // first one may settle the round, otherwise a cumulative table would score
     // one hand more than once.
@@ -3154,6 +3170,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private getAvailableActions(seatId: string, probeCollectiveResponder = false): AvailableActionEntry[] {
+    if (this.state.presentationUntil > Date.now() && !probeCollectiveResponder) return [];
     const hand = this.playerHands.get(seatId) ?? [];
     const allowCollectivePreselection = !probeCollectiveResponder && this.canSeatPreselectCollective(seatId);
     const entries = getAvailableActionsFlow({
@@ -3281,6 +3298,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return {
       roomId: this.roomId,
       stateRevision: Math.max(0, Number(this.state.stateRevision ?? 0)),
+      tablePresentationVersion: 1,
+      tableTransitions: readTableTransitions(this.state.tableTransitionsJson),
+      presentationUntil: this.state.presentationUntil,
       roomMode: this.state.roomMode,
       scoringMode: this.state.scoringMode,
       completedRounds: this.state.completedRounds,
@@ -3618,7 +3638,61 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：可能安排 bot 计时器、collective 超时或广播动作面板。
    */
+  private clearPresentation(): void {
+    if (this.presentationTimer) clearTimeout(this.presentationTimer);
+    this.presentationTimer = null;
+    this.pendingPresentationEnd = null;
+    this.state.presentationUntil = 0;
+    this.state.tableTransitionsJson = "[]";
+  }
+
+  private recordTableTransition(kind: TableTransition["kind"], moves: TableTransition["moves"]): void {
+    const startsAt = Math.max(Date.now(), this.state.presentationUntil);
+    // Headless simulations do not need display delays. Real rooms use the same
+    // timeline for every viewer, independent of client acknowledgements.
+    const duration = this.clients.length ? (kind === "draw" ? 1200 : 350) : 0;
+    const event: TableTransition = { id: ++this.state.tableEventSeq, round: this.state.completedRounds + 1,
+      kind, startsAt, endsAt: startsAt + duration, moves };
+    const previous = readTableTransitions(this.state.tableTransitionsJson).filter((item) => item.round === event.round);
+    this.state.tableTransitionsJson = JSON.stringify([...previous, event].slice(-32));
+    this.state.presentationUntil = event.endsAt;
+    this.clearBotTimer();
+    this.clearCollectiveTimer();
+  }
+
+  private recordMeld(ownerId: string, response: Card, before: Card[], kind: "meld" | "hu" = "meld"): void {
+    const remaining = new Set((this.playerHands.get(ownerId) ?? []).map((card) => card.id));
+    const handCards = kind === "hu" ? before : before.filter((card) => !remaining.has(card.id));
+    const from: TableLocation = this.state.responsePhase === "local_upper"
+      ? { zone: "flow", playerId: this.state.pollOriginPlayerId } : { zone: "center" };
+    const to: TableLocation = { zone: "meld", playerId: ownerId };
+    this.recordTableTransition(kind, [
+      { card: response, from, to },
+      ...handCards.filter((card) => card.id !== response.id).map((card) => ({ card, from: { zone: "hand" as const, playerId: ownerId }, to })),
+    ]);
+  }
+
+  private waitForPresentation(): boolean {
+    const remaining = this.state.presentationUntil - Date.now();
+    if (remaining <= 0) return false;
+    if (!this.presentationTimer) {
+      this.presentationTimer = setTimeout(() => {
+        this.presentationTimer = null;
+        this.tickBots();
+      }, remaining);
+    }
+    this.broadcastAvailableActions();
+    return true;
+  }
+
   private tickBots(): void {
+    if (this.waitForPresentation()) return;
+    if (this.pendingPresentationEnd) {
+      const end = this.pendingPresentationEnd;
+      this.pendingPresentationEnd = null;
+      this.endRound(end.lastAction, end.winnerId, end.groups);
+      return;
+    }
     const pending = this.pendingResponse;
     const plan = planTickBots({
       hasPending: !!pending,
@@ -3689,6 +3763,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：重置轮询游标、设置 activeResponder，并调度下一步。
    */
   private startCollectivePolling(): void {
+    const pending = this.pendingResponse;
+    if (pending && this.state.responsePhase === "collective") {
+      const kind = pending.card.source === "draw" ? "draw" : "discard";
+      const alreadyRecorded = readTableTransitions(this.state.tableTransitionsJson).some((event) =>
+        event.round === this.state.completedRounds + 1 && event.kind === kind && event.moves.some((move) => move.card.id === pending.card.id));
+      if (!alreadyRecorded) this.recordTableTransition(kind, [{ card: pending.card,
+        from: kind === "draw" ? { zone: "deck" } : { zone: "hand", playerId: pending.ownerId }, to: { zone: "center" } }]);
+    }
+    if (this.waitForPresentation()) return;
     this.traceStep("start_collective_polling");
     startCollectiveFlow({
       pending: this.pendingResponse,
@@ -3981,6 +4064,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：覆盖局部状态并触发轮询/机器人推进。
    */
   private applyDebugScenario(seatId: string, scenario: string): boolean {
+    this.clearPresentation();
     // A scenario replaces the live decision window. Cancel callbacks queued by
     // the randomly chosen opening player first, otherwise a bot step can race
     // the injected state and make browser regressions nondeterministic.
