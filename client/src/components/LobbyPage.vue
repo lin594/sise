@@ -79,22 +79,33 @@
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
-          <p>{{ canShareInvite ? "通过系统分享给牌友；链接不会包含你的身份凭据。" : "复制邀请链接给朋友；链接不会包含你的身份凭据。" }}</p>
+          <p>复制链接发给牌友，打开后输入昵称即可选座。</p>
         </div>
         <div class="invite-actions">
           <button
             class="ghost invite-button"
             type="button"
             data-testid="copy-invite"
-            :disabled="invitePending"
+            :disabled="invitePending !== null"
             @click="$emit('copy-invite')"
           >
-            {{ invitePending ? (canShareInvite ? "正在打开…" : "正在复制…") : (canShareInvite ? "邀请牌友" : "复制链接") }}
+            {{ invitePending === "copy" ? "正在复制…" : "复制邀请链接" }}
+          </button>
+          <button
+            v-if="canShareInvite"
+            class="ghost invite-button"
+            type="button"
+            data-testid="share-invite"
+            :disabled="invitePending !== null"
+            @click="$emit('share-invite')"
+          >
+            {{ invitePending === "share" ? "正在打开…" : "邀请牌友" }}
           </button>
           <button
             class="ghost invite-button show-qr-button"
             type="button"
             data-testid="show-invite-qr"
+            :disabled="invitePending !== null"
             @click="$emit('show-invite-qr')"
           >
             出示二维码
@@ -447,7 +458,7 @@ const props = defineProps<{
   matchSecondsLeft: number;
   players: LobbyPlayer[];
   canShareInvite: boolean;
-  invitePending: boolean;
+  invitePending: "copy" | "share" | null;
   seatClaimPending: number | null;
   readyPending: boolean | null;
   scoringMode: ScoringMode;
@@ -474,6 +485,7 @@ const emit = defineEmits<{
   start: [];
   "select-mode": [modeId: string];
   "copy-invite": [];
+  "share-invite": [];
   "show-invite-qr": [];
   "claim-seat": [seatIndex: number];
   "add-bot": [seatIndex: number];
@@ -843,8 +855,14 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .invite-actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.invite-button {
+  white-space: nowrap;
 }
 
 .show-qr-button {

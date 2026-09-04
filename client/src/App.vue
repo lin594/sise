@@ -133,6 +133,7 @@
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
+      @share-invite="shareInviteLink"
       @show-invite-qr="showInviteQr"
       @claim-seat="requestSeatClaim"
       @add-bot="addBot($event, 50)"
@@ -1501,7 +1502,7 @@ const inviteCopyFallbackUrl = ref("");
 const inviteQrUrl = ref("");
 const inviteQrRoomId = ref("");
 const canShareInvite = typeof navigator.share === "function";
-const inviteActionPending = ref(false);
+const inviteActionPending = ref<"copy" | "share" | null>(null);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
 let inviteQrReturnFocus: HTMLElement | null = null;
@@ -3366,20 +3367,28 @@ function buildInviteUrl(): string {
 }
 
 async function copyInviteLink() {
+  await performInviteAction("copy");
+}
+
+async function shareInviteLink() {
+  await performInviteAction("share");
+}
+
+async function performInviteAction(action: "copy" | "share") {
   if (!activeRoomId.value || inviteActionPending.value) {
     return;
   }
   inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  inviteActionPending.value = true;
+  inviteActionPending.value = action;
   const inviteUrl = buildInviteUrl();
   let restoreFocus = true;
   try {
-    if (canShareInvite && navigator.share) {
+    if (action === "share" && navigator.share) {
       try {
+        // Keep the URL in the message body instead of passing a separate
+        // link item that mobile share targets may turn into an attachment.
         await navigator.share({
-          title: "四色牌好友房",
-          text: `加入好友房 ${activeRoomId.value}，一起玩四色牌`,
-          url: inviteUrl,
+          text: `加入好友房 ${activeRoomId.value}，一起玩四色牌\n${inviteUrl}`,
         });
         globalError.value = "";
         showGlobalNotice("邀请已分享，等待牌友加入");
@@ -3391,6 +3400,7 @@ async function copyInviteLink() {
       }
     }
 
+    inviteActionPending.value = "copy";
     let copied = false;
     if (window.isSecureContext && navigator.clipboard?.writeText) {
       try {
@@ -3428,7 +3438,7 @@ async function copyInviteLink() {
       restoreFocus = false;
     }
   } finally {
-    inviteActionPending.value = false;
+    inviteActionPending.value = null;
     if (restoreFocus) {
       const returnTarget = inviteCopyReturnFocus;
       inviteCopyReturnFocus = null;

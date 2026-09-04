@@ -1,4 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openFriendInvitation(page: Page) {
+  await page.goto("/");
+  await page.getByTestId("nickname-input").fill("邀请房主");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("mode-friends").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("seat-grid")).toBeVisible();
+}
 
 test("host invites a friend, configures bots, and starts a shared game", async ({ browser }, testInfo) => {
   test.setTimeout(120_000);
@@ -11,7 +20,9 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     let copiedInvite = "";
     Object.defineProperty(navigator, "share", {
       configurable: true,
-      value: undefined,
+      value: async () => {
+        sessionStorage.setItem("sise_test_unexpected_share", "1");
+      },
     });
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -39,21 +50,23 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     expect(inviteUrl).not.toContain("playerToken");
     expect(inviteUrl).not.toContain("hostKey");
     await expect(host.getByText("把邀请链接发给朋友，或点击“补齐 3 位电脑”后开始。")).toBeVisible();
+    await expect(host.getByTestId("copy-invite")).toHaveText("复制邀请链接");
+    await expect(host.getByTestId("share-invite")).toHaveText("邀请牌友");
+    await host.evaluate(() => {
+      history.replaceState(history.state, "", `${location.href}&playerToken=private&hostKey=secret#private`);
+    });
     await host.getByTestId("copy-invite").click();
     await expect(host.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
     const clipboardSnapshot = await host.evaluate(async () => ({
       secureContext: window.isSecureContext,
       copiedInviteUrl: navigator.clipboard?.readText ? await navigator.clipboard.readText() : null,
     }));
-    if (clipboardSnapshot.secureContext && clipboardSnapshot.copiedInviteUrl !== null) {
-      const copiedInviteUrl = clipboardSnapshot.copiedInviteUrl;
-      expect(copiedInviteUrl).toBe(inviteUrl);
-      expect(copiedInviteUrl).not.toContain("playerToken");
-      expect(copiedInviteUrl).not.toContain("hostKey");
-    }
+    expect(clipboardSnapshot.secureContext).toBe(true);
+    expect(clipboardSnapshot.copiedInviteUrl).toBe(inviteUrl);
+    expect(await host.evaluate(() => sessionStorage.getItem("sise_test_unexpected_share"))).toBeNull();
 
     await guest.setViewportSize({ width: 667, height: 375 });
-    await guest.goto(inviteUrl);
+    await guest.goto(clipboardSnapshot.copiedInviteUrl!);
     await expect(guest.getByRole("heading", { name: "输入昵称，加入好友房" })).toBeVisible();
     await expect(guest.getByText("不用注册。输入牌桌上显示的名字，就能进入朋友的房间选座。")).toBeVisible();
     await expect(guest.getByTestId("login-submit")).toHaveText("加入好友房");
@@ -647,7 +660,7 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
-  const inviteButton = page.getByTestId("copy-invite");
+  const inviteButton = page.getByTestId("share-invite");
   await expect(inviteButton).toHaveText("邀请牌友");
   await inviteButton.click();
   await expect(page.getByTestId("global-notice")).toHaveText("邀请已分享，等待牌友加入");
@@ -655,11 +668,11 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   const shared = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem("sise_test_shared_invite") ?? "{}") as ShareData,
   );
-  expect(shared.title).toBe("四色牌好友房");
-  expect(shared.text).toContain("加入好友房");
-  expect(shared.url).toContain("roomId=");
-  expect(shared.url).not.toContain("playerToken");
-  expect(shared.url).not.toContain("hostKey");
+  const inviteUrl = page.url();
+  const roomId = new URL(inviteUrl).searchParams.get("roomId");
+  expect(shared).toEqual({ text: `加入好友房 ${roomId}，一起玩四色牌\n${inviteUrl}` });
+  expect(shared.text).not.toContain("playerToken");
+  expect(shared.text).not.toContain("hostKey");
 });
 
 test("keeps the friend room unchanged when system sharing is cancelled", async ({ page }) => {
@@ -670,6 +683,14 @@ test("keeps the friend room unchanged when system sharing is cancelled", async (
         throw new DOMException("cancelled", "AbortError");
       },
     });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => sessionStorage.setItem("sise_test_unexpected_copy", "1") },
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: () => { sessionStorage.setItem("sise_test_unexpected_copy", "1"); return true; },
+    });
   });
 
   await page.goto("/");
@@ -679,13 +700,14 @@ test("keeps the friend room unchanged when system sharing is cancelled", async (
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
-  const inviteButton = page.getByTestId("copy-invite");
+  const inviteButton = page.getByTestId("share-invite");
   await inviteButton.click();
   await expect(inviteButton).toBeEnabled();
   await expect(inviteButton).toBeFocused();
   await expect(page.getByTestId("global-notice")).toHaveCount(0);
   await expect(page.getByTestId("invite-copy-fallback-url")).toHaveCount(0);
   await expect(page.getByTestId("seat-grid")).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("sise_test_unexpected_copy"))).toBeNull();
 });
 
 test("copies an invite link on an insecure LAN deployment", async ({ page }) => {
@@ -711,84 +733,197 @@ test("copies an invite link on an insecure LAN deployment", async ({ page }) => 
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
+  await expect(page.getByTestId("share-invite")).toHaveCount(0);
   await page.getByTestId("copy-invite").click();
   await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
   await expect(page.getByTestId("copy-invite")).toBeFocused();
 });
 
-test("offers an accessible in-app fallback when invite copying is blocked", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "share", {
-      configurable: true,
-      value: async () => {
-        throw new DOMException("share unavailable", "NotAllowedError");
-      },
-    });
-    Object.defineProperty(window, "isSecureContext", {
-      configurable: true,
-      value: false,
-    });
-    Object.defineProperty(document, "execCommand", {
-      configurable: true,
-      value: () => false,
-    });
-    Object.defineProperty(window, "prompt", {
-      configurable: true,
-      value: () => {
-        (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled = true;
-        return null;
-      },
-    });
+for (const legacyCopy of [false, true]) {
+  test(`failed sharing copies the URL using ${legacyCopy ? "legacy copy after clipboard rejection" : "the clipboard"}`, async ({ page }) => {
+    await page.addInitScript(({ legacyCopy }) => {
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: async () => { throw new DOMException("unavailable", "NotAllowedError"); },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => {
+            if (legacyCopy) throw new DOMException("blocked", "NotAllowedError");
+            sessionStorage.setItem("sise_test_copied_invite", value);
+          },
+        },
+      });
+      Object.defineProperty(document, "execCommand", {
+        configurable: true,
+        value: (command: string) => {
+          if (!legacyCopy || command !== "copy") throw new Error("unexpected legacy copy");
+          sessionStorage.setItem("sise_test_copied_invite", (document.activeElement as HTMLTextAreaElement).value);
+          return true;
+        },
+      });
+    }, { legacyCopy });
+    await openFriendInvitation(page);
+    const shareButton = page.getByTestId("share-invite");
+    await shareButton.click();
+    await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
+    expect(await page.evaluate(() => sessionStorage.getItem("sise_test_copied_invite"))).toBe(page.url());
+    await expect(shareButton).toBeFocused();
+    await expect(page.getByTestId("copy-invite")).toBeEnabled();
   });
-  await page.setViewportSize({ width: 375, height: 667 });
+}
 
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("复制受限房主");
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("seat-grid")).toBeVisible();
-
-  const copyButton = page.getByTestId("copy-invite");
-  await copyButton.click();
-  const fallback = page.getByRole("dialog", { name: "复制邀请链接" });
-  const linkField = page.getByTestId("invite-copy-fallback-url");
-  await expect(fallback).toBeVisible();
-  await expect(linkField).toBeFocused();
-  const inviteUrl = await linkField.inputValue();
-  expect(inviteUrl).toContain("roomId=");
-  expect(inviteUrl).not.toContain("playerToken");
-  expect(inviteUrl).not.toContain("hostKey");
-  expect(await page.evaluate(() => (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled)).not.toBe(true);
-
-  const metrics = await fallback.evaluate((dialog) => {
-    const rect = dialog.getBoundingClientRect();
-    const selectedText = window.getSelection()?.toString() ?? "";
-    const field = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
-    const close = dialog.querySelector<HTMLElement>("[data-testid='close-invite-copy-fallback']")!;
-    const select = dialog.querySelector<HTMLElement>("[data-testid='select-invite-link']")!;
-    return {
-      withinViewport:
-        rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight,
-      selectionStart: field.selectionStart,
-      selectionEnd: field.selectionEnd,
-      valueLength: field.value.length,
-      selectedText,
-      closeHeight: close.getBoundingClientRect().height,
-      selectHeight: select.getBoundingClientRect().height,
-    };
+for (const action of ["copy", "share"] as const) {
+  test(`locks invitation actions while ${action} is pending`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const defer = () => {
+        sessionStorage.setItem("sise_test_invite_calls", String(Number(sessionStorage.getItem("sise_test_invite_calls")) + 1));
+        return new Promise<void>((resolve) => {
+          Object.assign(window, { finishInvite: resolve });
+        });
+      };
+      Object.defineProperty(navigator, "share", { configurable: true, value: defer });
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: defer } });
+    });
+    await openFriendInvitation(page);
+    const trigger = page.getByTestId(`${action}-invite`);
+    await trigger.click();
+    await expect(trigger).toHaveText(action === "copy" ? "正在复制…" : "正在打开…");
+    await expect(page.getByTestId("copy-invite")).toBeDisabled();
+    await expect(page.getByTestId("share-invite")).toBeDisabled();
+    await expect(page.getByTestId("show-invite-qr")).toBeDisabled();
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('[data-testid="copy-invite"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      document.querySelector<HTMLButtonElement>('[data-testid="share-invite"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(await page.evaluate(() => sessionStorage.getItem("sise_test_invite_calls"))).toBe("1");
+    await page.evaluate(() => (window as Window & { finishInvite: () => void }).finishInvite());
+    await expect(page.getByTestId("copy-invite")).toBeEnabled();
+    await expect(page.getByTestId("share-invite")).toBeEnabled();
+    await expect(trigger).toBeFocused();
   });
-  expect(metrics.withinViewport).toBe(true);
-  expect(metrics.selectionStart).toBe(0);
-  expect(metrics.selectionEnd).toBe(metrics.valueLength);
-  expect(metrics.closeHeight).toBeGreaterThanOrEqual(48);
-  expect(metrics.selectHeight).toBeGreaterThanOrEqual(48);
+}
 
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByTestId("select-invite-link")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(linkField).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(fallback).toHaveCount(0);
-  await expect(copyButton).toBeFocused();
+test.describe("all invitation buttons on mobile", () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test("keeps copying, sharing and QR reachable without hiding seats", async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", { configurable: true, value: async () => {} });
+    });
+    await openFriendInvitation(page);
+    for (const viewport of [{ width: 568, height: 320 }, { width: 667, height: 375 }, { width: 320, height: 568 }, { width: 1280, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      const rotated = viewport.width === 320;
+      await expect(page.locator(".layout")).toHaveAttribute("data-effective-viewport", rotated ? "568x320" : `${viewport.width}x${viewport.height}`);
+      const metrics = await page.evaluate(({ rotated }) => {
+        const actions = document.querySelector<HTMLElement>(".invite-actions")!;
+        const buttons = Array.from(actions.querySelectorAll<HTMLButtonElement>("button"));
+        const seat = document.querySelector<HTMLElement>('[data-testid="seat-0"]')!.getBoundingClientRect();
+        const scroll = document.querySelector<HTMLElement>('[data-testid="lobby-scroll"]')!.getBoundingClientRect();
+        return {
+          labels: buttons.map((button) => button.textContent!.trim()),
+          controls: buttons.map((button) => {
+            const rect = button.getBoundingClientRect();
+            return {
+              inside: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+              readable: button.scrollWidth <= button.clientWidth && button.scrollHeight <= button.clientHeight,
+              size: Math.min(rect.width, rect.height),
+            };
+          }),
+          seatVisible: rotated
+            ? Math.min(seat.right, scroll.right) - Math.max(seat.left, scroll.left)
+            : Math.min(seat.bottom, scroll.bottom) - Math.max(seat.top, scroll.top),
+        };
+      }, { rotated });
+      expect(metrics.labels).toEqual(["复制邀请链接", "邀请牌友", "出示二维码"]);
+      for (const control of metrics.controls) {
+        expect(control.inside, JSON.stringify({ viewport, metrics })).toBe(true);
+        expect(control.readable).toBe(true);
+        expect(control.size).toBeGreaterThanOrEqual(42);
+      }
+      expect(metrics.seatVisible, JSON.stringify({ viewport, metrics })).toBeGreaterThanOrEqual(80);
+      await page.screenshot({ path: testInfo.outputPath(`invite-actions-${viewport.width}x${viewport.height}.png`) });
+    }
+  });
 });
+
+for (const action of ["copy", "share"] as const) {
+  test(`offers an accessible in-app fallback when invite ${action} cannot copy`, async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: async () => {
+          throw new DOMException("share unavailable", "NotAllowedError");
+        },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async () => { throw new DOMException("blocked", "NotAllowedError"); } },
+      });
+      Object.defineProperty(document, "execCommand", {
+        configurable: true,
+        value: () => false,
+      });
+      Object.defineProperty(window, "prompt", {
+        configurable: true,
+        value: () => {
+          (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled = true;
+          return null;
+        },
+      });
+    });
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    await page.goto("/");
+    await page.getByTestId("nickname-input").fill("复制受限房主");
+    await page.getByTestId("login-submit").click();
+    await page.getByTestId("mode-friends").click();
+    await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("seat-grid")).toBeVisible();
+
+    const copyButton = page.getByTestId(`${action}-invite`);
+    await copyButton.click();
+    const fallback = page.getByRole("dialog", { name: "复制邀请链接" });
+    const linkField = page.getByTestId("invite-copy-fallback-url");
+    await expect(fallback).toBeVisible();
+    await expect(linkField).toBeFocused();
+    const inviteUrl = await linkField.inputValue();
+    expect(inviteUrl).toContain("roomId=");
+    expect(inviteUrl).not.toContain("playerToken");
+    expect(inviteUrl).not.toContain("hostKey");
+    expect(await page.evaluate(() => (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled)).not.toBe(true);
+
+    const metrics = await fallback.evaluate((dialog) => {
+      const rect = dialog.getBoundingClientRect();
+      const selectedText = window.getSelection()?.toString() ?? "";
+      const field = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+      const close = dialog.querySelector<HTMLElement>("[data-testid='close-invite-copy-fallback']")!;
+      const select = dialog.querySelector<HTMLElement>("[data-testid='select-invite-link']")!;
+      return {
+        withinViewport:
+          rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight,
+        selectionStart: field.selectionStart,
+        selectionEnd: field.selectionEnd,
+        valueLength: field.value.length,
+        selectedText,
+        closeHeight: close.getBoundingClientRect().height,
+        selectHeight: select.getBoundingClientRect().height,
+      };
+    });
+    expect(metrics.withinViewport).toBe(true);
+    expect(metrics.selectionStart).toBe(0);
+    expect(metrics.selectionEnd).toBe(metrics.valueLength);
+    expect(metrics.closeHeight).toBeGreaterThanOrEqual(48);
+    expect(metrics.selectHeight).toBeGreaterThanOrEqual(48);
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByTestId("select-invite-link")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(linkField).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(fallback).toHaveCount(0);
+    await expect(copyButton).toBeFocused();
+  });
+}
