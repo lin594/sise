@@ -246,15 +246,13 @@
                   data-testid="pending-card"
                 >
                   <span class="response-caption">待响</span>
-                  <Transition name="resp-move" mode="out-in">
-                    <CardComp
-                      :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
-                      :card="responseCard"
-                      :mode="props.tableCardMode"
-                      size="lg"
-                      class="response-card-face"
-                    />
-                  </Transition>
+                  <CardComp
+                    :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
+                    :card="responseCard"
+                    :mode="props.tableCardMode"
+                    size="lg"
+                    class="response-card-face"
+                  />
                 </div>
               </div>
             </div>
@@ -1112,6 +1110,7 @@ const presentationNow = computed(() => presentationTick.value + Number(props.sta
 const tableEvents = computed<TableTransition[]>(() => props.state?.tableTransitions ?? []);
 const lastCardRects = new Map<string, CardRect>();
 const tableFlightSources = new Map<string, CardRect>();
+const tableFlightDestinations = new Map<string, CardRect>();
 const missingDestinationTicks = new Map<string, number>();
 let presentationScopeKey = "";
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions] as const, () => {
@@ -1121,6 +1120,7 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
     presentationScopeKey = nextScopeKey;
     lastCardRects.clear();
     tableFlightSources.clear();
+    tableFlightDestinations.clear();
     missingDestinationTicks.clear();
   }
   const currentMoveKeys = new Set(tableEvents.value.flatMap((event) =>
@@ -1128,6 +1128,9 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
   ));
   for (const key of tableFlightSources.keys()) {
     if (!currentMoveKeys.has(key)) tableFlightSources.delete(key);
+  }
+  for (const key of tableFlightDestinations.keys()) {
+    if (!currentMoveKeys.has(key)) tableFlightDestinations.delete(key);
   }
   for (const key of missingDestinationTicks.keys()) {
     if (!currentMoveKeys.has(key)) missingDestinationTicks.delete(key);
@@ -1252,7 +1255,8 @@ function interpolateRect(start: CardRect, end: CardRect, progress: number): Card
 const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
   const key = `${event.round}:${event.id}:${index}`;
   const exactEnd = tableLocationExactRect(move.to, move.card.id);
-  const fallbackSize = exactEnd ?? defaultTableCardRect();
+  const frozenEnd = tableFlightDestinations.get(key);
+  const fallbackSize = frozenEnd ?? exactEnd ?? defaultTableCardRect();
   // Source nodes can disappear in the same authoritative patch that creates
   // their destination. Freeze the last real card rectangle per move so later
   // frames cannot drift back to a container center.
@@ -1264,14 +1268,14 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
   tableFlightSources.set(key, start);
   while (tableFlightSources.size > 128) tableFlightSources.delete(tableFlightSources.keys().next().value!);
 
-  let end = exactEnd;
+  let end = frozenEnd ?? exactEnd;
   if (!end) {
     // Normal moves publish a hidden real destination in the same patch. Give
     // Vue one paint to mount it before using a semantic zone fallback. Hu can
     // legitimately have no table target because settlement owns the result.
-    const missedAt = missingDestinationTicks.get(key);
-    if (event.kind !== "hu" && (missedAt === undefined || missedAt === presentationTick.value)) {
-      missingDestinationTicks.set(key, presentationTick.value);
+    const missedFrames = (missingDestinationTicks.get(key) ?? 0) + 1;
+    missingDestinationTicks.set(key, missedFrames);
+    if (event.kind !== "hu" && missedFrames < 2) {
       return [];
     }
     end = tableLocationAnchorRect(move.to, start);
@@ -1279,6 +1283,15 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
     missingDestinationTicks.delete(key);
   }
   if (!end) return [];
+  // A flight is one visual transaction. Freeze its real destination on the
+  // first painted frame so a hand scroll, late sibling mount, or responsive
+  // reflow cannot steer the card or resize it halfway through the animation.
+  if (!frozenEnd) {
+    tableFlightDestinations.set(key, end);
+    while (tableFlightDestinations.size > 128) {
+      tableFlightDestinations.delete(tableFlightDestinations.keys().next().value!);
+    }
+  }
 
   const elapsed = presentationNow.value - event.startsAt;
   const draw = event.kind === "draw";
@@ -1288,13 +1301,15 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
   const back = draw && elapsed < 950 && !reducedTableMotion.value;
   const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
   const current = interpolateRect(start, end, eased);
+  const scaleX = Math.max(0.01, current.width / start.width);
+  const scaleY = Math.max(0.01, current.height / start.height);
   return [{ key, card: move.card, kind: event.kind,
     back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
     stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
     style: {
-      width: `${Math.max(1, current.width)}px`,
-      height: `${Math.max(1, current.height)}px`,
-      transform: `translate3d(${current.left}px, ${current.top}px, 0)`,
+      width: `${Math.max(1, start.width)}px`,
+      height: `${Math.max(1, start.height)}px`,
+      transform: `translate3d(${current.left}px, ${current.top}px, 0) scale(${scaleX}, ${scaleY})`,
     },
   }];
 })));
@@ -2516,7 +2531,17 @@ watch(
 </script>
 
 <style scoped>
-.table-flight { position: fixed; left: 0; top: 0; pointer-events: none; perspective: 600px; z-index: 90; }
+.table-flight {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  perspective: 600px;
+  z-index: 90;
+  transform-origin: top left;
+  will-change: transform;
+  contain: strict;
+}
 .table-flight-turn { width: 100%; height: 100%; }
 .table-flight-turn > :deep(.card), .table-flight-turn > .card-back { width: 100%; height: 100%; box-sizing: border-box; }
 
@@ -3410,20 +3435,6 @@ watch(
   font-size: max(0.625rem, 10px);
   line-height: 1.15;
   color: #fef08a;
-}
-
-.resp-move-enter-active {
-  transition: transform 0.28s ease, opacity 0.28s ease;
-}
-
-.resp-move-enter-from {
-  transform: translateY(38px) scale(0.86);
-  opacity: 0;
-}
-
-.resp-move-enter-to {
-  transform: translateY(0) scale(1);
-  opacity: 1;
 }
 
 .center-pointer {
@@ -4655,8 +4666,6 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .resp-move-enter-active,
-  .resp-move-leave-active,
   .dealer-reveal,
   .dealer-reveal-panel,
   .dealer-reveal-back,

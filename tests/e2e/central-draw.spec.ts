@@ -12,6 +12,7 @@ type RectSnapshot = {
 type MeldHandoff = {
   done: boolean;
   histories: Record<string, RectSnapshot[]>;
+  layoutSizes: Record<string, Array<{ width: number; height: number }>>;
   lastFlights: Record<string, RectSnapshot>;
   targets: Record<string, RectSnapshot>;
   handCounts: Record<string, number>;
@@ -51,6 +52,7 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
       seen: false,
       done: false,
       histories: {},
+      layoutSizes: {},
       lastFlights: {},
       targets: {},
       handCounts: {},
@@ -85,6 +87,10 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
           if (!id || !ids.includes(id)) continue;
           const snapshot = rectOf(flight);
           (result.histories[id] ??= []).push(snapshot);
+          (result.layoutSizes[id] ??= []).push({
+            width: flight.offsetWidth,
+            height: flight.offsetHeight,
+          });
           result.lastFlights[id] = snapshot;
         }
       } else if (result.seen) {
@@ -140,6 +146,8 @@ async function expectRedXiangPengHandoff(page: Page, mode: "large" | "long") {
   for (const id of expectedIds) {
     expectRectClose(handoff.lastFlights[id], handoff.targets[id]);
     expectSizeConverges(handoff.histories[id], handoff.targets[id]);
+    expect(new Set(handoff.layoutSizes[id].map((size) => `${size.width}x${size.height}`)).size,
+      `${id} must animate size on the compositor without per-frame layout`).toBe(1);
     expect(handoff.handCounts[id], `${id} must not remain in hand`).toBe(0);
     expect(handoff.visibleCounts[id], `${id} must have one visible instance`).toBe(1);
     expect(handoff.targetModes[id]).toBe(mode);
