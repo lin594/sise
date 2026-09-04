@@ -142,6 +142,9 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
       ),
       minimumControlWidth: Math.min(...buttonRects.map((rect) => rect.width)),
       minimumControlHeight: Math.min(...buttonRects.map((rect) => rect.height)),
+      minimumControlFontSize: Math.min(
+        ...toolButtons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize)),
+      ),
     };
   });
   expect(geometry.boardTop).toBeGreaterThanOrEqual(geometry.headerBottom);
@@ -149,6 +152,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   expect(geometry.controlsInsideHeader).toBe(true);
   expect(geometry.minimumControlWidth).toBeGreaterThanOrEqual(40);
   expect(geometry.minimumControlHeight).toBeGreaterThanOrEqual(36);
+  expect(geometry.minimumControlFontSize).toBeGreaterThanOrEqual(14);
 }
 
 async function expectCompactTableContained(page: Page): Promise<{
@@ -438,6 +442,11 @@ test.describe("clear first-time entry", () => {
         startWidth: start.getBoundingClientRect().width,
         startHeight: start.getBoundingClientRect().height,
         startFontSize: Number.parseFloat(getComputedStyle(start).fontSize),
+        minimumTopActionFontSize: Math.min(
+          ...["change-entry-name", "open-rules"].map((testId) =>
+            Number.parseFloat(getComputedStyle(document.querySelector<HTMLElement>(`[data-testid='${testId}']`)!).fontSize),
+          ),
+        ),
       };
     });
     expect(lobbyGeometry.scrollDoesNotHideModes).toBe(true);
@@ -445,6 +454,7 @@ test.describe("clear first-time entry", () => {
     expect(lobbyGeometry.startWidth).toBeGreaterThanOrEqual(180);
     expect(lobbyGeometry.startHeight).toBeGreaterThanOrEqual(48);
     expect(lobbyGeometry.startFontSize).toBeGreaterThanOrEqual(16);
+    expect(lobbyGeometry.minimumTopActionFontSize).toBeGreaterThanOrEqual(14);
     await page.screenshot({ path: testInfo.outputPath("legacy-mode-lobby-568x320.png") });
 
     await page.getByTestId("change-entry-name").click();
@@ -1947,6 +1957,9 @@ test.describe("legacy small landscape gameplay", () => {
         glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
         minimumPagerWidth: Math.min(...pagerButtons.map((button) => button.offsetWidth)),
         minimumPagerHeight: Math.min(...pagerButtons.map((button) => button.offsetHeight)),
+        minimumPagerFontSize: Math.min(
+          ...pagerButtons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize)),
+        ),
         minimumPrimaryLabelFontSize: Math.min(
           ...primaryLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)),
         ),
@@ -1963,7 +1976,8 @@ test.describe("legacy small landscape gameplay", () => {
     expect(declarationGeometry.cardHeight).toBeGreaterThanOrEqual(44);
     expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(22);
     expect(declarationGeometry.minimumPagerWidth).toBeGreaterThanOrEqual(44);
-    expect(declarationGeometry.minimumPagerHeight).toBeGreaterThanOrEqual(34);
+    expect(declarationGeometry.minimumPagerHeight).toBeGreaterThanOrEqual(36);
+    expect(declarationGeometry.minimumPagerFontSize).toBeGreaterThanOrEqual(13);
     expect(declarationGeometry.minimumPrimaryLabelFontSize).toBeGreaterThanOrEqual(14);
     expect(declarationGeometry.minimumHelperLabelFontSize).toBeGreaterThanOrEqual(12);
 
@@ -2075,11 +2089,16 @@ test.describe("legacy small landscape gameplay", () => {
     const handScrollSizes = await handScrollTools.locator("button").evaluateAll((buttons) =>
       buttons.map((button) => {
         const rect = button.getBoundingClientRect();
-        return { width: Math.round(rect.width), height: Math.round(rect.height) };
+        return {
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          fontSize: Number.parseFloat(getComputedStyle(button).fontSize),
+        };
       }),
     );
     expect(Math.min(...handScrollSizes.map((size) => size.width))).toBeGreaterThanOrEqual(44);
-    expect(Math.min(...handScrollSizes.map((size) => size.height))).toBeGreaterThanOrEqual(34);
+    expect(Math.min(...handScrollSizes.map((size) => size.height))).toBeGreaterThanOrEqual(36);
+    expect(Math.min(...handScrollSizes.map((size) => size.fontSize))).toBeGreaterThanOrEqual(13);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-readable-game.png") });
 
     await page.setViewportSize({ width: 320, height: 568 });

@@ -45,12 +45,14 @@ test("a passwordless local profile stays private and updates after settlement", 
     );
     return {
       insideViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+      height: rect.height,
       smallestTextSize: Math.min(...textSizes),
       pageFits: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
     };
   });
   expect(geometry).toMatchObject({ insideViewport: true, pageFits: true });
-  expect(geometry.smallestTextSize).toBeGreaterThanOrEqual(13);
+  expect(geometry.height).toBeGreaterThanOrEqual(40);
+  expect(geometry.smallestTextSize).toBeGreaterThanOrEqual(14);
 
   await expect(summary).toHaveAttribute("aria-haspopup", "dialog");
   await summary.click();

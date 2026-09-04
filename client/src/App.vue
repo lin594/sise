@@ -3087,6 +3087,9 @@ watch(
 
 .reset-btn {
   margin-left: 0.25rem;
+  font-family: inherit;
+  font-size: max(0.875rem, 14px);
+  font-weight: 750;
 }
 
 .layout.playing {

@@ -763,6 +763,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary {
   min-width: 11.5rem;
+  min-height: 40px;
   padding: 0.48rem 0.72rem;
   border: 1px solid rgba(56, 189, 248, 0.5);
   border-radius: 0.72rem;
@@ -796,7 +797,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary-copy strong {
   color: #fef08a;
-  font-size: 0.78rem;
+  font-size: max(0.875rem, 14px);
 }
 
 .guest-profile-summary-copy > span {
@@ -808,7 +809,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .guest-profile-summary-view {
   align-self: center;
   color: #bae6fd;
-  font-size: 0.75rem;
+  font-size: max(0.875rem, 14px);
   font-weight: 850;
   white-space: nowrap;
 }
@@ -1489,8 +1490,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection {
-    gap: 0.3rem;
-    padding: 0.4rem;
+    gap: 0.2rem;
+    padding: 0.3rem;
   }
 
   .mode-selection .lobby-rule-tip {
@@ -1499,6 +1500,10 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .mode-selection .mode-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mode-selection .mode-card {
+    padding-block: 0.45rem;
   }
 
   .lobby-scroll {
@@ -1511,6 +1516,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .mode-selection .guest-profile-summary {
     min-width: 0;
+    min-height: 40px;
     padding: 0.3rem 0.5rem;
     display: flex;
     align-items: baseline;
@@ -1524,7 +1530,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection .guest-profile-summary-copy strong {
-    font-size: 0.82rem;
+    font-size: max(0.875rem, 14px);
   }
 
   .mode-selection .guest-profile-summary-copy > span {
@@ -1532,7 +1538,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection .guest-profile-summary-view {
-    font-size: 0.82rem;
+    font-size: max(0.875rem, 14px);
   }
 
   .head-action {

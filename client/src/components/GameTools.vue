@@ -807,7 +807,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.35rem;
   font-weight: 750;
-  font-size: clamp(13px, 0.86rem, 0.9rem);
+  font-size: max(0.875rem, 14px);
 }
 
 .tool-button:hover,

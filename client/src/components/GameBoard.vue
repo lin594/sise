@@ -4135,15 +4135,15 @@ watch(
 
   .hand-scroll-tools button {
     min-width: 44px;
-    height: 34px;
+    height: 36px;
     padding: 0 0.34rem;
     border-radius: 0.8vh;
-    font-size: clamp(0.74rem, 3.1vh, 0.84rem);
+    font-size: max(0.8125rem, 13px);
   }
 
   .hand-visible-range {
     min-width: 4.25rem;
-    height: 34px;
+    height: 36px;
     padding: 0 0.28rem;
     font-size: max(0.75rem, 12px);
   }

@@ -1339,14 +1339,14 @@ button:focus-visible {
 
 .declare-panel.compact .declare-hand-scroll-tools button {
   min-width: 44px;
-  height: 34px;
+  height: 36px;
   padding: 0 0.42rem;
   font-size: max(0.8125rem, 13px);
 }
 
 .declare-panel.compact .declare-hand-visible-range {
   min-width: 4.25rem;
-  height: 34px;
+  height: 36px;
   padding: 0 0.28rem;
   font-size: max(0.75rem, 12px);
 }
