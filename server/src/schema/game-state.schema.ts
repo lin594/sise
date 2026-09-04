@@ -36,6 +36,7 @@ export class PlayerState extends Schema {
 }
 
 export class GameState extends Schema {
+  @type("number") stateRevision: number = 0;
   @type("string") roomMode: "practice" | "friends" | "match" = "practice";
   @type("string") scoringMode: "single" | "cumulative" = "single";
   @type("number") completedRounds: number = 0;

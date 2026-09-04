@@ -730,6 +730,7 @@ import type {
   CardDisplayMode,
   GameDisplayPreferences,
   RenderedCardMode,
+  RoomStateSnapshot,
   RoundResultPlayer,
   TurnAlertMode,
 } from "@/types/game";
@@ -868,6 +869,7 @@ const {
   setScoringMode,
   setLobbyReady,
   setAutoPlay,
+  debugApplyRoomSnapshot,
   leaveRoom,
   claimSeat,
   addBot,
@@ -895,6 +897,12 @@ type LocalTestBridgeWindow = Window & {
       actions?: AvailableAction[];
     } | null;
     submitAction: (request: ActionRequest) => void;
+    applyRoomSnapshot: (
+      patch: Partial<RoomStateSnapshot> & Record<string, unknown>,
+      source?: "schema" | "explicit",
+    ) => void;
+    getRoomState: () => RoomStateSnapshot | null;
+    getDecisionTimer: () => typeof decisionTimer.value;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
   };
 };
@@ -911,6 +919,9 @@ function installLocalTestBridge(): void {
     setupScenario: (scenario) => debugSetup(scenario),
     getLastResult: () => debugApplied.value,
     submitAction: (request) => sendAction(request),
+    applyRoomSnapshot: (patch, source) => debugApplyRoomSnapshot(patch, source),
+    getRoomState: () => state.value,
+    getDecisionTimer: () => decisionTimer.value,
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
     },

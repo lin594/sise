@@ -312,6 +312,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (recoverySnapshot) {
       const recoveredState = new GameState();
       recoveredState.restore(recoverySnapshot.state as never);
+      recoveredState.stateRevision = Math.max(0, Number(recoveredState.stateRevision ?? 0));
       this.roomId = recoverySnapshot.roomId;
       this.setState(recoveredState);
       this.restoreRecoveryPrivateState(recoverySnapshot);
@@ -3208,6 +3209,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：发送 `available_actions`，并可触发状态快照日志。
    */
   private broadcastAvailableActions(): void {
+    this.state.stateRevision = Math.max(0, Number(this.state.stateRevision ?? 0)) + 1;
     this.syncRoomMetadata();
     scheduleRoomSnapshot(this.exportRecoverySnapshot());
     this.logStateSnapshot("STATE");
@@ -3278,6 +3280,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.updatePublicHandCounts();
     return {
       roomId: this.roomId,
+      stateRevision: Math.max(0, Number(this.state.stateRevision ?? 0)),
       roomMode: this.state.roomMode,
       scoringMode: this.state.scoringMode,
       completedRounds: this.state.completedRounds,

@@ -10,7 +10,6 @@ import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
 import { readStoredValue, removeStoredValue, withSafeBrowserStorage, writeStoredValue, } from "@/utils/safeStorage";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
-const PRIVATE_STATE_POLL_MS = 5000;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const RESTORED_NOTICE_MS = 6000;
 const ACTION_RECEIPT_WAIT_MS = 2500;
@@ -220,8 +219,18 @@ function normalizeSnapshot(next) {
     else if (rawPlayers && typeof rawPlayers === "object") {
         normalizedPlayers.push(...Object.values(rawPlayers).map((value) => normalizePlayer(value)));
     }
+    normalizedPlayers.sort((left, right) => {
+        const leftSeat = Number.isInteger(left.seatIndex) && left.seatIndex >= 0
+            ? left.seatIndex
+            : Number.MAX_SAFE_INTEGER;
+        const rightSeat = Number.isInteger(right.seatIndex) && right.seatIndex >= 0
+            ? right.seatIndex
+            : Number.MAX_SAFE_INTEGER;
+        return leftSeat - rightSeat || left.clientId.localeCompare(right.clientId);
+    });
     return {
         roomId: typeof rawState?.roomId === "string" ? rawState.roomId : undefined,
+        stateRevision: Math.max(0, Number(rawState?.stateRevision ?? 0) || 0),
         roomMode: rawState?.roomMode === "friends" || rawState?.roomMode === "match"
             ? rawState.roomMode
             : "practice",
@@ -417,12 +426,12 @@ export function useRoom(playerName = "Player") {
     let logSeq = 0;
     let lastFingerprint = "";
     let lastPhase = "";
-    let roomStateSyncTimer = null;
     let missingHandSyncTimer = null;
     let reconnectTimer = null;
     let restoredNoticeTimer = null;
-    let privateStatePollTimer = null;
     let stateSyncFingerprint = "";
+    let lastAppliedStateRevision = -1;
+    let revisionProtocolActive = false;
     let privateHandFingerprint = "";
     let availableActionsFingerprint = "";
     let connectInFlight = false;
@@ -515,12 +524,6 @@ export function useRoom(playerName = "Player") {
         }
         return "";
     }
-    function clearRoomStateSyncTimer() {
-        if (roomStateSyncTimer !== null) {
-            window.clearInterval(roomStateSyncTimer);
-            roomStateSyncTimer = null;
-        }
-    }
     function clearMissingHandSyncTimer() {
         if (missingHandSyncTimer !== null) {
             window.clearInterval(missingHandSyncTimer);
@@ -539,19 +542,11 @@ export function useRoom(playerName = "Player") {
             restoredNoticeTimer = null;
         }
     }
-    function clearPrivateStatePollTimer() {
-        if (privateStatePollTimer !== null) {
-            window.clearInterval(privateStatePollTimer);
-            privateStatePollTimer = null;
-        }
-    }
     function stopTerminalRecovery(message) {
         suppressReconnect = true;
-        clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
         clearReconnectTimer();
         clearRestoredNoticeTimer();
-        clearPrivateStatePollTimer();
         clearActionFeedback();
         connected.value = false;
         room.value = null;
@@ -806,24 +801,10 @@ export function useRoom(playerName = "Player") {
             void reason;
         }
     }
-    function startPrivateStatePolling() {
-        clearPrivateStatePollTimer();
-        privateStatePollTimer = window.setInterval(() => {
-            const phase = state.value?.phase;
-            if (!connected.value || !activeRoomId.value || !playerToken.value || !mySeatId.value) {
-                return;
-            }
-            if (phase !== "waiting" && phase !== "declaring" && phase !== "playing" && phase !== "ended") {
-                return;
-            }
-            void fetchPrivateState("poll");
-        }, PRIVATE_STATE_POLL_MS);
-    }
     function resetClientRoomState(options) {
         const keepLogs = Boolean(options?.keepLogs);
         const keepJoinError = Boolean(options?.keepJoinError);
         clearMissingHandSyncTimer();
-        clearPrivateStatePollTimer();
         clearActionFeedback();
         state.value = null;
         privateHand.value = [];
@@ -843,6 +824,8 @@ export function useRoom(playerName = "Player") {
         myId.value = "";
         mySeatId.value = "";
         stateSyncFingerprint = "";
+        lastAppliedStateRevision = -1;
+        revisionProtocolActive = false;
         privateHandFingerprint = "";
         availableActionsFingerprint = "";
         privateStateRetryAfterAt = 0;
@@ -860,11 +843,9 @@ export function useRoom(playerName = "Player") {
         suppressReconnect = true;
         activeConnectionSeq += 1;
         connectInFlight = false;
-        clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
         clearReconnectTimer();
         clearRestoredNoticeTimer();
-        clearPrivateStatePollTimer();
         connected.value = false;
         connectionState.value = "idle";
         reconnectAttempt.value = 0;
@@ -889,21 +870,32 @@ export function useRoom(playerName = "Player") {
         if (!snapshot) {
             return "";
         }
+        const cardMark = (card) => card
+            ? [card.id, card.color, card.type, card.source ?? "", card.isResponseCard ? "1" : "0"].join(":")
+            : "";
+        const cardListMark = (cards) => (cards ?? []).map(cardMark).join(",");
         const playerMarks = snapshot.players
             .map((player) => [
             player.clientId,
+            player.seatIndex,
+            player.name,
             player.handCount ?? 0,
             player.declaredKongs ?? 0,
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
             player.lobbyReady ? 1 : 0,
+            player.isBot ? 1 : 0,
             player.isAutoPlay ? 1 : 0,
+            player.isConfiguredBot ? 1 : 0,
+            player.botStrength,
             player.cumulativeScore,
-            player.discardPile.map((card) => card.id).join(","),
-            player.exposedArea.map((card) => card.id).join(","),
+            cardListMark(player.discardPile),
+            cardListMark(player.exposedArea),
+            player.exposedGroupSizes.join(","),
             player.exposedGroupKinds.join(","),
-            player.generalArea.map((card) => card.id).join(","),
-            player.fishArea.map((card) => card.id).join(","),
+            cardListMark(player.generalArea),
+            cardListMark(player.wildcardPool),
+            cardListMark(player.fishArea),
         ].join(":"))
             .join("|");
         return [
@@ -926,16 +918,19 @@ export function useRoom(playerName = "Player") {
             String(snapshot.declareEndsAt),
             snapshot.lastAction,
             String(snapshot.deckCount),
-            snapshot.targetCard?.id ?? "",
-            snapshot.responseCard?.id ?? "",
-            snapshot.dealerCard?.id ?? "",
-            snapshot.publicDiscardPile.map((card) => card.id).join("|"),
-            (snapshot.publicGeneralPool ?? []).map((card) => card.id).join("|"),
+            snapshot.isMoCard ? "1" : "0",
+            cardMark(snapshot.targetCard),
+            cardMark(snapshot.responseCard),
+            cardMark(snapshot.dealerCard),
+            cardListMark(snapshot.publicDiscardPile),
+            cardListMark(snapshot.publicGeneralPool),
             playerMarks,
         ].join("::");
     }
     function buildCardIdFingerprint(cards) {
-        return cards.map((card) => card.id).join("|");
+        return cards
+            .map((card) => [card.id, card.color, card.type, card.source ?? "", card.isResponseCard ? "1" : "0"].join(":"))
+            .join("|");
     }
     function buildAvailableActionsFingerprint(actions) {
         return actions
@@ -967,53 +962,15 @@ export function useRoom(playerName = "Player") {
     function applySnapshot(next, source = "schema") {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
         const rawSnapshot = next;
-        if (Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "privateHand") ||
-            Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "availableActions") ||
-            Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "roundResult")) {
-            privateStateAuthoritySeq += 1;
-        }
         const normalized = normalizeSnapshot(next);
-        const previousSnapshot = state.value;
-        if (source === "schema" &&
-            previousSnapshot?.phase === "ended" &&
-            roundResult.value &&
-            normalized.phase !== "ended") {
-            // A complete room_snapshot and round_result can be handled before the
-            // matching Colyseus schema patch. Do not let an older in-flight schema
-            // view briefly reopen the finished round. The next real round/lobby
-            // transition also sends an explicit snapshot, which remains authoritative.
-            return;
-        }
-        const snapshotServerNow = Number(rawSnapshot?.serverNow ?? 0);
-        if (Number.isFinite(snapshotServerNow) && snapshotServerNow > 0) {
-            matchClockSync.value = {
-                deadline: normalized.matchStartsAt,
-                offsetMs: snapshotServerNow - Date.now(),
-            };
-        }
-        if (normalized.phase !== "playing") {
-            clearActionFeedback();
-        }
-        applyDecisionTimer(rawSnapshot?.decisionTimer);
-        if (!normalized.dealerCard &&
-            normalized.dealerId &&
-            previousSnapshot?.dealerCard &&
-            previousSnapshot.dealerId === normalized.dealerId &&
-            (previousSnapshot.phase === "declaring" || previousSnapshot.phase === "playing") &&
-            (normalized.phase === "declaring" || normalized.phase === "playing" || normalized.phase === "ended")) {
-            // The explicit room snapshot carries the authoritative dealer card. The
-            // SDK Schema view can momentarily expose its pre-round empty child ref;
-            // never let that transient value erase a confirmed card mid-round.
-            normalized.dealerCard = previousSnapshot.dealerCard;
-        }
-        const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
-        const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
         if (!normalized.roomId && activeRoomId.value) {
             normalized.roomId = activeRoomId.value;
         }
         if (normalized.roomId && normalized.roomId !== activeRoomId.value) {
             activeRoomId.value = normalized.roomId;
             stateSyncFingerprint = "";
+            lastAppliedStateRevision = -1;
+            revisionProtocolActive = false;
             privateHandFingerprint = "";
             availableActionsFingerprint = "";
             lastFingerprint = "";
@@ -1024,7 +981,42 @@ export function useRoom(playerName = "Player") {
             roundResult.value = null;
             debugApplied.value = null;
         }
-        const nextFingerprint = buildStateSyncFingerprint(normalized);
+        const hasRevisionField = Boolean(rawSnapshot &&
+            typeof rawSnapshot === "object" &&
+            "stateRevision" in rawSnapshot);
+        if (hasRevisionField) {
+            revisionProtocolActive = true;
+        }
+        const incomingRevision = normalized.stateRevision;
+        if (revisionProtocolActive && incomingRevision < lastAppliedStateRevision) {
+            return;
+        }
+        const previousSnapshot = state.value;
+        if (!revisionProtocolActive &&
+            source === "schema" &&
+            previousSnapshot?.phase === "ended" &&
+            roundResult.value &&
+            normalized.phase !== "ended") {
+            // Compatibility guard for a revisionless server. New servers use the
+            // monotonic revision check above for every phase and action.
+            return;
+        }
+        const hasPrivatePayload = Boolean(rawSnapshot &&
+            typeof rawSnapshot === "object" &&
+            ("privateHand" in rawSnapshot || "availableActions" in rawSnapshot || "roundResult" in rawSnapshot));
+        if (hasPrivatePayload) {
+            privateStateAuthoritySeq += 1;
+        }
+        const snapshotServerNow = Number(rawSnapshot?.serverNow ?? 0);
+        if (Number.isFinite(snapshotServerNow) && snapshotServerNow > 0) {
+            matchClockSync.value = {
+                deadline: normalized.matchStartsAt,
+                offsetMs: snapshotServerNow - Date.now(),
+            };
+        }
+        applyDecisionTimer(rawSnapshot?.decisionTimer);
+        const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
+        const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
         const nextPrivateHandFingerprint = buildCardIdFingerprint(snapshotPrivateHand);
         const nextAvailableActionsFingerprint = buildAvailableActionsFingerprint(snapshotAvailableActions);
         if ((snapshotPrivateHand.length > 0 || rawSnapshot?.privateHand) &&
@@ -1048,6 +1040,33 @@ export function useRoom(playerName = "Player") {
                     groups: roundResult.value.groups ?? [],
                 };
             }
+        }
+        const sameRevision = Boolean(revisionProtocolActive &&
+            previousSnapshot &&
+            incomingRevision === lastAppliedStateRevision);
+        if (sameRevision) {
+            // Schema and room_snapshot for one publication intentionally share a
+            // revision. The latter may enrich private data and timers, but replacing
+            // the public object again would remount flow/card nodes and replay
+            // lastAction-derived animations.
+            return;
+        }
+        if (!normalized.dealerCard &&
+            normalized.dealerId &&
+            previousSnapshot?.dealerCard &&
+            previousSnapshot.dealerId === normalized.dealerId &&
+            (previousSnapshot.phase === "declaring" || previousSnapshot.phase === "playing") &&
+            (normalized.phase === "declaring" || normalized.phase === "playing" || normalized.phase === "ended")) {
+            // Keep a confirmed dealer card if a revisionless/partial Schema view
+            // momentarily exposes its empty child reference.
+            normalized.dealerCard = previousSnapshot.dealerCard;
+        }
+        const nextFingerprint = buildStateSyncFingerprint(normalized);
+        if (revisionProtocolActive) {
+            lastAppliedStateRevision = incomingRevision;
+        }
+        if (normalized.phase !== "playing") {
+            clearActionFeedback();
         }
         if (nextFingerprint === stateSyncFingerprint) {
             return;
@@ -1089,15 +1108,6 @@ export function useRoom(playerName = "Player") {
             pushLog(lastAction, normalized);
             lastFingerprint = fingerprint;
         }
-    }
-    function startRoomStateSync() {
-        clearRoomStateSyncTimer();
-        roomStateSyncTimer = window.setInterval(() => {
-            if (!connected.value || !room.value?.state || !canSendRoomMessage(room.value)) {
-                return;
-            }
-            applySnapshot(room.value.state);
-        }, 250);
     }
     function readStored(key) {
         return readStoredValue(key).trim();
@@ -1197,9 +1207,7 @@ export function useRoom(playerName = "Player") {
         const isActiveConnection = () => activeConnectionSeq === connectionSeq;
         try {
             const client = withSafeBrowserStorage(() => new Client(WS_URL));
-            clearRoomStateSyncTimer();
             clearMissingHandSyncTimer();
-            clearPrivateStatePollTimer();
             const previousRoom = room.value;
             room.value = null;
             connected.value = false;
@@ -1330,8 +1338,6 @@ export function useRoom(playerName = "Player") {
                 }
                 applySnapshot(next);
             });
-            startRoomStateSync();
-            startPrivateStatePolling();
             joined.onMessage("room_snapshot", (payload) => {
                 if (!isCurrentJoinedRoom()) {
                     return;
@@ -1506,9 +1512,7 @@ export function useRoom(playerName = "Player") {
                     stopTerminalRecovery(terminalMessage);
                     return;
                 }
-                clearRoomStateSyncTimer();
                 clearMissingHandSyncTimer();
-                clearPrivateStatePollTimer();
                 connected.value = false;
                 scheduleReconnect("room_leave");
             });
@@ -1521,9 +1525,7 @@ export function useRoom(playerName = "Player") {
                     stopTerminalRecovery(terminalMessage);
                     return;
                 }
-                clearRoomStateSyncTimer();
                 clearMissingHandSyncTimer();
-                clearPrivateStatePollTimer();
                 joinError.value = message || "房间连接异常";
                 connected.value = false;
                 scheduleReconnect("room_error");
@@ -1688,6 +1690,17 @@ export function useRoom(playerName = "Player") {
     function setAutoPlay(enabled) {
         safeRoomSend("set_auto_play", { enabled });
     }
+    function debugApplyRoomSnapshot(patch, source = "explicit") {
+        if (!state.value) {
+            return;
+        }
+        applySnapshot({
+            ...state.value,
+            ...patch,
+            roomId: state.value.roomId ?? activeRoomId.value,
+            players: patch.players ?? state.value.players,
+        }, source);
+    }
     async function leaveRoom() {
         const departingRoom = room.value;
         const departingRoomId = activeRoomId.value.trim() || pendingConnectionRoomId;
@@ -1695,11 +1708,9 @@ export function useRoom(playerName = "Player") {
         activeConnectionSeq += 1;
         connectInFlight = false;
         pendingConnectionRoomId = "";
-        clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
         clearReconnectTimer();
         clearRestoredNoticeTimer();
-        clearPrivateStatePollTimer();
         room.value = null;
         connected.value = false;
         connectionState.value = "idle";
@@ -1745,11 +1756,9 @@ export function useRoom(playerName = "Player") {
     window.addEventListener("online", handleBrowserOnline);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     onUnmounted(() => {
-        clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
         clearReconnectTimer();
         clearRestoredNoticeTimer();
-        clearPrivateStatePollTimer();
         clearActionFeedback();
         window.removeEventListener("offline", handleBrowserOffline);
         window.removeEventListener("online", handleBrowserOnline);
@@ -1797,6 +1806,7 @@ export function useRoom(playerName = "Player") {
         setScoringMode,
         setLobbyReady,
         setAutoPlay,
+        debugApplyRoomSnapshot,
         leaveRoom,
         claimSeat,
         addBot,

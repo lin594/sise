@@ -46,6 +46,7 @@ export interface PlayerState {
 }
 export interface RoomStateSnapshot {
     roomId?: string;
+    stateRevision: number;
     roomMode: "practice" | "friends" | "match";
     scoringMode: ScoringMode;
     completedRounds: number;

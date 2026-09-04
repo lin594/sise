@@ -6,6 +6,7 @@ import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 test("a new round snapshot reaches clients before the legacy private hand event", () => {
   const room = new FourColorGameRoom() as any;
   room.state = new GameState();
+  room.roomId = "round-presentation-room";
   room.state.roomMode = "practice";
   room.state.phase = "ended";
   room.state.hostPlayerId = "seat_0";
@@ -34,10 +35,6 @@ test("a new round snapshot reaches clients before the legacy private hand event"
     sessionId: "human-session",
     send: (event: string, payload: unknown) => sent.push({ event, payload }),
   }];
-  room.broadcastAvailableActions = () => {
-    room.clients[0].send("room_snapshot", room.buildClientRoomSnapshot("seat_0"));
-    room.clients[0].send("available_actions", { items: [] });
-  };
 
   room.bootstrapRound();
 
@@ -47,9 +44,20 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.ok(privateHandIndex > snapshotIndex, "private_hand must not arrive before the new-round snapshot");
 
   const snapshot = sent[snapshotIndex].payload;
+  assert.equal(snapshot.stateRevision, 1);
+  assert.equal(room.state.stateRevision, 1);
   assert.equal(snapshot.phase, "declaring");
-  assert.equal(snapshot.privateHand.length, 21);
+  assert.equal(
+    snapshot.privateHand.length,
+    snapshot.players.find((player: { clientId: string }) => player.clientId === "seat_0")?.handCount,
+  );
   assert.deepEqual(snapshot.players.map((player: { handCount: number }) => player.handCount).sort((a: number, b: number) => a - b), [20, 20, 20, 21]);
+
+  room.state.lastAction = "TEST SECOND_PUBLICATION";
+  room.broadcastAvailableActions();
+  const publishedSnapshots = sent.filter((message) => message.event === "room_snapshot");
+  assert.equal(room.state.stateRevision, 2);
+  assert.equal(publishedSnapshots.at(-1)?.payload.stateRevision, 2);
 
   room.clearDeclareIntroTimer();
 });

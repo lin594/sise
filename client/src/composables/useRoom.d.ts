@@ -20,6 +20,7 @@ export declare function useRoom(playerName?: string): {
     activeRoomId: import("vue").Ref<string, string>;
     state: import("vue").Ref<{
         roomId?: string | undefined;
+        stateRevision: number;
         roomMode: "practice" | "friends" | "match";
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
@@ -229,6 +230,7 @@ export declare function useRoom(playerName?: string): {
         } | null | undefined;
     } | null, RoomStateSnapshot | {
         roomId?: string | undefined;
+        stateRevision: number;
         roomMode: "practice" | "friends" | "match";
         scoringMode: import("@/types/game").ScoringMode;
         completedRounds: number;
@@ -761,6 +763,7 @@ export declare function useRoom(playerName?: string): {
     setScoringMode: (mode: "single" | "cumulative") => void;
     setLobbyReady: (ready: boolean) => boolean;
     setAutoPlay: (enabled: boolean) => void;
+    debugApplyRoomSnapshot: (patch: Partial<RoomStateSnapshot> & Record<string, unknown>, source?: "schema" | "explicit") => void;
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => boolean;
     addBot: (seatIndex: number, strength?: number) => void;

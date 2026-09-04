@@ -157,6 +157,22 @@ test("incompatible or incomplete recovery snapshots fail before replacing room i
   }
 });
 
+test("recovery snapshots created before state revisions continue from zero on first publication", () => {
+  const source = createRecoverableRoom();
+  const snapshot = source.exportRecoverySnapshot(10_000);
+  delete snapshot.state.stateRevision;
+  source.onDispose();
+
+  const restored = new FourColorGameRoom() as any;
+  restored.roomId = "temporary-id";
+  restored.onCreate({ recoverySnapshot: snapshot });
+  restored.clearRoomIdleTimer();
+
+  assert.equal(restored.state.stateRevision, 1);
+  assert.equal(restored.exportRecoverySnapshot(11_000).state.stateRevision, 1);
+  restored.onDispose();
+});
+
 test("reclaiming a recovered practice decision restores the human's untimed turn", () => {
   const source = createRecoverableRoom("practice");
   const snapshot = source.exportRecoverySnapshot(10_000);
