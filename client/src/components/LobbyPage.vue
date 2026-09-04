@@ -261,6 +261,7 @@
       <div class="lobby-primary-actions">
         <button
           v-if="showFillBots"
+          key="fill-bots"
           class="ghost fill-bots"
           type="button"
           data-testid="fill-bots"
@@ -271,6 +272,7 @@
         </button>
         <button
           v-if="showReadyAction"
+          key="ready-toggle"
           class="primary ready-toggle"
           :class="{ active: myLobbyReady }"
           type="button"
@@ -282,6 +284,7 @@
         </button>
         <button
           v-else-if="showStartAction"
+          key="start-game"
           ref="startButtonRef"
           class="primary"
           type="button"
@@ -563,7 +566,11 @@ watch(
       return;
     }
     await nextTick();
-    startButtonRef.value?.focus();
+    // The fill control is replaced by a differently keyed start control.
+    // Wait for that new button to be painted before moving keyboard focus;
+    // otherwise a slow browser can drop focus while removing the old button.
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    startButtonRef.value?.focus({ preventScroll: true });
     focusStartAfterFillRequested = false;
     clearFillRequestState();
   },
