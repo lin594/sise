@@ -30,6 +30,24 @@ assert.equal(pageResponse.status, 200, "gateway did not serve the client page");
 assert.match(pageResponse.headers.get("content-type") ?? "", /text\/html/u);
 assert.match(await pageResponse.text(), /<div id="app"><\/div>/u);
 
+const manifestResponse = await fetchWithTimeout(new URL("/site.webmanifest", baseUrl));
+assert.equal(manifestResponse.status, 200, "web app manifest is unavailable");
+assert.match(
+  manifestResponse.headers.get("content-type") ?? "",
+  /application\/manifest\+json/u,
+  "web app manifest has the wrong content type",
+);
+const manifest = await manifestResponse.json();
+assert.equal(manifest.name, "四色牌", "web app manifest has the wrong name");
+assert.equal(manifest.start_url, "/", "web app manifest has the wrong start URL");
+
+const iconResponse = await fetchWithTimeout(new URL("/icons/sise-192.png", baseUrl));
+assert.equal(iconResponse.status, 200, "home-screen icon is unavailable");
+assert.equal(iconResponse.headers.get("content-type"), "image/png", "home-screen icon has the wrong content type");
+
+const missingIconResponse = await fetchWithTimeout(new URL("/icons/missing-smoke-icon.png", baseUrl));
+assert.equal(missingIconResponse.status, 404, "missing static icons still fall back to the app shell");
+
 const healthResponse = await fetchWithTimeout(new URL("/health", baseUrl));
 assert.equal(healthResponse.status, 200, "same-origin health proxy failed");
 assert.equal((await healthResponse.json())?.ok, true, "health proxy returned an invalid body");
@@ -96,6 +114,8 @@ try {
 console.log(JSON.stringify({
   ok: true,
   page: true,
+  browserIdentity: true,
+  missingStatic404: true,
   health: true,
   roomApi: roomApiSeen,
   websocket: sameOriginWebSocket,

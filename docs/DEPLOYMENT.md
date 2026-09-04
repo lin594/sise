@@ -93,6 +93,8 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 正式页面通过 HTTPS 提供时，浏览器链路必须分别是 HTTPS API 和 WSS，不能配置 `http://` 或 `ws://` 造成混合内容。客户端在只设置其中一项时会从相同主机、端口和路径推导另一项，例如 `https://sise-api.example.com` 对应 `wss://sise-api.example.com`；正式部署仍建议像上例一样同时显式填写，便于上线前审阅。地址中的查询参数、片段和尾部斜杠不会进入运行时基础地址。
 
+Web 镜像会同源提供 `/site.webmanifest`、favicon 和手机主屏图标。正式 HTTPS 页面可由浏览器添加到主屏；当前没有注册 Service Worker，也不支持离线牌局，部署时不要额外给 API、WebSocket 或首页套用离线缓存。图标文件可长期缓存，Manifest 和首页保持可重新验证，以便升级后及时更新入口信息。
+
 ## 6. iMac 试玩环境
 
 试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。它只用于受控测试，不承担正式部署。使用 `docker-compose.imac.yml` 后，由 Web Nginx 统一代理页面、HTTP API 和 WebSocket：
