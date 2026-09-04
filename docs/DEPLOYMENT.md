@@ -95,26 +95,31 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 ## 6. iMac 试玩环境
 
-试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。普通 `docker-compose.yml` 直接映射端口，因此当前访问地址为：
+试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。它只用于受控测试，不承担正式部署。使用 `docker-compose.imac.yml` 后，由 Web Nginx 统一代理页面、HTTP API 和 WebSocket：
 
-- Web：`http://imac.tajuren.cn:3000`
-- 后端健康检查：`http://imac.tajuren.cn:2567/health`
+- 推荐试玩入口：`http://imac.tajuren.cn/`
+- 兼容旧书签：`http://imac.tajuren.cn:3000/`
+- 同源健康检查：`http://imac.tajuren.cn/health`
 
-只有另行部署并配置 Traefik/TLS 后，才使用不带端口的 HTTPS 域名。确认本地 commit 已推送后执行：
+无端口在这里表示标准 HTTP 80 端口，不代表 HTTPS。服务端 2567 不映射到宿主机，只允许 Web 容器通过 Compose 内网访问。正式环境仍必须按上一节配置 HTTPS/WSS；不要把 iMac 的 HTTP/WS 构建参数复制到公网部署，也不要使用自签证书制造浏览器安全警告。
+
+确认本地 commit 已推送后执行：
 
 ```bash
 ssh imac
 cd ~/workspace/lin594/sise
 git pull --ff-only
-docker compose up --build -d
-docker compose ps
+npm run compose:imac:check
+npm run compose:imac
+docker compose -f docker-compose.yml -f docker-compose.imac.yml ps
 ```
 
-部署后在 iMac 上确认版本与健康状态：
+`compose:imac:check` 会先渲染合并配置，并确认 Web 只发布 80/3000、服务端不发布宿主端口、前端使用同源 HTTP/WS、服务端只信任一层 Nginx。部署后在 iMac 上确认版本、Nginx 和健康状态：
 
 ```bash
 git rev-parse --short HEAD
-curl --fail http://localhost:2567/health
+docker compose -f docker-compose.yml -f docker-compose.imac.yml exec -T web nginx -t
+curl --fail http://localhost/health
 ```
 
 iMac 的 `.env` 应使用 `NPM_CONFIG_REGISTRY=https://registry.npmjs.org`。如果 `npm ci` 连续出现 `ECONNRESET`，先检查该值是否仍指向不可用的镜像站；切换下载源不应改动依赖版本或 lockfile integrity。
@@ -127,18 +132,25 @@ NODE_IMAGE=node:22-alpine
 
 仓库中的 Compose 默认值已经是 Node.js 22，但 `.env` 的显式值优先级更高；保留旧值会让 `npm ci` 因依赖引擎要求失败。
 
-iMac 通过带端口的试玩地址访问时，还必须设置：
+iMac 覆盖文件已有安全的测试默认值。只有改用其他测试主机名时，才在 `.env` 设置对应的 `IMAC_*` 变量，例如：
 
 ```dotenv
-CORS_ALLOWED_ORIGINS=http://imac.tajuren.cn:3000
-ENABLE_MONITOR=0
+IMAC_VITE_SERVER_URL=ws://test-host.example
+IMAC_VITE_SERVER_HTTP_URL=http://test-host.example
+IMAC_CORS_ALLOWED_ORIGINS=http://test-host.example,http://test-host.example:3000
 ```
 
-普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，档案 token 可以读取和更新聚合档案；任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让两类凭证明文经过网络。
+`ENABLE_MONITOR` 继续保持 `0`。普通 HTTP 地址只用于受控试玩。房间 token 可以恢复座位并读取本人私有手牌，档案 token 可以读取和更新聚合档案；任何公网正式环境都必须通过 TLS 提供 HTTPS/WSS，不能让两类凭证明文经过网络。
 
 好友房“出示二维码”由浏览器本机生成，只包含当前公开邀请地址和 `roomId`，不请求第三方二维码服务。它可作为普通 HTTP 试玩时系统分享或现代剪贴板不可用的现场邀请方式；正式公网环境仍应优先完成 HTTPS/WSS 配置。
 
-随后用浏览器访问 `http://imac.tajuren.cn:3000`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
+随后用浏览器访问 `http://imac.tajuren.cn/`，按 [TESTING.md](TESTING.md) 完成部署后冒烟测试。`:3000` 只用于验证旧书签兼容。`git pull --ff-only` 失败时先检查远端和工作区状态，不要用强制 reset 覆盖试玩机上的未知改动。
+
+从本地仓库可一次验证 Nginx 语法、同源页面/API/WebSocket、旧书签和 2567 端口收口：
+
+```bash
+npm run smoke:imac-gateway
+```
 
 ## 7. 环境变量
 
@@ -173,6 +185,7 @@ ENABLE_MONITOR=0
 
 - `VITE_SERVER_URL`：浏览器连接的 WebSocket 地址。
 - `VITE_SERVER_HTTP_URL`：浏览器请求的 HTTP API 地址。
+- `IMAC_VITE_SERVER_URL` / `IMAC_VITE_SERVER_HTTP_URL` / `IMAC_CORS_ALLOWED_ORIGINS`：只供 iMac 测试覆盖文件使用；正式部署不读取它们作为 Traefik/TLS 地址。
 - `NODE_IMAGE`、`NGINX_IMAGE`、`REDIS_IMAGE`：构建使用的基础镜像。
 - `NPM_CONFIG_REGISTRY`：容器构建使用的 npm registry，默认 `https://registry.npmjs.org`；只有确认镜像站稳定时才覆盖。
 - `TRAEFIK_NETWORK`、`TRAEFIK_CERT_RESOLVER`、`TRAEFIK_WEB_RULE`、`TRAEFIK_SERVER_RULE`：Traefik 配置。

@@ -191,7 +191,7 @@ Playwright 至少覆盖 320×568/375×667 旋转画布、568×320 老旧横屏�
 按 [DEPLOYMENT.md](DEPLOYMENT.md) 更新 iMac 后：
 
 1. 确认容器均为运行状态，服务健康检查返回成功。
-2. 普通 Compose 部署访问 `http://imac.tajuren.cn:3000`，确认首页资源、WebSocket、单人练习和快速配桌可用；只有部署 Traefik/TLS 后才使用无端口 HTTPS 地址。
+2. 使用 iMac 覆盖文件部署后访问 `http://imac.tajuren.cn/`，确认首页资源、同源 API、WebSocket、单人练习和快速配桌可用；`:3000` 旧书签仍可打开同一版本，宿主机 2567 不再监听。这里的无端口地址是 HTTP 80 测试入口，不是 HTTPS；正式环境另行验证 HTTPS/WSS。
 3. 并发请求两次 `/room-id`，确认返回不同 roomId；同时开启两局练习，确认两边各自只有一名真人和三名机器人。
 4. 用两个独立浏览器点击快速配桌，确认汇入同桌；点击立即补位后进入一局，检查牌堆造型、对手余牌数、操作坞和特殊牌提示。
 5. 创建一个房间但不建立 WebSocket；在宽限期内连续重启两次服务，确认倒计时不会因重启延长，并在原等待房空闲截止时间后确认该 roomId 已不能加入。
@@ -199,6 +199,15 @@ Playwright 至少覆盖 320×568/375×667 旋转画布、568×320 老旧横屏�
 7. 在活动牌局中记录 roomId、本人座位、手牌张数与待响应牌，只执行 `docker compose restart server`；页面应自动恢复到同一决定。随后完成一次出牌，确认不是只恢复了静态画面。
 8. 重建服务容器后再次读取测试档案，确认命名卷中的统计仍在；检查日志只显示恢复房间数量，不包含 token 或私有手牌。
 9. 正常退出或解散一桌后再重启服务，确认该房间没有从旧快照复活。
+10. 对比部署 commit 与本地已验证 commit，避免只重建了旧代码。
+
+同源网关的首轮检查可直接运行：
+
+```bash
+npm run smoke:imac-gateway
+```
+
+该脚本会在远端容器内执行 `nginx -t`，再从浏览器侧验证无端口页面、同源 `/health`、建房 HTTP 请求、`/matchmake/*` WebSocket、`:3000` 兼容入口以及宿主机 2567 已关闭。它只创建并正常退出一局练习，不重启服务，也不输出房号、身份凭据或手牌。
 
 部署级的活动房恢复可使用受保护的 smoke 脚本。它会真实创建一局并重启目标服务，必须在确认当前环境允许短暂断连后显式解锁；脚本只输出座位、手牌数量和恢复结论，不输出房间 token 或牌面明细：
 
@@ -206,17 +215,16 @@ Playwright 至少覆盖 320×568/375×667 旋转画布、568×320 老旧横屏�
 LIVE_RECOVERY_SMOKE=1 npm run smoke:live-recovery
 ```
 
-默认目标为 `imac`、`~/workspace/lin594/sise`、`http://imac.tajuren.cn:3000/` 和 `http://imac.tajuren.cn:2567/`。其他部署可通过 `LIVE_RECOVERY_SSH_HOST`、`LIVE_RECOVERY_REMOTE_PATH`、`LIVE_RECOVERY_BASE_URL`、`LIVE_RECOVERY_BACKEND_URL` 覆盖；路径仅接受不含空格和 shell 控制符的安全形式。
-10. 对比部署 commit 与本地已验证 commit，避免只重建了旧代码。
+默认目标为 `imac`、`~/workspace/lin594/sise` 和同源 `http://imac.tajuren.cn/`；页面、HTTP API 与 WebSocket 都经过 Web 网关。其他部署可通过 `LIVE_RECOVERY_SSH_HOST`、`LIVE_RECOVERY_REMOTE_PATH`、`LIVE_RECOVERY_BASE_URL`、`LIVE_RECOVERY_BACKEND_URL` 覆盖；路径仅接受不含空格和 shell 控制符的安全形式。
 
 可直接从本地测试仓库复用部署后浏览器回归（测试机地址按实际环境替换）：
 
 ```bash
-PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn:3000 PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
+PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
   npx playwright test tests/e2e/next-round-confirm.spec.ts
-PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn:3000 PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
+PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
   npx playwright test tests/e2e/mobile-responsive.spec.ts --grep "keeps eight readable hand cards"
-PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn:3000 PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
+PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
   npx playwright test tests/e2e/quick-matchmaking.spec.ts --grep "groups humans|leaving quick-match"
 ```
 
