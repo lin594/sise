@@ -7,6 +7,7 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
+import { readStoredValue, removeStoredValue, withSafeBrowserStorage, writeStoredValue, } from "@/utils/safeStorage";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
 const PRIVATE_STATE_POLL_MS = 5000;
@@ -1088,15 +1089,13 @@ export function useRoom(playerName = "Player") {
         }, 250);
     }
     function readStored(key) {
-        return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+        return readStoredValue(key).trim();
     }
     function writeStored(key, value) {
-        window.localStorage.setItem(key, value);
-        window.sessionStorage.setItem(key, value);
+        writeStoredValue(key, value);
     }
     function clearStored(key) {
-        window.localStorage.removeItem(key);
-        window.sessionStorage.removeItem(key);
+        removeStoredValue(key);
     }
     function tokenKey(roomId) {
         return `four_player_token:${roomId}`;
@@ -1185,7 +1184,7 @@ export function useRoom(playerName = "Player") {
         connectionState.value = reconnecting ? "reconnecting" : "connecting";
         const connectionSeq = ++activeConnectionSeq;
         const isActiveConnection = () => activeConnectionSeq === connectionSeq;
-        const client = new Client(WS_URL);
+        const client = withSafeBrowserStorage(() => new Client(WS_URL));
         try {
             clearRoomStateSyncTimer();
             clearMissingHandSyncTimer();

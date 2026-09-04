@@ -3,10 +3,19 @@
     <div class="entry-hero">
       <p class="entry-kicker">{{ friendInvite ? "好友邀请" : "开始游戏" }}</p>
       <h2>{{ friendInvite ? "输入昵称，加入好友房" : "先取一个昵称" }}</h2>
-      <p class="entry-desc">
-        {{ friendInvite
-          ? "不用注册。输入牌桌上显示的名字，就能进入朋友的房间选座。"
-          : "不用注册，也不用密码；这台设备会记住昵称，进入后再选择玩法。" }}
+      <p
+        class="entry-desc"
+        :class="{ 'storage-limited': !storagePersistent }"
+        :data-testid="storagePersistent ? undefined : 'storage-limited-note'"
+        :role="storagePersistent ? undefined : 'status'"
+      >
+        {{ storagePersistent
+          ? (friendInvite
+            ? "不用注册。输入牌桌上显示的名字，就能进入朋友的房间选座。"
+            : "不用注册，也不用密码；这台设备会记住昵称，进入后再选择玩法。")
+          : (friendInvite
+            ? "本次仍可正常加入；当前浏览器不保存信息，关闭页面后可能无法回到原座。"
+            : "本次仍可正常游戏；当前浏览器不保存信息，关闭页面后可能需要重填昵称或无法恢复牌局。") }}
       </p>
     </div>
 
@@ -58,6 +67,7 @@ defineProps<{
   primaryLabel: string;
   friendInvite: boolean;
   historyNames: string[];
+  storagePersistent: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -111,6 +121,11 @@ function onInput(event: Event) {
   color: #cbd5e1;
   max-width: 60ch;
   line-height: 1.65;
+}
+
+.entry-desc.storage-limited {
+  color: #fde68a;
+  font-weight: 700;
 }
 
 .entry-card {

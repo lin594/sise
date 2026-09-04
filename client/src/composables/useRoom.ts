@@ -22,6 +22,12 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
+import {
+  readStoredValue,
+  removeStoredValue,
+  withSafeBrowserStorage,
+  writeStoredValue,
+} from "@/utils/safeStorage";
 
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
@@ -1228,17 +1234,15 @@ export function useRoom(playerName = "Player") {
   }
 
   function readStored(key: string): string {
-    return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+    return readStoredValue(key).trim();
   }
 
   function writeStored(key: string, value: string) {
-    window.localStorage.setItem(key, value);
-    window.sessionStorage.setItem(key, value);
+    writeStoredValue(key, value);
   }
 
   function clearStored(key: string) {
-    window.localStorage.removeItem(key);
-    window.sessionStorage.removeItem(key);
+    removeStoredValue(key);
   }
 
   function tokenKey(roomId: string): string {
@@ -1337,7 +1341,7 @@ export function useRoom(playerName = "Player") {
     connectionState.value = reconnecting ? "reconnecting" : "connecting";
     const connectionSeq = ++activeConnectionSeq;
     const isActiveConnection = () => activeConnectionSeq === connectionSeq;
-    const client = new Client(WS_URL);
+    const client = withSafeBrowserStorage(() => new Client(WS_URL));
     try {
       clearRoomStateSyncTimer();
       clearMissingHandSyncTimer();

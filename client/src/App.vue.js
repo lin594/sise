@@ -15,11 +15,13 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { getCardLabelText } from "@/utils/cardText";
 const FriendInviteQrDialog = defineAsyncComponent(() => import("@/components/FriendInviteQrDialog.vue"));
 const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
 const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
+const browserStoragePersistent = hasPersistentBrowserStorage();
 function normalizeCardDisplayMode(value) {
     return value === "large" || value === "adaptive" || value === "long" ? value : null;
 }
@@ -28,7 +30,7 @@ function normalizeTurnAlertMode(value) {
 }
 function readDisplayPreferences() {
     try {
-        const stored = window.localStorage.getItem(DISPLAY_PREFERENCES_KEY);
+        const stored = readStoredValue(DISPLAY_PREFERENCES_KEY);
         if (stored) {
             const parsed = JSON.parse(stored);
             return {
@@ -45,7 +47,7 @@ function readDisplayPreferences() {
     catch {
         // Invalid local preferences fall back to the compatible defaults below.
     }
-    const legacyMode = window.localStorage.getItem(LEGACY_TABLE_CARD_MODE_KEY);
+    const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
     return {
         ownCards: "adaptive",
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
@@ -66,7 +68,7 @@ function generateRandomNickname() {
 }
 function readNicknameHistory() {
     try {
-        const raw = window.localStorage.getItem("sise_entry_name_history") ?? "[]";
+        const raw = readStoredValue("sise_entry_name_history") || "[]";
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) {
             return [];
@@ -78,12 +80,14 @@ function readNicknameHistory() {
     }
 }
 function writeNicknameHistory(names) {
-    window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
+    writeStoredValue("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
 const { profile: guestProfile, refresh: refreshGuestProfile, refreshAfterSettlement: refreshGuestProfileAfterSettlement, updateNickname: updateGuestProfileNickname, } = useGuestProfile();
 void refreshGuestProfile();
 const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, actionFeedback, matchClockSync, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareSetup, requestMoreTime, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setLobbyReady, setAutoPlay, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, } = useRoom("玩家");
 const guestProfileSummary = computed(() => {
+    if (!browserStoragePersistent)
+        return "";
     const current = guestProfile.value;
     if (!current)
         return "";
@@ -113,7 +117,7 @@ function removeLocalTestBridge() {
 }
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
-const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
+const entryName = ref(readStoredValue(ENTRY_NAME_KEY).trim());
 const nicknameHistory = ref(readNicknameHistory());
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
@@ -144,7 +148,7 @@ const lobbyModes = [
     },
 ];
 function readBrowserStorage(key) {
-    return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+    return readStoredValue(key).trim();
 }
 function readStoredRoomSession() {
     const query = new URLSearchParams(window.location.search);
@@ -1236,7 +1240,7 @@ onMounted(() => {
     declareTick = window.setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
-    window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+    writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
     void resumeStoredRoomSession();
 });
 onUnmounted(() => {
@@ -1262,7 +1266,7 @@ watch(globalError, (message) => {
     }
 });
 watch(displayPreferences, (preferences) => {
-    window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
+    writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
 }, { deep: true });
 function maybeAutoStartPractice() {
     if (!pendingPracticeAutoStart.value || !canPressStartGame.value) {
@@ -1727,7 +1731,7 @@ async function enterLobby() {
     const nickname = entryName.value.trim() || generateRandomNickname();
     entryName.value = nickname;
     globalError.value = "";
-    window.localStorage.setItem(ENTRY_NAME_KEY, nickname);
+    writeStoredValue(ENTRY_NAME_KEY, nickname);
     const mergedHistory = [nickname, ...nicknameHistory.value.filter((item) => item !== nickname)].slice(0, 8);
     nicknameHistory.value = mergedHistory;
     writeNicknameHistory(mergedHistory);
@@ -2545,6 +2549,7 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         friendInvite: (__VLS_ctx.hasFriendInvite),
         historyNames: (__VLS_ctx.nicknameHistory),
+        storagePersistent: (__VLS_ctx.browserStoragePersistent),
     }));
     const __VLS_19 = __VLS_18({
         ...{ 'onUpdate:nickname': {} },
@@ -2556,6 +2561,7 @@ if (__VLS_ctx.showEntry) {
         primaryLabel: (__VLS_ctx.entryPrimaryLabel),
         friendInvite: (__VLS_ctx.hasFriendInvite),
         historyNames: (__VLS_ctx.nicknameHistory),
+        storagePersistent: (__VLS_ctx.browserStoragePersistent),
     }, ...__VLS_functionalComponentArgsRest(__VLS_18));
     let __VLS_21;
     let __VLS_22;
@@ -3858,6 +3864,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             LobbyPage: LobbyPage,
             LoginPage: LoginPage,
             FriendInviteQrDialog: FriendInviteQrDialog,
+            browserStoragePersistent: browserStoragePersistent,
             guestProfile: guestProfile,
             connected: connected,
             connectionState: connectionState,

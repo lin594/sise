@@ -1,5 +1,6 @@
 import { onUnmounted, ref } from "vue";
 import { BACKEND_HTTP_URL } from "@/config/backend";
+import { readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 
 export const GUEST_PROFILE_TOKEN_KEY = "sise_guest_profile_token_v1";
 
@@ -16,15 +17,8 @@ const PROFILE_TOKEN_PATTERN = /^gp_[a-f0-9]{48}$/;
 let volatileProfileToken = "";
 
 function readStoredToken(): string {
-  for (const storage of [window.localStorage, window.sessionStorage]) {
-    try {
-      const value = storage.getItem(GUEST_PROFILE_TOKEN_KEY)?.trim() ?? "";
-      if (PROFILE_TOKEN_PATTERN.test(value)) return value;
-    } catch {
-      // Privacy modes may disable one storage while leaving gameplay usable.
-    }
-  }
-  return "";
+  const value = readStoredValue(GUEST_PROFILE_TOKEN_KEY).trim();
+  return PROFILE_TOKEN_PATTERN.test(value) ? value : "";
 }
 
 function createProfileToken(): string {
@@ -42,13 +36,7 @@ export function ensureGuestProfileToken(): string {
   if (!volatileProfileToken) {
     volatileProfileToken = createProfileToken();
   }
-  for (const storage of [window.localStorage, window.sessionStorage]) {
-    try {
-      storage.setItem(GUEST_PROFILE_TOKEN_KEY, volatileProfileToken);
-    } catch {
-      // The in-memory token still keeps the active page functional.
-    }
-  }
+  writeStoredValue(GUEST_PROFILE_TOKEN_KEY, volatileProfileToken);
   return volatileProfileToken;
 }
 

@@ -85,6 +85,7 @@
       :primary-label="entryPrimaryLabel"
       :friend-invite="hasFriendInvite"
       :history-names="nicknameHistory"
+      :storage-persistent="browserStoragePersistent"
       @update:nickname="entryName = $event"
       @submit="enterLobby"
       @randomize="randomizeNickname"
@@ -666,6 +667,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
   ActionCandidate,
   ActionRequest,
@@ -701,6 +703,7 @@ type LobbyMode = {
 const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
 const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
+const browserStoragePersistent = hasPersistentBrowserStorage();
 
 function normalizeCardDisplayMode(value: unknown): CardDisplayMode | null {
   return value === "large" || value === "adaptive" || value === "long" ? value : null;
@@ -712,7 +715,7 @@ function normalizeTurnAlertMode(value: unknown): TurnAlertMode {
 
 function readDisplayPreferences(): GameDisplayPreferences {
   try {
-    const stored = window.localStorage.getItem(DISPLAY_PREFERENCES_KEY);
+    const stored = readStoredValue(DISPLAY_PREFERENCES_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
@@ -729,7 +732,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
     // Invalid local preferences fall back to the compatible defaults below.
   }
 
-  const legacyMode = window.localStorage.getItem(LEGACY_TABLE_CARD_MODE_KEY);
+  const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
     ownCards: "adaptive",
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
@@ -753,7 +756,7 @@ function generateRandomNickname(): string {
 
 function readNicknameHistory(): string[] {
   try {
-    const raw = window.localStorage.getItem("sise_entry_name_history") ?? "[]";
+    const raw = readStoredValue("sise_entry_name_history") || "[]";
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       return [];
@@ -765,7 +768,7 @@ function readNicknameHistory(): string[] {
 }
 
 function writeNicknameHistory(names: string[]) {
-  window.localStorage.setItem("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
+  writeStoredValue("sise_entry_name_history", JSON.stringify(names.slice(0, 8)));
 }
 
 const {
@@ -820,6 +823,7 @@ const {
 } = useRoom("玩家");
 
 const guestProfileSummary = computed(() => {
+  if (!browserStoragePersistent) return "";
   const current = guestProfile.value;
   if (!current) return "";
   return current.roundsPlayed > 0
@@ -866,7 +870,7 @@ function removeLocalTestBridge(): void {
 
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
-const entryName = ref(window.localStorage.getItem(ENTRY_NAME_KEY)?.trim() || "");
+const entryName = ref(readStoredValue(ENTRY_NAME_KEY).trim());
 const nicknameHistory = ref<string[]>(readNicknameHistory());
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
@@ -904,7 +908,7 @@ type StoredRoomSession = {
 };
 
 function readBrowserStorage(key: string): string {
-  return (window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key) ?? "").trim();
+  return readStoredValue(key).trim();
 }
 
 function readStoredRoomSession(): StoredRoomSession | null {
@@ -2153,7 +2157,7 @@ onMounted(() => {
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
-  window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+  writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
   void resumeStoredRoomSession();
 });
 
@@ -2184,7 +2188,7 @@ watch(globalError, (message) => {
 watch(
   displayPreferences,
   (preferences) => {
-    window.localStorage.setItem(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
+    writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
   },
   { deep: true },
 );
@@ -2700,7 +2704,7 @@ async function enterLobby() {
   const nickname = entryName.value.trim() || generateRandomNickname();
   entryName.value = nickname;
   globalError.value = "";
-  window.localStorage.setItem(ENTRY_NAME_KEY, nickname);
+  writeStoredValue(ENTRY_NAME_KEY, nickname);
   const mergedHistory = [nickname, ...nicknameHistory.value.filter((item) => item !== nickname)].slice(0, 8);
   nicknameHistory.value = mergedHistory;
   writeNicknameHistory(mergedHistory);
