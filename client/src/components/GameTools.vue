@@ -838,11 +838,11 @@ onBeforeUnmount(() => {
   z-index: 2;
   display: flex;
   justify-content: flex-end;
-  gap: clamp(0.3rem, 0.8vh, 0.5rem);
+  gap: clamp(0.3rem, calc(var(--effective-vh, 1vh) * 0.8), 0.5rem);
 }
 
 .tool-button {
-  min-width: clamp(4.25rem, 9vw, 5.25rem);
+  min-width: clamp(4.25rem, calc(var(--effective-vw, 1vw) * 9), 5.25rem);
   height: 2.55rem;
   padding: 0.35rem 0.62rem;
   border-radius: 0.72rem;
@@ -1431,7 +1431,7 @@ onBeforeUnmount(() => {
   }
 
   .tool-button {
-    min-width: clamp(3.6rem, 9vw, 4.4rem);
+    min-width: clamp(3.6rem, calc(var(--effective-vw, 1vw) * 9), 4.4rem);
     height: max(2.25rem, 36px);
     padding-inline: 0.42rem;
   }

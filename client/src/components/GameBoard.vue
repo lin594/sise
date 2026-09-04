@@ -736,6 +736,8 @@ const props = defineProps<{
   tableCardMode?: RenderedCardMode;
   seatDirection?: SeatDirection;
   reduceMotion?: boolean;
+  viewportTransformed?: boolean;
+  viewportTransformKey?: string;
 }>();
 
 const emit = defineEmits<{
@@ -1090,6 +1092,16 @@ const tableFlightSources = new Map<string, CardRect>();
 const tableFlightDestinations = new Map<string, CardRect>();
 let presentationScopeKey = "";
 let lastPresentationPaintAt = 0;
+watch(() => props.viewportTransformKey, () => {
+  // A resize or a switch between native and CSS-rotated landscape invalidates
+  // every cached DOMRect. Re-sample in the new coordinate space instead of
+  // stretching an in-flight card toward an obsolete rectangle.
+  lastCardRects.clear();
+  tableFlightSources.clear();
+  tableFlightDestinations.clear();
+  flights.value = [];
+  lastPresentationPaintAt = 0;
+}, { flush: "sync" });
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions] as const, () => {
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   const nextScopeKey = `${String(props.state?.roomId ?? "")}:${Number(props.state?.completedRounds ?? 0)}`;
@@ -1129,6 +1141,11 @@ const centerCardVisible = computed(() => {
 });
 const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
+// A flight teleported to <body> uses physical viewport coordinates, while a
+// portrait-locked table is painted in a rotated logical coordinate system.
+// Showing the authoritative landing immediately is safer than briefly drawing
+// the same card at a conflicting angle or scale.
+const coordinateMotionSuppressed = computed(() => reducedTableMotion.value || props.viewportTransformed);
 const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
 onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
@@ -1143,7 +1160,7 @@ onBeforeUpdate(() => {
   while (lastCardRects.size > 256) lastCardRects.delete(lastCardRects.keys().next().value!);
 });
 function isMovingCard(id: string): boolean {
-  if (reducedTableMotion.value) return false;
+  if (coordinateMotionSuppressed.value) return false;
   return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
 }
 function movingCardStyle(id: string): Record<string, string> {
@@ -1231,7 +1248,7 @@ function interpolateRect(start: CardRect, end: CardRect, progress: number): Card
   };
 }
 
-const tableFlights = computed(() => reducedTableMotion.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
+const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
   const key = `${event.round}:${event.id}:${index}`;
   const exactEnd = tableLocationExactRect(move.to, move.card.id);
   const frozenEnd = tableFlightDestinations.get(key);
@@ -1962,7 +1979,7 @@ function groupOffsets(count: number): Array<{ x: number; y: number }> {
 function spawnFlight(flight: Omit<CardFlight, "id">): void {
   // Legacy action flights aim at estimated zone centers. Keep only the
   // symbolic opening-deal backs; exact table transitions own card movement.
-  if (flight.mode !== "deal") return;
+  if (flight.mode !== "deal" || coordinateMotionSuppressed.value) return;
   const id = ++flightSeq;
   flights.value.push({ id, ...flight });
   const ttl = Math.max(120, flight.duration + flight.delay + 120);
@@ -4238,27 +4255,31 @@ watch(
   }
 }
 
+:global(.layout.effective-short-landscape .turn-timer-bar) {
+  height: 6px;
+}
+
 @media (max-width: 960px), (max-height: 500px) {
   .board {
-    grid-template-columns: clamp(6rem, 15vw, 7.5rem) minmax(0, 1fr) clamp(8.4rem, 21vw, 10.5rem);
-    grid-template-rows: minmax(0, 1fr) var(--compact-board-self-row-height, clamp(6.75rem, 31vh, 7.5rem));
-    gap: 0.4vh;
+    grid-template-columns: clamp(6rem, calc(var(--effective-vw, 1vw) * 15), 7.5rem) minmax(0, 1fr) clamp(8.4rem, calc(var(--effective-vw, 1vw) * 21), 10.5rem);
+    grid-template-rows: minmax(0, 1fr) var(--compact-board-self-row-height, clamp(6.75rem, calc(var(--effective-vh, 1vh) * 31), 7.5rem));
+    gap: calc(var(--effective-vh, 1vh) * 0.4);
   }
 
   .table {
     height: 100%;
     max-height: none;
     aspect-ratio: auto;
-    padding: 0.45vh;
-    border-radius: 1.6vh;
+    padding: calc(var(--effective-vh, 1vh) * 0.45);
+    border-radius: calc(var(--effective-vh, 1vh) * 1.6);
     grid-template-columns: minmax(0, 22%) minmax(0, 1fr) minmax(0, 22%);
     grid-template-rows: minmax(0, 0.8fr) minmax(4.4rem, 1.2fr) minmax(0, 0.8fr);
     grid-template-areas:
       "flowtl top flowtr"
       "left center right"
       "flowbl selfgroups flowbr";
-    column-gap: 0.35vh;
-    row-gap: 0.35vh;
+    column-gap: calc(var(--effective-vh, 1vh) * 0.35);
+    row-gap: calc(var(--effective-vh, 1vh) * 0.35);
   }
 
   .corner-card {
@@ -4268,25 +4289,25 @@ watch(
   }
 
   .group-block-list {
-    gap: 0.35vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.35);
   }
 
   .group-block {
-    gap: 0.35vh;
-    padding: 0.28vh 0.4vh;
-    border-radius: 0.9vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.35);
+    padding: calc(var(--effective-vh, 1vh) * 0.28) calc(var(--effective-vh, 1vh) * 0.4);
+    border-radius: calc(var(--effective-vh, 1vh) * 0.9);
   }
 
   .group-badge {
     min-width: 1.28rem;
     height: 1.28rem;
-    font-size: clamp(0.5rem, 1.15vh, 0.62rem);
+    font-size: clamp(0.5rem, calc(var(--effective-vh, 1vh) * 1.15), 0.62rem);
   }
 
   .mini-card.mode-large {
     width: 1.55rem;
     height: 1.7rem;
-    font-size: clamp(0.78rem, 3.4vh, 0.9rem);
+    font-size: clamp(0.78rem, calc(var(--effective-vh, 1vh) * 3.4), 0.9rem);
   }
 
   .discard-token.mode-long,
@@ -4301,8 +4322,8 @@ watch(
   .self-groups-card,
   .self-info-card,
   .self-hand-card {
-    padding: 0.3vh 0.42vh;
-    gap: 0.25vh;
+    padding: calc(var(--effective-vh, 1vh) * 0.3) calc(var(--effective-vh, 1vh) * 0.42);
+    gap: calc(var(--effective-vh, 1vh) * 0.25);
   }
 
   .player-top {
@@ -4319,7 +4340,7 @@ watch(
   .player-right .seat-head {
     align-items: stretch;
     flex-direction: column;
-    gap: 0.3vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.3);
   }
 
   .player-left .seat-identity,
@@ -4327,7 +4348,7 @@ watch(
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    gap: 0.3vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.3);
   }
 
   .player-left .seat-identity > strong,
@@ -4337,36 +4358,36 @@ watch(
   }
 
   .seat-head strong {
-    font-size: clamp(0.92rem, 4vh, 1.05rem);
+    font-size: clamp(0.92rem, calc(var(--effective-vh, 1vh) * 4), 1.05rem);
   }
 
   .seat-meta {
-    font-size: clamp(0.56rem, 1.35vh, 0.68rem);
+    font-size: clamp(0.56rem, calc(var(--effective-vh, 1vh) * 1.35), 0.68rem);
   }
 
   .tag {
     padding: 0.1rem 0.35rem;
     line-height: 1.1;
-    font-size: clamp(0.54rem, 1.25vh, 0.65rem);
+    font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.25), 0.65rem);
   }
 
   .flow-card p,
   .self-groups-card p {
-    font-size: clamp(0.8125rem, 3.2vh, 0.85rem);
+    font-size: clamp(0.8125rem, calc(var(--effective-vh, 1vh) * 3.2), 0.85rem);
   }
 
   .center {
-    padding: 0.7vh 0.9vh;
-    border-radius: 1.4vh;
+    padding: calc(var(--effective-vh, 1vh) * 0.7) calc(var(--effective-vh, 1vh) * 0.9);
+    border-radius: calc(var(--effective-vh, 1vh) * 1.4);
   }
 
   .center-board {
     grid-template-columns: minmax(0, 1fr) minmax(6.4rem, 1.2fr) minmax(0, 1fr);
-    gap: 0.45vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.45);
   }
 
   .center-text p {
-    font-size: clamp(0.62rem, 1.4vh, 0.76rem);
+    font-size: clamp(0.62rem, calc(var(--effective-vh, 1vh) * 1.4), 0.76rem);
   }
 
   .center-info-row {
@@ -4376,11 +4397,11 @@ watch(
   .info-chip {
     min-height: 1.25rem;
     padding: 0.08rem 0.35rem;
-    font-size: clamp(0.5rem, 1.15vh, 0.64rem);
+    font-size: clamp(0.5rem, calc(var(--effective-vh, 1vh) * 1.15), 0.64rem);
   }
 
   .center-seat-name {
-    font-size: clamp(0.5rem, 1.1vh, 0.62rem);
+    font-size: clamp(0.5rem, calc(var(--effective-vh, 1vh) * 1.1), 0.62rem);
   }
 
   .center-seat-action {
@@ -4391,22 +4412,22 @@ watch(
   }
 
   .response-wrap {
-    min-height: 8.8vh;
-    padding: 0.45vh;
+    min-height: calc(var(--effective-vh, 1vh) * 8.8);
+    padding: calc(var(--effective-vh, 1vh) * 0.45);
   }
 
   .response-wrap small {
-    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
+    font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.28), 0.66rem);
   }
 
   .self-head {
     align-items: flex-start;
-    gap: 0.4vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.4);
     flex-wrap: wrap;
   }
 
   .self-head h3 {
-    font-size: clamp(0.96rem, 4.2vh, 1.1rem);
+    font-size: clamp(0.96rem, calc(var(--effective-vh, 1vh) * 4.2), 1.1rem);
     line-height: 1.08;
   }
 
@@ -4414,7 +4435,7 @@ watch(
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
-    gap: 0.3vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.3);
   }
 
   .self-info-card .seat-identity > h3 {
@@ -4423,27 +4444,27 @@ watch(
   }
 
   .self-head p {
-    font-size: clamp(0.8125rem, 2.8vh, 0.85rem);
+    font-size: clamp(0.8125rem, calc(var(--effective-vh, 1vh) * 2.8), 0.85rem);
   }
 
   .self-head .seat-tags {
     width: 100%;
     justify-content: flex-start;
-    gap: 0.35vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.35);
   }
 
   .self-info-card {
     grid-column: 1;
-    border-radius: 1.4vh;
-    padding: 0.4vh 0.55vh;
+    border-radius: calc(var(--effective-vh, 1vh) * 1.4);
+    padding: calc(var(--effective-vh, 1vh) * 0.4) calc(var(--effective-vh, 1vh) * 0.55);
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .self-groups-card,
   .self-hand-card {
-    border-radius: 1.1vh;
-    padding: 0.25vh 0.4vh;
+    border-radius: calc(var(--effective-vh, 1vh) * 1.1);
+    padding: calc(var(--effective-vh, 1vh) * 0.25) calc(var(--effective-vh, 1vh) * 0.4);
   }
 
   .self-hand-card {
@@ -4451,7 +4472,7 @@ watch(
   }
 
   .self-info-hint {
-    font-size: clamp(0.54rem, 1.28vh, 0.66rem);
+    font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.28), 0.66rem);
   }
 
   .discard-tip {
@@ -4466,7 +4487,7 @@ watch(
     min-width: 44px;
     height: 36px;
     padding: 0 0.34rem;
-    border-radius: 0.8vh;
+    border-radius: calc(var(--effective-vh, 1vh) * 0.8);
     font-size: max(0.8125rem, 13px);
   }
 
@@ -4480,7 +4501,7 @@ watch(
   .discard-token.mode-large {
     width: 1.55rem;
     height: 1.65rem;
-    font-size: clamp(0.76rem, 3.2vh, 0.88rem);
+    font-size: clamp(0.76rem, calc(var(--effective-vh, 1vh) * 3.2), 0.88rem);
   }
 
   .hand {
@@ -4499,15 +4520,15 @@ watch(
   }
 
   .hand-card.mode-long {
-    border-radius: 0.7vh;
-    flex-basis: clamp(28px, 4.5vw, 32px);
-    width: clamp(28px, 4.5vw, 32px);
+    border-radius: calc(var(--effective-vh, 1vh) * 0.7);
+    flex-basis: clamp(28px, calc(var(--effective-vw, 1vw) * 4.5), 32px);
+    width: clamp(28px, calc(var(--effective-vw, 1vw) * 4.5), 32px);
   }
 
   .hand-card.mode-large {
-    border-radius: 0.7vh;
-    flex-basis: clamp(40px, 6.2vw, 44px);
-    width: clamp(40px, 6.2vw, 44px);
+    border-radius: calc(var(--effective-vh, 1vh) * 0.7);
+    flex-basis: clamp(40px, calc(var(--effective-vw, 1vw) * 6.2), 44px);
+    width: clamp(40px, calc(var(--effective-vw, 1vw) * 6.2), 44px);
   }
 
   .hand-card {
@@ -4515,37 +4536,37 @@ watch(
   }
 
   .hand :deep(.size-xl.mode-long) {
-    width: clamp(0.9rem, 2.2vw, 1.3rem);
-    height: clamp(2.7rem, 6.6vh, 3.8rem);
-    font-size: clamp(0.62rem, 1.55vh, 0.82rem);
+    width: clamp(0.9rem, calc(var(--effective-vw, 1vw) * 2.2), 1.3rem);
+    height: clamp(2.7rem, calc(var(--effective-vh, 1vh) * 6.6), 3.8rem);
+    font-size: clamp(0.62rem, calc(var(--effective-vh, 1vh) * 1.55), 0.82rem);
   }
 
   .hand :deep(.size-xl.mode-large) {
-    width: clamp(40px, 6.2vw, 44px);
-    height: clamp(52px, 14vh, 60px);
-    font-size: clamp(22px, 5.8vh, 1.55rem);
+    width: clamp(40px, calc(var(--effective-vw, 1vw) * 6.2), 44px);
+    height: clamp(52px, calc(var(--effective-vh, 1vh) * 14), 60px);
+    font-size: clamp(22px, calc(var(--effective-vh, 1vh) * 5.8), 1.55rem);
   }
 
   .embedded-actions {
     background: #0b1220;
     border: 1px solid #1e293b;
-    border-radius: 1.1vh;
-    padding: 0.35vh;
+    border-radius: calc(var(--effective-vh, 1vh) * 1.1);
+    padding: calc(var(--effective-vh, 1vh) * 0.35);
   }
 
   .embedded-actions :deep(.action-row) {
     width: 100%;
-    gap: 0.45vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.45);
   }
 
   .embedded-actions :deep(.btn) {
     width: auto;
     flex: 1 1 0;
-    min-width: clamp(40px, 7vw, 48px);
-    min-height: clamp(40px, 11.5vh, 46px);
-    padding-inline: clamp(0.2rem, 0.8vw, 0.45rem);
-    font-size: clamp(0.96rem, 4vh, 1.08rem);
-    border-radius: 0.85vh;
+    min-width: clamp(40px, calc(var(--effective-vw, 1vw) * 7), 48px);
+    min-height: clamp(40px, calc(var(--effective-vh, 1vh) * 11.5), 46px);
+    padding-inline: clamp(0.2rem, calc(var(--effective-vw, 1vw) * 0.8), 0.45rem);
+    font-size: clamp(0.96rem, calc(var(--effective-vh, 1vh) * 4), 1.08rem);
+    border-radius: calc(var(--effective-vh, 1vh) * 0.85);
   }
 
   .embedded-actions :deep(.btn:disabled) {
@@ -4611,7 +4632,7 @@ watch(
 @media (max-width: 620px) and (max-height: 360px),
   (max-width: 360px) and (max-height: 620px) {
   .board {
-    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8.6rem, 24vw, 9rem);
+    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8.25rem, 23vw, 9rem);
     gap: 2px;
   }
 }

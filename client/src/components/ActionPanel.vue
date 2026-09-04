@@ -290,7 +290,7 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
 <style scoped>
 .panel {
   min-height: 0;
-  padding: clamp(0.28rem, 0.8vh, 0.5rem);
+  padding: clamp(0.28rem, calc(var(--effective-vh, 1vh) * 0.8), 0.5rem);
   border-top: 1px solid #1e293b;
   background: #0f172a;
 }
@@ -321,13 +321,13 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.3rem, 0.8vw, 0.55rem);
+  gap: clamp(0.3rem, calc(var(--effective-vw, 1vw) * 0.8), 0.55rem);
   overflow: hidden;
 }
 
 .compact-status {
   color: #fde68a;
-  font-size: clamp(0.78rem, 1.5vh, 0.92rem);
+  font-size: clamp(0.78rem, calc(var(--effective-vh, 1vh) * 1.5), 0.92rem);
 }
 
 .btn,
@@ -339,7 +339,7 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   border-radius: 0.68rem;
   background: #1e293b;
   color: #f8fafc;
-  font-size: clamp(1rem, 2.7vh, 1.25rem);
+  font-size: clamp(1rem, calc(var(--effective-vh, 1vh) * 2.7), 1.25rem);
   font-weight: 900;
 }
 
@@ -369,7 +369,7 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
 .timer-chip,
 .feedback-chip {
   flex: 0 1 auto;
-  max-width: min(12rem, 35vw);
+  max-width: min(12rem, calc(var(--effective-vw, 1vw) * 35));
   min-height: 32px;
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
@@ -381,7 +381,7 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   white-space: nowrap;
   color: #dbeafe;
   background: #172554;
-  font-size: clamp(0.72rem, 1.55vh, 0.88rem);
+  font-size: clamp(0.72rem, calc(var(--effective-vh, 1vh) * 1.55), 0.88rem);
   font-weight: 800;
 }
 
@@ -402,29 +402,27 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   color: #fef3c7;
   border-color: #92400e;
   background: #451a03;
-  font-size: clamp(0.75rem, 1.7vh, 0.9rem);
+  font-size: clamp(0.75rem, calc(var(--effective-vh, 1vh) * 1.7), 0.9rem);
 }
 
-@media (max-height: 390px) {
-  .panel {
+:global(.layout.effective-short-landscape .panel) {
     padding: 0.2rem 0.28rem;
-  }
+}
 
-  .action-row,
-  .compact-status {
+:global(.layout.effective-short-landscape .action-row),
+:global(.layout.effective-short-landscape .compact-status) {
     min-height: 40px;
     gap: 0.28rem;
-  }
+}
 
-  .btn,
-  .more-time-button {
+:global(.layout.effective-short-landscape .btn),
+:global(.layout.effective-short-landscape .more-time-button) {
     min-width: 40px;
     min-height: 40px;
     border-radius: 0.58rem;
-  }
+}
 
-  .feedback-chip {
-    max-width: 28vw;
-  }
+:global(.layout.effective-short-landscape .feedback-chip) {
+    max-width: calc(var(--effective-vw, 1vw) * 28);
 }
 </style>

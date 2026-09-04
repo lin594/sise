@@ -301,6 +301,16 @@ const tableFlightSources = new Map();
 const tableFlightDestinations = new Map();
 let presentationScopeKey = "";
 let lastPresentationPaintAt = 0;
+watch(() => props.viewportTransformKey, () => {
+    // A resize or a switch between native and CSS-rotated landscape invalidates
+    // every cached DOMRect. Re-sample in the new coordinate space instead of
+    // stretching an in-flight card toward an obsolete rectangle.
+    lastCardRects.clear();
+    tableFlightSources.clear();
+    tableFlightDestinations.clear();
+    flights.value = [];
+    lastPresentationPaintAt = 0;
+}, { flush: "sync" });
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
@@ -343,6 +353,11 @@ const centerCardVisible = computed(() => {
 });
 const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
+// A flight teleported to <body> uses physical viewport coordinates, while a
+// portrait-locked table is painted in a rotated logical coordinate system.
+// Showing the authoritative landing immediately is safer than briefly drawing
+// the same card at a conflicting angle or scale.
+const coordinateMotionSuppressed = computed(() => reducedTableMotion.value || props.viewportTransformed);
 const motionQuery = typeof matchMedia !== "undefined" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 const updateMotionPreference = () => { systemReducedMotion.value = motionQuery?.matches ?? false; };
 onMounted(() => motionQuery?.addEventListener("change", updateMotionPreference));
@@ -357,7 +372,7 @@ onBeforeUpdate(() => {
         lastCardRects.delete(lastCardRects.keys().next().value);
 });
 function isMovingCard(id) {
-    if (reducedTableMotion.value)
+    if (coordinateMotionSuppressed.value)
         return false;
     return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
 }
@@ -444,7 +459,7 @@ function interpolateRect(start, end, progress) {
         height: interpolate(start.height, end.height),
     };
 }
-const tableFlights = computed(() => reducedTableMotion.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
+const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
     const key = `${event.round}:${event.id}:${index}`;
     const exactEnd = tableLocationExactRect(move.to, move.card.id);
     const frozenEnd = tableFlightDestinations.get(key);
@@ -1100,7 +1115,7 @@ function groupOffsets(count) {
 function spawnFlight(flight) {
     // Legacy action flights aim at estimated zone centers. Keep only the
     // symbolic opening-deal backs; exact table transitions own card movement.
-    if (flight.mode !== "deal")
+    if (flight.mode !== "deal" || coordinateMotionSuppressed.value)
         return;
     const id = ++flightSeq;
     flights.value.push({ id, ...flight });
@@ -1791,6 +1806,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;

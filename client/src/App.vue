@@ -7,6 +7,7 @@
       'ultra-compact-viewport': isUltraCompactViewport,
       'legacy-compact-viewport': isLegacyCompactViewport,
       'compact-landscape': isCompactViewport && isPlaying,
+      'effective-short-landscape': effectiveWidth > effectiveHeight && effectiveHeight <= 600,
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
       'reduce-motion': displayPreferences.reduceMotion,
@@ -18,6 +19,8 @@
     :style="{
       '--physical-viewport-width': `${viewportWidth}px`,
       '--physical-viewport-height': `${viewportHeight}px`,
+      '--effective-vw': `${effectiveWidth / 100}px`,
+      '--effective-vh': `${effectiveHeight / 100}px`,
     }"
   >
     <header
@@ -184,6 +187,8 @@
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
+        :viewport-transformed="isRotatedPhonePortrait"
+        :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
         @request-more-time="requestMoreTime"
@@ -3347,8 +3352,8 @@ watch(
   margin: 0 auto;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: clamp(0.35rem, 1vh, 0.55rem);
-  padding: clamp(0.25rem, 0.8vh, 0.5rem);
+  gap: clamp(0.35rem, calc(var(--effective-vh, 1vh) * 1), 0.55rem);
+  padding: clamp(0.25rem, calc(var(--effective-vh, 1vh) * 0.8), 0.5rem);
   background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
   overflow: hidden;
 }
@@ -3413,7 +3418,7 @@ watch(
   background: #0b1220;
   border: 1px solid #1e293b;
   border-radius: 0.65rem;
-  padding: clamp(0.2rem, 0.8vh, 0.45rem) clamp(0.45rem, 1.2vw, 0.75rem);
+  padding: clamp(0.2rem, calc(var(--effective-vh, 1vh) * 0.8), 0.45rem) clamp(0.45rem, calc(var(--effective-vw, 1vw) * 1.2), 0.75rem);
   color: #e2e8f0;
   min-height: 0;
 }
@@ -3472,21 +3477,21 @@ watch(
 
 .top h1 {
   margin: 0;
-  font-size: clamp(0.95rem, 2.2vh, 1.25rem);
+  font-size: clamp(0.95rem, calc(var(--effective-vh, 1vh) * 2.2), 1.25rem);
   line-height: 1;
 }
 
 .top-slogan {
   margin: 0;
   color: #fde68a;
-  font-size: clamp(0.6rem, 1.3vh, 0.8rem);
+  font-size: clamp(0.6rem, calc(var(--effective-vh, 1vh) * 1.3), 0.8rem);
 }
 
 .meta {
   display: flex;
-  gap: clamp(0.35rem, 1vw, 0.65rem);
+  gap: clamp(0.35rem, calc(var(--effective-vw, 1vw) * 1), 0.65rem);
   color: #93c5fd;
-  font-size: clamp(0.6rem, 1.4vh, 0.78rem);
+  font-size: clamp(0.6rem, calc(var(--effective-vh, 1vh) * 1.4), 0.78rem);
   align-items: center;
 }
 
@@ -4497,7 +4502,7 @@ watch(
 @media (max-width: 960px), (max-height: 500px) {
   .layout {
     --game-header-height: max(2.5rem, 40px);
-    gap: 0.7vh;
+    gap: calc(var(--effective-vh, 1vh) * 0.7);
     padding: max(0.25rem, var(--safe-top)) max(0.25rem, var(--safe-right))
       max(0.25rem, var(--safe-bottom)) max(0.25rem, var(--safe-left));
   }
@@ -4507,17 +4512,17 @@ watch(
   }
 
   .top {
-    border-radius: 1.2vh;
-    padding: 0.45vh 1.2vw;
+    border-radius: calc(var(--effective-vh, 1vh) * 1.2);
+    padding: calc(var(--effective-vh, 1vh) * 0.45) calc(var(--effective-vw, 1vw) * 1.2);
   }
 
   .top h1 {
-    font-size: clamp(0.85rem, 2.2vh, 1.05rem);
+    font-size: clamp(0.85rem, calc(var(--effective-vh, 1vh) * 2.2), 1.05rem);
   }
 
   .meta {
-    font-size: clamp(0.54rem, 1.3vh, 0.66rem);
-    gap: 1vw;
+    font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.3), 0.66rem);
+    gap: calc(var(--effective-vw, 1vw) * 1);
     flex-wrap: nowrap;
     justify-content: flex-end;
     overflow: hidden;

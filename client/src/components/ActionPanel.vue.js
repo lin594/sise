@@ -198,10 +198,20 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['timer-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['effective-short-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['effective-short-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['effective-short-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['effective-short-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['effective-short-landscape']} */ ;
 /** @type {__VLS_StyleScopedClasses['feedback-chip']} */ ;
 // CSS variable injection 
 // CSS variable injection end 

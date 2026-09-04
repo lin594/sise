@@ -2608,6 +2608,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
             'ultra-compact-viewport': __VLS_ctx.isUltraCompactViewport,
             'legacy-compact-viewport': __VLS_ctx.isLegacyCompactViewport,
             'compact-landscape': __VLS_ctx.isCompactViewport && __VLS_ctx.isPlaying,
+            'effective-short-landscape': __VLS_ctx.effectiveWidth > __VLS_ctx.effectiveHeight && __VLS_ctx.effectiveHeight <= 600,
             'rotated-phone-portrait': __VLS_ctx.isRotatedPhonePortrait,
             'game-tools-active': __VLS_ctx.showGameTools,
             'reduce-motion': __VLS_ctx.displayPreferences.reduceMotion,
@@ -2619,6 +2620,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
     ...{ style: ({
             '--physical-viewport-width': `${__VLS_ctx.viewportWidth}px`,
             '--physical-viewport-height': `${__VLS_ctx.viewportHeight}px`,
+            '--effective-vw': `${__VLS_ctx.effectiveWidth / 100}px`,
+            '--effective-vh': `${__VLS_ctx.effectiveHeight / 100}px`,
         }) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
@@ -3040,6 +3043,8 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
+        viewportTransformed: (__VLS_ctx.isRotatedPhonePortrait),
+        viewportTransformKey: (`${__VLS_ctx.viewportWidth}x${__VLS_ctx.viewportHeight}:${__VLS_ctx.isRotatedPhonePortrait ? 'rotated' : 'native'}`),
     }));
     const __VLS_52 = __VLS_51({
         ...{ 'onDiscardCard': {} },
@@ -3068,6 +3073,8 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
+        viewportTransformed: (__VLS_ctx.isRotatedPhonePortrait),
+        viewportTransformKey: (`${__VLS_ctx.viewportWidth}x${__VLS_ctx.viewportHeight}:${__VLS_ctx.isRotatedPhonePortrait ? 'rotated' : 'native'}`),
     }, ...__VLS_functionalComponentArgsRest(__VLS_51));
     let __VLS_54;
     let __VLS_55;
