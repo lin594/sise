@@ -3018,6 +3018,7 @@ watch(
 
 .deck-number small {
   font-size: max(0.625rem, 10px);
+  line-height: 1.15;
   color: #fef08a;
 }
 

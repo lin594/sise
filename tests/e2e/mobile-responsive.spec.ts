@@ -1036,15 +1036,22 @@ test.describe("compact landscape gameplay", () => {
     const guidanceMetrics = await page.getByTestId("action-guidance").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
+      const decisionCopy = Array.from(element.querySelectorAll<HTMLElement>(
+        ".decision-line strong, .decision-line b, .instruction",
+      ));
       return {
         fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+        minimumDecisionFontSize: Math.min(
+          ...decisionCopy.map((item) => Number.parseFloat(getComputedStyle(item).fontSize)),
+        ),
         top: rect.top,
         bottom: rect.bottom,
         dockTop: dock.top,
         dockBottom: dock.bottom,
       };
     });
-    expect(guidanceMetrics.fontSize).toBeGreaterThanOrEqual(12);
+    expect(guidanceMetrics.fontSize).toBeGreaterThanOrEqual(13);
+    expect(guidanceMetrics.minimumDecisionFontSize).toBeGreaterThanOrEqual(13);
     expect(guidanceMetrics.top).toBeGreaterThanOrEqual(guidanceMetrics.dockTop);
     expect(guidanceMetrics.bottom).toBeLessThanOrEqual(guidanceMetrics.dockBottom);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
@@ -2056,7 +2063,7 @@ test.describe("legacy small landscape gameplay", () => {
       const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
-        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, .dealer-badge, .self-seat-badge, .history-count",
+        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, .dealer-badge, .self-seat-badge, .history-count, .action-dock .instruction, .action-dock .untimed-label",
       ));
       const deckUnit = document.querySelector<HTMLElement>(".deck-number small")!;
       const handRect = hand.getBoundingClientRect();
@@ -2110,6 +2117,8 @@ test.describe("legacy small landscape gameplay", () => {
           ...essentialTurnSignals.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
         ),
         deckUnitFontSize: Number.parseFloat(getComputedStyle(deckUnit).fontSize),
+        deckUnitClipped: deckUnit.scrollWidth > deckUnit.clientWidth + 1
+          || deckUnit.scrollHeight > deckUnit.clientHeight + 1,
       };
     });
 
@@ -2134,6 +2143,7 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.essentialTurnSignalCount).toBeGreaterThanOrEqual(4);
     expect(metrics.minimumEssentialTurnSignalFontSize).toBeGreaterThanOrEqual(13);
     expect(metrics.deckUnitFontSize).toBeGreaterThanOrEqual(10);
+    expect(metrics.deckUnitClipped).toBe(false);
     const landscapeTableGeometry = await expectCompactTableContained(page);
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");

@@ -722,14 +722,14 @@ function onClick(item: PanelAction): void {
   .hint {
     min-height: 0;
     padding: 0.08rem 0.2rem;
-    font-size: clamp(0.75rem, 3.2vh, 0.84rem);
+    font-size: clamp(0.8125rem, 3.2vh, 0.9rem);
     line-height: 1.2;
   }
 
   .more-time-button {
     min-height: 40px;
     padding: 0.12rem 0.45rem;
-    font-size: 0.72rem;
+    font-size: 0.8125rem;
   }
 
   .waiting-state {
@@ -757,7 +757,7 @@ function onClick(item: PanelAction): void {
   }
 
   .decision-line b {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
 
   .actions {
