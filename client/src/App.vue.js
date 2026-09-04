@@ -722,7 +722,9 @@ function submitSettlementTransition(transition) {
     globalError.value = "";
     const sent = transition === "next_round" ? nextRound() : returnLobby();
     if (!sent) {
-        globalError.value = "网络未连接，整桌操作没有发送，请稍候重试。";
+        globalError.value = state.value?.roomMode === "practice"
+            ? "网络未连接，下一局请求没有发送，请稍候重试。"
+            : "网络未连接，整桌操作没有发送，请稍候重试。";
         return false;
     }
     settlementTransitionPending.value = transition;
@@ -735,7 +737,9 @@ function submitSettlementTransition(transition) {
             return;
         }
         settlementTransitionPending.value = null;
-        globalError.value = "暂未确认整桌操作，请再点一次。";
+        globalError.value = state.value?.roomMode === "practice"
+            ? "暂未确认下一局，请再点一次。"
+            : "暂未确认整桌操作，请再点一次。";
     }, 8_000);
     return true;
 }
@@ -775,6 +779,16 @@ async function rematchQuickTable() {
     finally {
         quickRematchPending.value = false;
     }
+}
+async function returnPracticeToModeSelection() {
+    if (!settlementReady.value ||
+        state.value?.roomMode !== "practice" ||
+        state.value?.phase !== "ended" ||
+        settlementTransitionPending.value !== null) {
+        return;
+    }
+    await handleLeaveRoom();
+    enteredFrontLobby.value = true;
 }
 function cancelNextRound() {
     if (!confirmingNextRound.value) {
@@ -3797,6 +3811,37 @@ if (__VLS_ctx.showEndPanel) {
             ...{ class: "host-actions-hint" },
         });
     }
+    else if (__VLS_ctx.state?.roomMode === 'practice') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.requestNextRound) },
+            ref: "nextRoundTriggerRef",
+            ...{ class: "primary" },
+            type: "button",
+            'data-testid': "next-round-trigger",
+            disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.settlementTransitionPending !== null),
+        });
+        /** @type {typeof __VLS_ctx.nextRoundTriggerRef} */ ;
+        (!__VLS_ctx.settlementReady
+            ? "正在结算…"
+            : __VLS_ctx.settlementTransitionPending === "next_round"
+                ? "正在开始下一局…"
+                : "再练一局");
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.returnPracticeToModeSelection) },
+            ...{ class: "ghost" },
+            type: "button",
+            'data-testid': "practice-return-to-modes",
+            disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.settlementTransitionPending !== null),
+        });
+        if (__VLS_ctx.settlementTransitionPending === 'next_round') {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "host-actions-hint" },
+                'data-testid': "settlement-transition-status",
+                role: "status",
+                'aria-live': "polite",
+            });
+        }
+    }
     else if (__VLS_ctx.isHost) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestNextRound) },
@@ -4188,6 +4233,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
@@ -4356,6 +4404,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             trapRulesFocus: trapRulesFocus,
             requestNextRound: requestNextRound,
             rematchQuickTable: rematchQuickTable,
+            returnPracticeToModeSelection: returnPracticeToModeSelection,
             cancelNextRound: cancelNextRound,
             confirmNextRound: confirmNextRound,
             trapNextRoundFocus: trapNextRoundFocus,

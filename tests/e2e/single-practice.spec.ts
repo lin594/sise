@@ -133,7 +133,7 @@ test("practice settlement stays readable and reachable on legacy phones", async 
 
   await expect(page.getByText(/胡牌结算|流局结算/)).toBeVisible();
   const settlementPanel = page.getByTestId("settlement-panel");
-  const nextRoundButton = page.getByRole("button", { name: /下一局（房主）|正在结算…/ });
+  const nextRoundButton = page.getByRole("button", { name: /再练一局|正在结算…/ });
   if (await page.getByTestId("settlement-loading").isVisible().catch(() => false)) {
     await expect(settlementPanel).toHaveAttribute("aria-busy", "true");
     await expect(nextRoundButton).toBeDisabled();
@@ -153,8 +153,8 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   expect(await settlementItems.evaluateAll((items) => items.every((item) => !item.hasAttribute("open")))).toBe(true);
   await expect(page.getByText(/最后动作/)).toHaveCount(0);
   await expect(page.getByTestId("game-tools")).toBeVisible();
-  await expect(page.getByRole("button", { name: "下一局（房主）" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "全桌返回大厅（房主）" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "再练一局" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "返回玩法选择" })).toBeEnabled();
 
   await settlementSummaries.first().click();
   await expect(settlementItems.first()).toHaveAttribute("open", "");
@@ -305,31 +305,6 @@ test("practice settlement stays readable and reachable on legacy phones", async 
     actionsDoNotCoverDetails: true,
   });
   await page.screenshot({ path: testInfo.outputPath("legacy-portrait-settlement.png") });
-  const returnLobbyTrigger = page.getByTestId("return-lobby-trigger");
-  await returnLobbyTrigger.click();
-  const returnLobbyDialog = page.getByRole("dialog", { name: "让全桌返回大厅？" });
-  await expect(returnLobbyDialog).toBeVisible();
-  const returnDialogGeometry = await returnLobbyDialog.evaluate((dialog) => {
-    const rect = dialog.getBoundingClientRect();
-    return {
-      withinViewport:
-        rect.left >= 0 &&
-        rect.right <= window.innerWidth &&
-        rect.top >= 0 &&
-        rect.bottom <= window.innerHeight,
-    };
-  });
-  expect(returnDialogGeometry.withinViewport).toBe(true);
-  await expect(page.getByTestId("cancel-table-return")).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByTestId("confirm-table-return")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByTestId("cancel-table-return")).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(returnLobbyDialog).toHaveCount(0);
-  await expect(returnLobbyTrigger).toBeFocused();
-  await expect(settlementPanel).toBeVisible();
-
   await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
   await expect.poll(() => settlementItems.evaluateAll((items) => items.every((item) => item.hasAttribute("open")))).toBe(true);
@@ -356,4 +331,15 @@ test("practice settlement stays readable and reachable on legacy phones", async 
     detailsAboveActions: true,
   });
   await page.screenshot({ path: testInfo.outputPath("desktop-settlement.png") });
+
+  await page.getByTestId("practice-return-to-modes").click();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
+  await expect(page.getByTestId("mode-quick_match")).toBeVisible();
+  await expect(page.getByTestId("mode-friends")).toBeVisible();
+  await expect(page.getByTestId("return-lobby-trigger")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    roomId: localStorage.getItem("four_room_id"),
+    tokens: Object.keys(localStorage).filter((key) => key.startsWith("four_player_token")),
+  }))).toEqual({ roomId: null, tokens: [] });
 });

@@ -461,6 +461,36 @@
             </button>
             <p class="host-actions-hint">只为你寻找下一桌，不会让其他牌友离开当前结算。</p>
           </template>
+          <template v-else-if="state?.roomMode === 'practice'">
+            <button
+              ref="nextRoundTriggerRef"
+              class="primary"
+              type="button"
+              data-testid="next-round-trigger"
+              :disabled="!settlementReady || settlementTransitionPending !== null"
+              @click="requestNextRound"
+            >
+              {{ !settlementReady
+                ? "正在结算…"
+                : settlementTransitionPending === "next_round"
+                ? "正在开始下一局…"
+                : "再练一局" }}
+            </button>
+            <button
+              class="ghost"
+              type="button"
+              data-testid="practice-return-to-modes"
+              :disabled="!settlementReady || settlementTransitionPending !== null"
+              @click="returnPracticeToModeSelection"
+            >返回玩法选择</button>
+            <p
+              v-if="settlementTransitionPending === 'next_round'"
+              class="host-actions-hint"
+              data-testid="settlement-transition-status"
+              role="status"
+              aria-live="polite"
+            >下一局请求已发送，请稍候</p>
+          </template>
           <template v-else-if="isHost">
             <button
               ref="nextRoundTriggerRef"
@@ -1567,7 +1597,9 @@ function submitSettlementTransition(transition: SettlementTransition): boolean {
   globalError.value = "";
   const sent = transition === "next_round" ? nextRound() : returnLobby();
   if (!sent) {
-    globalError.value = "网络未连接，整桌操作没有发送，请稍候重试。";
+    globalError.value = state.value?.roomMode === "practice"
+      ? "网络未连接，下一局请求没有发送，请稍候重试。"
+      : "网络未连接，整桌操作没有发送，请稍候重试。";
     return false;
   }
   settlementTransitionPending.value = transition;
@@ -1582,7 +1614,9 @@ function submitSettlementTransition(transition: SettlementTransition): boolean {
       return;
     }
     settlementTransitionPending.value = null;
-    globalError.value = "暂未确认整桌操作，请再点一次。";
+    globalError.value = state.value?.roomMode === "practice"
+      ? "暂未确认下一局，请再点一次。"
+      : "暂未确认整桌操作，请再点一次。";
   }, 8_000);
   return true;
 }
@@ -1622,6 +1656,19 @@ async function rematchQuickTable(): Promise<void> {
   } finally {
     quickRematchPending.value = false;
   }
+}
+
+async function returnPracticeToModeSelection(): Promise<void> {
+  if (
+    !settlementReady.value ||
+    state.value?.roomMode !== "practice" ||
+    state.value?.phase !== "ended" ||
+    settlementTransitionPending.value !== null
+  ) {
+    return;
+  }
+  await handleLeaveRoom();
+  enteredFrontLobby.value = true;
 }
 
 function cancelNextRound(): void {

@@ -72,13 +72,13 @@ async function releaseSocketMessages(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
-test("next round locks both table-wide actions and recovers after no receipt", async ({ page }) => {
+test("practice next round locks settlement actions and recovers after no receipt", async ({ page }) => {
   test.setTimeout(60_000);
   await reachPracticeSettlement(page);
   await holdSocketMessage(page, "next_round");
 
   const nextRound = page.getByTestId("next-round-trigger");
-  const returnLobby = page.getByTestId("return-lobby-trigger");
+  const returnToModes = page.getByTestId("practice-return-to-modes");
   await nextRound.evaluate((button) => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -87,14 +87,14 @@ test("next round locks both table-wide actions and recovers after no receipt", a
   await expect.poll(() => heldMessageCount(page)).toBe(1);
   await expect(nextRound).toBeDisabled();
   await expect(nextRound).toHaveText("正在开始下一局…");
-  await expect(returnLobby).toBeDisabled();
-  await expect(page.getByTestId("settlement-transition-status")).toHaveText("整桌请求已发送，请稍候");
+  await expect(returnToModes).toBeDisabled();
+  await expect(page.getByTestId("settlement-transition-status")).toHaveText("下一局请求已发送，请稍候");
 
-  await expect(page.getByRole("alert")).toHaveText("暂未确认整桌操作，请再点一次。", {
+  await expect(page.getByRole("alert")).toHaveText("暂未确认下一局，请再点一次。", {
     timeout: 10_000,
   });
   await expect(nextRound).toBeEnabled();
-  await expect(returnLobby).toBeEnabled();
+  await expect(returnToModes).toBeEnabled();
   await nextRound.click();
   await expect.poll(() => heldMessageCount(page)).toBe(2);
 
@@ -102,25 +102,16 @@ test("next round locks both table-wide actions and recovers after no receipt", a
   await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
 });
 
-test("confirmed return to lobby submits once and shows stable progress", async ({ page }) => {
+test("practice settlement returns personally to the complete mode picker", async ({ page }) => {
   test.setTimeout(60_000);
   await reachPracticeSettlement(page);
-  await page.getByTestId("return-lobby-trigger").click();
   await holdSocketMessage(page, "return_lobby");
-
-  const confirm = page.getByTestId("confirm-table-return");
-  await confirm.evaluate((button) => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  });
-
-  await expect.poll(() => heldMessageCount(page)).toBe(1);
-  await expect(page.getByTestId("next-round-trigger")).toBeDisabled();
-  await expect(page.getByTestId("return-lobby-trigger")).toBeDisabled();
-  await expect(page.getByTestId("return-lobby-trigger")).toHaveText("正在返回房间大厅…");
-  await expect(page.getByTestId("settlement-transition-status")).toHaveText("整桌请求已发送，请稍候");
-
-  await releaseSocketMessages(page);
-  await expect(page.getByRole("heading", { name: "房间准备中" })).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId("practice-return-to-modes").click();
+  await expect.poll(() => heldMessageCount(page)).toBe(0);
+  await expect(page.getByText("游戏模式选择")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
+  await expect(page.getByTestId("mode-quick_match")).toBeVisible();
+  await expect(page.getByTestId("mode-friends")).toBeVisible();
   await expect(page.getByTestId("settlement-panel")).toHaveCount(0);
+  await releaseSocketMessages(page);
 });

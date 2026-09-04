@@ -267,7 +267,7 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
   };
 
   while (Date.now() < deadline) {
-    const nextRound = page.getByRole("button", { name: "下一局（房主）" });
+    const nextRound = page.getByRole("button", { name: /下一局（房主）|再练一局/ });
     if ((await nextRound.isVisible().catch(() => false)) && (await nextRound.isEnabled().catch(() => false))) {
       await nextRound.click();
       await page.waitForTimeout(180);
