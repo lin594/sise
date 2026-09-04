@@ -1281,11 +1281,16 @@ test.describe("compact landscape gameplay", () => {
     await expect(discardConfirm).toHaveText(`打出${selectedCardLabel}`);
     await expect(discardConfirm).toHaveAttribute("aria-label", `打出${selectedCardLabel}`);
     const gameSettings = page.getByTestId("game-settings");
-    await expect(gameSettings).toBeDisabled();
+    await expect(gameSettings).toBeEnabled();
     await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
-    await expect(gameSettings).toHaveAttribute("title", "完成当前操作后可打开设置");
-    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
+    await expect(gameSettings).toHaveAttribute("title", "牌局设置");
+    await gameSettings.click();
+    await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("settings-return-to-decision").click();
+    await expect(selectedCard).toBeFocused();
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-selected-card.png") });
     const discardButtonRect = await discardConfirm.evaluate((button) => {
       const rect = button.getBoundingClientRect();
@@ -1349,7 +1354,7 @@ test.describe("compact landscape gameplay", () => {
     expect(waitingHandState.minimumOpacity).toBeGreaterThanOrEqual(0.95);
     expect(waitingHandState.labels.every((label) => label.endsWith("当前无需选牌"))).toBe(true);
     const visibleFlows = page.locator(".flow-card");
-    await expect.poll(() => visibleFlows.count(), { timeout: 5_000 }).toBeGreaterThan(0);
+    await expect(visibleFlows).toHaveCount(4);
     await expect(page.getByText("暂无流水", { exact: true })).toHaveCount(0);
     const flowMetrics = await visibleFlows.evaluateAll((flows) => flows.map((flow) => {
       const title = flow.querySelector<HTMLElement>("p")!;
@@ -1360,7 +1365,7 @@ test.describe("compact landscape gameplay", () => {
         titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
       };
     }));
-    expect(flowMetrics.every((flow) => flow.cardCount > 0)).toBe(true);
+    expect(flowMetrics.some((flow) => flow.cardCount > 0)).toBe(true);
     expect(flowMetrics.every((flow) => flow.label?.startsWith("流水："))).toBe(true);
     expect(flowMetrics.every((flow) => flow.title?.includes(" → "))).toBe(true);
     expect(Math.min(...flowMetrics.map((flow) => flow.titleFontSize))).toBeGreaterThanOrEqual(12);

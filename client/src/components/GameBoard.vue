@@ -7,20 +7,23 @@
   >
     <div class="table" ref="tableRef">
       <section
-        v-if="leftPlayer && flowCardCount(leftPlayer.clientId)"
+        v-if="flowTopLeftPlayer"
         class="flow-card flow-top-left"
-        :aria-label="flowAccessibleTitle(leftPlayer.clientId)"
+        :class="{ 'flow-empty': flowCardCount(flowTopLeftPlayer.clientId) === 0 }"
+        data-flow-lane="top-left"
+        :data-flow-receiver-id="flowTopLeftPlayer.clientId"
+        :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(leftPlayer.clientId) }}</p>
+        <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
         <div class="discard-strip">
           <CardComp
-            v-for="(card, index) in visibleFlowCards(leftPlayer.clientId)"
+            v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
             :card="card"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
-            :class="{ active: isActiveDiscardCard(leftPlayer.clientId, card, index) }"
+            :class="{ active: isActiveDiscardCard(flowTopLeftPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
           />
         </div>
@@ -101,20 +104,23 @@
       </section>
 
       <section
-        v-if="topPlayer && flowCardCount(topPlayer.clientId)"
+        v-if="flowTopRightPlayer"
         class="flow-card flow-top-right"
-        :aria-label="flowAccessibleTitle(topPlayer.clientId)"
+        :class="{ 'flow-empty': flowCardCount(flowTopRightPlayer.clientId) === 0 }"
+        data-flow-lane="top-right"
+        :data-flow-receiver-id="flowTopRightPlayer.clientId"
+        :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(topPlayer.clientId) }}</p>
+        <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
         <div class="discard-strip">
           <CardComp
-            v-for="(card, index) in visibleFlowCards(topPlayer.clientId)"
+            v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
             :card="card"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
-            :class="{ active: isActiveDiscardCard(topPlayer.clientId, card, index) }"
+            :class="{ active: isActiveDiscardCard(flowTopRightPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
           />
         </div>
@@ -345,20 +351,23 @@
       </section>
 
       <section
-        v-if="selfPlayer && flowCardCount(selfPlayer.clientId)"
+        v-if="flowBottomLeftPlayer"
         class="flow-card flow-bottom-left"
-        :aria-label="flowAccessibleTitle(selfPlayer.clientId)"
+        :class="{ 'flow-empty': flowCardCount(flowBottomLeftPlayer.clientId) === 0 }"
+        data-flow-lane="bottom-left"
+        :data-flow-receiver-id="flowBottomLeftPlayer.clientId"
+        :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(selfPlayer.clientId) }}</p>
+        <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
         <div class="discard-strip">
           <CardComp
-            v-for="(card, index) in visibleFlowCards(selfPlayer.clientId)"
+            v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
             :card="card"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
-            :class="{ active: isActiveDiscardCard(selfPlayer.clientId, card, index) }"
+            :class="{ active: isActiveDiscardCard(flowBottomLeftPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
           />
         </div>
@@ -397,20 +406,23 @@
       </section>
 
       <section
-        v-if="rightPlayer && flowCardCount(rightPlayer.clientId)"
+        v-if="flowBottomRightPlayer"
         class="flow-card flow-bottom-right"
-        :aria-label="flowAccessibleTitle(rightPlayer.clientId)"
+        :class="{ 'flow-empty': flowCardCount(flowBottomRightPlayer.clientId) === 0 }"
+        data-flow-lane="bottom-right"
+        :data-flow-receiver-id="flowBottomRightPlayer.clientId"
+        :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(rightPlayer.clientId) }}</p>
+        <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
         <div class="discard-strip">
           <CardComp
-            v-for="(card, index) in visibleFlowCards(rightPlayer.clientId)"
+            v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
             :card="card"
             :mode="props.tableCardMode"
             size="xs"
             class="discard-token"
-            :class="{ active: isActiveDiscardCard(rightPlayer.clientId, card, index) }"
+            :class="{ active: isActiveDiscardCard(flowBottomRightPlayer.clientId, card, index) }"
             :title="cardLabel(card)"
           />
         </div>
@@ -741,10 +753,10 @@ function shouldConcealOpeningHand(): boolean {
   return props.state?.phase === "waiting" || isOpeningDealIntroState();
 }
 
-const orderedPlayers = computed<PlayerState[]>(() => {
+const seatOrderedPlayers = computed<PlayerState[]>(() => {
   // 房间中的 Map 插入顺序会随加入、换座和机器人补位而变化，不能代表
-  // A→B→C→D 的权威座次。先按服务端 seatIndex 排序，再围绕本人旋转。
-  const list = [...(props.players ?? [])].sort((left, right) => {
+  // A→B→C→D 的权威座次。
+  return [...(props.players ?? [])].sort((left, right) => {
     const leftSeat = Number.isInteger(left.seatIndex) && left.seatIndex >= 0
       ? left.seatIndex
       : Number.MAX_SAFE_INTEGER;
@@ -753,6 +765,11 @@ const orderedPlayers = computed<PlayerState[]>(() => {
       : Number.MAX_SAFE_INTEGER;
     return leftSeat - rightSeat || left.clientId.localeCompare(right.clientId);
   });
+});
+
+const orderedPlayers = computed<PlayerState[]>(() => {
+  // 围绕本人旋转仅服务于视觉座位，不改变权威座次环。
+  const list = seatOrderedPlayers.value;
   if (!list.length) {
     return [];
   }
@@ -770,6 +787,18 @@ const rightPlayer = computed<PlayerState | null>(() =>
 );
 const leftPlayer = computed<PlayerState | null>(() =>
   props.seatDirection === "clockwise" ? orderedPlayers.value[1] ?? null : orderedPlayers.value[3] ?? null,
+);
+const flowTopLeftPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? topPlayer.value : leftPlayer.value,
+);
+const flowTopRightPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? rightPlayer.value : topPlayer.value,
+);
+const flowBottomLeftPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? leftPlayer.value : selfPlayer.value,
+);
+const flowBottomRightPlayer = computed<PlayerState | null>(() =>
+  props.seatDirection === "clockwise" ? selfPlayer.value : rightPlayer.value,
 );
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
@@ -804,6 +833,9 @@ let dealRunSeq = 0;
 let dealFrame: number | null = null;
 let preparedDealRoundKey = "";
 let presentedDealRoundKey = "";
+let animatedActionRoundKey = "";
+const animatedActionKeys = new Set<string>();
+const animatedSemanticActionKeys = new Set<string>();
 let dealerTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -970,7 +1002,7 @@ const responseCard = computed<Card | null>(() => {
 });
 
 function getPreviousPlayer(playerId: string): PlayerState | null {
-  const list = props.players ?? [];
+  const list = seatOrderedPlayers.value;
   const idx = list.findIndex((player) => player.clientId === playerId);
   if (idx < 0 || list.length === 0) {
     return null;
@@ -979,7 +1011,7 @@ function getPreviousPlayer(playerId: string): PlayerState | null {
 }
 
 function getNextPlayer(playerId: string): PlayerState | null {
-  const list = props.players ?? [];
+  const list = seatOrderedPlayers.value;
   const idx = list.findIndex((player) => player.clientId === playerId);
   if (idx < 0 || list.length === 0) {
     return null;
@@ -1862,6 +1894,43 @@ function currentDealRoundKey(): string {
   return `${roomId}:${roundNumber}`;
 }
 
+function currentAnimationRoundKey(): string {
+  const roomId = String(props.state?.roomId ?? "room");
+  const completedRounds = Math.max(0, Number(props.state?.completedRounds ?? 0));
+  const roundNumber = props.state?.phase === "ended" ? Math.max(1, completedRounds) : completedRounds + 1;
+  return `${roomId}:${roundNumber}`;
+}
+
+function shouldAnimateAuthoritativeAction(action: string): boolean {
+  const roundKey = currentAnimationRoundKey();
+  if (roundKey !== animatedActionRoundKey) {
+    animatedActionRoundKey = roundKey;
+    animatedActionKeys.clear();
+    animatedSemanticActionKeys.clear();
+  }
+  const targetCardId = String(
+    (/^DEALER(?:_PICK|_CARD)?\b/.test(action) ? props.state?.dealerCard?.id : "") ||
+    props.state?.responseCard?.id ||
+    props.state?.targetCard?.id ||
+    "",
+  );
+  const revision = Math.max(0, Number(props.state?.stateRevision ?? 0));
+  const key = `${revision}|${action}|${targetCardId}`;
+  const semanticKey = `${action}|${targetCardId}`;
+  if (animatedActionKeys.has(key) || animatedSemanticActionKeys.has(semanticKey)) {
+    return false;
+  }
+  animatedActionKeys.add(key);
+  animatedSemanticActionKeys.add(semanticKey);
+  if (animatedActionKeys.size > 64) {
+    animatedActionKeys.delete(animatedActionKeys.values().next().value as string);
+  }
+  if (animatedSemanticActionKeys.size > 64) {
+    animatedSemanticActionKeys.delete(animatedSemanticActionKeys.values().next().value as string);
+  }
+  return true;
+}
+
 function clearDealAnimationRuntime(revealFullHand = true): void {
   dealRunSeq += 1;
   if (dealFrame !== null) {
@@ -2064,8 +2133,15 @@ onUnmounted(() => {
 // mount hook incorrectly started a complete deal here and DEALER started a
 // second one a moment later.
 watch(
-  () => props.state?.lastAction,
-  (action) => {
+  () => [
+    Number(props.state?.stateRevision ?? 0),
+    String(props.state?.lastAction ?? ""),
+    String(props.state?.responseCard?.id ?? props.state?.targetCard?.id ?? props.state?.dealerCard?.id ?? ""),
+  ] as const,
+  ([, action]) => {
+    if (!action || !shouldAnimateAuthoritativeAction(action)) {
+      return;
+    }
     const roundKey = currentDealRoundKey();
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
@@ -2300,12 +2376,23 @@ watch(
 .self-info-card.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
-  animation: seat-turn-pulse 1.45s ease-in-out infinite;
 }
 
 .player-card.actor-flash,
 .self-info-card.actor-flash {
-  animation: actor-flash 0.8s ease-out;
+  isolation: isolate;
+}
+
+.player-card.actor-flash::after,
+.self-info-card.actor-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 3px solid rgba(56, 189, 248, 0.86);
+  border-radius: inherit;
+  animation: actor-flash 0.72s ease-out both;
 }
 
 .player-card.dealer,
@@ -2319,6 +2406,22 @@ watch(
   flex-direction: column;
   gap: 0.35rem;
   overflow: auto;
+  contain: layout paint;
+}
+
+.flow-card.flow-empty {
+  background: rgba(11, 18, 32, 0.48);
+  border-color: rgba(51, 65, 85, 0.7);
+}
+
+.flow-top-left,
+.flow-bottom-left {
+  border-left-color: rgba(56, 189, 248, 0.68);
+}
+
+.flow-top-right,
+.flow-bottom-right {
+  border-right-color: rgba(251, 191, 36, 0.68);
 }
 
 .flow-card p,
@@ -2625,7 +2728,7 @@ watch(
   border: 2px solid rgba(15, 23, 42, 0.45);
   flex: 0 0 auto;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease, border-color 0.18s ease;
 }
 
 .discard-token.mode-large {
@@ -2655,7 +2758,6 @@ watch(
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: flow-active-glow 1.35s linear infinite;
   pointer-events: none;
 }
 
@@ -3160,7 +3262,6 @@ watch(
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
   background: linear-gradient(180deg, rgba(8, 26, 19, 0.9), rgba(11, 18, 32, 0.95));
-  animation: self-turn-pulse 1.15s ease-in-out infinite;
 }
 
 .self-zone.dealer {
@@ -3169,7 +3270,7 @@ watch(
 }
 
 .self-zone.actor-flash {
-  animation: actor-flash 0.8s ease-out;
+  isolation: isolate;
 }
 
 .self-turn-arrow {
@@ -3386,7 +3487,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3408,19 +3509,16 @@ watch(
 .hand-card.discard-selected {
   z-index: 2;
   transform: translateY(-5px);
-  filter: drop-shadow(0 7px 6px rgba(2, 132, 199, 0.38));
   box-shadow: 0 0 0 2px #38bdf8;
 }
 
 .hand-card.blocked {
   opacity: 0.72;
   cursor: not-allowed;
-  filter: saturate(0.72);
 }
 
 .hand-card.gold-blocked {
   opacity: 0.78;
-  filter: saturate(0.82);
 }
 
 .hand-card.candidate-active {
@@ -3772,16 +3870,6 @@ watch(
   }
 }
 
-@keyframes seat-turn-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
-  }
-  50% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.8) inset, 0 0 18px rgba(34, 197, 94, 0.25);
-  }
-}
-
 @keyframes dealer-panel-arrive {
   0% {
     transform: translateY(-8px) scale(0.92);
@@ -3796,11 +3884,11 @@ watch(
 @keyframes dealer-card-wait {
   0% {
     transform: translateY(1px) rotate(-1deg);
-    filter: brightness(0.92);
+    opacity: 0.9;
   }
   100% {
     transform: translateY(-3px) rotate(1deg);
-    filter: brightness(1.08);
+    opacity: 1;
   }
 }
 
@@ -3819,16 +3907,6 @@ watch(
   }
 }
 
-@keyframes self-turn-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
-  }
-  50% {
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.85) inset, 0 0 22px rgba(34, 197, 94, 0.22);
-  }
-}
-
 @keyframes turn-arrow-bounce {
   0%,
   100% {
@@ -3843,10 +3921,12 @@ watch(
 
 @keyframes actor-flash {
   0% {
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.88);
+    transform: scale(0.96);
+    opacity: 1;
   }
   100% {
-    box-shadow: 0 0 0 14px rgba(56, 189, 248, 0);
+    transform: scale(1.08);
+    opacity: 0;
   }
 }
 
@@ -3861,15 +3941,6 @@ watch(
   100% {
     transform: translate(var(--ex), var(--ey)) scale(1);
     opacity: 1;
-  }
-}
-
-@keyframes flow-active-glow {
-  0% {
-    filter: hue-rotate(0deg);
-  }
-  100% {
-    filter: hue-rotate(360deg);
   }
 }
 

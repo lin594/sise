@@ -681,7 +681,18 @@ function openRules() {
 }
 function returnToDecision() {
     decisionControlFocusPending = true;
-    void nextTick(focusReadyGameControl);
+    void nextTick(() => {
+        if (focusReadyGameControl()) {
+            return;
+        }
+        // The settings/rules leave transition briefly remains aria-modal. Retry
+        // after that compositor-only transition instead of dropping focus.
+        window.setTimeout(() => {
+            if (decisionControlFocusPending && settingsDecisionActive.value) {
+                focusReadyGameControl();
+            }
+        }, 220);
+    });
 }
 function returnToDecisionFromRules() {
     closeRules(false);

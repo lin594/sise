@@ -12,10 +12,10 @@ function isOpeningDealIntroState() {
 function shouldConcealOpeningHand() {
     return props.state?.phase === "waiting" || isOpeningDealIntroState();
 }
-const orderedPlayers = computed(() => {
+const seatOrderedPlayers = computed(() => {
     // 房间中的 Map 插入顺序会随加入、换座和机器人补位而变化，不能代表
-    // A→B→C→D 的权威座次。先按服务端 seatIndex 排序，再围绕本人旋转。
-    const list = [...(props.players ?? [])].sort((left, right) => {
+    // A→B→C→D 的权威座次。
+    return [...(props.players ?? [])].sort((left, right) => {
         const leftSeat = Number.isInteger(left.seatIndex) && left.seatIndex >= 0
             ? left.seatIndex
             : Number.MAX_SAFE_INTEGER;
@@ -24,6 +24,10 @@ const orderedPlayers = computed(() => {
             : Number.MAX_SAFE_INTEGER;
         return leftSeat - rightSeat || left.clientId.localeCompare(right.clientId);
     });
+});
+const orderedPlayers = computed(() => {
+    // 围绕本人旋转仅服务于视觉座位，不改变权威座次环。
+    const list = seatOrderedPlayers.value;
     if (!list.length) {
         return [];
     }
@@ -37,6 +41,10 @@ const selfPlayer = computed(() => orderedPlayers.value[0] ?? null);
 const topPlayer = computed(() => orderedPlayers.value[2] ?? null);
 const rightPlayer = computed(() => props.seatDirection === "clockwise" ? orderedPlayers.value[3] ?? null : orderedPlayers.value[1] ?? null);
 const leftPlayer = computed(() => props.seatDirection === "clockwise" ? orderedPlayers.value[1] ?? null : orderedPlayers.value[3] ?? null);
+const flowTopLeftPlayer = computed(() => props.seatDirection === "clockwise" ? topPlayer.value : leftPlayer.value);
+const flowTopRightPlayer = computed(() => props.seatDirection === "clockwise" ? rightPlayer.value : topPlayer.value);
+const flowBottomLeftPlayer = computed(() => props.seatDirection === "clockwise" ? leftPlayer.value : selfPlayer.value);
+const flowBottomRightPlayer = computed(() => props.seatDirection === "clockwise" ? selfPlayer.value : rightPlayer.value);
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
 const locallyAnimatedDiscardCardId = ref(null);
@@ -68,6 +76,9 @@ let dealRunSeq = 0;
 let dealFrame = null;
 let preparedDealRoundKey = "";
 let presentedDealRoundKey = "";
+let animatedActionRoundKey = "";
+const animatedActionKeys = new Set();
+const animatedSemanticActionKeys = new Set();
 let dealerTimer = null;
 let dealerIntroTimer = null;
 let flashTimer = null;
@@ -214,7 +225,7 @@ const responseCard = computed(() => {
     return collective ? latestDiscardFromAction.value : null;
 });
 function getPreviousPlayer(playerId) {
-    const list = props.players ?? [];
+    const list = seatOrderedPlayers.value;
     const idx = list.findIndex((player) => player.clientId === playerId);
     if (idx < 0 || list.length === 0) {
         return null;
@@ -222,7 +233,7 @@ function getPreviousPlayer(playerId) {
     return list[(idx - 1 + list.length) % list.length] ?? null;
 }
 function getNextPlayer(playerId) {
-    const list = props.players ?? [];
+    const list = seatOrderedPlayers.value;
     const idx = list.findIndex((player) => player.clientId === playerId);
     if (idx < 0 || list.length === 0) {
         return null;
@@ -1013,6 +1024,39 @@ function currentDealRoundKey() {
     const roundNumber = Math.max(1, Number(props.state?.completedRounds ?? 0) + 1);
     return `${roomId}:${roundNumber}`;
 }
+function currentAnimationRoundKey() {
+    const roomId = String(props.state?.roomId ?? "room");
+    const completedRounds = Math.max(0, Number(props.state?.completedRounds ?? 0));
+    const roundNumber = props.state?.phase === "ended" ? Math.max(1, completedRounds) : completedRounds + 1;
+    return `${roomId}:${roundNumber}`;
+}
+function shouldAnimateAuthoritativeAction(action) {
+    const roundKey = currentAnimationRoundKey();
+    if (roundKey !== animatedActionRoundKey) {
+        animatedActionRoundKey = roundKey;
+        animatedActionKeys.clear();
+        animatedSemanticActionKeys.clear();
+    }
+    const targetCardId = String((/^DEALER(?:_PICK|_CARD)?\b/.test(action) ? props.state?.dealerCard?.id : "") ||
+        props.state?.responseCard?.id ||
+        props.state?.targetCard?.id ||
+        "");
+    const revision = Math.max(0, Number(props.state?.stateRevision ?? 0));
+    const key = `${revision}|${action}|${targetCardId}`;
+    const semanticKey = `${action}|${targetCardId}`;
+    if (animatedActionKeys.has(key) || animatedSemanticActionKeys.has(semanticKey)) {
+        return false;
+    }
+    animatedActionKeys.add(key);
+    animatedSemanticActionKeys.add(semanticKey);
+    if (animatedActionKeys.size > 64) {
+        animatedActionKeys.delete(animatedActionKeys.values().next().value);
+    }
+    if (animatedSemanticActionKeys.size > 64) {
+        animatedSemanticActionKeys.delete(animatedSemanticActionKeys.values().next().value);
+    }
+    return true;
+}
 function clearDealAnimationRuntime(revealFullHand = true) {
     dealRunSeq += 1;
     if (dealFrame !== null) {
@@ -1196,7 +1240,14 @@ onUnmounted(() => {
 // Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
 // mount hook incorrectly started a complete deal here and DEALER started a
 // second one a moment later.
-watch(() => props.state?.lastAction, (action) => {
+watch(() => [
+    Number(props.state?.stateRevision ?? 0),
+    String(props.state?.lastAction ?? ""),
+    String(props.state?.responseCard?.id ?? props.state?.targetCard?.id ?? props.state?.dealerCard?.id ?? ""),
+], ([, action]) => {
+    if (!action || !shouldAnimateAuthoritativeAction(action)) {
+        return;
+    }
     const roundKey = currentDealRoundKey();
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
@@ -1313,11 +1364,20 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
@@ -1581,19 +1641,22 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "tableRef",
 });
 /** @type {typeof __VLS_ctx.tableRef} */ ;
-if (__VLS_ctx.leftPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.leftPlayer.clientId)) {
+if (__VLS_ctx.flowTopLeftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-top-left" },
-        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.leftPlayer.clientId)),
+        ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowTopLeftPlayer.clientId) === 0 }) },
+        'data-flow-lane': "top-left",
+        'data-flow-receiver-id': (__VLS_ctx.flowTopLeftPlayer.clientId),
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowTopLeftPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         'aria-hidden': "true",
     });
-    (__VLS_ctx.flowTitle(__VLS_ctx.leftPlayer.clientId));
+    (__VLS_ctx.flowTitle(__VLS_ctx.flowTopLeftPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
     });
-    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.leftPlayer.clientId)))) {
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
         const __VLS_0 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -1602,7 +1665,7 @@ if (__VLS_ctx.leftPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.leftPlayer.clientI
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
         const __VLS_1 = __VLS_0({
@@ -1611,7 +1674,7 @@ if (__VLS_ctx.leftPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.leftPlayer.clientI
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.leftPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }, ...__VLS_functionalComponentArgsRest(__VLS_0));
     }
@@ -1753,19 +1816,22 @@ if (__VLS_ctx.topPlayer) {
         }
     }
 }
-if (__VLS_ctx.topPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.topPlayer.clientId)) {
+if (__VLS_ctx.flowTopRightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-top-right" },
-        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.topPlayer.clientId)),
+        ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowTopRightPlayer.clientId) === 0 }) },
+        'data-flow-lane': "top-right",
+        'data-flow-receiver-id': (__VLS_ctx.flowTopRightPlayer.clientId),
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowTopRightPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         'aria-hidden': "true",
     });
-    (__VLS_ctx.flowTitle(__VLS_ctx.topPlayer.clientId));
+    (__VLS_ctx.flowTitle(__VLS_ctx.flowTopRightPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
     });
-    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.topPlayer.clientId)))) {
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
         const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -1774,7 +1840,7 @@ if (__VLS_ctx.topPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.topPlayer.clientId)
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
         const __VLS_10 = __VLS_9({
@@ -1783,7 +1849,7 @@ if (__VLS_ctx.topPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.topPlayer.clientId)
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.topPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }, ...__VLS_functionalComponentArgsRest(__VLS_9));
     }
@@ -2205,19 +2271,22 @@ if (__VLS_ctx.rightPlayer) {
         }
     }
 }
-if (__VLS_ctx.selfPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientId)) {
+if (__VLS_ctx.flowBottomLeftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-bottom-left" },
-        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.selfPlayer.clientId)),
+        ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowBottomLeftPlayer.clientId) === 0 }) },
+        'data-flow-lane': "bottom-left",
+        'data-flow-receiver-id': (__VLS_ctx.flowBottomLeftPlayer.clientId),
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowBottomLeftPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         'aria-hidden': "true",
     });
-    (__VLS_ctx.flowTitle(__VLS_ctx.selfPlayer.clientId));
+    (__VLS_ctx.flowTitle(__VLS_ctx.flowBottomLeftPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
     });
-    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.selfPlayer.clientId)))) {
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
         const __VLS_31 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -2226,7 +2295,7 @@ if (__VLS_ctx.selfPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientI
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
         const __VLS_32 = __VLS_31({
@@ -2235,7 +2304,7 @@ if (__VLS_ctx.selfPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.selfPlayer.clientI
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.selfPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }, ...__VLS_functionalComponentArgsRest(__VLS_31));
     }
@@ -2292,19 +2361,22 @@ if (__VLS_ctx.selfPlayer) {
         }
     }
 }
-if (__VLS_ctx.rightPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clientId)) {
+if (__VLS_ctx.flowBottomRightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "flow-card flow-bottom-right" },
-        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.rightPlayer.clientId)),
+        ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowBottomRightPlayer.clientId) === 0 }) },
+        'data-flow-lane': "bottom-right",
+        'data-flow-receiver-id': (__VLS_ctx.flowBottomRightPlayer.clientId),
+        'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowBottomRightPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         'aria-hidden': "true",
     });
-    (__VLS_ctx.flowTitle(__VLS_ctx.rightPlayer.clientId));
+    (__VLS_ctx.flowTitle(__VLS_ctx.flowBottomRightPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
     });
-    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.rightPlayer.clientId)))) {
+    for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
         const __VLS_37 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -2313,7 +2385,7 @@ if (__VLS_ctx.rightPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clien
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
         const __VLS_38 = __VLS_37({
@@ -2322,7 +2394,7 @@ if (__VLS_ctx.rightPlayer && __VLS_ctx.flowCardCount(__VLS_ctx.rightPlayer.clien
             mode: (props.tableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
-            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.rightPlayer.clientId, card, index) }) },
+            ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }, ...__VLS_functionalComponentArgsRest(__VLS_37));
     }
@@ -2947,6 +3019,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             topPlayer: topPlayer,
             rightPlayer: rightPlayer,
             leftPlayer: leftPlayer,
+            flowTopLeftPlayer: flowTopLeftPlayer,
+            flowTopRightPlayer: flowTopRightPlayer,
+            flowBottomLeftPlayer: flowBottomLeftPlayer,
+            flowBottomRightPlayer: flowBottomRightPlayer,
             discardingCardId: discardingCardId,
             selectedDiscardCardId: selectedDiscardCardId,
             flights: flights,
