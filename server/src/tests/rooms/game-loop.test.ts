@@ -66,15 +66,17 @@ test("no-response on upper enters local_upper for next player", () => {
 
 test("local_upper human gets timeout countdown scheduled", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.localTimeoutMs = 1_000;
   room.pendingResponse = {
     ownerId: "B",
     card: mkCard("x", "red", "ju", "upper"),
     collectives: new Map(),
   };
   room.state.responsePhase = "local_upper";
+  const startedAt = Date.now();
   room.tickBots();
 
-  assert.equal(room.state.responseEndsAt > Date.now(), true);
+  assert.equal(room.state.responseEndsAt >= startedAt + 900, true);
   assert.equal(Boolean(room.collectiveTimer), true);
   room.clearCollectiveTimer();
 });
