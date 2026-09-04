@@ -1465,15 +1465,17 @@ function scrollHand(direction: "backward" | "forward"): void {
     return;
   }
   const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
-  hand.scrollBy({
-    left: direction === "forward" ? distance : -distance,
-    behavior: shouldReduceMotion(hand) ? "auto" : "smooth",
-  });
-  window.setTimeout(updateHandScrollState, 320);
-}
-
-function shouldReduceMotion(element: HTMLElement | null): boolean {
-  return Boolean(element?.closest(".reduce-motion")) || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
+  const target = Math.min(
+    maxScrollLeft,
+    Math.max(0, hand.scrollLeft + (direction === "forward" ? distance : -distance)),
+  );
+  // The explicit controls behave like page buttons: move a predictable chunk
+  // immediately, then announce the new range. Native touch dragging remains
+  // available on the scroller and does not need CSS snap points.
+  hand.scrollTo({ left: target, behavior: "auto" });
+  updateHandScrollState();
+  window.requestAnimationFrame(updateHandScrollState);
 }
 
 function observeHandScroller(hand: HTMLElement | null): void {
@@ -4164,7 +4166,6 @@ watch(
     align-items: center;
     align-content: center;
     padding: 0.08rem 0.08rem 0.25rem;
-    scroll-snap-type: x proximity;
     overscroll-behavior-inline: contain;
     touch-action: pan-x;
     scrollbar-width: thin;
@@ -4184,7 +4185,6 @@ watch(
 
   .hand-card {
     min-height: 0;
-    scroll-snap-align: start;
   }
 
   .hand :deep(.size-xl.mode-long) {
