@@ -102,6 +102,27 @@ test("active room recovery preserves authoritative and private state", () => {
   assert.equal(restored.roomId, "room-recovery-1");
   assert.equal(restored.state.phase, "playing");
   assert.equal(restored.state.lastAction, "seat_0 DRAW");
+  assert.equal(restored.state.hostPlayerId, "seat_0");
+  assert.equal(restored.state.dealerId, "seat_0");
+  assert.equal(restored.state.currentTurnPlayerId, "seat_0");
+  assert.equal(restored.state.deckCount, 2);
+  assert.deepEqual(
+    [...restored.state.publicDiscardPile].map((card: CardSchema) => card.id),
+    ["discard-1"],
+  );
+  assert.equal(restored.state.players.get("seat_0")?.cumulativeScore, 12);
+  assert.deepEqual(
+    [...(restored.state.players.get("seat_0")?.exposedArea ?? [])].map((card: CardSchema) => card.id),
+    ["exposed-1"],
+  );
+  assert.deepEqual(
+    [...(restored.state.players.get("seat_0")?.exposedGroupSizes ?? [])],
+    [3],
+  );
+  assert.deepEqual(
+    [...(restored.state.players.get("seat_0")?.exposedGroupKinds ?? [])],
+    ["chi"],
+  );
   assert.deepEqual(restored.playerOrder, ["seat_0", "seat_1"]);
   assert.deepEqual(restored.playerHands.get("seat_0"), source.playerHands.get("seat_0"));
   assert.deepEqual(restored.playerHands.get("seat_1"), source.playerHands.get("seat_1"));
