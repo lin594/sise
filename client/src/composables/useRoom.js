@@ -964,7 +964,7 @@ export function useRoom(playerName = "Player") {
         };
         decisionTimer.value = nextTimer;
     }
-    function applySnapshot(next) {
+    function applySnapshot(next, source = "schema") {
         // Access Proxy properties directly without calling toJSON() to avoid circular reference
         const rawSnapshot = next;
         if (Object.prototype.hasOwnProperty.call(rawSnapshot ?? {}, "privateHand") ||
@@ -973,6 +973,17 @@ export function useRoom(playerName = "Player") {
             privateStateAuthoritySeq += 1;
         }
         const normalized = normalizeSnapshot(next);
+        const previousSnapshot = state.value;
+        if (source === "schema" &&
+            previousSnapshot?.phase === "ended" &&
+            roundResult.value &&
+            normalized.phase !== "ended") {
+            // A complete room_snapshot and round_result can be handled before the
+            // matching Colyseus schema patch. Do not let an older in-flight schema
+            // view briefly reopen the finished round. The next real round/lobby
+            // transition also sends an explicit snapshot, which remains authoritative.
+            return;
+        }
         const snapshotServerNow = Number(rawSnapshot?.serverNow ?? 0);
         if (Number.isFinite(snapshotServerNow) && snapshotServerNow > 0) {
             matchClockSync.value = {
@@ -984,7 +995,6 @@ export function useRoom(playerName = "Player") {
             clearActionFeedback();
         }
         applyDecisionTimer(rawSnapshot?.decisionTimer);
-        const previousSnapshot = state.value;
         if (!normalized.dealerCard &&
             normalized.dealerId &&
             previousSnapshot?.dealerCard &&
@@ -1326,7 +1336,7 @@ export function useRoom(playerName = "Player") {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
-                applySnapshot(payload);
+                applySnapshot(payload, "explicit");
             });
             joined.onMessage("private_hand", (payload) => {
                 if (!isCurrentJoinedRoom()) {
