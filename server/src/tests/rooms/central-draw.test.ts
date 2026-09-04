@@ -11,6 +11,9 @@ function fixture() {
   room.state = new GameState();
   room.state.phase = "playing";
   room.state.roomMode = "friends";
+  // These deterministic flow tests assert synchronous resolution; timing
+  // privacy has a dedicated real-timer regression in game-loop.test.ts.
+  room.humanForcedPassDelayMs = 0;
   room.playerOrder = ["A", "B", "C", "D"];
   for (const id of room.playerOrder) {
     const player = new PlayerState(); player.clientId = id; player.name = id;

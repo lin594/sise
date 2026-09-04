@@ -50,6 +50,75 @@ test("collective order for upper starts from next and includes owner at tail", (
   assert.deepEqual(order, ["B", "C", "D", "A"]);
 });
 
+test("online human forced pass waits for the fairness window even after an early Pass", async () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.humanForcedPassDelayMs = 40;
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("fair-pass", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B"];
+  room.collectiveCursor = 0;
+  room.seatBySession.set("session-B", "B");
+  let resolved = false;
+  room.resolveCollectivePhase = () => {
+    resolved = true;
+  };
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-B",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  const startedAt = Date.now();
+  room.advanceCollectivePolling();
+  assert.equal(room.collectiveResponderId, "B");
+  assert.equal(room.pendingResponse.collectives.has("B"), false);
+  assert.equal(room.state.responseEndsAt >= startedAt + 30, true);
+  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
+
+  const decisionKey = room.buildDecisionTimerSnapshot("B").decisionKey;
+  room.handleAction(client, { action: "pass", decisionKey });
+  assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "pass", candidateId: undefined });
+  assert.equal(resolved, false);
+  assert.equal(room.collectiveCursor, 0);
+  assert.equal(sent.some((message) => message.event === "action_received"), true);
+
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.equal(resolved, false);
+  await new Promise((resolve) => setTimeout(resolve, 45));
+  assert.equal(resolved, true);
+  assert.equal(room.collectiveCursor, 1);
+  assert.equal(room.state.lastAction, "B PASS");
+});
+
+test("a private preselection cannot make a human responder vanish instantly", async () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.humanForcedPassDelayMs = 35;
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("fair-preselect", "red", "ju", "upper"),
+    collectives: new Map([["B", { action: "peng", candidateId: "reserved-peng" }]]),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B"];
+  room.collectiveCursor = 0;
+  let resolved = false;
+  room.resolveCollectivePhase = () => {
+    resolved = true;
+  };
+
+  room.advanceCollectivePolling();
+  assert.equal(room.collectiveResponderId, "B");
+  assert.equal(room.collectiveCursor, 0);
+  assert.equal(resolved, false);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(room.collectiveCursor, 1);
+  assert.equal(resolved, true);
+});
+
 test("no-response on upper enters local_upper for next player", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.pendingResponse = {

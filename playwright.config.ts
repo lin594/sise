@@ -53,6 +53,7 @@ export default defineConfig({
             BOT_THINK_MAX_MS: "60",
             BOT_COLLECTIVE_THINK_MIN_MS: "10",
             BOT_COLLECTIVE_THINK_MAX_MS: "20",
+            HUMAN_FORCED_PASS_DELAY_MS: "20",
             LOCAL_TRANSITION_DELAY_MS: "20",
             DEALER_PICK_INTRO_MS: "20",
             DEALER_REVEAL_INTRO_MS: "20",

@@ -775,6 +775,7 @@ export interface AdvanceCollectiveDeps {
   queue: SeatId[];
   cursor: number;
   hasActionBeyondPass: (seatId: SeatId) => boolean;
+  responsePrivacyDelayMs: (seatId: SeatId) => number;
   setCollectivePass: (seatId: SeatId) => void;
   setCursor: (cursor: number) => void;
   setResponder: (responderId: SeatId | null) => void;
@@ -783,7 +784,7 @@ export interface AdvanceCollectiveDeps {
   setCurrentTurnPlayer: (seatId: SeatId) => void;
   isBot: (seatId: SeatId) => boolean;
   scheduleBotStep: () => void;
-  scheduleCollectiveTimeout: () => void;
+  scheduleCollectiveTimeout: (timeoutOverrideMs?: number, responsePrivacyDelay?: boolean) => void;
   broadcastAvailableActions: () => void;
   clearResponseEndsAt: () => void;
   resolveCollectivePhase: () => void;
@@ -807,8 +808,15 @@ export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
   const next = resolveNextCollectiveResponder({
     queue: deps.queue,
     cursor: deps.cursor,
-    hasResponded: (seatId) => deps.hasResponded(seatId),
-    hasActionBeyondPass: (seatId) => deps.hasActionBeyondPass(seatId),
+    // A response preselected in private must not make the public cursor skip a
+    // human seat instantly; hold it for the same privacy window as auto-pass.
+    hasResponded: (seatId) =>
+      deps.hasResponded(seatId) && deps.responsePrivacyDelayMs(seatId) <= 0,
+    // Online humans with only Pass available still receive a real response
+    // slot. Skipping them synchronously leaks that their concealed hand had no
+    // interrupt, while configured bots and practice seats keep the fast path.
+    hasActionBeyondPass: (seatId) =>
+      deps.hasActionBeyondPass(seatId) || deps.responsePrivacyDelayMs(seatId) > 0,
   });
   for (const seatId of next.forcedPassIds) {
     deps.setCollectivePass(seatId);
@@ -823,7 +831,11 @@ export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
     if (deps.isBot(next.responderId)) {
       deps.scheduleBotStep();
     } else {
-      deps.scheduleCollectiveTimeout();
+      const responsePrivacyDelayMs = deps.responsePrivacyDelayMs(next.responderId);
+      deps.scheduleCollectiveTimeout(
+        responsePrivacyDelayMs > 0 ? responsePrivacyDelayMs : undefined,
+        responsePrivacyDelayMs > 0,
+      );
     }
     deps.broadcastAvailableActions();
     return;

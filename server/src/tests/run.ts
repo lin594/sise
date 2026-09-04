@@ -1095,6 +1095,9 @@ function mkRoom(seats: string[]) {
   room.collectiveTimeoutMs = 5;
   room.localTimeoutMs = 5;
   room.operationTimeoutMs = 5;
+  // Legacy synchronous flow assertions do not exercise response timing; the
+  // real fairness delay is covered by the node:test game-loop suite.
+  room.humanForcedPassDelayMs = 0;
   return room;
 }
 

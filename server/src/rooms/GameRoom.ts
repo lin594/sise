@@ -225,6 +225,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
+  private readonly humanForcedPassDelayMs = Math.max(
+    0,
+    Number(process.env.HUMAN_FORCED_PASS_DELAY_MS ?? 3000),
+  );
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 2000));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
@@ -277,6 +281,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private responseTimerTotalMs = 0;
   private declareDecisionWindowId = 0;
   private responseDecisionWindowId = 0;
+  private collectivePrivacyDelaySeatId: string | null = null;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
@@ -1967,6 +1972,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (
       this.state.phase !== "playing" ||
       this.responseTimeExtensionUsed ||
+      this.collectivePrivacyDelaySeatId === seatId ||
       this.state.responseEndsAt <= now ||
       !this.pendingResponse
     ) {
@@ -2481,7 +2487,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (decision === "collective_accept") {
       this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
-      if (isCurrentResponder) {
+      const waitsForResponsePrivacyDelay =
+        isCurrentResponder && this.collectivePrivacyDelaySeatId === seatId;
+      if (isCurrentResponder && !waitsForResponsePrivacyDelay) {
         this.clearCollectiveTimer();
       }
       pending.collectives.set(seatId, {
@@ -2489,9 +2497,17 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         candidateId: action === "pass" ? undefined : candidateId,
       });
       this.traceStep(
-        isCurrentResponder ? "collective_accept" : "collective_preselect",
+        waitsForResponsePrivacyDelay
+          ? "collective_choice_held_for_fairness"
+          : isCurrentResponder
+            ? "collective_accept"
+            : "collective_preselect",
         `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
       );
+      if (waitsForResponsePrivacyDelay) {
+        this.broadcastAvailableActions();
+        return;
+      }
       if (isCurrentResponder) {
         this.collectiveCursor += 1;
       }
@@ -2639,7 +2655,28 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
     const acts = this.getAvailableActions(seatId, true);
-    return acts.some((item) => Boolean(item.deferred) || (item.enabled && item.action !== "pass"));
+    return acts.some((item) =>
+      item.action !== "pass" && (Boolean(item.deferred) || item.enabled),
+    );
+  }
+
+  /**
+   * Give an online human a fixed response slot even when their private hand
+   * has no action beyond Pass. Synchronously skipping that seat exposes hidden
+   * hand information through public turn timing. Practice games and seats
+   * already controlled by the server retain their fast path.
+   */
+  private responsePrivacyDelayForSeat(seatId: string): number {
+    if (this.state.roomMode === "practice" || this.humanForcedPassDelayMs <= 0) {
+      return 0;
+    }
+    const player = this.state.players.get(seatId);
+    if (!player?.connected || player.isConfiguredBot || this.botIds.has(seatId)) {
+      return 0;
+    }
+    return this.pendingResponse?.collectives.has(seatId) || !this.hasCollectiveActionBeyondPass(seatId)
+      ? this.humanForcedPassDelayMs
+      : 0;
   }
 
   private canSeatPreselectCollective(seatId: string): boolean {
@@ -3746,6 +3783,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       clearTimeout(this.collectiveTimer);
       this.collectiveTimer = null;
     }
+    this.collectivePrivacyDelaySeatId = null;
     this.state.responseEndsAt = 0;
   }
 
@@ -3815,17 +3853,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：设置 `collectiveTimer`，超时后写入 pass 并推进游标。
    */
-  private scheduleCollectiveTimeout(timeoutOverrideMs?: number, preserveExtensionState = false): void {
+  private scheduleCollectiveTimeout(
+    timeoutOverrideMs?: number,
+    preserveExtensionState = false,
+    responsePrivacyDelay = false,
+  ): void {
     const isCollectivePhase = this.state.responsePhase === "collective";
     const baseTimeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
     const timeoutMs = Math.max(1, timeoutOverrideMs ?? baseTimeoutMs);
-    if (this.collectiveTimer) {
-      clearTimeout(this.collectiveTimer);
-      this.collectiveTimer = null;
-    }
+    this.clearCollectiveTimer();
     if (!preserveExtensionState) {
       this.responseTimeExtensionUsed = false;
-      this.responseTimerTotalMs = baseTimeoutMs;
+      this.responseTimerTotalMs = responsePrivacyDelay ? timeoutMs : baseTimeoutMs;
       this.responseDecisionWindowId += 1;
     }
     const decisionSeatId = isCollectivePhase ? this.collectiveResponderId ?? "" : this.pendingResponse?.ownerId ?? "";
@@ -3838,6 +3877,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       );
       return;
     }
+    this.collectivePrivacyDelaySeatId = responsePrivacyDelay ? decisionSeatId : null;
     this.state.responseEndsAt = Date.now() + timeoutMs;
     this.traceStep(
       "schedule_collective_timeout",
@@ -3847,23 +3887,45 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.collectiveTimer = null;
       const pending = this.pendingResponse;
       if (!pending || this.state.phase !== "playing") {
+        this.collectivePrivacyDelaySeatId = null;
         this.traceStep("collective_timeout_skip");
         return;
       }
       if (this.state.responsePhase === "collective") {
         const responderId = this.collectiveResponderId;
         if (!responderId) {
+          this.collectivePrivacyDelaySeatId = null;
           this.traceStep("collective_timeout_skip");
           return;
         }
-        if (pending.collectives.has(responderId)) {
+        const heldPrivateChoice =
+          this.collectivePrivacyDelaySeatId === responderId &&
+          pending.collectives.has(responderId);
+        this.collectivePrivacyDelaySeatId = null;
+        if (pending.collectives.has(responderId) && !heldPrivateChoice) {
           this.traceStep("collective_timeout_already_responded", `responder=${responderId}`);
           return;
         }
-        pending.collectives.set(responderId, { action: "pass" });
+        if (!heldPrivateChoice) {
+          pending.collectives.set(responderId, { action: "pass" });
+          // Keep the public action indistinguishable from a deliberate Pass;
+          // the private trace records that the fairness timer supplied it.
+          this.state.lastAction = `${responderId} PASS`;
+        } else if (pending.collectives.get(responderId)?.action === "pass") {
+          this.state.lastAction = `${responderId} PASS`;
+        }
         this.collectiveCursor += 1;
-        this.state.lastAction = `${responderId} TIMEOUT_PASS`;
-        this.traceStep("collective_timeout_pass", `responder=${responderId}`);
+        if (!responsePrivacyDelay) {
+          this.state.lastAction = `${responderId} TIMEOUT_PASS`;
+        }
+        this.traceStep(
+          heldPrivateChoice
+            ? "collective_fair_preselection_release"
+            : responsePrivacyDelay
+              ? "collective_fair_auto_pass"
+              : "collective_timeout_pass",
+          `responder=${responderId}`,
+        );
         this.advanceCollectivePolling();
         return;
       }
@@ -3915,6 +3977,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       queue: this.collectiveQueue,
       cursor: this.collectiveCursor,
       hasActionBeyondPass: (seatId) => this.hasCollectiveActionBeyondPass(seatId),
+      responsePrivacyDelayMs: (seatId) => this.responsePrivacyDelayForSeat(seatId),
       setCollectivePass: (seatId) => {
         this.pendingResponse?.collectives.set(seatId, { action: "pass" });
       },
@@ -3935,7 +3998,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       },
       isBot: (seatId) => this.botIds.has(seatId),
       scheduleBotStep: () => this.scheduleBotStep(),
-      scheduleCollectiveTimeout: () => this.scheduleCollectiveTimeout(),
+      scheduleCollectiveTimeout: (timeoutOverrideMs, responsePrivacyDelay) =>
+        this.scheduleCollectiveTimeout(timeoutOverrideMs, false, responsePrivacyDelay),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       clearResponseEndsAt: () => {
         this.state.responseEndsAt = 0;
