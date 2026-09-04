@@ -68,7 +68,34 @@ test.describe("牌局断线恢复", () => {
 
     await context.setOffline(true);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "offline", { timeout: 10_000 });
-    await expect(page.getByTestId("connection-status")).toContainText("断网 · 自动恢复中");
+    const offlineStatus = page.getByTestId("connection-status");
+    await expect(offlineStatus).toContainText("断网 · 自动恢复中");
+    const offlineStatusGeometry = await offlineStatus.evaluate((status) => {
+      const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
+      const brand = header.querySelector<HTMLElement>(".top-brand")!;
+      const tools = header.querySelector<HTMLElement>("[data-testid='game-tools']")!;
+      const title = status.querySelector<HTMLElement>("strong")!;
+      const statusRect = status.getBoundingClientRect();
+      const headerRect = header.getBoundingClientRect();
+      return {
+        insideHeader:
+          statusRect.left >= headerRect.left &&
+          statusRect.right <= headerRect.right &&
+          statusRect.top >= headerRect.top &&
+          statusRect.bottom <= headerRect.bottom,
+        clearOfBrand: statusRect.left >= brand.getBoundingClientRect().right,
+        clearOfTools: statusRect.right <= tools.getBoundingClientRect().left,
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        titleUnclipped: title.scrollWidth <= title.clientWidth,
+      };
+    });
+    expect(offlineStatusGeometry).toMatchObject({
+      insideHeader: true,
+      clearOfBrand: true,
+      clearOfTools: true,
+      titleUnclipped: true,
+    });
+    expect(offlineStatusGeometry.titleFontSize).toBeGreaterThanOrEqual(14);
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(beforeDisconnect.handIds.length);
     expect(
@@ -126,7 +153,7 @@ test.describe("牌局断线恢复", () => {
     expect(restoredStatusGeometry.insideHeader).toBe(true);
     expect(restoredStatusGeometry.clearOfBrand).toBe(true);
     expect(restoredStatusGeometry.clearOfTools).toBe(true);
-    expect(restoredStatusGeometry.titleFontSize).toBeGreaterThanOrEqual(12);
+    expect(restoredStatusGeometry.titleFontSize).toBeGreaterThanOrEqual(14);
     expect(restoredStatusGeometry.titleUnclipped).toBe(true);
     const restoredPrivateState = await page.evaluate(() => {
       const handIds = Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='hand-card-']")).map(

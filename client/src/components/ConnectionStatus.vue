@@ -129,7 +129,7 @@ const detail = computed(() => {
 }
 
 .status-copy strong {
-  font-size: clamp(0.78rem, 1.65vh, 0.9rem);
+  font-size: max(0.875rem, 14px);
 }
 
 .status-copy small {
@@ -143,14 +143,14 @@ const detail = computed(() => {
 }
 
 button {
-  min-height: 1.8rem;
+  min-height: max(2.25rem, 36px);
   flex: 0 0 auto;
   padding: 0.25rem 0.55rem;
   border: 1px solid rgba(125, 211, 252, 0.62);
   border-radius: 0.52rem;
   background: #075985;
   color: #f0f9ff;
-  font-size: clamp(0.75rem, 1.45vh, 0.8rem);
+  font-size: max(0.875rem, 14px);
   font-weight: 800;
 }
 
