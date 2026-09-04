@@ -675,22 +675,49 @@ async function requestAutoPlayChange(): Promise<void> {
   }
   confirmingAutoPlay.value = true;
   await nextTick();
+  installConfirmationFocusGuard();
   cancelAutoPlayButtonRef.value?.focus();
 }
 
 async function cancelAutoPlay(): Promise<void> {
   confirmingAutoPlay.value = false;
+  removeConfirmationFocusGuard();
   await nextTick();
   autoPlayButtonRef.value?.focus();
 }
 
 function confirmAutoPlay(): void {
   confirmingAutoPlay.value = false;
+  removeConfirmationFocusGuard();
   emit("setAutoPlay", true);
 }
 
 function trapAutoPlayFocus(event: KeyboardEvent): void {
   trapPanelFocus(event, autoPlayDialogRef.value);
+}
+
+function keepConfirmationFocus(event: FocusEvent): void {
+  const isExitConfirmation = confirmingExit.value;
+  const dialog = isExitConfirmation ? exitDialogRef.value : autoPlayDialogRef.value;
+  if (!dialog) {
+    return;
+  }
+  const target = event.target;
+  if (target instanceof Node && dialog.contains(target)) {
+    return;
+  }
+  const safeChoice = isExitConfirmation
+    ? cancelExitButtonRef.value
+    : cancelAutoPlayButtonRef.value;
+  (safeChoice ?? dialog).focus({ preventScroll: true });
+}
+
+function installConfirmationFocusGuard(): void {
+  document.addEventListener("focusin", keepConfirmationFocus, true);
+}
+
+function removeConfirmationFocusGuard(): void {
+  document.removeEventListener("focusin", keepConfirmationFocus, true);
 }
 
 async function requestExit(): Promise<void> {
@@ -703,6 +730,7 @@ async function requestExit(): Promise<void> {
   historyOpen.value = false;
   confirmingExit.value = true;
   await nextTick();
+  installConfirmationFocusGuard();
   // “继续游戏” is intentionally first: an accidental Enter cannot confirm
   // the destructive action, and keyboard/switch users land on the safe choice.
   cancelExitButtonRef.value?.focus();
@@ -710,6 +738,7 @@ async function requestExit(): Promise<void> {
 
 async function cancelExit(): Promise<void> {
   confirmingExit.value = false;
+  removeConfirmationFocusGuard();
   await nextTick();
   const target = exitReturnFocus?.isConnected ? exitReturnFocus : exitButtonRef.value;
   target?.focus();
@@ -742,6 +771,7 @@ function trapExitFocus(event: KeyboardEvent): void {
 
 function confirmExit(): void {
   confirmingExit.value = false;
+  removeConfirmationFocusGuard();
   exitReturnFocus = null;
   emit("exit");
 }
@@ -774,6 +804,7 @@ defineExpose({
 onBeforeUnmount(() => {
   removeSettingsOutsideListener();
   stopObservingSettingsScroll();
+  removeConfirmationFocusGuard();
 });
 </script>
 

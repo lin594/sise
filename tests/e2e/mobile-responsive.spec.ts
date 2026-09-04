@@ -621,6 +621,8 @@ test.describe("phone portrait landscape canvas", () => {
     const dialog = page.getByRole("dialog", { name: "退出当前牌局？" });
     await expect(dialog).toBeVisible();
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
+    await exitButton.evaluate((button) => button.focus());
+    await expect(page.getByTestId("cancel-exit")).toBeFocused();
     const geometry = await page.evaluate(() => {
       const layoutElement = document.querySelector<HTMLElement>(".layout")!;
       const mask = document.querySelector<HTMLElement>(".exit-confirm-mask")!;
@@ -1566,6 +1568,8 @@ test.describe("compact landscape gameplay", () => {
     const dialog = page.getByRole("dialog", { name: "让机器人替你操作？" });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("你可以随时拿回操作");
+    await expect(page.getByTestId("cancel-auto-play")).toBeFocused();
+    await autoPlay.evaluate((button) => button.focus());
     await expect(page.getByTestId("cancel-auto-play")).toBeFocused();
     await page.getByTestId("confirm-auto-play").click();
 
