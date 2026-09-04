@@ -22,6 +22,7 @@ export type PrivateStateSnapshot = {
 
 export interface RegisteredRoom {
   getPrivateStateByToken(token: string): PrivateStateSnapshot | null;
+  exportRecoverySnapshot(now?: number): import("./room-recovery.js").RoomRecoverySnapshot;
 }
 
 const activeRooms = new Map<string, RegisteredRoom>();
@@ -36,4 +37,8 @@ export function unregisterRoom(roomId: string): void {
 
 export function getRegisteredRoom(roomId: string): RegisteredRoom | null {
   return activeRooms.get(roomId) ?? null;
+}
+
+export function getRegisteredRooms(): RegisteredRoom[] {
+  return [...activeRooms.values()];
 }

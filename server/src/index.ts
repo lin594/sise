@@ -16,9 +16,18 @@ import {
   shouldEnableMonitor,
 } from "./http/origin-policy.js";
 import { FourColorGameRoom } from "./rooms/GameRoom.js";
-import { getRegisteredRoom } from "./rooms/room-registry.js";
+import { getRegisteredRoom, getRegisteredRooms } from "./rooms/room-registry.js";
 import { createGuestProfileStore } from "./profiles/redis-guest-profile-store.js";
 import { configureGuestProfileStore } from "./profiles/guest-profile-runtime.js";
+import { createRoomSnapshotStore } from "./persistence/room-snapshot-store.js";
+import {
+  RoomSnapshotRuntime,
+  beginRoomSnapshotShutdown,
+  closeRoomSnapshotRuntime,
+  configureRoomSnapshotRuntime,
+  loadRoomSnapshots,
+  removeRoomSnapshot,
+} from "./persistence/room-snapshot-runtime.js";
 
 const port = Number(process.env.PORT ?? 2567);
 const runtimeEnv = process.env.NODE_ENV;
@@ -32,6 +41,8 @@ if (trustedProxyHops > 0) {
 const server = http.createServer(app);
 const guestProfileStore = await createGuestProfileStore(process.env.REDIS_URL);
 configureGuestProfileStore(guestProfileStore);
+const roomSnapshotRuntime = new RoomSnapshotRuntime(createRoomSnapshotStore(process.env.REDIS_URL));
+configureRoomSnapshotRuntime(roomSnapshotRuntime);
 const guestProfileHandlers = createGuestProfileHandlers(guestProfileStore);
 const gameServer = new Server({
   transport: new WebSocketTransport({
@@ -159,6 +170,42 @@ app.get("/private-state", privateStateLimit, async (req, res) => {
     res.status(500).json({ ok: false, message });
   }
 });
+
+gameServer.onBeforeShutdown(async () => {
+  const snapshots = getRegisteredRooms().map((room) => room.exportRecoverySnapshot());
+  await beginRoomSnapshotShutdown(snapshots);
+});
+
+gameServer.onShutdown(async () => {
+  await Promise.all([
+    closeRoomSnapshotRuntime(),
+    guestProfileStore.close?.() ?? Promise.resolve(),
+  ]);
+});
+
+await matchMaker.onReady;
+try {
+  const snapshots = await loadRoomSnapshots();
+  let restoredCount = 0;
+  for (const snapshot of snapshots) {
+    try {
+      await matchMaker.createRoom("four-color", {
+        roomMode: snapshot.state.roomMode,
+        matchOpen: false,
+        recoverySnapshot: snapshot,
+      });
+      restoredCount += 1;
+    } catch {
+      await removeRoomSnapshot(snapshot.roomId);
+      console.warn(`[room-recovery] 无法恢复房间 ${snapshot.roomId}，已清理不兼容快照。`);
+    }
+  }
+  if (restoredCount > 0) {
+    console.log(`[room-recovery] 已在开放连接前恢复 ${restoredCount} 个房间。`);
+  }
+} catch {
+  console.warn("[room-recovery] Redis 暂不可用，本次启动没有恢复历史房间；新牌局仍可正常进行。");
+}
 
 await gameServer.listen(port, "0.0.0.0", undefined, () => {
   // eslint-disable-next-line no-console

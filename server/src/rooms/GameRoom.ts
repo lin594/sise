@@ -80,6 +80,17 @@ import {
   recordActiveGuestRoundResults,
   touchGuestProfile,
 } from "../profiles/guest-profile-runtime.js";
+import {
+  ACTIVE_ROOM_SNAPSHOT_TTL_MS,
+  ENDED_ROOM_SNAPSHOT_TTL_MS,
+  ROOM_RECOVERY_VERSION,
+  assertRoomRecoverySnapshot,
+  type RoomRecoverySnapshot,
+} from "./room-recovery.js";
+import {
+  removeRoomSnapshot,
+  scheduleRoomSnapshot,
+} from "../persistence/room-snapshot-runtime.js";
 
 interface PendingResponse {
   ownerId: string;
@@ -106,6 +117,7 @@ interface DeclareSetupPayload {
 interface RoomCreateOptions {
   roomMode?: "practice" | "friends" | "match";
   hostKey?: string;
+  recoverySnapshot?: RoomRecoverySnapshot;
 }
 
 interface RoomJoinOptions {
@@ -291,14 +303,27 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：创建 `GameState`、初始化 `stateOps`、绑定所有消息处理器。
    */
   onCreate(options: RoomCreateOptions = {}): void {
-    this.setState(new GameState());
-    this.state.roomMode = options.roomMode === "friends" || options.roomMode === "match"
-      ? options.roomMode
-      : "practice";
+    const recoverySnapshot = options.recoverySnapshot;
+    if (recoverySnapshot) {
+      assertRoomRecoverySnapshot(recoverySnapshot);
+    }
+
+    if (recoverySnapshot) {
+      const recoveredState = new GameState();
+      recoveredState.restore(recoverySnapshot.state as never);
+      this.roomId = recoverySnapshot.roomId;
+      this.setState(recoveredState);
+      this.restoreRecoveryPrivateState(recoverySnapshot);
+    } else {
+      this.setState(new GameState());
+      this.state.roomMode = options.roomMode === "friends" || options.roomMode === "match"
+        ? options.roomMode
+        : "practice";
+      this.hostKey = String(options.hostKey ?? "").trim();
+    }
     if (this.state.roomMode === "match") {
       this.maxClients = this.targetSeats;
     }
-    this.hostKey = String(options.hostKey ?? "").trim();
     this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
     this.syncRoomMetadata();
     registerRoom(this.roomId, this);
@@ -407,7 +432,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     // HTTP room creation and the WebSocket join are separate requests. Keep the
     // room available for the configured grace period, but do not leak a room
     // forever when the browser closes before completing the join.
-    this.scheduleRoomIdleIfEmpty();
+    if (recoverySnapshot) {
+      this.resumeRecoveredRoom();
+    } else {
+      this.scheduleRoomIdleIfEmpty();
+    }
   }
 
   /**
@@ -570,6 +599,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   onDispose(): void {
     unregisterRoom(this.roomId);
+    void removeRoomSnapshot(this.roomId);
     this.clearBotTimer();
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
@@ -581,6 +611,178 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     this.seatDisconnectTimers.clear();
     this.clearAllTakeoverTimers();
+  }
+
+  /**
+   * Produces the complete private server snapshot needed to resume this exact
+   * decision after a process restart. This object must only be written to the
+   * internal snapshot store: it intentionally contains hands and room tokens.
+   */
+  exportRecoverySnapshot(now = Date.now()): RoomRecoverySnapshot {
+    this.updatePublicHandCounts();
+    const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
+    const ttlMs = this.state.phase === "ended" ? ENDED_ROOM_SNAPSHOT_TTL_MS : ACTIVE_ROOM_SNAPSHOT_TTL_MS;
+    return {
+      version: ROOM_RECOVERY_VERSION,
+      roomId: this.roomId,
+      savedAt: now,
+      expiresAt: now + ttlMs,
+      state: JSON.parse(JSON.stringify(this.state)) as Record<string, unknown>,
+      privateState: {
+        deck: cloneCards(this.deck),
+        playerHands: [...this.playerHands].map(([seatId, cards]) => [seatId, cloneCards(cards)]),
+        playerOrder: [...this.playerOrder],
+        botIds: [...this.botIds],
+        configuredBotIds: [...this.configuredBotIds],
+        seatByToken: [...this.seatByToken],
+        baseNameBySeat: [...this.baseNameBySeat],
+        profileTokenBySeat: [...this.profileTokenBySeat],
+        hostKey: this.hostKey,
+        hostKeyConsumed: this.hostKeyConsumed,
+        pendingResponse: this.pendingResponse
+          ? {
+              ownerId: this.pendingResponse.ownerId,
+              card: { ...this.pendingResponse.card },
+              collectives: [...this.pendingResponse.collectives].map(([seatId, choice]) => [seatId, { ...choice }]),
+              responsePhaseAfterNoResponse: this.pendingResponse.responsePhaseAfterNoResponse,
+            }
+          : null,
+        publicGeneralPool: cloneCards(this.publicGeneralPool),
+        dealerCard: this.dealerCard ? { ...this.dealerCard } : null,
+        dealerPickerId: this.dealerPickerId,
+        nextRoundSetup: this.nextRoundSetup ? { ...this.nextRoundSetup } : null,
+        awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
+        pendingFishDeclarations: [...this.pendingFishDeclarations]
+          .map(([seatId, cards]) => [seatId, cloneCards(cards)]),
+        declareTimeExtensionUsedBy: [...this.declareTimeExtensionUsedBy],
+        responseTimeExtensionUsed: this.responseTimeExtensionUsed,
+        declareTimerTotalMs: this.declareTimerTotalMs,
+        responseTimerTotalMs: this.responseTimerTotalMs,
+        declareDecisionWindowId: this.declareDecisionWindowId,
+        responseDecisionWindowId: this.responseDecisionWindowId,
+        collectiveQueue: [...this.collectiveQueue],
+        collectiveCursor: this.collectiveCursor,
+        collectiveResponderId: this.collectiveResponderId,
+        debugSeq: this.debugSeq,
+        roundDealerId: this.roundDealerId,
+        lastRoundResult: this.lastRoundResult
+          ? JSON.parse(JSON.stringify(this.lastRoundResult)) as typeof this.lastRoundResult
+          : null,
+      },
+    };
+  }
+
+  private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
+    const privateState = snapshot.privateState;
+    const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
+    this.deck = cloneCards(privateState.deck);
+    this.playerHands = new Map(
+      privateState.playerHands.map(([seatId, cards]) => [seatId, cloneCards(cards)]),
+    );
+    this.playerOrder = [...privateState.playerOrder];
+    this.configuredBotIds = new Set(privateState.configuredBotIds);
+    this.botIds = new Set(privateState.botIds);
+    this.seatBySession = new Map();
+    this.seatByToken = new Map(privateState.seatByToken);
+    this.baseNameBySeat = new Map(privateState.baseNameBySeat);
+    this.pendingNameBySession = new Map();
+    this.pendingTokenBySession = new Map();
+    this.pendingProfileTokenBySession = new Map();
+    this.profileTokenBySeat = new Map(privateState.profileTokenBySeat);
+    this.hostKey = privateState.hostKey;
+    this.hostKeyConsumed = privateState.hostKeyConsumed;
+    this.pendingResponse = privateState.pendingResponse
+      ? {
+          ownerId: privateState.pendingResponse.ownerId,
+          card: { ...privateState.pendingResponse.card },
+          collectives: new Map(
+            privateState.pendingResponse.collectives.map(([seatId, choice]) => [seatId, { ...choice }]),
+          ),
+          responsePhaseAfterNoResponse: privateState.pendingResponse.responsePhaseAfterNoResponse,
+        }
+      : null;
+    this.publicGeneralPool = cloneCards(privateState.publicGeneralPool);
+    this.dealerCard = privateState.dealerCard ? { ...privateState.dealerCard } : null;
+    this.dealerPickerId = privateState.dealerPickerId;
+    this.nextRoundSetup = privateState.nextRoundSetup ? { ...privateState.nextRoundSetup } : null;
+    this.awaitingDiscardOwnerId = privateState.awaitingDiscardOwnerId;
+    this.pendingFishDeclarations.clear();
+    for (const [seatId, cards] of privateState.pendingFishDeclarations) {
+      this.pendingFishDeclarations.set(seatId, cloneCards(cards));
+    }
+    this.declareTimeExtensionUsedBy.clear();
+    for (const seatId of privateState.declareTimeExtensionUsedBy) {
+      this.declareTimeExtensionUsedBy.add(seatId);
+    }
+    this.responseTimeExtensionUsed = privateState.responseTimeExtensionUsed;
+    this.declareTimerTotalMs = privateState.declareTimerTotalMs;
+    this.responseTimerTotalMs = privateState.responseTimerTotalMs;
+    this.declareDecisionWindowId = privateState.declareDecisionWindowId;
+    this.responseDecisionWindowId = privateState.responseDecisionWindowId;
+    this.collectiveQueue = [...privateState.collectiveQueue];
+    this.collectiveCursor = privateState.collectiveCursor;
+    this.collectiveResponderId = privateState.collectiveResponderId;
+    this.debugSeq = privateState.debugSeq;
+    this.roundDealerId = privateState.roundDealerId;
+    this.lastRoundResult = privateState.lastRoundResult
+      ? JSON.parse(JSON.stringify(privateState.lastRoundResult)) as typeof this.lastRoundResult
+      : null;
+
+    // Socket sessions never survive a process restart. Keep configured bots as
+    // bots, but give every human seat its normal reconnect grace before the
+    // existing temporary-takeover mechanism is allowed to act.
+    for (const [seatId, player] of this.state.players.entries()) {
+      player.clientId = seatId;
+      if (this.configuredBotIds.has(seatId) || player.isConfiguredBot) {
+        player.connected = false;
+        player.isBot = true;
+        player.isConfiguredBot = true;
+        this.configuredBotIds.add(seatId);
+        this.botIds.add(seatId);
+        continue;
+      }
+      player.connected = false;
+      player.isBot = false;
+      player.isConfiguredBot = false;
+      player.name = this.baseNameBySeat.get(seatId) ?? player.name;
+      if (player.isAutoPlay) {
+        this.botIds.add(seatId);
+      } else {
+        this.botIds.delete(seatId);
+      }
+    }
+  }
+
+  private resumeRecoveredRoom(): void {
+    this.state.matchStartsAt = 0;
+    this.state.declareEndsAt = 0;
+    this.state.responseEndsAt = 0;
+
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (!player || player.isConfiguredBot) {
+        continue;
+      }
+      if (this.state.phase === "waiting") {
+        this.scheduleSeatRelease(seatId);
+      } else if (!player.isAutoPlay) {
+        this.scheduleTemporaryTakeover(seatId);
+      }
+    }
+
+    if (this.state.phase === "waiting") {
+      this.onMatchRosterChanged();
+    } else if (this.state.phase === "declaring") {
+      this.startDeclaringPhase();
+    } else if (this.state.phase === "playing") {
+      this.responseTimeExtensionUsed = false;
+      this.responseTimerTotalMs = this.state.responsePhase === "collective"
+        ? this.collectiveTimeoutMs
+        : this.localTimeoutMs;
+      this.responseDecisionWindowId += 1;
+      this.tickBots();
+    }
+    this.scheduleRoomIdleIfEmpty();
   }
 
   // ===== 房间生命周期与消息入口 =====
@@ -1401,11 +1603,37 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.state.hostPlayerId = seatId;
     }
 
+    this.restorePracticeUntimedDecision(seatId);
     this.sendSessionToken(client, seatId, token, true);
     this.syncAllPrivateHands();
     this.broadcastAvailableActions();
     this.onMatchRosterChanged();
     this.tickBots();
+  }
+
+  /**
+   * A recovered practice room initially treats its human as disconnected, so
+   * the decision receives a finite takeover timer. Once the original player
+   * reclaims the seat, restore practice mode's normal untimed decision before
+   * sending the refreshed action panel.
+   */
+  private restorePracticeUntimedDecision(seatId: string): void {
+    if (!this.isPracticeDecisionUntimed(seatId)) {
+      return;
+    }
+    if (this.state.phase === "declaring") {
+      this.clearDeclareTimer();
+      this.declareTimerTotalMs = 0;
+      this.state.declareEndsAt = 0;
+      this.declareDecisionWindowId += 1;
+      return;
+    }
+    if (this.state.phase === "playing") {
+      this.clearCollectiveTimer();
+      this.responseTimerTotalMs = 0;
+      this.state.responseEndsAt = 0;
+      this.responseDecisionWindowId += 1;
+    }
   }
 
   /**
@@ -2960,6 +3188,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private broadcastAvailableActions(): void {
     this.syncRoomMetadata();
+    scheduleRoomSnapshot(this.exportRecoverySnapshot());
     this.logStateSnapshot("STATE");
     for (const client of this.clients) {
       const seatId = this.seatBySession.get(client.sessionId);

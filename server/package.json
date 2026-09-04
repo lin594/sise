@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "npm run build && node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
+    "test": "npm run build && node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/persistence/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
   },
   "dependencies": {
     "@colyseus/core": "^0.18.10",
