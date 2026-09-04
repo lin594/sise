@@ -105,7 +105,7 @@ function onInput(event: Event) {
 .entry-kicker {
   margin: 0;
   color: #fbbf24;
-  font-size: 0.78rem;
+  font-size: max(0.8125rem, 13px);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;

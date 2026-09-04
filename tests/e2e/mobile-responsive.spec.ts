@@ -385,6 +385,7 @@ test.describe("clear first-time entry", () => {
       const shell = document.querySelector<HTMLElement>(".entry-shell")!;
       const card = shell.querySelector<HTMLElement>(".entry-card")!;
       const input = shell.querySelector<HTMLInputElement>("[data-testid='nickname-input']")!;
+      const kicker = shell.querySelector<HTMLElement>(".entry-kicker")!;
       const label = shell.querySelector<HTMLElement>(".entry-field > span")!;
       const description = shell.querySelector<HTMLElement>(".entry-desc")!;
       const buttons = [...shell.querySelectorAll<HTMLButtonElement>(".entry-actions button")];
@@ -397,6 +398,7 @@ test.describe("clear first-time entry", () => {
         noPageOverflow: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
         controlsInsideCard: [input, ...buttons].every(isInsideCard),
         inputFontSize: Number.parseFloat(getComputedStyle(input).fontSize),
+        kickerFontSize: Number.parseFloat(getComputedStyle(kicker).fontSize),
         labelFontSize: Number.parseFloat(getComputedStyle(label).fontSize),
         descriptionFontSize: Number.parseFloat(getComputedStyle(description).fontSize),
         minimumButtonWidth: Math.min(...buttons.map((button) => button.getBoundingClientRect().width)),
@@ -409,6 +411,7 @@ test.describe("clear first-time entry", () => {
       controlsInsideCard: true,
     });
     expect(entryGeometry.inputFontSize).toBeGreaterThanOrEqual(18);
+    expect(entryGeometry.kickerFontSize).toBeGreaterThanOrEqual(13);
     expect(entryGeometry.labelFontSize).toBeGreaterThanOrEqual(15);
     expect(entryGeometry.descriptionFontSize).toBeGreaterThanOrEqual(14);
     expect(entryGeometry.minimumButtonWidth).toBeGreaterThanOrEqual(150);
@@ -1681,7 +1684,7 @@ test.describe("compact landscape gameplay", () => {
     });
     expect(waitingGeometry.insideDock).toBe(true);
     expect(waitingGeometry.headlineFontSize).toBeGreaterThanOrEqual(15);
-    expect(waitingGeometry.helpFontSize).toBeGreaterThanOrEqual(12);
+    expect(waitingGeometry.helpFontSize).toBeGreaterThanOrEqual(13);
     expect(waitingGeometry.tabIndex).toBeNull();
     await page.screenshot({ path: testInfo.outputPath("legacy-phone-waiting-dock.png") });
 
@@ -1974,7 +1977,7 @@ test.describe("legacy small landscape gameplay", () => {
         panel.querySelectorAll<HTMLElement>(".section-heading h3, .fish-option-copy strong, .empty-option strong"),
       );
       const helperLabels = Array.from(
-        panel.querySelectorAll<HTMLElement>(".section-result, .fish-option-copy small, .empty-option span, .untimed-message"),
+        panel.querySelectorAll<HTMLElement>(".section-result, .hand-total, .declare-timer span, .fish-option-copy small, .empty-option span, .kong-choice span, .untimed-message"),
       );
       const cardRect = card.getBoundingClientRect();
       return {
@@ -2015,7 +2018,7 @@ test.describe("legacy small landscape gameplay", () => {
     expect(declarationGeometry.minimumPagerFontSize).toBeGreaterThanOrEqual(13);
     expect(declarationGeometry.rangeFontSize).toBeGreaterThanOrEqual(13);
     expect(declarationGeometry.minimumPrimaryLabelFontSize).toBeGreaterThanOrEqual(14);
-    expect(declarationGeometry.minimumHelperLabelFontSize).toBeGreaterThanOrEqual(12);
+    expect(declarationGeometry.minimumHelperLabelFontSize).toBeGreaterThanOrEqual(13);
 
     for (let attempt = 0; attempt < 8 && await declarationHandNext.isEnabled(); attempt += 1) {
       await declarationHandNext.click();
@@ -2063,7 +2066,7 @@ test.describe("legacy small landscape gameplay", () => {
       const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
-        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, .dealer-badge, .self-seat-badge, .history-count, .action-dock .instruction, .action-dock .untimed-label",
+        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, [data-testid='self-seat-meta'], .dealer-badge, .self-seat-badge, .history-count, .action-dock .instruction, .action-dock .untimed-label",
       ));
       const deckUnit = document.querySelector<HTMLElement>(".deck-number small")!;
       const handRect = hand.getBoundingClientRect();

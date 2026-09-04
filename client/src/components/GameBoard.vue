@@ -4107,7 +4107,7 @@ watch(
   }
 
   .self-head p {
-    font-size: clamp(0.64rem, 2.8vh, 0.75rem);
+    font-size: clamp(0.8125rem, 2.8vh, 0.85rem);
   }
 
   .self-head .seat-tags {

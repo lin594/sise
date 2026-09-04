@@ -743,7 +743,7 @@ function onClick(item: PanelAction): void {
   }
 
   .waiting-copy small {
-    font-size: clamp(0.75rem, 3.2vh, 0.84rem);
+    font-size: clamp(0.8125rem, 3.2vh, 0.9rem);
   }
 
   .decision-line {

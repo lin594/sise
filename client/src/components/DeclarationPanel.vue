@@ -1317,7 +1317,6 @@ button:focus-visible {
   margin-bottom: 0.35rem;
 }
 
-.declare-panel.compact .section-index,
 .declare-panel.compact .section-result,
 .declare-panel.compact .hand-total,
 .declare-panel.compact .declare-timer span,
@@ -1327,6 +1326,10 @@ button:focus-visible {
 .declare-panel.compact .kong-choice span,
 .declare-panel.compact .footer-meta p,
 .declare-panel.compact .confirm-declaration small {
+  font-size: max(0.8125rem, 13px);
+}
+
+.declare-panel.compact .section-index {
   font-size: max(0.75rem, 12px);
 }
 
