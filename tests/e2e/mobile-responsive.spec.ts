@@ -59,6 +59,11 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByText(/^庄家:/)).toHaveCount(0);
   await expect(page.locator(".center-core-cell")).toHaveCount(0);
   await expect(page.locator(".pending-placeholder")).toHaveCount(0);
+  const pendingCaption = page.getByTestId("pending-card").locator(".response-caption");
+  if (await pendingCaption.count()) {
+    expect(await pendingCaption.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)))
+      .toBeGreaterThanOrEqual(13);
+  }
 
   const centerGeometry = await page.evaluate(() => {
     const stage = document.querySelector<HTMLElement>(".center-stage")?.getBoundingClientRect();
@@ -2033,6 +2038,10 @@ test.describe("legacy small landscape gameplay", () => {
       const botIdentities = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='bot-identity']"));
       const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
+      const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
+        ".tag.turn, .response-caption, .center-seat-action, .dealer-badge, .self-seat-badge, .history-count",
+      ));
+      const deckUnit = document.querySelector<HTMLElement>(".deck-number small")!;
       const handRect = hand.getBoundingClientRect();
       const cardRects = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card")).map((card) => {
         const rect = card.getBoundingClientRect();
@@ -2079,6 +2088,11 @@ test.describe("legacy small landscape gameplay", () => {
         ),
         handCountFontSize: Number.parseFloat(getComputedStyle(handCount).fontSize),
         handRangeFontSize: Number.parseFloat(getComputedStyle(handRange).fontSize),
+        essentialTurnSignalCount: essentialTurnSignals.length,
+        minimumEssentialTurnSignalFontSize: Math.min(
+          ...essentialTurnSignals.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        ),
+        deckUnitFontSize: Number.parseFloat(getComputedStyle(deckUnit).fontSize),
       };
     });
 
@@ -2098,6 +2112,11 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.minimumBotIdentityFontSize).toBeGreaterThanOrEqual(13);
     expect(metrics.handCountFontSize).toBeGreaterThanOrEqual(13);
     expect(metrics.handRangeFontSize).toBeGreaterThanOrEqual(13);
+    // The exact phase decides whether the pending caption or a directional
+    // action badge is mounted; current turn, dealer, self and history remain.
+    expect(metrics.essentialTurnSignalCount).toBeGreaterThanOrEqual(4);
+    expect(metrics.minimumEssentialTurnSignalFontSize).toBeGreaterThanOrEqual(13);
+    expect(metrics.deckUnitFontSize).toBeGreaterThanOrEqual(10);
     const landscapeTableGeometry = await expectCompactTableContained(page);
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");

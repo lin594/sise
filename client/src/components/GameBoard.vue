@@ -2400,7 +2400,7 @@ watch(
   color: #e0f2fe;
   display: inline-grid;
   place-items: center;
-  font-size: clamp(0.74rem, 1.5vh, 0.88rem);
+  font-size: max(0.8125rem, 13px);
   font-weight: 900;
   line-height: 1;
 }
@@ -2433,7 +2433,7 @@ watch(
   border: 1px solid rgba(245, 158, 11, 0.95);
   background: linear-gradient(145deg, #fbbf24, #b45309);
   color: #451a03;
-  font-size: clamp(0.7rem, 1.55vh, 0.9rem);
+  font-size: max(0.8125rem, 13px);
   font-weight: 900;
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.32);
 }
@@ -2496,6 +2496,8 @@ watch(
   border-color: #22c55e;
   background: rgba(34, 197, 94, 0.15);
   color: #bbf7d0;
+  font-size: max(0.8125rem, 13px);
+  line-height: 1.2;
 }
 
 .turn-countdown {
@@ -2937,7 +2939,9 @@ watch(
   background: rgba(8, 47, 73, 0.88);
   color: #e0f2fe;
   padding: 0.05rem 0.38rem;
-  font-size: clamp(0.55rem, 1.15vh, 0.7rem);
+  font-size: max(0.8125rem, 13px);
+  font-weight: 800;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
@@ -3007,7 +3011,7 @@ watch(
 }
 
 .deck-number small {
-  font-size: clamp(0.48rem, 1.08vh, 0.62rem);
+  font-size: max(0.625rem, 10px);
   color: #fef08a;
 }
 
@@ -4060,7 +4064,7 @@ watch(
     min-width: 2.4rem;
     min-height: 1.7rem;
     padding: 0.12rem 0.28rem;
-    font-size: clamp(0.7rem, 3vh, 0.82rem);
+    font-size: max(0.8125rem, 13px);
   }
 
   .response-wrap {

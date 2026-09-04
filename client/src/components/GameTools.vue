@@ -841,7 +841,7 @@ onBeforeUnmount(() => {
   color: #422006;
   display: inline-grid;
   place-items: center;
-  font-size: 0.68rem;
+  font-size: max(0.8125rem, 13px);
   font-weight: 900;
   line-height: 1;
 }
