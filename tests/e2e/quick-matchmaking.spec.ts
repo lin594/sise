@@ -41,6 +41,23 @@ test("quick match groups humans, fixes their seats, and can start with computers
     await expect(first.getByTestId("mode-practice_bots")).toBeVisible();
     await expect(first.getByTestId("mode-quick_match")).toBeVisible();
     await expect(first.getByTestId("mode-friends")).toBeVisible();
+    const compactModeGeometry = await first.evaluate(() => {
+      const header = document.querySelector<HTMLElement>(".top")!;
+      const scroll = document.querySelector<HTMLElement>("[data-testid='lobby-scroll']")!;
+      const scrollRect = scroll.getBoundingClientRect();
+      const cards = [...scroll.querySelectorAll<HTMLElement>(".mode-card")];
+      return {
+        headerHeight: header.getBoundingClientRect().height,
+        cardsFullyVisible: cards.every((card) => {
+          const rect = card.getBoundingClientRect();
+          return rect.top >= scrollRect.top - 1 && rect.bottom <= scrollRect.bottom + 1;
+        }),
+        pageFits: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+      };
+    });
+    expect(compactModeGeometry.pageFits).toBe(true);
+    expect(compactModeGeometry.cardsFullyVisible).toBe(true);
+    expect(compactModeGeometry.headerHeight).toBeLessThanOrEqual(64);
     await first.screenshot({ path: testInfo.outputPath("quick-match-modes-568x320.png") });
 
     await first.getByTestId("mode-quick_match").click();

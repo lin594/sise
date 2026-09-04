@@ -3181,6 +3181,8 @@ watch(
 }
 
 .meta.front-lobby-meta {
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 0.45rem;
   overflow: visible;
   color: #cbd5e1;
