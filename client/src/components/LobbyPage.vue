@@ -1,6 +1,7 @@
 <template>
   <section
     class="lobby"
+    :aria-busy="startPending"
     :class="{
       'friend-waiting-room': roomMode === 'friends' && Boolean(roomId),
       'match-waiting-room': roomMode === 'match' && Boolean(roomId),
@@ -62,8 +63,8 @@
           :key="mode.id"
           :data-testid="`mode-${mode.id}`"
           class="mode-card"
-          :class="{ active: selectedMode === mode.id, disabled: !mode.enabled }"
-          :disabled="!mode.enabled"
+          :class="{ active: selectedMode === mode.id, disabled: !mode.enabled || startPending }"
+          :disabled="!mode.enabled || startPending"
           :aria-pressed="selectedMode === mode.id"
           @click="$emit('select-mode', mode.id)"
         >
@@ -289,7 +290,7 @@
           class="primary"
           type="button"
           data-testid="lobby-start"
-          :disabled="!canStart"
+          :disabled="!canStart || startPending"
           @click="$emit('start')"
         >
           {{ startLabel }}
@@ -419,6 +420,7 @@ const props = defineProps<{
   canStart: boolean;
   startLabel: string;
   startHint: string;
+  startPending: boolean;
   joinError: string;
   hostPlayerId: string;
   mySeatId: string;

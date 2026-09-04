@@ -124,6 +124,7 @@ const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
 const restoringStoredSession = ref(false);
 const joiningFriendInvite = ref(false);
+const startingRoomMode = ref(null);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref("practice_bots");
 const lobbyModes = [
@@ -202,13 +203,15 @@ async function resumeStoredRoomSession() {
     }
 }
 async function abandonSessionResume() {
+    const returnToModeLobby = startingRoomMode.value !== null;
     restoringStoredSession.value = false;
     joiningFriendInvite.value = false;
+    startingRoomMode.value = null;
     entryInviteRoomId.value = "";
     enteringLobby.value = false;
     globalError.value = "";
     await leaveRoom();
-    enteredFrontLobby.value = false;
+    enteredFrontLobby.value = returnToModeLobby;
 }
 const isWaiting = computed(() => state.value?.phase === "waiting");
 const isDeclaring = computed(() => state.value?.phase === "declaring");
@@ -227,6 +230,86 @@ const isConnectingWithoutState = computed(() => !state.value &&
         connectionState.value === "closed"));
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
 const showSyncingScreen = computed(() => !state.value && (hasLobbySession.value || isConnectingWithoutState.value));
+const syncScreenCopy = computed(() => {
+    if (joiningFriendInvite.value) {
+        return {
+            kicker: "加入好友房",
+            title: "正在进入朋友的牌桌",
+            description: "正在连接房间，请稍候。请不要重复点击。",
+            cancelLabel: "取消加入，返回首页",
+        };
+    }
+    if (startingRoomMode.value === "quick_match") {
+        return {
+            kicker: "快速配桌",
+            title: "正在寻找牌友",
+            description: "正在连接配桌服务，请稍候。",
+            cancelLabel: "取消，返回玩法选择",
+        };
+    }
+    if (startingRoomMode.value === "practice") {
+        return {
+            kicker: "单人练习",
+            title: "正在准备练习牌桌",
+            description: "正在连接牌桌，请稍候。",
+            cancelLabel: "取消，返回玩法选择",
+        };
+    }
+    if (startingRoomMode.value === "friends") {
+        return {
+            kicker: "好友同桌",
+            title: "正在创建好友房",
+            description: "正在连接牌桌，请稍候。",
+            cancelLabel: "取消，返回玩法选择",
+        };
+    }
+    if (connectionState.value === "closed") {
+        return {
+            kicker: "原牌局已关闭",
+            title: "无法回到原来的牌桌",
+            description: joinError.value || "原牌局已经结束，系统不会继续重试。",
+            cancelLabel: "返回首页",
+        };
+    }
+    if (connectionState.value === "offline") {
+        return {
+            kicker: "等待网络",
+            title: "联网后会自动继续",
+            description: "你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。",
+            cancelLabel: "放弃恢复，返回首页",
+        };
+    }
+    return {
+        kicker: "恢复牌局",
+        title: "正在回到原来的牌桌",
+        description: "正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。",
+        cancelLabel: "放弃恢复，返回首页",
+    };
+});
+const syncCancelDialogCopy = computed(() => {
+    if (startingRoomMode.value !== null) {
+        return {
+            title: "取消正在开始的玩法？",
+            description: "牌桌仍在连接中。确认取消后会返回玩法选择。",
+            keepLabel: "继续等待",
+            confirmLabel: "取消并返回玩法选择",
+        };
+    }
+    if (joiningFriendInvite.value) {
+        return {
+            title: "取消加入好友房？",
+            description: "房间仍在连接中。确认取消后会停止本次加入并返回首页。",
+            keepLabel: "继续加入",
+            confirmLabel: "取消并返回首页",
+        };
+    }
+    return {
+        title: "放弃恢复原牌局？",
+        description: "系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。",
+        keepLabel: "继续恢复",
+        confirmLabel: "放弃并返回首页",
+    };
+});
 const showModeLobby = computed(() => {
     if (showSyncingScreen.value) {
         return false;
@@ -247,11 +330,12 @@ const canPressStartGame = computed(() => Boolean(connected.value) &&
                 players.value.every((player) => player.isConfiguredBot ||
                     (player.connected &&
                         (player.clientId === state.value?.hostPlayerId || player.lobbyReady))))));
-const canStartSelectedMode = computed(() => (!hasLobbySession.value &&
-    (selectedLobbyMode.value === "practice_bots" ||
-        selectedLobbyMode.value === "quick_match" ||
-        selectedLobbyMode.value === "friends")) ||
-    canPressStartGame.value);
+const canStartSelectedMode = computed(() => !enteringLobby.value &&
+    ((!hasLobbySession.value &&
+        (selectedLobbyMode.value === "practice_bots" ||
+            selectedLobbyMode.value === "quick_match" ||
+            selectedLobbyMode.value === "friends")) ||
+        canPressStartGame.value));
 const remainingFriendSeats = computed(() => Math.max(0, 4 - players.value.length));
 const hasOfflineFriend = computed(() => players.value.some((player) => !player.isConfiguredBot && !player.connected));
 const unreadyFriendCount = computed(() => players.value.filter((player) => !player.isConfiguredBot &&
@@ -324,6 +408,11 @@ const lobbySubtitle = computed(() => {
 });
 const lobbyStartLabel = computed(() => {
     if (!hasLobbySession.value) {
+        if (enteringLobby.value) {
+            if (selectedLobbyMode.value === "friends")
+                return "正在创建好友房…";
+            return selectedLobbyMode.value === "quick_match" ? "正在寻找牌友…" : "正在创建练习房…";
+        }
         if (selectedLobbyMode.value === "friends")
             return "创建好友房";
         return selectedLobbyMode.value === "quick_match" ? "开始快速配桌" : "开始单人练习";
@@ -340,7 +429,9 @@ const lobbyStartLabel = computed(() => {
     return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
 });
 const lobbyStartHint = computed(() => {
-    if (!hasLobbySession.value || !isWaiting.value)
+    if (!hasLobbySession.value)
+        return enteringLobby.value ? "请稍候，不用重复点击" : "";
+    if (!isWaiting.value)
         return "";
     if (!mySeatId.value)
         return "请先选择一个空座位";
@@ -1817,6 +1908,7 @@ async function startQuickMatchLobby() {
     }
     const nickname = entryName.value.trim() || generateRandomNickname();
     entryName.value = nickname;
+    startingRoomMode.value = "quick_match";
     enteringLobby.value = true;
     try {
         const ok = await connect({
@@ -1833,6 +1925,7 @@ async function startQuickMatchLobby() {
     }
     finally {
         enteringLobby.value = false;
+        startingRoomMode.value = null;
     }
 }
 function requestPracticeAutoStart() {
@@ -1845,6 +1938,7 @@ async function startPracticeLobby() {
     }
     const nickname = entryName.value.trim() || generateRandomNickname();
     entryName.value = nickname;
+    startingRoomMode.value = "practice";
     enteringLobby.value = true;
     try {
         const response = await fetch(`${HTTP_URL}/rooms`, {
@@ -1875,6 +1969,7 @@ async function startPracticeLobby() {
     }
     finally {
         enteringLobby.value = false;
+        startingRoomMode.value = null;
     }
 }
 async function startFriendLobby() {
@@ -1882,6 +1977,7 @@ async function startFriendLobby() {
         return;
     }
     const nickname = entryName.value.trim() || generateRandomNickname();
+    startingRoomMode.value = "friends";
     enteringLobby.value = true;
     try {
         const response = await fetch(`${HTTP_URL}/rooms`, {
@@ -1912,6 +2008,7 @@ async function startFriendLobby() {
     }
     finally {
         enteringLobby.value = false;
+        startingRoomMode.value = null;
     }
 }
 function buildInviteUrl() {
@@ -2638,6 +2735,7 @@ else if (__VLS_ctx.showModeLobby) {
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
         startHint: (__VLS_ctx.lobbyStartHint),
+        startPending: (__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -2679,6 +2777,7 @@ else if (__VLS_ctx.showModeLobby) {
         canStart: (__VLS_ctx.canStartSelectedMode),
         startLabel: (__VLS_ctx.lobbyStartLabel),
         startHint: (__VLS_ctx.lobbyStartHint),
+        startPending: (__VLS_ctx.enteringLobby && !__VLS_ctx.hasLobbySession),
         joinError: (__VLS_ctx.joinError),
         hostPlayerId: (__VLS_ctx.state?.hostPlayerId || ''),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -2771,26 +2870,20 @@ else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-kicker" },
     });
-    (__VLS_ctx.joiningFriendInvite ? '加入好友房' : __VLS_ctx.connectionState === 'closed' ? '原牌局已关闭' : __VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
+    (__VLS_ctx.syncScreenCopy.kicker);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
-    (__VLS_ctx.joiningFriendInvite ? '正在进入朋友的牌桌' : __VLS_ctx.connectionState === 'closed' ? '无法回到原来的牌桌' : __VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
+    (__VLS_ctx.syncScreenCopy.title);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-desc" },
     });
-    (__VLS_ctx.joiningFriendInvite
-        ? '正在连接房间，请稍候。请不要重复点击。'
-        : __VLS_ctx.connectionState === 'closed'
-            ? (__VLS_ctx.joinError || '原牌局已经结束，系统不会继续重试。')
-            : __VLS_ctx.connectionState === 'offline'
-                ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
-                : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
+    (__VLS_ctx.syncScreenCopy.description);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.abandonSessionResume) },
         ...{ class: "resume-cancel" },
         type: "button",
         'data-testid': "cancel-session-resume",
     });
-    (__VLS_ctx.joiningFriendInvite ? '取消加入，返回首页' : __VLS_ctx.connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页');
+    (__VLS_ctx.syncScreenCopy.cancelLabel);
 }
 else {
     /** @type {[typeof GameBoard, ]} */ ;
@@ -3606,11 +3699,11 @@ if (__VLS_ctx.confirmingResumeAbandon) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
         id: "resume-abandon-title",
     });
-    (__VLS_ctx.joiningFriendInvite ? '取消加入好友房？' : '放弃恢复原牌局？');
+    (__VLS_ctx.syncCancelDialogCopy.title);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         id: "resume-abandon-description",
     });
-    (__VLS_ctx.joiningFriendInvite ? '房间仍在连接中。确认取消后会停止本次加入并返回首页。' : '系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。');
+    (__VLS_ctx.syncCancelDialogCopy.description);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-return-actions" },
     });
@@ -3621,14 +3714,14 @@ if (__VLS_ctx.confirmingResumeAbandon) {
         'data-testid': "cancel-resume-abandon",
     });
     /** @type {typeof __VLS_ctx.resumeAbandonCancelRef} */ ;
-    (__VLS_ctx.joiningFriendInvite ? '继续加入' : '继续恢复');
+    (__VLS_ctx.syncCancelDialogCopy.keepLabel);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.confirmResumeAbandon) },
         ...{ class: "danger" },
         type: "button",
         'data-testid': "confirm-resume-abandon",
     });
-    (__VLS_ctx.joiningFriendInvite ? '取消并返回首页' : '放弃并返回首页');
+    (__VLS_ctx.syncCancelDialogCopy.confirmLabel);
 }
 if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3926,7 +4019,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,
-            joiningFriendInvite: joiningFriendInvite,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
             abandonSessionResume: abandonSessionResume,
@@ -3939,6 +4031,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             isConnectingWithoutState: isConnectingWithoutState,
             showEntry: showEntry,
             showSyncingScreen: showSyncingScreen,
+            syncScreenCopy: syncScreenCopy,
+            syncCancelDialogCopy: syncCancelDialogCopy,
             showModeLobby: showModeLobby,
             showGameTools: showGameTools,
             canStartSelectedMode: canStartSelectedMode,
