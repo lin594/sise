@@ -426,6 +426,7 @@ export function useRoom(playerName = "Player") {
     let privateHandFingerprint = "";
     let availableActionsFingerprint = "";
     let connectInFlight = false;
+    let pendingConnectionRoomId = "";
     let activeConnectionSeq = 0;
     let lastManualSyncAt = 0;
     let privateStateRetryAfterAt = 0;
@@ -1223,6 +1224,7 @@ export function useRoom(playerName = "Player") {
             const initialRoomId = matchmaking
                 ? ""
                 : queryRoomId || cachedRoomId || (await createCompatibilityPracticeRoomId());
+            pendingConnectionRoomId = initialRoomId;
             const cachedToken = (initialRoomId && readStored(tokenKey(initialRoomId))) ||
                 (cachedRoomId === initialRoomId ? readStored(LEGACY_TOKEN_KEY) : "");
             const desiredToken = queryToken || cachedToken || generateLocalPlayerToken();
@@ -1267,6 +1269,8 @@ export function useRoom(playerName = "Player") {
                 }
                 clearStored(ROOM_KEY);
                 const fallbackRoomId = await createCompatibilityPracticeRoomId();
+                pendingConnectionRoomId = fallbackRoomId;
+                writeStored(tokenKey(fallbackRoomId), desiredToken);
                 joined = await client.joinById(fallbackRoomId, {
                     name: desiredName,
                     playerToken: desiredToken,
@@ -1290,6 +1294,7 @@ export function useRoom(playerName = "Player") {
             reconnectAttempts = 0;
             reconnectAttempt.value = 0;
             activeRoomId.value = joined.roomId || initialRoomId;
+            pendingConnectionRoomId = "";
             if (reconnecting || preserveState) {
                 connectionState.value = "restored";
                 restoredNoticeTimer = window.setTimeout(() => {
@@ -1558,6 +1563,7 @@ export function useRoom(playerName = "Player") {
         finally {
             if (isActiveConnection()) {
                 connectInFlight = false;
+                pendingConnectionRoomId = "";
             }
         }
         return false;
@@ -1674,10 +1680,11 @@ export function useRoom(playerName = "Player") {
     }
     async function leaveRoom() {
         const departingRoom = room.value;
-        const departingRoomId = activeRoomId.value.trim();
+        const departingRoomId = activeRoomId.value.trim() || pendingConnectionRoomId;
         suppressReconnect = true;
         activeConnectionSeq += 1;
         connectInFlight = false;
+        pendingConnectionRoomId = "";
         clearRoomStateSyncTimer();
         clearMissingHandSyncTimer();
         clearReconnectTimer();

@@ -143,13 +143,15 @@
       <div class="sync-card" data-testid="resume-session-screen">
         <div class="sync-message" role="status" aria-live="polite">
           <p class="entry-kicker">
-            {{ connectionState === 'closed' ? '原牌局已关闭' : connectionState === 'offline' ? '等待网络' : '恢复牌局' }}
+            {{ joiningFriendInvite ? '加入好友房' : connectionState === 'closed' ? '原牌局已关闭' : connectionState === 'offline' ? '等待网络' : '恢复牌局' }}
           </p>
           <h2>
-            {{ connectionState === 'closed' ? '无法回到原来的牌桌' : connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌' }}
+            {{ joiningFriendInvite ? '正在进入朋友的牌桌' : connectionState === 'closed' ? '无法回到原来的牌桌' : connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌' }}
           </h2>
           <p class="entry-desc">
-            {{ connectionState === 'closed'
+            {{ joiningFriendInvite
+              ? '正在连接房间，请稍候。请不要重复点击。'
+              : connectionState === 'closed'
               ? (joinError || '原牌局已经结束，系统不会继续重试。')
               : connectionState === 'offline'
               ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
@@ -157,7 +159,7 @@
           </p>
         </div>
         <button class="resume-cancel" type="button" data-testid="cancel-session-resume" @click="abandonSessionResume">
-          {{ connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页' }}
+          {{ joiningFriendInvite ? '取消加入，返回首页' : connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页' }}
         </button>
       </div>
     </section>
@@ -567,11 +569,11 @@
         @keydown.tab="trapResumeAbandonFocus"
       >
         <div class="table-return-symbol" aria-hidden="true">↩</div>
-        <h2 id="resume-abandon-title">放弃恢复原牌局？</h2>
-        <p id="resume-abandon-description">系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。</p>
+        <h2 id="resume-abandon-title">{{ joiningFriendInvite ? '取消加入好友房？' : '放弃恢复原牌局？' }}</h2>
+        <p id="resume-abandon-description">{{ joiningFriendInvite ? '房间仍在连接中。确认取消后会停止本次加入并返回首页。' : '系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。' }}</p>
         <div class="table-return-actions">
-          <button ref="resumeAbandonCancelRef" type="button" data-testid="cancel-resume-abandon" @click="cancelResumeAbandon">继续恢复</button>
-          <button class="danger" type="button" data-testid="confirm-resume-abandon" @click="confirmResumeAbandon">放弃并返回首页</button>
+          <button ref="resumeAbandonCancelRef" type="button" data-testid="cancel-resume-abandon" @click="cancelResumeAbandon">{{ joiningFriendInvite ? '继续加入' : '继续恢复' }}</button>
+          <button class="danger" type="button" data-testid="confirm-resume-abandon" @click="confirmResumeAbandon">{{ joiningFriendInvite ? '取消并返回首页' : '放弃并返回首页' }}</button>
         </div>
       </section>
     </div>
@@ -876,9 +878,11 @@ const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(readStoredValue(ENTRY_NAME_KEY).trim());
 const nicknameHistory = ref<string[]>(readNicknameHistory());
+const entryInviteRoomId = ref(new URLSearchParams(window.location.search).get("roomId")?.trim() || "");
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
 const restoringStoredSession = ref(false);
+const joiningFriendInvite = ref(false);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
 const lobbyModes: LobbyMode[] = [
@@ -968,6 +972,8 @@ async function resumeStoredRoomSession(): Promise<void> {
 
 async function abandonSessionResume(): Promise<void> {
   restoringStoredSession.value = false;
+  joiningFriendInvite.value = false;
+  entryInviteRoomId.value = "";
   enteringLobby.value = false;
   globalError.value = "";
   await leaveRoom();
@@ -1143,9 +1149,7 @@ const lobbyStartHint = computed(() => {
   if (unreadyFriendCount.value > 0) return `还有 ${unreadyFriendCount.value} 位牌友未准备`;
   return "四席已就绪，请点开始好友对局";
 });
-const hasFriendInvite = computed(
-  () => Boolean(new URLSearchParams(window.location.search).get("roomId")?.trim()),
-);
+const hasFriendInvite = computed(() => Boolean(entryInviteRoomId.value));
 const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
 const matchSecondsLeft = computed(() => {
@@ -1606,16 +1610,19 @@ function isCurrentRoomHistoryGuard(): boolean {
   );
 }
 
-function cleanRoomUrl(): string {
+function cleanRoomUrl(preserveInviteRoomId = false): string {
   const url = new URL(window.location.href);
-  url.searchParams.delete("roomId");
+  if (!preserveInviteRoomId) {
+    url.searchParams.delete("roomId");
+  }
   url.searchParams.delete("playerToken");
   url.searchParams.delete("new");
   return url.toString();
 }
 
 function sanitizeCurrentHistoryEntry(): void {
-  window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl());
+  const preserveInviteRoomId = showEntry.value && hasFriendInvite.value && !hasLobbySession.value;
+  window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl(preserveInviteRoomId));
 }
 
 function armRoomNavigationGuard(): void {
@@ -1920,6 +1927,7 @@ async function handleLeaveRoom(): Promise<void> {
   pendingPracticeAutoStart.value = false;
   clearSelection();
   await leaveRoom();
+  entryInviteRoomId.value = "";
 }
 
 function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }) {
@@ -2707,6 +2715,9 @@ const roundDealerCard = computed<Card | null>(() => {
 });
 
 async function enterLobby() {
+  if (enteringLobby.value || enteredFrontLobby.value) {
+    return;
+  }
   const nickname = entryName.value.trim() || generateRandomNickname();
   entryName.value = nickname;
   globalError.value = "";
@@ -2716,12 +2727,13 @@ async function enterLobby() {
   writeNicknameHistory(mergedHistory);
   void updateGuestProfileNickname(nickname);
   enteredFrontLobby.value = true;
-  const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
+  const invitedRoomId = entryInviteRoomId.value;
   if (!invitedRoomId) {
     await nextTick();
     document.querySelector<HTMLButtonElement>("[data-testid='mode-practice_bots']")?.focus();
     return;
   }
+  joiningFriendInvite.value = true;
   enteringLobby.value = true;
   try {
     const ok = await connect({
@@ -2734,7 +2746,9 @@ async function enterLobby() {
     }
   } catch (error) {
     globalError.value = error instanceof Error ? error.message : "加入好友房失败";
+    enteredFrontLobby.value = false;
   } finally {
+    joiningFriendInvite.value = false;
     enteringLobby.value = false;
   }
 }
@@ -3023,6 +3037,9 @@ watch(
 watch(activeRoomId, (roomId, previousRoomId) => {
   if (roomId !== previousRoomId) {
     closeInviteQr(false);
+  }
+  if (previousRoomId && !roomId) {
+    entryInviteRoomId.value = "";
   }
 });
 

@@ -119,9 +119,11 @@ const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const entryName = ref(readStoredValue(ENTRY_NAME_KEY).trim());
 const nicknameHistory = ref(readNicknameHistory());
+const entryInviteRoomId = ref(new URLSearchParams(window.location.search).get("roomId")?.trim() || "");
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
 const restoringStoredSession = ref(false);
+const joiningFriendInvite = ref(false);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref("practice_bots");
 const lobbyModes = [
@@ -201,6 +203,8 @@ async function resumeStoredRoomSession() {
 }
 async function abandonSessionResume() {
     restoringStoredSession.value = false;
+    joiningFriendInvite.value = false;
+    entryInviteRoomId.value = "";
     enteringLobby.value = false;
     globalError.value = "";
     await leaveRoom();
@@ -362,7 +366,7 @@ const lobbyStartHint = computed(() => {
         return `还有 ${unreadyFriendCount.value} 位牌友未准备`;
     return "四席已就绪，请点开始好友对局";
 });
-const hasFriendInvite = computed(() => Boolean(new URLSearchParams(window.location.search).get("roomId")?.trim()));
+const hasFriendInvite = computed(() => Boolean(entryInviteRoomId.value));
 const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
 const matchSecondsLeft = computed(() => {
@@ -751,15 +755,18 @@ function isCurrentRoomHistoryGuard() {
         !Array.isArray(current) &&
         current[ROOM_HISTORY_GUARD_KEY] === true);
 }
-function cleanRoomUrl() {
+function cleanRoomUrl(preserveInviteRoomId = false) {
     const url = new URL(window.location.href);
-    url.searchParams.delete("roomId");
+    if (!preserveInviteRoomId) {
+        url.searchParams.delete("roomId");
+    }
     url.searchParams.delete("playerToken");
     url.searchParams.delete("new");
     return url.toString();
 }
 function sanitizeCurrentHistoryEntry() {
-    window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl());
+    const preserveInviteRoomId = showEntry.value && hasFriendInvite.value && !hasLobbySession.value;
+    window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl(preserveInviteRoomId));
 }
 function armRoomNavigationGuard() {
     if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
@@ -1034,6 +1041,7 @@ async function handleLeaveRoom() {
     pendingPracticeAutoStart.value = false;
     clearSelection();
     await leaveRoom();
+    entryInviteRoomId.value = "";
 }
 function onPanelSelectionChange(payload) {
     if (!payload.mode) {
@@ -1728,6 +1736,9 @@ const roundDealerCard = computed(() => {
     return card?.id ? card : null;
 });
 async function enterLobby() {
+    if (enteringLobby.value || enteredFrontLobby.value) {
+        return;
+    }
     const nickname = entryName.value.trim() || generateRandomNickname();
     entryName.value = nickname;
     globalError.value = "";
@@ -1737,12 +1748,13 @@ async function enterLobby() {
     writeNicknameHistory(mergedHistory);
     void updateGuestProfileNickname(nickname);
     enteredFrontLobby.value = true;
-    const invitedRoomId = new URLSearchParams(window.location.search).get("roomId")?.trim() || "";
+    const invitedRoomId = entryInviteRoomId.value;
     if (!invitedRoomId) {
         await nextTick();
         document.querySelector("[data-testid='mode-practice_bots']")?.focus();
         return;
     }
+    joiningFriendInvite.value = true;
     enteringLobby.value = true;
     try {
         const ok = await connect({
@@ -1756,8 +1768,10 @@ async function enterLobby() {
     }
     catch (error) {
         globalError.value = error instanceof Error ? error.message : "加入好友房失败";
+        enteredFrontLobby.value = false;
     }
     finally {
+        joiningFriendInvite.value = false;
         enteringLobby.value = false;
     }
 }
@@ -2041,6 +2055,9 @@ watch(() => state.value?.phase, (phase) => {
 watch(activeRoomId, (roomId, previousRoomId) => {
     if (roomId !== previousRoomId) {
         closeInviteQr(false);
+    }
+    if (previousRoomId && !roomId) {
+        entryInviteRoomId.value = "";
     }
 });
 let lastGuestProfileRoundKey = "";
@@ -2751,24 +2768,26 @@ else if (__VLS_ctx.showSyncingScreen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-kicker" },
     });
-    (__VLS_ctx.connectionState === 'closed' ? '原牌局已关闭' : __VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
+    (__VLS_ctx.joiningFriendInvite ? '加入好友房' : __VLS_ctx.connectionState === 'closed' ? '原牌局已关闭' : __VLS_ctx.connectionState === 'offline' ? '等待网络' : '恢复牌局');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({});
-    (__VLS_ctx.connectionState === 'closed' ? '无法回到原来的牌桌' : __VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
+    (__VLS_ctx.joiningFriendInvite ? '正在进入朋友的牌桌' : __VLS_ctx.connectionState === 'closed' ? '无法回到原来的牌桌' : __VLS_ctx.connectionState === 'offline' ? '联网后会自动继续' : '正在回到原来的牌桌');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "entry-desc" },
     });
-    (__VLS_ctx.connectionState === 'closed'
-        ? (__VLS_ctx.joinError || '原牌局已经结束，系统不会继续重试。')
-        : __VLS_ctx.connectionState === 'offline'
-            ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
-            : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
+    (__VLS_ctx.joiningFriendInvite
+        ? '正在连接房间，请稍候。请不要重复点击。'
+        : __VLS_ctx.connectionState === 'closed'
+            ? (__VLS_ctx.joinError || '原牌局已经结束，系统不会继续重试。')
+            : __VLS_ctx.connectionState === 'offline'
+                ? '你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。'
+                : '正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.abandonSessionResume) },
         ...{ class: "resume-cancel" },
         type: "button",
         'data-testid': "cancel-session-resume",
     });
-    (__VLS_ctx.connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页');
+    (__VLS_ctx.joiningFriendInvite ? '取消加入，返回首页' : __VLS_ctx.connectionState === 'closed' ? '返回首页' : '放弃恢复，返回首页');
 }
 else {
     /** @type {[typeof GameBoard, ]} */ ;
@@ -3584,9 +3603,11 @@ if (__VLS_ctx.confirmingResumeAbandon) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h2, __VLS_intrinsicElements.h2)({
         id: "resume-abandon-title",
     });
+    (__VLS_ctx.joiningFriendInvite ? '取消加入好友房？' : '放弃恢复原牌局？');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         id: "resume-abandon-description",
     });
+    (__VLS_ctx.joiningFriendInvite ? '房间仍在连接中。确认取消后会停止本次加入并返回首页。' : '系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-return-actions" },
     });
@@ -3597,12 +3618,14 @@ if (__VLS_ctx.confirmingResumeAbandon) {
         'data-testid': "cancel-resume-abandon",
     });
     /** @type {typeof __VLS_ctx.resumeAbandonCancelRef} */ ;
+    (__VLS_ctx.joiningFriendInvite ? '继续加入' : '继续恢复');
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.confirmResumeAbandon) },
         ...{ class: "danger" },
         type: "button",
         'data-testid': "confirm-resume-abandon",
     });
+    (__VLS_ctx.joiningFriendInvite ? '取消并返回首页' : '放弃并返回首页');
 }
 if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3900,6 +3923,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,
+            joiningFriendInvite: joiningFriendInvite,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
             abandonSessionResume: abandonSessionResume,
