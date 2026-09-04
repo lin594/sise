@@ -199,6 +199,14 @@ Playwright 至少覆盖 320×568/375×667 旋转画布、568×320 老旧横屏�
 7. 在活动牌局中记录 roomId、本人座位、手牌张数与待响应牌，只执行 `docker compose restart server`；页面应自动恢复到同一决定。随后完成一次出牌，确认不是只恢复了静态画面。
 8. 重建服务容器后再次读取测试档案，确认命名卷中的统计仍在；检查日志只显示恢复房间数量，不包含 token 或私有手牌。
 9. 正常退出或解散一桌后再重启服务，确认该房间没有从旧快照复活。
+
+部署级的活动房恢复可使用受保护的 smoke 脚本。它会真实创建一局并重启目标服务，必须在确认当前环境允许短暂断连后显式解锁；脚本只输出座位、手牌数量和恢复结论，不输出房间 token 或牌面明细：
+
+```bash
+LIVE_RECOVERY_SMOKE=1 npm run smoke:live-recovery
+```
+
+默认目标为 `imac`、`~/workspace/lin594/sise`、`http://imac.tajuren.cn:3000/` 和 `http://imac.tajuren.cn:2567/`。其他部署可通过 `LIVE_RECOVERY_SSH_HOST`、`LIVE_RECOVERY_REMOTE_PATH`、`LIVE_RECOVERY_BASE_URL`、`LIVE_RECOVERY_BACKEND_URL` 覆盖；路径仅接受不含空格和 shell 控制符的安全形式。
 10. 对比部署 commit 与本地已验证 commit，避免只重建了旧代码。
 
 可直接从本地测试仓库复用部署后浏览器回归（测试机地址按实际环境替换）：
