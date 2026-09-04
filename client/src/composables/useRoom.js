@@ -1184,8 +1184,8 @@ export function useRoom(playerName = "Player") {
         connectionState.value = reconnecting ? "reconnecting" : "connecting";
         const connectionSeq = ++activeConnectionSeq;
         const isActiveConnection = () => activeConnectionSeq === connectionSeq;
-        const client = withSafeBrowserStorage(() => new Client(WS_URL));
         try {
+            const client = withSafeBrowserStorage(() => new Client(WS_URL));
             clearRoomStateSyncTimer();
             clearMissingHandSyncTimer();
             clearPrivateStatePollTimer();

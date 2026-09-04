@@ -1,6 +1,7 @@
 type BrowserStorageName = "localStorage" | "sessionStorage";
 
 const volatileValues = new Map<string, string>();
+const removedKeys = new Set<string>();
 
 function browserStorage(name: BrowserStorageName): Storage | null {
   if (typeof window === "undefined") {
@@ -25,6 +26,9 @@ function readFrom(storage: Storage | null, key: string): string | null {
 }
 
 export function readStoredValue(key: string): string {
+  if (removedKeys.has(key)) {
+    return volatileValues.get(key) ?? "";
+  }
   for (const name of ["localStorage", "sessionStorage"] as const) {
     const value = readFrom(browserStorage(name), key);
     if (value !== null) {
@@ -37,7 +41,8 @@ export function readStoredValue(key: string): string {
 
 export function writeStoredValue(key: string, value: string): boolean {
   volatileValues.set(key, value);
-  let browserWriteSucceeded = false;
+  removedKeys.delete(key);
+  let persistentWriteSucceeded = false;
   for (const name of ["localStorage", "sessionStorage"] as const) {
     const storage = browserStorage(name);
     if (!storage) {
@@ -45,16 +50,19 @@ export function writeStoredValue(key: string, value: string): boolean {
     }
     try {
       storage.setItem(key, value);
-      browserWriteSucceeded = true;
+      if (name === "localStorage") {
+        persistentWriteSucceeded = true;
+      }
     } catch {
       // The in-memory value keeps the current page usable.
     }
   }
-  return browserWriteSucceeded;
+  return persistentWriteSucceeded;
 }
 
 export function removeStoredValue(key: string): void {
   volatileValues.delete(key);
+  removedKeys.add(key);
   for (const name of ["localStorage", "sessionStorage"] as const) {
     const storage = browserStorage(name);
     if (!storage) {
@@ -88,6 +96,11 @@ export function hasPersistentBrowserStorage(): boolean {
   }
 }
 
+/**
+ * Some browser SDK constructors synchronously probe Web Storage without
+ * catching method-level SecurityError. Guard only that synchronous boundary,
+ * then restore the browser methods immediately.
+ */
 export function withSafeBrowserStorage<T>(operation: () => T): T {
   if (typeof Storage === "undefined") {
     return operation();

@@ -59,6 +59,10 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId("game-exit").click();
+    await page.getByTestId("confirm-exit").click();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByTestId("guest-profile-summary")).toHaveCount(0);
     expect(pageErrors).toEqual([]);
   } finally {
     await context.close();
