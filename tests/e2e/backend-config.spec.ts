@@ -41,6 +41,20 @@ test("the iMac-style HTTP deployment keeps HTTP and WS fallback transport", () =
   });
 });
 
+test("explicit iMac gateway addresses keep both channels on the HTTP test origin", () => {
+  expect(
+    resolveBackendUrls({
+      protocol: "http:",
+      hostname: "imac.tajuren.cn",
+      httpUrl: "http://imac.tajuren.cn",
+      wsUrl: "ws://imac.tajuren.cn",
+    }),
+  ).toEqual({
+    httpUrl: "http://imac.tajuren.cn",
+    wsUrl: "ws://imac.tajuren.cn",
+  });
+});
+
 test("IPv6 development hosts remain valid backend URLs", () => {
   expect(resolveBackendUrls({ protocol: "http:", hostname: "::1" })).toEqual({
     httpUrl: "http://[::1]:2567",

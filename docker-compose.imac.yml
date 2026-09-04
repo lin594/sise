@@ -1,0 +1,15 @@
+services:
+  server:
+    environment:
+      CORS_ALLOWED_ORIGINS: "${IMAC_CORS_ALLOWED_ORIGINS:-http://imac.tajuren.cn,http://imac.tajuren.cn:3000}"
+      TRUST_PROXY_HOPS: "1"
+    ports: !override []
+
+  web:
+    build:
+      args:
+        VITE_SERVER_URL: "${IMAC_VITE_SERVER_URL:-ws://imac.tajuren.cn}"
+        VITE_SERVER_HTTP_URL: "${IMAC_VITE_SERVER_HTTP_URL:-http://imac.tajuren.cn}"
+    ports: !override
+      - "80:80"
+      - "3000:80"

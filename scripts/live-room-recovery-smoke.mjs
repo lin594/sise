@@ -10,8 +10,8 @@ if (process.env.LIVE_RECOVERY_SMOKE !== "1") {
   process.exit(2);
 }
 
-const baseUrl = new URL(process.env.LIVE_RECOVERY_BASE_URL || "http://imac.tajuren.cn:3000/");
-const backendUrl = new URL(process.env.LIVE_RECOVERY_BACKEND_URL || "http://imac.tajuren.cn:2567/");
+const baseUrl = new URL(process.env.LIVE_RECOVERY_BASE_URL || "http://imac.tajuren.cn/");
+const backendUrl = new URL(process.env.LIVE_RECOVERY_BACKEND_URL || baseUrl.href);
 const sshHost = process.env.LIVE_RECOVERY_SSH_HOST || "imac";
 const remotePath = process.env.LIVE_RECOVERY_REMOTE_PATH || "~/workspace/lin594/sise";
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL || "chrome";

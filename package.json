@@ -12,11 +12,15 @@
     "build:client": "npm --prefix client run build",
     "e2e": "npm run build && playwright test",
     "e2e:headed": "npm run build && playwright test --headed",
+    "smoke:imac-gateway": "node scripts/imac-gateway-smoke.mjs",
     "smoke:live-recovery": "node scripts/live-room-recovery-smoke.mjs",
     "install:all": "npm install --prefix server && npm install --prefix client",
     "compose:dev": "docker compose -f docker-compose.dev.yml up --build",
     "compose:prod": "docker compose up --build -d",
+    "compose:imac:check": "node scripts/validate-imac-compose.mjs",
+    "compose:imac": "npm run compose:imac:check && docker compose -f docker-compose.yml -f docker-compose.imac.yml up --build -d",
     "compose:down": "docker compose down",
+    "compose:down:imac": "docker compose -f docker-compose.yml -f docker-compose.imac.yml down",
     "compose:down:dev": "docker compose -f docker-compose.dev.yml down"
   },
   "devDependencies": {
