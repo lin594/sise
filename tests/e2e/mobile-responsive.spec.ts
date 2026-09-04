@@ -1745,18 +1745,15 @@ test.describe("compact landscape gameplay", () => {
     await expect(waiting).toHaveCount(0);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-pass")).toBeEnabled();
-    await expect(gameSettings).toBeDisabled();
+    await expect(gameSettings).toBeEnabled();
     await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
-    const decisionSettingsStyle = await gameSettings.evaluate((button) => {
-      const style = getComputedStyle(button);
-      return { color: style.color, backgroundColor: style.backgroundColor, borderColor: style.borderColor };
-    });
-    expect(decisionSettingsStyle).toEqual({
-      color: "rgb(148, 163, 184)",
-      backgroundColor: "rgba(15, 23, 42, 0.7)",
-      borderColor: "rgba(100, 116, 139, 0.42)",
-    });
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
+    await gameSettings.click();
+    await expect(page.getByTestId("settings-decision-reminder")).toContainText("轮到你操作");
+    await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
+    await page.getByTestId("settings-return-to-decision").click();
+    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+    await expect(page.getByTestId("action-pass")).toBeFocused();
     const toolPositionsDuringDecision = await page.locator("[data-testid='game-history'], [data-testid='game-settings'], [data-testid='game-exit']")
       .evaluateAll((buttons) => buttons.map((button) => {
         const rect = button.getBoundingClientRect();
@@ -1773,7 +1770,7 @@ test.describe("compact landscape gameplay", () => {
     expect(decisionDock.height).toBeCloseTo(desktopWaitingDock.height, 0);
   });
 
-  test("keeps settings readable and clears them when a turn needs attention", async ({ page }, testInfo) => {
+  test("keeps settings and rules available while a turn needs attention", async ({ page }, testInfo) => {
     test.setTimeout(60_000);
     await page.addInitScript(() => {
       const key = "sise_test_vibration_calls";
@@ -1812,7 +1809,7 @@ test.describe("compact landscape gameplay", () => {
         },
       });
     });
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
@@ -1936,13 +1933,32 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("settings-rules").click();
     await expect(rulesDialog).toBeVisible();
     await confirmDeclaration.dispatchEvent("click");
-    await expect(gameSettings).toBeDisabled({ timeout: 30_000 });
-    await expect(rulesDialog).toHaveCount(0);
-    await expect(settingsPanel).toHaveCount(0);
+    await expect(gameSettings).toBeEnabled({ timeout: 30_000 });
+    await expect(rulesDialog).toBeVisible();
+    await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");
+    await expect(page.getByTestId("rules-decision-reminder")).toContainText("练习局不限时");
     await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "完成当前操作后可打开设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
+    await page.getByTestId("rules-return-to-decision").click();
+    await expect(rulesDialog).toHaveCount(0);
     await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
+
+    await applyLocalDebugScenario(page, "chi_local_upper");
+    await page.getByTestId("action-chi").click();
+    await page.getByTestId("candidate-option").first().click();
+    await expect(page.getByTestId("discard-confirm")).toBeVisible();
+    const selectedCard = page.locator(".hand-card.playable:not(:disabled)").first();
+    await expect(selectedCard).toBeVisible();
+    await selectedCard.click();
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
+    await gameSettings.click();
+    await expect(settingsPanel).toBeVisible();
+    await page.getByTestId("card-mode-own-large").click();
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("settings-return-to-decision").click();
+    await expect(selectedCard).toBeFocused();
+    await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await expect.poll(() => page.title()).toBe("轮到你了 · 四色牌");
     const vibrationCalls = await page.evaluate(() =>
       JSON.parse(sessionStorage.getItem("sise_test_vibration_calls") ?? "[]") as unknown[],

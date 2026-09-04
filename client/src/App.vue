@@ -45,6 +45,8 @@
         v-if="showGameTools"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
+        :decision-untimed="decisionTimer.untimed"
+        :decision-seconds-left="settingsDecisionSecondsLeft"
         :action-logs="actionLogs"
         :players="players"
         :my-seat-id="mySeatId"
@@ -53,6 +55,7 @@
         :spoken-turn-guidance-supported="spokenTurnGuidanceSupported"
         :screen-wake-lock-supported="screenWakeLockSupported"
         @open-rules="openRules"
+        @return-to-decision="returnToDecision"
         @set-auto-play="setAutoPlay"
         @exit="handleLeaveRoom"
       />
@@ -629,6 +632,19 @@
             <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
           </div>
           <button ref="rulesCloseButtonRef" class="ghost" data-testid="close-rules" @click="closeRules()">关闭</button>
+        </div>
+
+        <div
+          v-if="settingsDecisionActive"
+          class="rules-decision-reminder"
+          data-testid="rules-decision-reminder"
+          role="status"
+          aria-live="polite"
+        >
+          <span><strong>轮到你操作</strong> · {{ settingsDecisionTimeText }}</span>
+          <button type="button" data-testid="rules-return-to-decision" @click="returnToDecisionFromRules">
+            返回出牌
+          </button>
         </div>
 
         <section class="rules-section">
@@ -1521,14 +1537,33 @@ const shouldShowDeclarePanel = computed(
 const settingsDecisionActive = computed(
   () => pendingActionDecision.value || pendingDiscardDecision.value,
 );
+const settingsDecisionSecondsLeft = computed(() => {
+  if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
+    return 0;
+  }
+  const endsAt = Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0);
+  return endsAt > 0 ? Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000)) : 0;
+});
+const settingsDecisionTimeText = computed(() =>
+  decisionTimer.value.untimed
+    ? "练习局不限时，查看规则期间牌局仍会继续"
+    : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
+);
 
 function openRules(): void {
-  if (settingsDecisionActive.value) {
-    return;
-  }
   rulesReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   showRules.value = true;
   void nextTick(() => rulesCloseButtonRef.value?.focus());
+}
+
+function returnToDecision(): void {
+  decisionControlFocusPending = true;
+  void nextTick(focusReadyGameControl);
+}
+
+function returnToDecisionFromRules(): void {
+  closeRules(false);
+  returnToDecision();
 }
 
 function closeRules(restoreFocus = true): void {
@@ -1942,12 +1977,6 @@ function handleRoomNavigationPopState(): void {
   void requestRoomExitFromBrowserBack();
 }
 
-function closeRulesForDecision(): void {
-  if (showRules.value) {
-    closeRules(false);
-  }
-}
-
 let decisionControlFocusPending = false;
 
 function focusReadyGameControl(): boolean {
@@ -1955,7 +1984,7 @@ function focusReadyGameControl(): boolean {
     return false;
   }
   const control = document.querySelector<HTMLElement>(
-    ".hand-card.playable:not(:disabled), .action-dock .btn:not(:disabled)",
+    ".hand-card.discard-selected:not(:disabled), .action-dock .btn:not(:disabled), .hand-card.playable:not(:disabled)",
   );
   if (!control) {
     return false;
@@ -1971,7 +2000,6 @@ watch(settingsDecisionActive, (active) => {
     return;
   }
   decisionControlFocusPending = true;
-  closeRulesForDecision();
   // A decision can arrive before the private hand or action buttons finish
   // their adjacent state patch. Keep the focus request pending until a real
   // control exists instead of leaving keyboard users on removed settings.
@@ -4100,6 +4128,36 @@ watch(
   color: #7c2d12;
   font-weight: 700;
   font-size: clamp(0.84rem, 1.75vh, 0.98rem);
+}
+
+.rules-decision-reminder {
+  position: sticky;
+  top: clamp(4.7rem, 12vh, 6.2rem);
+  z-index: 2;
+  min-height: 2.8rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #f59e0b;
+  border-radius: 0.8rem;
+  background: #fffbeb;
+  color: #78350f;
+  box-shadow: 0 5px 16px rgba(120, 53, 15, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  font-size: max(0.88rem, 14px);
+}
+
+.rules-decision-reminder button {
+  flex: 0 0 auto;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #b45309;
+  border-radius: 0.65rem;
+  background: #b45309;
+  color: #fff7ed;
+  font-size: max(0.88rem, 14px);
+  font-weight: 850;
 }
 
 .rules-section {

@@ -23,12 +23,11 @@
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '完成当前操作后可打开设置' : '牌局设置'"
-        :title="decisionActive ? '完成当前操作后可打开设置' : '牌局设置'"
+        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '牌局设置'"
+        title="牌局设置"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
-        :disabled="decisionActive"
         @click="toggleSettings"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -148,6 +147,21 @@
           </div>
           <button type="button" aria-label="关闭设置" @click="closeSettings()">×</button>
         </header>
+        <div
+          v-if="decisionActive"
+          class="decision-reminder"
+          data-testid="settings-decision-reminder"
+          role="status"
+          aria-live="polite"
+        >
+          <span>
+            <strong>轮到你操作</strong>
+            <small>{{ decisionTimeText }}</small>
+          </span>
+          <button type="button" data-testid="settings-return-to-decision" @click="returnToDecision">
+            返回出牌
+          </button>
+        </div>
         <div class="preference-group">
           <div class="preference-copy">
             <strong>我的牌</strong>
@@ -374,6 +388,8 @@ const props = withDefaults(
   defineProps<{
     modelValue: GameDisplayPreferences;
     decisionActive?: boolean;
+    decisionUntimed?: boolean;
+    decisionSecondsLeft?: number;
     actionLogs?: ParsedActionLog[];
     players?: PlayerState[];
     mySeatId?: string;
@@ -384,6 +400,8 @@ const props = withDefaults(
   }>(),
   {
     decisionActive: false,
+    decisionUntimed: false,
+    decisionSecondsLeft: 0,
     actionLogs: () => [],
     players: () => [],
     mySeatId: "",
@@ -397,6 +415,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:modelValue": [preferences: GameDisplayPreferences];
   openRules: [];
+  returnToDecision: [];
   exit: [];
   setAutoPlay: [enabled: boolean];
 }>();
@@ -454,6 +473,11 @@ const historyButtonLabel = computed(() =>
     ? `最近操作，共${historyItems.value.length}条`
     : "最近操作，暂无记录",
 );
+const decisionTimeText = computed(() =>
+  props.decisionUntimed
+    ? "练习局不限时，设置期间牌局仍会继续"
+    : `还剩 ${Math.max(0, Math.ceil(props.decisionSecondsLeft))} 秒，设置期间计时继续`,
+);
 
 function formattedHistoryAction(log: ParsedActionLog): string {
   const card = log.cardLabel;
@@ -478,18 +502,6 @@ function formattedHistoryAction(log: ParsedActionLog): string {
   };
   return withCard[log.actionKey] ?? log.displayText;
 }
-
-watch(
-  () => props.decisionActive,
-  (active) => {
-    if (active) {
-      removeSettingsOutsideListener();
-      stopObservingSettingsScroll();
-      settingsOpen.value = false;
-      historyOpen.value = false;
-    }
-  },
-);
 
 async function toggleSettings(): Promise<void> {
   if (settingsOpen.value) {
@@ -659,6 +671,12 @@ function openRules(): void {
   settingsOpen.value = false;
   historyOpen.value = false;
   emit("openRules");
+}
+
+function returnToDecision(): void {
+  closeSettings(false);
+  closeHistory(false);
+  emit("returnToDecision");
 }
 
 async function requestAutoPlayChange(): Promise<void> {
@@ -877,14 +895,6 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
-.tool-button.settings:disabled {
-  cursor: not-allowed;
-  border-color: rgba(100, 116, 139, 0.42);
-  background: rgba(15, 23, 42, 0.7);
-  color: #94a3b8;
-  opacity: 1;
-}
-
 .tool-button svg {
   width: 1.1rem;
   height: 1.1rem;
@@ -964,6 +974,51 @@ onBeforeUnmount(() => {
   background: rgba(30, 41, 59, 0.78);
   color: #cbd5e1;
   font-size: 1.25rem;
+}
+
+.decision-reminder {
+  position: sticky;
+  top: -0.8rem;
+  z-index: 3;
+  margin: 0.55rem -0.35rem 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(251, 191, 36, 0.62);
+  border-radius: 0.75rem;
+  background: #30220b;
+  box-shadow: 0 5px 14px rgba(2, 6, 23, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.decision-reminder > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+  text-align: left;
+}
+
+.decision-reminder strong {
+  color: #fef3c7;
+  font-size: max(0.9rem, 15px);
+}
+
+.decision-reminder small {
+  color: #fde68a;
+  line-height: 1.3;
+}
+
+.decision-reminder button {
+  flex: 0 0 auto;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.62rem;
+  border: 1px solid #fbbf24;
+  border-radius: 0.65rem;
+  background: #b45309;
+  color: #fff7ed;
+  font-size: max(0.86rem, 14px);
+  font-weight: 850;
 }
 
 .settings-scroll-hint {
