@@ -16,11 +16,13 @@ const sshHost = process.env.LIVE_RECOVERY_SSH_HOST || "imac";
 const remotePath = process.env.LIVE_RECOVERY_REMOTE_PATH || "~/workspace/lin594/sise";
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL || "chrome";
 const recreateServer = process.env.LIVE_RECOVERY_RECREATE_SERVER === "1";
+const recoveryPhase = process.env.LIVE_RECOVERY_PHASE || "declaring";
 
 assert.match(baseUrl.protocol, /^https?:$/);
 assert.match(backendUrl.protocol, /^https?:$/);
 assert.match(sshHost, /^[A-Za-z0-9_.-]+$/, "SSH host contains unsupported characters");
 assert.match(remotePath, /^~?[A-Za-z0-9_./-]+$/, "Remote path contains unsupported characters");
+assert.match(recoveryPhase, /^(?:declaring|playing)$/u, "Unsupported recovery phase");
 
 async function waitForHealth(timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
@@ -80,6 +82,80 @@ async function readDeclarationSnapshot(page) {
   });
 }
 
+async function readPlayingSnapshot(page) {
+  await page.locator("main.layout.playing").waitFor({ state: "visible", timeout: 30_000 });
+  await page.getByTestId("discard-confirm").waitFor({ state: "visible", timeout: 30_000 });
+  await page.locator(".hand .hand-card").first().waitFor({ state: "visible", timeout: 30_000 });
+
+  return page.evaluate(() => {
+    const roomId = localStorage.getItem("four_room_id");
+    const token = roomId ? localStorage.getItem(`four_player_token:${roomId}`) : null;
+    return {
+      roomId,
+      token,
+      seatId: document.querySelector('[data-testid="player-self"]')?.getAttribute("data-player-id") ?? null,
+      handLabels: Array.from(
+        document.querySelectorAll(".hand .hand-card"),
+        (card) => card.dataset.cardId ?? "",
+      ),
+    };
+  });
+}
+
+async function reachPlayingDiscardDecision(page) {
+  await page.getByTestId("confirm-declaration").click();
+  await page.locator("main.layout.playing").waitFor({ state: "visible", timeout: 30_000 });
+  const deadline = Date.now() + 60_000;
+  const discardConfirm = page.getByTestId("discard-confirm");
+
+  while (Date.now() < deadline) {
+    if (await discardConfirm.isVisible().catch(() => false)) {
+      return;
+    }
+
+    const candidate = page.getByTestId("candidate-option").first();
+    if ((await candidate.isVisible().catch(() => false)) && (await candidate.isEnabled().catch(() => false))) {
+      await candidate.click({ force: true });
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    const responsePhase = await page.getByTestId("game-board").getAttribute("data-response-phase");
+    const preferredActions = responsePhase === "collective"
+      ? ["action-pass", "action-peng", "action-kai", "action-chi"]
+      : ["action-pass", "action-chi", "action-peng", "action-kai"];
+    let acted = false;
+    for (const testId of preferredActions) {
+      const action = page.getByTestId(testId);
+      if ((await action.isVisible().catch(() => false)) && (await action.isEnabled().catch(() => false))) {
+        await action.click({ force: true });
+        acted = true;
+        break;
+      }
+    }
+    await page.waitForTimeout(acted ? 250 : 150);
+  }
+
+  throw new Error("Timed out before the player received a discard decision");
+}
+
+async function advanceRecoveredPlayingDecision(page, handCountBefore) {
+  const playableCard = page.locator(".hand .hand-card:not(:disabled)").first();
+  await playableCard.waitFor({ state: "visible", timeout: 30_000 });
+  await playableCard.click();
+  const discardConfirm = page.getByTestId("discard-confirm");
+  await discardConfirm.waitFor({ state: "visible", timeout: 10_000 });
+  assert.equal(await discardConfirm.isEnabled(), true, "discard confirmation did not become enabled");
+  await discardConfirm.click();
+  await page.waitForFunction(
+    (previousCount) =>
+      document.querySelectorAll(".hand .hand-card").length < previousCount
+      || !document.querySelector('[data-testid="discard-confirm"]'),
+    handCountBefore,
+    { timeout: 30_000 },
+  );
+}
+
 let browser;
 let page;
 try {
@@ -98,11 +174,19 @@ try {
   await page.getByTestId("lobby-start").click();
   await page.getByTestId("game-board").waitFor({ state: "visible", timeout: 20_000 });
 
-  const before = await readDeclarationSnapshot(page);
+  if (recoveryPhase === "playing") {
+    await reachPlayingDiscardDecision(page);
+  }
+  const before = recoveryPhase === "playing"
+    ? await readPlayingSnapshot(page)
+    : await readDeclarationSnapshot(page);
   assert.match(before.roomId ?? "", /^[A-Za-z0-9_-]+$/);
   assert.ok(/^pt_[0-9a-f]{48}$/.test(before.token ?? ""), "room credential is missing or malformed");
   assert.ok(before.seatId, "seat identity is missing");
-  assert.ok(before.handLabels.length >= 20, "private hand is incomplete");
+  assert.ok(
+    recoveryPhase === "playing" ? before.handLabels.length > 0 : before.handLabels.length >= 20,
+    "private hand is incomplete",
+  );
 
   // Give the debounced persistence writer enough time before inducing failure.
   await page.waitForTimeout(500);
@@ -137,7 +221,9 @@ try {
   await restoredNotice.waitFor({ state: "visible", timeout: 30_000 });
   assert.match((await restoredNotice.textContent()) ?? "", /已恢复.*请核对手牌/s);
 
-  const after = await readDeclarationSnapshot(page);
+  const after = recoveryPhase === "playing"
+    ? await readPlayingSnapshot(page)
+    : await readDeclarationSnapshot(page);
   assert.ok(after.roomId === before.roomId, "room id changed after restart");
   assert.ok(after.token === before.token, "room credential changed after restart");
   assert.ok(after.seatId === before.seatId, "seat changed after restart");
@@ -156,8 +242,12 @@ try {
   assert.match(recoveryLogs, /\[room-recovery\] 已在开放连接前恢复 \d+ 个房间/);
 
   // Prove that the recovered untimed human decision can still advance.
-  await page.getByTestId("confirm-declaration").click();
-  await page.locator("main.layout.playing").waitFor({ state: "visible", timeout: 30_000 });
+  if (recoveryPhase === "playing") {
+    await advanceRecoveredPlayingDecision(page, after.handLabels.length);
+  } else {
+    await page.getByTestId("confirm-declaration").click();
+    await page.locator("main.layout.playing").waitFor({ state: "visible", timeout: 30_000 });
+  }
 
   await page.getByTestId("game-exit").click();
   await page.getByTestId("confirm-exit").click();
@@ -169,6 +259,8 @@ try {
     seatPreserved: true,
     privateHandCount: after.handLabels.length,
     recoveredDecisionAdvanced: true,
+    playingDecisionAdvanced: recoveryPhase === "playing" ? true : undefined,
+    recoveryPhase,
     serverOperation: recreateServer ? "recreate" : "restart",
     webGatewayPreserved: recreateServer || undefined,
   }));

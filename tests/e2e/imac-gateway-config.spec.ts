@@ -38,8 +38,11 @@ test("the recovery smoke can replace only the backend container", async () => {
   const smoke = await readFile(path.join(repositoryRoot, "scripts/live-room-recovery-smoke.mjs"), "utf8");
 
   expect(smoke).toContain('process.env.LIVE_RECOVERY_RECREATE_SERVER === "1"');
+  expect(smoke).toContain('process.env.LIVE_RECOVERY_PHASE || "declaring"');
   expect(smoke).toContain("up -d --force-recreate --no-deps server");
   expect(smoke).toContain('readRemoteContainerId("server")');
   expect(smoke).toContain('readRemoteContainerId("web")');
+  expect(smoke).toContain('recoveryPhase === "playing"');
+  expect(smoke).toContain('playingDecisionAdvanced: recoveryPhase === "playing" ? true : undefined');
   expect(smoke).toContain('"web gateway restarted during the server-only recovery test"');
 });

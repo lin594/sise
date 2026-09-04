@@ -220,10 +220,11 @@ LIVE_RECOVERY_SMOKE=1 npm run smoke:live-recovery
 普通模式执行 `docker compose restart server`。网关发布前必须再执行一次真正替换后端容器的严格模式，并由脚本断言 Web 容器没有随之重启：
 
 ```bash
-LIVE_RECOVERY_SMOKE=1 LIVE_RECOVERY_RECREATE_SERVER=1 npm run smoke:live-recovery
+LIVE_RECOVERY_SMOKE=1 LIVE_RECOVERY_RECREATE_SERVER=1 LIVE_RECOVERY_PHASE=playing \
+  npm run smoke:live-recovery
 ```
 
-默认目标为 `imac`、`~/workspace/lin594/sise` 和同源 `http://imac.tajuren.cn/`；页面、HTTP API 与 WebSocket 都经过 Web 网关。其他部署可通过 `LIVE_RECOVERY_SSH_HOST`、`LIVE_RECOVERY_REMOTE_PATH`、`LIVE_RECOVERY_BASE_URL`、`LIVE_RECOVERY_BACKEND_URL` 覆盖；路径仅接受不含空格和 shell 控制符的安全形式。
+`LIVE_RECOVERY_PHASE` 默认为 `declaring`；设为 `playing` 后，脚本会先推进到真人等待确认出牌，重建后逐张核对手牌，再实际打出一张牌。默认目标为 `imac`、`~/workspace/lin594/sise` 和同源 `http://imac.tajuren.cn/`；页面、HTTP API 与 WebSocket 都经过 Web 网关。其他部署可通过 `LIVE_RECOVERY_SSH_HOST`、`LIVE_RECOVERY_REMOTE_PATH`、`LIVE_RECOVERY_BASE_URL`、`LIVE_RECOVERY_BACKEND_URL` 覆盖；路径仅接受不含空格和 shell 控制符的安全形式。
 
 可直接从本地测试仓库复用部署后浏览器回归（测试机地址按实际环境替换）：
 

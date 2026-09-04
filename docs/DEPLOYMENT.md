@@ -154,7 +154,7 @@ IMAC_CORS_ALLOWED_ORIGINS=http://test-host.example,http://test-host.example:3000
 npm run smoke:imac-gateway
 ```
 
-发布前还应按 [TESTING.md](TESTING.md) 运行 `LIVE_RECOVERY_RECREATE_SERVER=1` 的活动房恢复冒烟；它会真正替换 server 容器，同时断言 Web 网关容器未重启且原牌局可继续。
+发布前还应按 [TESTING.md](TESTING.md) 运行 `LIVE_RECOVERY_RECREATE_SERVER=1 LIVE_RECOVERY_PHASE=playing` 的活动房恢复冒烟；它会在真人等待确认出牌时真正替换 server 容器，同时断言 Web 网关容器未重启、逐张私有手牌未改变且原牌局可继续出牌。
 
 ## 7. 环境变量
 
