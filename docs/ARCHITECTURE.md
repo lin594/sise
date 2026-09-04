@@ -6,7 +6,7 @@
 - 服务端：Colyseus Core 0.18 + Schema 5 + TypeScript，使用 Express 提供少量 HTTP 辅助接口。
 - 实时通信：Colyseus 房间状态补丁与自定义 WebSocket 消息。
 - 运行模式：单人练习、公开快速配桌和好友同桌私有房。
-- 数据保存：牌局与匹配状态只在当前服务端进程内存中；免注册访客的聚合档案写入 Redis。未配置 Redis 的开发环境使用进程内存；Redis 短暂故障时使用内存镜像和变更日志，恢复后自动补写。
+- 数据保存：权威牌局在进程内运行，并以版本化私有快照写入 Redis，单服务重建后可恢复原房间；免注册访客的聚合档案也写入 Redis。未配置 Redis 的开发环境仍可游戏，但进程退出后不会恢复房间；档案在 Redis 短暂故障时使用内存镜像和变更日志，恢复后自动补写。
 
 规则裁决全部在服务端。客户端只渲染公开状态、本人的私有手牌和服务端签发的合法动作，不能自行决定胡、吃、碰、开或弃牌是否成功。
 
@@ -44,6 +44,10 @@
 - 当前待响应上下文及集体选择
 - 当前必须弃牌的座位
 - 超时任务、断线托管和本局结算快照
+
+上述权威数据除旧 WebSocket session 和计时器句柄外，会在每次完整动作广播后生成 `ROOM_RECOVERY_VERSION` 版本的 Redis 快照。每个房间的短时间连续广播只写最后一份，写入在房间事件循环之外串行执行，不让 Redis 延迟阻塞出牌。快照包含四家真实手牌、牌堆、待响应上下文和房间/档案 token，因此只能保存在内部 Redis，不能进入公开 Schema、房间元数据、HTTP 响应或日志。活动/等待房快照保留 24 小时，已结算房保留 6 小时，后续写入续期；正常解散和空房回收会删除对应记录。
+
+服务启动先等待 MatchMaker 初始化，再读取并校验快照，用原 roomId 重建房间，全部完成后才开放 HTTP/WebSocket 监听。旧 session 和绝对截止时间不会复用：配置机器人继续运行，真人先标记离线并获得新的重连宽限，声明/响应计时从安全的完整窗口重新建立；原 `playerToken` 随后仍能回收同一座位和私有手牌。优雅关停在 Colyseus 断开客户端之前强制写入所有房间，并抑制关停过程的正常删除。Redis 故障只让本次快照不可用，不中断当前游戏；后续状态变化会再次尝试，但进程与 Redis 同时永久故障仍无法恢复未落盘状态。
 
 私有手牌通过 `private_hand` 消息和受 token 保护的 `/private-state` 恢复，不进入公开 Schema。客户端使用 `Authorization: Bearer <playerToken>` 请求该接口，响应带 `Cache-Control: no-store`；服务端暂时兼容旧客户端的查询参数 token，但新代码不得再把凭证写入 URL。好友邀请访客尚未选座时只同步公开大厅状态；客户端接收 `lobby_presence` 并保持本地座位为空，不启动私有状态请求。收到 `session_token` 确认入座后才立即补拉并进入周期轮询，避免未入座 token 产生必然失败的 404。
 
@@ -181,7 +185,7 @@
 | `GET /guest-profile` | 按 Bearer 档案凭证读取或创建本机临时档案，响应禁止缓存 |
 | `PUT /guest-profile` | 按 Bearer 档案凭证更新规范化昵称，响应禁止缓存 |
 
-项目没有公开房间列表、正式账号鉴权 API 或跨进程房间恢复。快速配桌使用 Colyseus 自带 `/matchmake` 链路，不新增 HTTP 辅助接口。
+项目没有公开房间列表、正式账号鉴权 API 或多服务实例之间的活动房迁移。单服务重建恢复走内部 Redis 快照，不新增公开 HTTP 接口；快速配桌使用 Colyseus 自带 `/matchmake` 链路。
 
 ## 7. 代码职责
 
@@ -195,7 +199,9 @@ client/src/components/GameBoard.vue  牌桌、座位、牌组、手牌与操作�
 client/src/components/ActionPanel.vue 合法动作和弃牌确认
 server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
 server/src/profiles/                  访客档案领域、Redis 持久化与内存降级
+server/src/persistence/               活动房快照存储、防抖写入与关停编排
 server/src/rooms/GameRoom.ts          房间生命周期、座位和消息路由
+server/src/rooms/room-recovery.ts     私有恢复快照格式、版本与校验
 server/src/rooms/flow/                牌局状态机、动作执行与结算
 server/src/rules/                     牌堆、动作候选、胡牌拆解
 server/src/schema/                    公开同步 Schema
@@ -208,6 +214,6 @@ server/src/schema/                    公开同步 Schema
 - 房间 token 与档案 token 都不是生产级账号体系。
 - 两类 token 都必须视为秘密；房间 token 可恢复原座并读取私有手牌，档案 token 可读取与更新聚合档案。公网部署必须使用 HTTPS/WSS，邀请链接和日志均不得携带 token。
 - 来源限制和基础内存限流只提供轻量边界保护，不代替正式账号鉴权、跨进程限流或专业抗拒绝服务能力。
-- 房间状态无法在服务端进程重启后恢复。
-- 正式账号、跨设备档案找回、公开房间列表、账号级邀请码和跨进程匹配状态尚未实现；当前快速配桌只在单个服务进程内聚合玩家。
+- 配置 Redis 且保留同一数据卷时，单个服务进程重建可恢复活动房间；未配置 Redis、删除数据卷、格式版本不兼容，或进程与 Redis 同时永久损坏时不能恢复。快照不是跨地域灾备。
+- 正式账号、跨设备档案找回、公开房间列表、账号级邀请码和多服务实例之间的房间迁移尚未实现；当前快速配桌只在单个服务进程内聚合玩家。
 - 未最终确定的规则不得由旧 SRS 推断，统一记录在 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)。

@@ -1,6 +1,6 @@
 # 部署与运行
 
-当前版本支持单人练习、快速配桌和好友同桌。服务端使用内存房间状态，重启容器会结束现有牌局与匹配队列；免注册访客的聚合档案保存在 Redis 命名卷中。
+当前版本支持单人练习、快速配桌和好友同桌。服务端把活动房间的完整私有恢复快照和免注册访客聚合档案保存在 Redis 命名卷中；普通服务容器重建后，浏览器会用原房号和座位凭证自动恢复牌局。
 
 ## 1. 环境要求
 
@@ -45,9 +45,9 @@ docker compose up --build -d
 
 - Web：`http://localhost:3000`
 - HTTP / WebSocket 服务：`http://localhost:2567`
-- Redis：只在 Compose 内部网络可达，不映射宿主机端口；使用 AOF 和 `guest-profile-data` 命名卷保存访客档案
+- Redis：只在 Compose 内部网络可达，不映射宿主机端口；使用 AOF 和历史兼容名称 `guest-profile-data` 的命名卷保存访客档案及活动房快照
 
-Compose 会等待 Redis 健康后再启动服务端，避免首次部署时过早降级到内存。正式环境应备份 `guest-profile-data`；删除这个命名卷会永久删除尚未绑定正式账号的本机档案，但不会影响规则代码。
+Compose 会等待 Redis 健康后再启动服务端。正式环境应备份 `guest-profile-data`；删除这个命名卷会永久删除尚未绑定正式账号的本机档案和可恢复牌局，但不会影响规则代码。普通升级不要执行 `docker compose down -v`。
 
 普通 Compose 默认只允许 `http://localhost:3000` 和 `http://127.0.0.1:3000` 作为浏览器来源。使用局域网主机名或 IP 访问时，必须在 `.env` 写入实际前端来源，例如：
 
@@ -167,7 +167,7 @@ ENABLE_MONITOR=0
 - `ROOM_LOG`、`HU_LOG`、`ROOM_TRACE`、`ROOM_TRACE_CARDS`：日志与追踪开关。
 - `ROOM_STATE_LOG_MODE`：`compact | all | off`。
 - `ENABLE_DEBUG_SCENARIOS`：仅供本地自动化构造牌局；默认 `0`。只有非生产环境显式设为 `1` 才注册 `debug_setup`，且仅房主可调用；`NODE_ENV=production` 时即使误设为 `1` 也会硬禁用。
-- `REDIS_URL`：访客档案 Redis 地址；未配置、启动连接失败或运行中不可用时自动降级为当前进程内存，牌局不受影响。它不保存进行中的房间或牌局状态。
+- `REDIS_URL`：访客档案和活动房恢复快照的 Redis 地址。档案操作在故障时降级到当前进程内存并可在恢复后补写；牌局本身继续在内存运行，快照写入失败不阻塞操作，但只有已成功落盘的最新快照能在进程重建后恢复。
 
 ### 前端与镜像
 
@@ -181,7 +181,7 @@ ENABLE_MONITOR=0
 
 - 前端无法连接：检查两个 `VITE_SERVER_*` 构建参数、TLS 协议和反向代理的 WebSocket 转发。
 - 手机无法打开开发服务：确认同一局域网、防火墙及 5173/2567 端口。
-- 重启后牌局消失：这是当前内存状态模型的预期行为。
-- 重启后本机档案消失：检查 `REDIS_URL`、Redis 日志和 `guest-profile-data` 命名卷；普通重建不要执行删除 volume 的命令。
+- 重启后牌局消失：检查服务启动日志是否出现快照恢复数量、`REDIS_URL`、Redis 日志和 `guest-profile-data` 命名卷；确认没有执行 `down -v`，且部署前后的快照格式兼容。
+- 重启后本机档案消失：检查 `REDIS_URL`、Redis 日志和 `guest-profile-data` 命名卷；普通重建不要删除 volume。
 - 页面还是旧版：核对远端 commit，重新执行带 `--build` 的 compose 命令，并清理浏览器缓存后复查。
 - `npm ci` 报 Node 引擎不兼容：检查 `.env` 是否仍覆盖为 `node:20-alpine`，并确认构建日志中的 Node 主版本为 22 或更高。
