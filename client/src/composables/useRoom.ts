@@ -1830,14 +1830,14 @@ export function useRoom(playerName = "Player") {
     return safeRoomSend("start_game");
   }
 
-  function nextRound() {
+  function nextRound(): boolean {
     clearActionLogs();
-    safeRoomSend("next_round");
+    return safeRoomSend("next_round");
   }
 
-  function returnLobby() {
+  function returnLobby(): boolean {
     clearActionLogs();
-    safeRoomSend("return_lobby");
+    return safeRoomSend("return_lobby");
   }
 
   function dissolveRoom() {

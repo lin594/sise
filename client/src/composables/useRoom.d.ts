@@ -755,8 +755,8 @@ export declare function useRoom(playerName?: string): {
     requestMoreTime: () => void;
     debugSetup: (scenario: string) => void;
     startGame: () => boolean;
-    nextRound: () => void;
-    returnLobby: () => void;
+    nextRound: () => boolean;
+    returnLobby: () => boolean;
     dissolveRoom: () => void;
     setScoringMode: (mode: "single" | "cumulative") => void;
     setLobbyReady: (ready: boolean) => void;

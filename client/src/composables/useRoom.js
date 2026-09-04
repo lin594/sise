@@ -1657,11 +1657,11 @@ export function useRoom(playerName = "Player") {
     }
     function nextRound() {
         clearActionLogs();
-        safeRoomSend("next_round");
+        return safeRoomSend("next_round");
     }
     function returnLobby() {
         clearActionLogs();
-        safeRoomSend("return_lobby");
+        return safeRoomSend("return_lobby");
     }
     function dissolveRoom() {
         joinError.value = "";

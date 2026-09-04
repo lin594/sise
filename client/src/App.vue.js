@@ -626,6 +626,8 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref(null);
 const returnLobbyDialogRef = ref(null);
 const returnLobbyCancelRef = ref(null);
+const settlementTransitionPending = ref(null);
+let settlementTransitionReceiptTimer = null;
 const quickRematchPending = ref(false);
 const confirmingResumeAbandon = ref(false);
 const resumeAbandonDialogRef = ref(null);
@@ -643,6 +645,7 @@ watch(showEndPanel, (visible) => {
         void nextTick(() => settlementPanelRef.value?.focus());
         return;
     }
+    clearSettlementTransitionPending();
     confirmingNextRound.value = false;
     confirmingReturnLobby.value = false;
 }, { immediate: true });
@@ -696,12 +699,46 @@ function trapRulesFocus(event) {
     }
 }
 const hasOtherHumanAtSettlement = computed(() => players.value.some((player) => player.clientId !== mySeatId.value && !player.isConfiguredBot));
+function clearSettlementTransitionPending() {
+    settlementTransitionPending.value = null;
+    if (settlementTransitionReceiptTimer !== null) {
+        window.clearTimeout(settlementTransitionReceiptTimer);
+        settlementTransitionReceiptTimer = null;
+    }
+}
+function submitSettlementTransition(transition) {
+    if (settlementTransitionPending.value !== null ||
+        !settlementReady.value ||
+        !isHost.value ||
+        state.value?.phase !== "ended") {
+        return false;
+    }
+    globalError.value = "";
+    const sent = transition === "next_round" ? nextRound() : returnLobby();
+    if (!sent) {
+        globalError.value = "网络未连接，整桌操作没有发送，请稍候重试。";
+        return false;
+    }
+    settlementTransitionPending.value = transition;
+    const requestedRoomId = activeRoomId.value;
+    settlementTransitionReceiptTimer = window.setTimeout(() => {
+        settlementTransitionReceiptTimer = null;
+        if (settlementTransitionPending.value !== transition ||
+            state.value?.phase !== "ended" ||
+            activeRoomId.value !== requestedRoomId) {
+            return;
+        }
+        settlementTransitionPending.value = null;
+        globalError.value = "暂未确认整桌操作，请再点一次。";
+    }, 8_000);
+    return true;
+}
 async function requestNextRound() {
-    if (!settlementReady.value || !isHost.value) {
+    if (!settlementReady.value || !isHost.value || settlementTransitionPending.value !== null) {
         return;
     }
     if (state.value?.roomMode !== "friends" || !hasOtherHumanAtSettlement.value) {
-        nextRound();
+        submitSettlementTransition("next_round");
         return;
     }
     confirmingNextRound.value = true;
@@ -742,7 +779,7 @@ function cancelNextRound() {
 }
 function confirmNextRound() {
     confirmingNextRound.value = false;
-    nextRound();
+    submitSettlementTransition("next_round");
 }
 function trapNextRoundFocus(event) {
     const panel = nextRoundDialogRef.value;
@@ -767,7 +804,7 @@ function trapNextRoundFocus(event) {
     }
 }
 async function requestReturnLobby() {
-    if (!settlementReady.value || !isHost.value) {
+    if (!settlementReady.value || !isHost.value || settlementTransitionPending.value !== null) {
         return;
     }
     confirmingReturnLobby.value = true;
@@ -783,7 +820,7 @@ function cancelReturnLobby() {
 }
 function confirmReturnLobby() {
     confirmingReturnLobby.value = false;
-    returnLobby();
+    submitSettlementTransition("return_lobby");
 }
 function trapReturnLobbyFocus(event) {
     const panel = returnLobbyDialogRef.value;
@@ -1146,6 +1183,7 @@ async function handleLeaveRoom() {
     globalError.value = "";
     pendingPracticeAutoStart.value = false;
     clearRoundStartPending();
+    clearSettlementTransitionPending();
     clearSelection();
     await leaveRoom();
     entryInviteRoomId.value = "";
@@ -1375,6 +1413,7 @@ onUnmounted(() => {
         globalNoticeTimer = null;
     }
     clearRoundStartPending();
+    clearSettlementTransitionPending();
 });
 watch(globalError, (message) => {
     if (message) {
@@ -1382,13 +1421,23 @@ watch(globalError, (message) => {
     }
 });
 watch(joinError, (message) => {
-    if (message && roundStartPending.value) {
-        clearRoundStartPending();
+    if (message) {
+        if (roundStartPending.value) {
+            clearRoundStartPending();
+        }
+        if (settlementTransitionPending.value !== null) {
+            clearSettlementTransitionPending();
+        }
     }
 });
 watch(connected, (isConnected) => {
-    if (!isConnected && roundStartPending.value) {
-        clearRoundStartPending();
+    if (!isConnected) {
+        if (roundStartPending.value) {
+            clearRoundStartPending();
+        }
+        if (settlementTransitionPending.value !== null) {
+            clearSettlementTransitionPending();
+        }
     }
 });
 watch(displayPreferences, (preferences) => {
@@ -1445,6 +1494,9 @@ watch(() => state.value?.phase, (phase) => {
     }
     if (phase && phase !== "waiting" && pendingPracticeAutoStart.value) {
         pendingPracticeAutoStart.value = false;
+    }
+    if (phase && phase !== "ended") {
+        clearSettlementTransitionPending();
     }
 });
 // 更直接的兜底：一旦收到手牌，说明游戏已实际开始，立即清除 pending。
@@ -2222,6 +2274,7 @@ watch(() => state.value?.phase, (phase) => {
 watch(activeRoomId, (roomId, previousRoomId) => {
     if (roomId !== previousRoomId) {
         clearRoundStartPending();
+        clearSettlementTransitionPending();
         closeInviteQr(false);
     }
     if (previousRoomId && !roomId) {
@@ -3632,19 +3685,32 @@ if (__VLS_ctx.showEndPanel) {
             ...{ class: "primary" },
             type: "button",
             'data-testid': "next-round-trigger",
-            disabled: (!__VLS_ctx.settlementReady),
+            disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.settlementTransitionPending !== null),
         });
         /** @type {typeof __VLS_ctx.nextRoundTriggerRef} */ ;
-        (__VLS_ctx.settlementReady ? "下一局（房主）" : "正在结算…");
+        (!__VLS_ctx.settlementReady
+            ? "正在结算…"
+            : __VLS_ctx.settlementTransitionPending === "next_round"
+                ? "正在开始下一局…"
+                : "下一局（房主）");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestReturnLobby) },
             ref: "returnLobbyTriggerRef",
             ...{ class: "ghost" },
             type: "button",
             'data-testid': "return-lobby-trigger",
-            disabled: (!__VLS_ctx.settlementReady),
+            disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.settlementTransitionPending !== null),
         });
         /** @type {typeof __VLS_ctx.returnLobbyTriggerRef} */ ;
+        (__VLS_ctx.settlementTransitionPending === "return_lobby" ? "正在返回房间大厅…" : "全桌返回大厅（房主）");
+        if (__VLS_ctx.settlementTransitionPending) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+                ...{ class: "host-actions-hint" },
+                'data-testid': "settlement-transition-status",
+                role: "status",
+                'aria-live': "polite",
+            });
+        }
     }
     else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -4003,6 +4069,7 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;
@@ -4156,6 +4223,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             returnLobbyTriggerRef: returnLobbyTriggerRef,
             returnLobbyDialogRef: returnLobbyDialogRef,
             returnLobbyCancelRef: returnLobbyCancelRef,
+            settlementTransitionPending: settlementTransitionPending,
             quickRematchPending: quickRematchPending,
             confirmingResumeAbandon: confirmingResumeAbandon,
             resumeAbandonDialogRef: resumeAbandonDialogRef,

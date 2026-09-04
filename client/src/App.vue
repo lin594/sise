@@ -465,21 +465,32 @@
               class="primary"
               type="button"
               data-testid="next-round-trigger"
-              :disabled="!settlementReady"
+              :disabled="!settlementReady || settlementTransitionPending !== null"
               @click="requestNextRound"
             >
-              {{ settlementReady ? "下一局（房主）" : "正在结算…" }}
+              {{ !settlementReady
+                ? "正在结算…"
+                : settlementTransitionPending === "next_round"
+                ? "正在开始下一局…"
+                : "下一局（房主）" }}
             </button>
             <button
               ref="returnLobbyTriggerRef"
               class="ghost"
               type="button"
               data-testid="return-lobby-trigger"
-              :disabled="!settlementReady"
+              :disabled="!settlementReady || settlementTransitionPending !== null"
               @click="requestReturnLobby"
             >
-              全桌返回大厅（房主）
+              {{ settlementTransitionPending === "return_lobby" ? "正在返回房间大厅…" : "全桌返回大厅（房主）" }}
             </button>
+            <p
+              v-if="settlementTransitionPending"
+              class="host-actions-hint"
+              data-testid="settlement-transition-status"
+              role="status"
+              aria-live="polite"
+            >整桌请求已发送，请稍候</p>
           </template>
           <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
         </div>
@@ -1434,6 +1445,9 @@ const confirmingReturnLobby = ref(false);
 const returnLobbyTriggerRef = ref<HTMLButtonElement | null>(null);
 const returnLobbyDialogRef = ref<HTMLElement | null>(null);
 const returnLobbyCancelRef = ref<HTMLButtonElement | null>(null);
+type SettlementTransition = "next_round" | "return_lobby";
+const settlementTransitionPending = ref<SettlementTransition | null>(null);
+let settlementTransitionReceiptTimer: number | null = null;
 const quickRematchPending = ref(false);
 const confirmingResumeAbandon = ref(false);
 const resumeAbandonDialogRef = ref<HTMLElement | null>(null);
@@ -1453,6 +1467,7 @@ watch(
       void nextTick(() => settlementPanelRef.value?.focus());
       return;
     }
+    clearSettlementTransitionPending();
     confirmingNextRound.value = false;
     confirmingReturnLobby.value = false;
   },
@@ -1525,12 +1540,52 @@ const hasOtherHumanAtSettlement = computed(() =>
   players.value.some((player) => player.clientId !== mySeatId.value && !player.isConfiguredBot),
 );
 
+function clearSettlementTransitionPending(): void {
+  settlementTransitionPending.value = null;
+  if (settlementTransitionReceiptTimer !== null) {
+    window.clearTimeout(settlementTransitionReceiptTimer);
+    settlementTransitionReceiptTimer = null;
+  }
+}
+
+function submitSettlementTransition(transition: SettlementTransition): boolean {
+  if (
+    settlementTransitionPending.value !== null ||
+    !settlementReady.value ||
+    !isHost.value ||
+    state.value?.phase !== "ended"
+  ) {
+    return false;
+  }
+  globalError.value = "";
+  const sent = transition === "next_round" ? nextRound() : returnLobby();
+  if (!sent) {
+    globalError.value = "网络未连接，整桌操作没有发送，请稍候重试。";
+    return false;
+  }
+  settlementTransitionPending.value = transition;
+  const requestedRoomId = activeRoomId.value;
+  settlementTransitionReceiptTimer = window.setTimeout(() => {
+    settlementTransitionReceiptTimer = null;
+    if (
+      settlementTransitionPending.value !== transition ||
+      state.value?.phase !== "ended" ||
+      activeRoomId.value !== requestedRoomId
+    ) {
+      return;
+    }
+    settlementTransitionPending.value = null;
+    globalError.value = "暂未确认整桌操作，请再点一次。";
+  }, 8_000);
+  return true;
+}
+
 async function requestNextRound(): Promise<void> {
-  if (!settlementReady.value || !isHost.value) {
+  if (!settlementReady.value || !isHost.value || settlementTransitionPending.value !== null) {
     return;
   }
   if (state.value?.roomMode !== "friends" || !hasOtherHumanAtSettlement.value) {
-    nextRound();
+    submitSettlementTransition("next_round");
     return;
   }
   confirmingNextRound.value = true;
@@ -1572,7 +1627,7 @@ function cancelNextRound(): void {
 
 function confirmNextRound(): void {
   confirmingNextRound.value = false;
-  nextRound();
+  submitSettlementTransition("next_round");
 }
 
 function trapNextRoundFocus(event: KeyboardEvent): void {
@@ -1598,7 +1653,7 @@ function trapNextRoundFocus(event: KeyboardEvent): void {
 }
 
 async function requestReturnLobby(): Promise<void> {
-  if (!settlementReady.value || !isHost.value) {
+  if (!settlementReady.value || !isHost.value || settlementTransitionPending.value !== null) {
     return;
   }
   confirmingReturnLobby.value = true;
@@ -1616,7 +1671,7 @@ function cancelReturnLobby(): void {
 
 function confirmReturnLobby(): void {
   confirmingReturnLobby.value = false;
-  returnLobby();
+  submitSettlementTransition("return_lobby");
 }
 
 function trapReturnLobbyFocus(event: KeyboardEvent): void {
@@ -2018,6 +2073,7 @@ async function handleLeaveRoom(): Promise<void> {
   globalError.value = "";
   pendingPracticeAutoStart.value = false;
   clearRoundStartPending();
+  clearSettlementTransitionPending();
   clearSelection();
   await leaveRoom();
   entryInviteRoomId.value = "";
@@ -2285,6 +2341,7 @@ onUnmounted(() => {
     globalNoticeTimer = null;
   }
   clearRoundStartPending();
+  clearSettlementTransitionPending();
 });
 
 watch(globalError, (message) => {
@@ -2294,14 +2351,24 @@ watch(globalError, (message) => {
 });
 
 watch(joinError, (message) => {
-  if (message && roundStartPending.value) {
-    clearRoundStartPending();
+  if (message) {
+    if (roundStartPending.value) {
+      clearRoundStartPending();
+    }
+    if (settlementTransitionPending.value !== null) {
+      clearSettlementTransitionPending();
+    }
   }
 });
 
 watch(connected, (isConnected) => {
-  if (!isConnected && roundStartPending.value) {
-    clearRoundStartPending();
+  if (!isConnected) {
+    if (roundStartPending.value) {
+      clearRoundStartPending();
+    }
+    if (settlementTransitionPending.value !== null) {
+      clearSettlementTransitionPending();
+    }
   }
 });
 
@@ -2376,6 +2443,9 @@ watch(
     }
     if (phase && phase !== "waiting" && pendingPracticeAutoStart.value) {
       pendingPracticeAutoStart.value = false;
+    }
+    if (phase && phase !== "ended") {
+      clearSettlementTransitionPending();
     }
   },
 );
@@ -3196,6 +3266,7 @@ watch(
 watch(activeRoomId, (roomId, previousRoomId) => {
   if (roomId !== previousRoomId) {
     clearRoundStartPending();
+    clearSettlementTransitionPending();
     closeInviteQr(false);
   }
   if (previousRoomId && !roomId) {
