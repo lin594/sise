@@ -95,7 +95,6 @@ test("optional spoken guidance explains each new decision once and persists", as
   await expect.poll(() => spokenMessages(page)).toHaveLength(1);
 
   await page.getByTestId("action-chi").click();
-  await page.getByTestId("candidate-option").first().click();
   await expect(page.getByTestId("discard-confirm")).toBeVisible();
   await expect.poll(() => spokenMessages(page)).toEqual([
     "轮到你了。可选择吃或抓。",

@@ -81,12 +81,8 @@ test("an accepted meld yields immediately to the next discard instruction", asyn
   await setupChiScenario(page);
 
   await page.getByTestId("action-chi").click();
-  const options = page.getByTestId("candidate-option");
-  await expect(options).toHaveCount(2);
-  await options.first().click();
-
   await expect(page.getByTestId("discard-confirm")).toBeVisible();
-  await expect(page.getByTestId("discard-confirm")).toHaveText("先选牌");
-  await expect(page.getByTestId("action-guidance")).toContainText("请先选择一张手牌");
+  await expect(page.getByTestId("discard-confirm")).toHaveText("出");
+  await expect(page.getByTestId("discard-confirm")).toBeDisabled();
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
 });

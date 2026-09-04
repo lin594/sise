@@ -4,6 +4,7 @@
     class="board"
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
+    @keydown.esc="clearChiSelection"
   >
     <div class="table" ref="tableRef">
       <section
@@ -534,7 +535,7 @@
       <div class="self-hand-panel">
         <div class="hand-toolbar">
           <p class="discard-tip">
-            手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 先选牌，再确认出牌</span>
+            手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 选牌后点“出”</span>
           </p>
           <div v-if="handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
@@ -576,23 +577,27 @@
             :class="{
               'mode-large': props.ownCardMode === 'large',
               'mode-long': props.ownCardMode === 'long',
-              playable: canDiscardCard(card),
+              playable: canSelectHandCard(card),
               blocked: canDiscard && isDiscardProtectedCard(card),
               'gold-blocked': canDiscard && card.color === 'gold',
-              'discard-selected': selectedDiscardCardId === card.id,
-              'candidate-active': isCandidateCard(card.id),
-              'candidate-selected': isSelectedCandidateCard(card.id),
+              'discard-selected': !chiSelectionAvailable && selectedDiscardCardId === card.id,
+              'candidate-active': isChiCardSelectable(card.id),
+              'candidate-selected': selectedChiCardIds.includes(card.id),
             }"
-            :aria-pressed="selectedDiscardCardId === card.id"
+            :aria-pressed="chiSelectionAvailable ? selectedChiCardIds.includes(card.id) : selectedDiscardCardId === card.id"
             :aria-label="handCardAccessibleLabel(card)"
-            :disabled="!canDiscardCard(card) || Boolean(discardingCardId)"
-            @click="selectDiscardCard(card.id)"
-            @dblclick.prevent="selectDiscardCard(card.id)"
+            :disabled="!canSelectHandCard(card) || Boolean(discardingCardId)"
+            @click="selectHandCard(card.id)"
+            @dblclick.prevent="ensureHandCardSelected(card.id)"
           >
-            <span v-if="candidateBadgeText(card.id)" class="candidate-badge">{{ candidateBadgeText(card.id) }}</span>
             <span
-              v-if="selectedDiscardCardId === card.id"
+              v-if="!chiSelectionAvailable && selectedDiscardCardId === card.id"
               class="discard-selection-badge"
+              aria-hidden="true"
+            >✓</span>
+            <span
+              v-else-if="selectedChiCardIds.includes(card.id)"
+              class="candidate-selection-badge"
               aria-hidden="true"
             >✓</span>
             <span
@@ -614,11 +619,9 @@
       :can-act="canAct"
       :can-discard="canDiscard"
       :has-discard-selection="Boolean(selectedDiscardCardId)"
-      :selected-discard-card-label="selectedDiscardCardLabel"
       :discard-pending="Boolean(discardingCardId)"
       :is-current-turn="Boolean(props.isCurrentTurn)"
       :response-phase="props.responsePhase ?? ''"
-      :current-player-name="props.currentPlayerName ?? '-'"
       :paused-hint="effectiveInteractionPausedMessage"
       :seconds-left="seatCountdownSeconds"
       :untimed="Boolean(props.decisionUntimed)"
@@ -626,12 +629,10 @@
       :more-time-seconds="props.moreTimeSeconds ?? 20"
       :decision-key="props.decisionKey ?? ''"
       :action-feedback="props.actionFeedback ?? null"
-      :selection-mode="props.selectionMode ?? null"
-      :selected-candidate-id="props.selectedCandidateId ?? null"
+      :selected-chi-candidate-id="selectedChiCandidate?.id ?? null"
       @confirm-discard="confirmDiscard"
       @request-more-time="emit('requestMoreTime')"
       @submit="onSubmitAction"
-      @selection-change="onSelectionChange"
     />
 
     <Teleport to="body">
@@ -739,7 +740,6 @@ const props = defineProps<{
   canAct?: boolean;
   isCurrentTurn?: boolean;
   responsePhase?: string;
-  currentPlayerName?: string;
   turnHint?: string;
   interactionPausedMessage?: string;
   canRequestMoreTime?: boolean;
@@ -754,16 +754,12 @@ const props = defineProps<{
   tableCardMode?: RenderedCardMode;
   seatDirection?: SeatDirection;
   reduceMotion?: boolean;
-  selectionMode?: "kai" | "peng" | "chi" | null;
-  selectedCandidateId?: string | null;
-  activeCandidates?: ActionCandidate[];
 }>();
 
 const emit = defineEmits<{
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
   requestMoreTime: [];
-  selectionChange: [payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }];
 }>();
 
 const nowMs = ref(Date.now());
@@ -828,6 +824,7 @@ const flowBottomRightPlayer = computed<PlayerState | null>(() =>
 );
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
+const selectedChiCardIds = ref<string[]>([]);
 const locallyAnimatedDiscardCardId = ref<string | null>(null);
 const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
@@ -1365,14 +1362,6 @@ const currentPlayer = computed(() => {
   return props.players.find((x) => x.clientId === playerId) ?? null;
 });
 
-const currentPlayerName = computed(() => {
-  const playerId = displayTurnPlayerId.value;
-  if (!playerId) {
-    return "-";
-  }
-  return currentPlayer.value?.name || playerId;
-});
-
 const isMyTurn = computed(
   () =>
     String(props.state?.responsePhase ?? "") !== "collective" &&
@@ -1402,14 +1391,6 @@ const canConfirmDiscard = computed(() => {
   const card = props.privateHand.find((item) => item.id === selectedId);
   return Boolean(card && canDiscardCard(card));
 });
-const selectedDiscardCardLabel = computed(() => {
-  const selectedId = selectedDiscardCardId.value;
-  if (!selectedId) {
-    return "";
-  }
-  const card = props.privateHand.find((item) => item.id === selectedId);
-  return card ? getCardAccessibleText(card) : "";
-});
 const displayPrivateHand = computed<Card[]>(() => {
   if (props.state?.phase === "waiting") {
     return [];
@@ -1430,25 +1411,29 @@ const handVisibleRangeLabel = computed(() => {
 const isResponseCardDrawHidden = computed(
   () => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value,
 );
-const activeCandidates = computed<ActionCandidate[]>(() => props.activeCandidates ?? []);
-const selectedCandidate = computed<ActionCandidate | null>(() => {
-  const id = props.selectedCandidateId ?? "";
-  if (!id) {
-    return null;
+const activeChiCandidates = computed<ActionCandidate[]>(() => {
+  if (!canAct.value) {
+    return [];
   }
-  return activeCandidates.value.find((candidate) => candidate.id === id) ?? null;
+  const entry = (props.actions ?? []).find(
+    (action) => action.action === "chi" && (action.enabled || action.deferred),
+  );
+  return entry?.candidates ?? [];
 });
-
-const candidateIndexesByCardId = computed(() => {
-  const map = new Map<string, number[]>();
-  activeCandidates.value.forEach((candidate, index) => {
-    candidate.cardIds.forEach((cardId) => {
-      const list = map.get(cardId) ?? [];
-      list.push(index + 1);
-      map.set(cardId, list);
-    });
-  });
-  return map;
+const chiSelectionAvailable = computed(() => activeChiCandidates.value.length > 0);
+const selectedChiCandidate = computed<ActionCandidate | null>(() => {
+  const selected = [...selectedChiCardIds.value].sort();
+  return activeChiCandidates.value.find((candidate) => {
+    const candidateIds = [...candidate.cardIds].sort();
+    return candidateIds.length === selected.length && candidateIds.every((id, index) => id === selected[index]);
+  }) ?? null;
+});
+const extendableChiCandidates = computed(() => {
+  const selected = new Set(selectedChiCardIds.value);
+  return activeChiCandidates.value.filter((candidate) =>
+    selectedChiCardIds.value.length <= candidate.cardIds.length &&
+    [...selected].every((cardId) => candidate.cardIds.includes(cardId)),
+  );
 });
 
 const ACTION_LABELS: Record<string, string> = {
@@ -1681,6 +1666,27 @@ function canDiscardCard(card: Card): boolean {
   return canDiscard.value && !isDiscardProtectedCard(card);
 }
 
+function canPreselectDiscardCard(card: Card): boolean {
+  return props.state?.phase === "playing" && !handPresentationBusy.value && !isDiscardProtectedCard(card);
+}
+
+function isChiCardSelectable(cardId: string): boolean {
+  if (!chiSelectionAvailable.value) {
+    return false;
+  }
+  if (selectedChiCardIds.value.includes(cardId)) {
+    return true;
+  }
+  return extendableChiCandidates.value.some((candidate) => candidate.cardIds.includes(cardId));
+}
+
+function canSelectHandCard(card: Card): boolean {
+  if (chiSelectionAvailable.value) {
+    return isChiCardSelectable(card.id);
+  }
+  return canPreselectDiscardCard(card);
+}
+
 function isDiscardProtectedCard(card: Card): boolean {
   return card.type === "jiang" || card.color === "gold";
 }
@@ -1690,10 +1696,46 @@ function selectDiscardCard(cardId: string): void {
     return;
   }
   const picked = props.privateHand.find((card) => card.id === cardId);
-  if (!picked || !canDiscardCard(picked)) {
+  if (!picked || !canPreselectDiscardCard(picked)) {
     return;
   }
-  selectedDiscardCardId.value = cardId;
+  selectedDiscardCardId.value = selectedDiscardCardId.value === cardId ? null : cardId;
+}
+
+function selectHandCard(cardId: string): void {
+  if (!chiSelectionAvailable.value) {
+    selectDiscardCard(cardId);
+    return;
+  }
+  if (!isChiCardSelectable(cardId)) {
+    return;
+  }
+  if (selectedChiCardIds.value.includes(cardId)) {
+    selectedChiCardIds.value = selectedChiCardIds.value.filter((id) => id !== cardId);
+    return;
+  }
+  selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
+}
+
+function ensureHandCardSelected(cardId: string): void {
+  if (!chiSelectionAvailable.value) {
+    const picked = props.privateHand.find((card) => card.id === cardId);
+    if (picked && canPreselectDiscardCard(picked)) {
+      selectedDiscardCardId.value = cardId;
+    }
+    return;
+  }
+  if (isChiCardSelectable(cardId) && !selectedChiCardIds.value.includes(cardId)) {
+    selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
+  }
+}
+
+function clearChiSelection(event?: KeyboardEvent): void {
+  if (selectedChiCardIds.value.length === 0) {
+    return;
+  }
+  event?.preventDefault();
+  selectedChiCardIds.value = [];
 }
 
 function updateHandScrollState(): void {
@@ -1808,24 +1850,10 @@ function confirmDiscard(): void {
 }
 
 function onSubmitAction(request: ActionRequest): void {
+  if (typeof request !== "string" && request.action === "chi") {
+    selectedChiCardIds.value = [];
+  }
   emit("submitAction", request);
-}
-
-function onSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }): void {
-  emit("selectionChange", payload);
-}
-
-function isCandidateCard(cardId: string): boolean {
-  return candidateIndexesByCardId.value.has(cardId);
-}
-
-function isSelectedCandidateCard(cardId: string): boolean {
-  return Boolean(selectedCandidate.value?.cardIds.includes(cardId));
-}
-
-function candidateBadgeText(cardId: string): string {
-  const indexes = candidateIndexesByCardId.value.get(cardId) ?? [];
-  return indexes.length > 0 ? indexes.join("/") : "";
 }
 
 function cardLabel(card: Card): string {
@@ -1833,13 +1861,19 @@ function cardLabel(card: Card): string {
 }
 
 function handCardAccessibleLabel(card: Card): string {
-  const state = selectedDiscardCardId.value === card.id
-    ? "已选中"
-    : canDiscardCard(card)
-      ? "可选择"
-      : canDiscard.value && isDiscardProtectedCard(card)
-        ? "规则保护，不能打出"
-        : "当前无需选牌";
+  const state = chiSelectionAvailable.value
+    ? selectedChiCardIds.value.includes(card.id)
+      ? "已选入吃牌组合"
+      : isChiCardSelectable(card.id)
+        ? "可加入吃牌组合"
+        : "不能加入当前吃牌组合"
+    : selectedDiscardCardId.value === card.id
+      ? "已预选出牌"
+      : canPreselectDiscardCard(card)
+        ? "可预选出牌"
+        : canDiscard.value && isDiscardProtectedCard(card)
+          ? "规则保护，不能打出"
+          : "当前无需选牌";
   return `${getCardAccessibleText(card)}，${state}`;
 }
 
@@ -2468,6 +2502,9 @@ watch(
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
       selectedDiscardCardId.value = null;
     }
+    selectedChiCardIds.value = selectedChiCardIds.value.filter((cardId) =>
+      props.privateHand.some((card) => card.id === cardId),
+    );
     void nextTick(updateHandScrollState);
   },
 );
@@ -2484,11 +2521,40 @@ watch(
 
 watch(selfHandRef, observeHandScroller, { immediate: true });
 
-watch(canDiscard, (enabled) => {
-  if (!enabled) {
+watch(
+  () => `${props.state?.responseCard?.id ?? props.state?.targetCard?.id ?? ""}|${props.responsePhase ?? ""}`,
+  () => {
+    selectedChiCardIds.value = [];
+  },
+);
+
+watch(
+  () => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`,
+  () => {
+    if (props.state?.phase === "playing") {
+      return;
+    }
     selectedDiscardCardId.value = null;
-  }
-});
+    selectedChiCardIds.value = [];
+  },
+);
+
+watch(
+  () => activeChiCandidates.value.map((candidate) => candidate.id).join("|"),
+  () => {
+    if (!chiSelectionAvailable.value) {
+      selectedChiCardIds.value = [];
+      return;
+    }
+    const selected = selectedChiCardIds.value;
+    if (
+      selected.length > 0 &&
+      !activeChiCandidates.value.some((candidate) => selected.every((cardId) => candidate.cardIds.includes(cardId)))
+    ) {
+      selectedChiCardIds.value = [];
+    }
+  },
+);
 
 watch(
   () => props.actionFeedback?.status,
@@ -2520,9 +2586,12 @@ watch(
         return;
       }
       const board = boardRef.value;
-      const target = canDiscard.value
-        ? board?.querySelector<HTMLElement>(".hand-card.playable")
-        : board?.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
+      const target = chiSelectionAvailable.value
+        ? board?.querySelector<HTMLElement>(".hand-card.candidate-active:not(:disabled)") ??
+          board?.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)")
+        : canDiscard.value
+          ? board?.querySelector<HTMLElement>(".hand-card.playable")
+          : board?.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
       target?.focus();
     });
   },
@@ -3789,20 +3858,21 @@ watch(
   transform: translateY(-2px);
 }
 
-.candidate-badge {
+.candidate-selection-badge {
   position: absolute;
   right: 2px;
   top: 2px;
-  z-index: 2;
-  min-width: 16px;
-  height: 16px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
-  background: #1d4ed8;
-  color: #fff;
-  font-size: 10px;
-  line-height: 16px;
-  text-align: center;
-  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fef3c7;
+  background: #b45309;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .discard-selection-badge {
@@ -4587,32 +4657,19 @@ watch(
     padding: 0.35vh;
   }
 
-  .embedded-actions :deep(.actions) {
+  .embedded-actions :deep(.action-row) {
     width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(40px, 1fr));
     gap: 0.45vh;
-    justify-content: initial;
-    align-items: stretch;
-    flex-wrap: nowrap;
   }
 
   .embedded-actions :deep(.btn) {
-    width: 100%;
-    flex: 0 0 auto;
+    width: auto;
+    flex: 1 1 0;
     min-width: clamp(40px, 7vw, 48px);
     min-height: clamp(40px, 11.5vh, 46px);
+    padding-inline: clamp(0.2rem, 0.8vw, 0.45rem);
     font-size: clamp(0.96rem, 4vh, 1.08rem);
     border-radius: 0.85vh;
-  }
-
-  .embedded-actions :deep(.actions.discard-mode) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .embedded-actions :deep(.discard-action) {
-    width: 100%;
-    max-width: none;
   }
 
   .embedded-actions :deep(.btn:disabled) {

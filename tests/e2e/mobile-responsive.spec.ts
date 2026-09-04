@@ -255,6 +255,13 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
   const deadline = Date.now() + 60_000;
   const confirm = page.getByTestId("discard-confirm");
 
+  if (await page.evaluate(() => Boolean((window as Window & { __siseLocalTest?: unknown }).__siseLocalTest))) {
+    await applyLocalDebugScenario(page, "chi_local_upper");
+    await page.getByTestId("action-chi").click();
+    await expect(confirm).toBeVisible();
+    return;
+  }
+
   const clickIfReady = async (testId: string): Promise<boolean> => {
     const action = page.getByTestId(testId);
     if (!(await action.isVisible().catch(() => false)) || !(await action.isEnabled().catch(() => false))) {
@@ -286,24 +293,6 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     if (await confirm.isVisible().catch(() => false)) {
       return;
     }
-    const candidates = page.locator(".candidate-item");
-    let candidateActed = false;
-    for (let index = 0; index < await candidates.count(); index += 1) {
-      const candidate = candidates.nth(index);
-      if ((await candidate.isVisible().catch(() => false)) && (await candidate.isEnabled().catch(() => false))) {
-        candidateActed = await candidate
-          .click({ force: true, timeout: 1_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (candidateActed) {
-          break;
-        }
-      }
-    }
-    if (candidateActed) {
-      await page.waitForTimeout(300);
-      continue;
-    }
     if (await confirm.isVisible().catch(() => false)) {
       return;
     }
@@ -333,37 +322,19 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
   throw new Error("Timed out before the player received a discard confirmation turn");
 }
 
-async function expectFiveButtonActionGrid(page: Page): Promise<void> {
-  const actionMetrics = await page.locator(".action-dock .actions").evaluate((element) => {
-    const first = element.querySelector<HTMLButtonElement>(".btn");
-    if (!first) {
-      throw new Error("Action dock rendered without action buttons");
-    }
-    const hadDiscardMode = element.classList.contains("discard-mode");
-    element.classList.remove("discard-mode");
-    const clones: HTMLButtonElement[] = [];
-    while (element.querySelectorAll(".btn").length < 5) {
-      const clone = first.cloneNode(true) as HTMLButtonElement;
-      clone.textContent = `测试${clones.length + 1}`;
-      element.appendChild(clone);
-      clones.push(clone);
-    }
-    const buttons = Array.from(element.querySelectorAll<HTMLElement>(".btn")).slice(0, 5);
+async function expectCompactActionDock(page: Page): Promise<void> {
+  const actionMetrics = await page.getByTestId("action-row").evaluate((element) => {
+    const buttons = Array.from(element.querySelectorAll<HTMLElement>("button"));
     const sizes = buttons.map((button) => {
       const rect = button.getBoundingClientRect();
-      return { width: Math.round(rect.width), height: Math.round(rect.height) };
+      return { width: Math.round(rect.width), height: Math.round(rect.height), y: Math.round(rect.y) };
     });
-    const rows = new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().y))).size;
-    clones.forEach((clone) => clone.remove());
-    if (hadDiscardMode) {
-      element.classList.add("discard-mode");
-    }
-    return { sizes, rows };
+    return { count: buttons.length, sizes, rows: new Set(sizes.map((size) => size.y)).size };
   });
-  expect(actionMetrics.rows).toBe(2);
+  expect(actionMetrics.count).toBeGreaterThan(0);
+  expect(actionMetrics.rows).toBe(1);
   expect(Math.min(...actionMetrics.sizes.map((size) => size.width))).toBeGreaterThanOrEqual(40);
   expect(Math.min(...actionMetrics.sizes.map((size) => size.height))).toBeGreaterThanOrEqual(40);
-  expect(Math.max(...actionMetrics.sizes.map((size) => size.height))).toBeLessThanOrEqual(46);
 }
 
 test.describe("clear first-time entry", () => {
@@ -995,7 +966,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();
-    await expectFiveButtonActionGrid(page);
+    await expectCompactActionDock(page);
     const gameHistory = page.getByTestId("game-history");
     await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
       .toBeGreaterThan(0);
@@ -1057,27 +1028,18 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("action-guidance")).not.toContainText(/还剩 \d+ 秒/);
     await expect(page.getByTestId("action-guidance")).toHaveAttribute("data-urgent", "false");
     await expect(page.getByTestId("request-more-time")).toHaveCount(0);
-    const guidanceMetrics = await page.getByTestId("action-guidance").evaluate((element) => {
+    const actionRowMetrics = await page.getByTestId("action-row").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
-      const decisionCopy = Array.from(element.querySelectorAll<HTMLElement>(
-        ".decision-line strong, .decision-line b, .instruction",
-      ));
       return {
-        fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
-        minimumDecisionFontSize: Math.min(
-          ...decisionCopy.map((item) => Number.parseFloat(getComputedStyle(item).fontSize)),
-        ),
         top: rect.top,
         bottom: rect.bottom,
         dockTop: dock.top,
         dockBottom: dock.bottom,
       };
     });
-    expect(guidanceMetrics.fontSize).toBeGreaterThanOrEqual(13);
-    expect(guidanceMetrics.minimumDecisionFontSize).toBeGreaterThanOrEqual(13);
-    expect(guidanceMetrics.top).toBeGreaterThanOrEqual(guidanceMetrics.dockTop);
-    expect(guidanceMetrics.bottom).toBeLessThanOrEqual(guidanceMetrics.dockBottom);
+    expect(actionRowMetrics.top).toBeGreaterThanOrEqual(actionRowMetrics.dockTop);
+    expect(actionRowMetrics.bottom).toBeLessThanOrEqual(actionRowMetrics.dockBottom);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-normal-game.png") });
 
     const handMetrics = await page.locator(".hand").evaluate((element) => {
@@ -1264,22 +1226,22 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".action-dock").getByTestId("discard-confirm")).toBeVisible();
     await expect(page.locator(".hand-toolbar").getByTestId("discard-confirm")).toHaveCount(0);
     await expect(discardConfirm).toBeDisabled();
-    await expect(discardConfirm).toHaveText("先选牌");
+    await expect(discardConfirm).toHaveText("出");
     const handBeforeSelection = await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     );
     await selectedCard.click();
     await selectedCard.dblclick();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
-    await expect(selectedCard).toHaveAttribute("aria-label", /已选中$/);
+    await expect(selectedCard).toHaveAttribute("aria-label", /已预选出牌$/);
     await expect(selectedCard.locator(".discard-selection-badge")).toHaveText("✓");
     expect(await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
-    await expect(page.getByTestId("action-guidance")).toContainText(`已选${selectedCardLabel}，再点按钮确认`);
-    await expect(discardConfirm).toHaveText(`打出${selectedCardLabel}`);
-    await expect(discardConfirm).toHaveAttribute("aria-label", `打出${selectedCardLabel}`);
+    await expect(page.getByTestId("action-guidance")).toContainText("可先选择手牌，再按出");
+    await expect(discardConfirm).toHaveText("出");
+    await expect(discardConfirm).toHaveAttribute("aria-label", "出牌");
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
     await expect(gameSettings).toHaveText("设置");
@@ -1352,7 +1314,10 @@ test.describe("compact landscape gameplay", () => {
     });
     expect(waitingHandState.blockedCount).toBe(0);
     expect(waitingHandState.minimumOpacity).toBeGreaterThanOrEqual(0.95);
-    expect(waitingHandState.labels.every((label) => label.endsWith("当前无需选牌"))).toBe(true);
+    expect(waitingHandState.labels.some((label) => label.endsWith("可预选出牌"))).toBe(true);
+    expect(waitingHandState.labels.every((label) =>
+      label.endsWith("可预选出牌") || label.endsWith("当前无需选牌"),
+    )).toBe(true);
     const visibleFlows = page.locator(".flow-card");
     await expect(visibleFlows).toHaveCount(4);
     await expect(page.getByText("暂无流水", { exact: true })).toHaveCount(0);
@@ -1689,49 +1654,19 @@ test.describe("compact landscape gameplay", () => {
       return /手牌（3张）/.test(text) && !text.includes("/");
     }).toBe(true);
     const waiting = page.getByTestId("action-waiting");
-    await expect(waiting).toBeVisible();
-    await expect(waiting).toContainText(/.+正在操作/);
-    await expect(waiting).toContainText("轮到你时会提醒");
-    await expect(waiting).toHaveAccessibleName(/.+（机器人）正在操作。轮到你时会提醒/);
+    await expect(waiting).toHaveCount(0);
     await expect(page.locator(".action-dock .btn")).toHaveCount(0);
     await expect(page.getByTestId("action-guidance")).toHaveCount(0);
-
-    const waitingGeometry = await waiting.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const dock = element.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
-      const headline = element.querySelector<HTMLElement>("strong")!;
-      const help = element.querySelector<HTMLElement>("small")!;
-      return {
-        insideDock:
-          rect.left >= dock.left && rect.right <= dock.right && rect.top >= dock.top && rect.bottom <= dock.bottom,
-        headlineFontSize: Number.parseFloat(getComputedStyle(headline).fontSize),
-        helpFontSize: Number.parseFloat(getComputedStyle(help).fontSize),
-        tabIndex: element.getAttribute("tabindex"),
-        dock: { x: dock.x, y: dock.y, width: dock.width, height: dock.height },
-      };
-    });
-    expect(waitingGeometry.insideDock).toBe(true);
-    expect(waitingGeometry.headlineFontSize).toBeGreaterThanOrEqual(15);
-    expect(waitingGeometry.helpFontSize).toBeGreaterThanOrEqual(13);
-    expect(waitingGeometry.tabIndex).toBeNull();
     await page.screenshot({ path: testInfo.outputPath("legacy-phone-waiting-dock.png") });
 
     await page.setViewportSize({ width: 320, height: 568 });
     await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
-    await expect(waiting).toBeVisible();
-    const rotatedWaitingGeometry = await waiting.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return {
-        insidePhysicalViewport:
-          rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
-      };
-    });
-    expect(rotatedWaitingGeometry.insidePhysicalViewport).toBe(true);
+    await expect(waiting).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("rotated-phone-waiting-dock.png") });
 
     await page.setViewportSize({ width: 1280, height: 720 });
     await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "false");
-    await expect(waiting).toBeVisible();
+    await expect(waiting).toHaveCount(0);
     await expect(page.locator(".action-dock .btn")).toHaveCount(0);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
@@ -1758,7 +1693,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
     await page.getByTestId("settings-return-to-decision").click();
     await expect(page.getByTestId("settings-panel")).toHaveCount(0);
-    await expect(page.getByTestId("action-pass")).toBeFocused();
+    await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
     const toolPositionsDuringDecision = await page.locator("[data-testid='game-history'], [data-testid='game-settings'], [data-testid='game-exit']")
       .evaluateAll((buttons) => buttons.map((button) => {
         const rect = button.getBoundingClientRect();
@@ -1951,7 +1886,6 @@ test.describe("compact landscape gameplay", () => {
 
     await applyLocalDebugScenario(page, "chi_local_upper");
     await page.getByTestId("action-chi").click();
-    await page.getByTestId("candidate-option").first().click();
     await expect(page.getByTestId("discard-confirm")).toBeVisible();
     const selectedCard = page.locator(".hand-card.playable:not(:disabled)").first();
     await expect(selectedCard).toBeVisible();

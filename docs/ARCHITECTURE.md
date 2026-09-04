@@ -219,7 +219,7 @@ server/src/rules/                     牌堆、动作候选、胡牌拆解
 server/src/schema/                    公开同步 Schema
 ```
 
-`GameTools` 由页面层传入 `decisionUntimed`、`decisionSecondsLeft`，并通过 `returnToDecision` 通知牌桌恢复当前操作焦点；这些字段只描述现有服务端决策窗口，不暂停或改写计时。`GameBoard` 接收同一决定状态并持有选牌、候选与统一操作坞，打开顶栏弹层不能销毁这些本地交互状态。
+`GameTools` 由页面层传入 `decisionUntimed`、`decisionSecondsLeft`，并通过 `returnToDecision` 通知牌桌恢复当前操作焦点；这些字段只描述现有服务端决策窗口，不暂停或改写计时。`GameBoard` 接收同一决定状态并持有真实手牌上的弃牌预选、吃牌组合草稿与统一操作坞，打开顶栏弹层不能销毁这些本地交互状态。
 
 触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布。`useResponsiveViewport` 把 `window.innerWidth/innerHeight` 暴露为随尺寸变化更新的 `--physical-viewport-width/height` 像素变量；根布局在普通方向直接引用它们，自动旋转时交换宽高，再通过 `--effective-viewport-width/height` 向下游组件提供唯一游戏坐标来源。根节点在脚本加载前保留 `100vh` 后备，不能把旧浏览器不认识的 `dvh/dvw` 当作唯一尺寸。设置、记录、确认层和紧凑牌桌的底部手牌操作行都使用上述变量或容器百分比，`GameBoard` 不再直接把物理高度当成游戏高度。牌桌内部三行只能分配实际剩余空间，内容溢出由各牌区自行滚动，牌桌根网格不得产生被 `overflow: hidden` 裁掉的行。显示偏好由根布局统一持久化；游戏内 `reduceMotion` 或操作系统 `prefers-reduced-motion` 任一生效时，根布局对所有子组件统一关闭非必要动画，手牌滚动逻辑同时改用即时行为，不改变服务端状态机时间。
 

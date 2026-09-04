@@ -47,6 +47,7 @@ const flowBottomLeftPlayer = computed(() => props.seatDirection === "clockwise" 
 const flowBottomRightPlayer = computed(() => props.seatDirection === "clockwise" ? selfPlayer.value : rightPlayer.value);
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
+const selectedChiCardIds = ref([]);
 const locallyAnimatedDiscardCardId = ref(null);
 const flights = ref([]);
 const showDealAnimation = ref(false);
@@ -550,13 +551,6 @@ const currentPlayer = computed(() => {
     }
     return props.players.find((x) => x.clientId === playerId) ?? null;
 });
-const currentPlayerName = computed(() => {
-    const playerId = displayTurnPlayerId.value;
-    if (!playerId) {
-        return "-";
-    }
-    return currentPlayer.value?.name || playerId;
-});
 const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "collective" &&
     Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
@@ -582,14 +576,6 @@ const canConfirmDiscard = computed(() => {
     const card = props.privateHand.find((item) => item.id === selectedId);
     return Boolean(card && canDiscardCard(card));
 });
-const selectedDiscardCardLabel = computed(() => {
-    const selectedId = selectedDiscardCardId.value;
-    if (!selectedId) {
-        return "";
-    }
-    const card = props.privateHand.find((item) => item.id === selectedId);
-    return card ? getCardAccessibleText(card) : "";
-});
 const displayPrivateHand = computed(() => {
     if (props.state?.phase === "waiting") {
         return [];
@@ -608,24 +594,25 @@ const handVisibleRangeLabel = computed(() => {
     return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
 });
 const isResponseCardDrawHidden = computed(() => Boolean(drawHiddenCardId.value) && responseCard.value?.id === drawHiddenCardId.value);
-const activeCandidates = computed(() => props.activeCandidates ?? []);
-const selectedCandidate = computed(() => {
-    const id = props.selectedCandidateId ?? "";
-    if (!id) {
-        return null;
+const activeChiCandidates = computed(() => {
+    if (!canAct.value) {
+        return [];
     }
-    return activeCandidates.value.find((candidate) => candidate.id === id) ?? null;
+    const entry = (props.actions ?? []).find((action) => action.action === "chi" && (action.enabled || action.deferred));
+    return entry?.candidates ?? [];
 });
-const candidateIndexesByCardId = computed(() => {
-    const map = new Map();
-    activeCandidates.value.forEach((candidate, index) => {
-        candidate.cardIds.forEach((cardId) => {
-            const list = map.get(cardId) ?? [];
-            list.push(index + 1);
-            map.set(cardId, list);
-        });
-    });
-    return map;
+const chiSelectionAvailable = computed(() => activeChiCandidates.value.length > 0);
+const selectedChiCandidate = computed(() => {
+    const selected = [...selectedChiCardIds.value].sort();
+    return activeChiCandidates.value.find((candidate) => {
+        const candidateIds = [...candidate.cardIds].sort();
+        return candidateIds.length === selected.length && candidateIds.every((id, index) => id === selected[index]);
+    }) ?? null;
+});
+const extendableChiCandidates = computed(() => {
+    const selected = new Set(selectedChiCardIds.value);
+    return activeChiCandidates.value.filter((candidate) => selectedChiCardIds.value.length <= candidate.cardIds.length &&
+        [...selected].every((cardId) => candidate.cardIds.includes(cardId)));
 });
 const ACTION_LABELS = {
     DISCARD: "出牌",
@@ -824,6 +811,24 @@ function isSystemAction(actionKey) {
 function canDiscardCard(card) {
     return canDiscard.value && !isDiscardProtectedCard(card);
 }
+function canPreselectDiscardCard(card) {
+    return props.state?.phase === "playing" && !handPresentationBusy.value && !isDiscardProtectedCard(card);
+}
+function isChiCardSelectable(cardId) {
+    if (!chiSelectionAvailable.value) {
+        return false;
+    }
+    if (selectedChiCardIds.value.includes(cardId)) {
+        return true;
+    }
+    return extendableChiCandidates.value.some((candidate) => candidate.cardIds.includes(cardId));
+}
+function canSelectHandCard(card) {
+    if (chiSelectionAvailable.value) {
+        return isChiCardSelectable(card.id);
+    }
+    return canPreselectDiscardCard(card);
+}
 function isDiscardProtectedCard(card) {
     return card.type === "jiang" || card.color === "gold";
 }
@@ -832,10 +837,43 @@ function selectDiscardCard(cardId) {
         return;
     }
     const picked = props.privateHand.find((card) => card.id === cardId);
-    if (!picked || !canDiscardCard(picked)) {
+    if (!picked || !canPreselectDiscardCard(picked)) {
         return;
     }
-    selectedDiscardCardId.value = cardId;
+    selectedDiscardCardId.value = selectedDiscardCardId.value === cardId ? null : cardId;
+}
+function selectHandCard(cardId) {
+    if (!chiSelectionAvailable.value) {
+        selectDiscardCard(cardId);
+        return;
+    }
+    if (!isChiCardSelectable(cardId)) {
+        return;
+    }
+    if (selectedChiCardIds.value.includes(cardId)) {
+        selectedChiCardIds.value = selectedChiCardIds.value.filter((id) => id !== cardId);
+        return;
+    }
+    selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
+}
+function ensureHandCardSelected(cardId) {
+    if (!chiSelectionAvailable.value) {
+        const picked = props.privateHand.find((card) => card.id === cardId);
+        if (picked && canPreselectDiscardCard(picked)) {
+            selectedDiscardCardId.value = cardId;
+        }
+        return;
+    }
+    if (isChiCardSelectable(cardId) && !selectedChiCardIds.value.includes(cardId)) {
+        selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
+    }
+}
+function clearChiSelection(event) {
+    if (selectedChiCardIds.value.length === 0) {
+        return;
+    }
+    event?.preventDefault();
+    selectedChiCardIds.value = [];
 }
 function updateHandScrollState() {
     const hand = selfHandRef.value;
@@ -942,32 +980,28 @@ function confirmDiscard() {
     }, 2500);
 }
 function onSubmitAction(request) {
+    if (typeof request !== "string" && request.action === "chi") {
+        selectedChiCardIds.value = [];
+    }
     emit("submitAction", request);
-}
-function onSelectionChange(payload) {
-    emit("selectionChange", payload);
-}
-function isCandidateCard(cardId) {
-    return candidateIndexesByCardId.value.has(cardId);
-}
-function isSelectedCandidateCard(cardId) {
-    return Boolean(selectedCandidate.value?.cardIds.includes(cardId));
-}
-function candidateBadgeText(cardId) {
-    const indexes = candidateIndexesByCardId.value.get(cardId) ?? [];
-    return indexes.length > 0 ? indexes.join("/") : "";
 }
 function cardLabel(card) {
     return getCardLabelText(card);
 }
 function handCardAccessibleLabel(card) {
-    const state = selectedDiscardCardId.value === card.id
-        ? "已选中"
-        : canDiscardCard(card)
-            ? "可选择"
-            : canDiscard.value && isDiscardProtectedCard(card)
-                ? "规则保护，不能打出"
-                : "当前无需选牌";
+    const state = chiSelectionAvailable.value
+        ? selectedChiCardIds.value.includes(card.id)
+            ? "已选入吃牌组合"
+            : isChiCardSelectable(card.id)
+                ? "可加入吃牌组合"
+                : "不能加入当前吃牌组合"
+        : selectedDiscardCardId.value === card.id
+            ? "已预选出牌"
+            : canPreselectDiscardCard(card)
+                ? "可预选出牌"
+                : canDiscard.value && isDiscardProtectedCard(card)
+                    ? "规则保护，不能打出"
+                    : "当前无需选牌";
     return `${getCardAccessibleText(card)}，${state}`;
 }
 function parseActionDescriptor(action) {
@@ -1552,14 +1586,31 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
         selectedDiscardCardId.value = null;
     }
+    selectedChiCardIds.value = selectedChiCardIds.value.filter((cardId) => props.privateHand.some((card) => card.id === cardId));
     void nextTick(updateHandScrollState);
 });
 watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(() => observeHandScroller(selfHandRef.value)));
 watch(() => props.ownCardMode, () => void nextTick(updateHandScrollState));
 watch(selfHandRef, observeHandScroller, { immediate: true });
-watch(canDiscard, (enabled) => {
-    if (!enabled) {
-        selectedDiscardCardId.value = null;
+watch(() => `${props.state?.responseCard?.id ?? props.state?.targetCard?.id ?? ""}|${props.responsePhase ?? ""}`, () => {
+    selectedChiCardIds.value = [];
+});
+watch(() => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`, () => {
+    if (props.state?.phase === "playing") {
+        return;
+    }
+    selectedDiscardCardId.value = null;
+    selectedChiCardIds.value = [];
+});
+watch(() => activeChiCandidates.value.map((candidate) => candidate.id).join("|"), () => {
+    if (!chiSelectionAvailable.value) {
+        selectedChiCardIds.value = [];
+        return;
+    }
+    const selected = selectedChiCardIds.value;
+    if (selected.length > 0 &&
+        !activeChiCandidates.value.some((candidate) => selected.every((cardId) => candidate.cardIds.includes(cardId)))) {
+        selectedChiCardIds.value = [];
     }
 });
 watch(() => props.actionFeedback?.status, (status) => {
@@ -1586,9 +1637,12 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
             return;
         }
         const board = boardRef.value;
-        const target = canDiscard.value
-            ? board?.querySelector(".hand-card.playable")
-            : board?.querySelector(".action-dock .btn:not(:disabled)");
+        const target = chiSelectionAvailable.value
+            ? board?.querySelector(".hand-card.candidate-active:not(:disabled)") ??
+                board?.querySelector(".action-dock .btn:not(:disabled)")
+            : canDiscard.value
+                ? board?.querySelector(".hand-card.playable")
+                : board?.querySelector(".action-dock .btn:not(:disabled)");
         target?.focus();
     });
 }, { immediate: true });
@@ -1844,9 +1898,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
@@ -1874,6 +1925,7 @@ let __VLS_directives;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ onKeydown: (__VLS_ctx.clearChiSelection) },
     ref: "boardRef",
     ...{ class: "board" },
     'data-testid': "game-board",
@@ -2922,12 +2974,12 @@ if (__VLS_ctx.selfPlayer) {
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    __VLS_ctx.selectDiscardCard(card.id);
+                    __VLS_ctx.selectHandCard(card.id);
                 } },
             ...{ onDblclick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    __VLS_ctx.selectDiscardCard(card.id);
+                    __VLS_ctx.ensureHandCardSelected(card.id);
                 } },
             key: (`me-${card.id}`),
             'data-testid': (`hand-card-${card.id}`),
@@ -2936,26 +2988,26 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: ({
                     'mode-large': props.ownCardMode === 'large',
                     'mode-long': props.ownCardMode === 'long',
-                    playable: __VLS_ctx.canDiscardCard(card),
+                    playable: __VLS_ctx.canSelectHandCard(card),
                     blocked: __VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card),
                     'gold-blocked': __VLS_ctx.canDiscard && card.color === 'gold',
-                    'discard-selected': __VLS_ctx.selectedDiscardCardId === card.id,
-                    'candidate-active': __VLS_ctx.isCandidateCard(card.id),
-                    'candidate-selected': __VLS_ctx.isSelectedCandidateCard(card.id),
+                    'discard-selected': !__VLS_ctx.chiSelectionAvailable && __VLS_ctx.selectedDiscardCardId === card.id,
+                    'candidate-active': __VLS_ctx.isChiCardSelectable(card.id),
+                    'candidate-selected': __VLS_ctx.selectedChiCardIds.includes(card.id),
                 }) },
-            'aria-pressed': (__VLS_ctx.selectedDiscardCardId === card.id),
+            'aria-pressed': (__VLS_ctx.chiSelectionAvailable ? __VLS_ctx.selectedChiCardIds.includes(card.id) : __VLS_ctx.selectedDiscardCardId === card.id),
             'aria-label': (__VLS_ctx.handCardAccessibleLabel(card)),
-            disabled: (!__VLS_ctx.canDiscardCard(card) || Boolean(__VLS_ctx.discardingCardId)),
+            disabled: (!__VLS_ctx.canSelectHandCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
-        if (__VLS_ctx.candidateBadgeText(card.id)) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "candidate-badge" },
-            });
-            (__VLS_ctx.candidateBadgeText(card.id));
-        }
-        if (__VLS_ctx.selectedDiscardCardId === card.id) {
+        if (!__VLS_ctx.chiSelectionAvailable && __VLS_ctx.selectedDiscardCardId === card.id) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "discard-selection-badge" },
+                'aria-hidden': "true",
+            });
+        }
+        else if (__VLS_ctx.selectedChiCardIds.includes(card.id)) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "candidate-selection-badge" },
                 'aria-hidden': "true",
             });
         }
@@ -2988,17 +3040,14 @@ if (props.state?.phase === 'playing') {
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
-        ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
         canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
-        selectedDiscardCardLabel: (__VLS_ctx.selectedDiscardCardLabel),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
-        currentPlayerName: (props.currentPlayerName ?? '-'),
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         untimed: (Boolean(props.decisionUntimed)),
@@ -3006,24 +3055,20 @@ if (props.state?.phase === 'playing') {
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (props.actionFeedback ?? null),
-        selectionMode: (props.selectionMode ?? null),
-        selectedCandidateId: (props.selectedCandidateId ?? null),
+        selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
     const __VLS_54 = __VLS_53({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
-        ...{ 'onSelectionChange': {} },
         ...{ class: "embedded-actions action-dock" },
         actions: (props.actions ?? []),
         canAct: (__VLS_ctx.canAct),
         canDiscard: (__VLS_ctx.canDiscard),
         hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
-        selectedDiscardCardLabel: (__VLS_ctx.selectedDiscardCardLabel),
         discardPending: (Boolean(__VLS_ctx.discardingCardId)),
         isCurrentTurn: (Boolean(props.isCurrentTurn)),
         responsePhase: (props.responsePhase ?? ''),
-        currentPlayerName: (props.currentPlayerName ?? '-'),
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         untimed: (Boolean(props.decisionUntimed)),
@@ -3031,8 +3076,7 @@ if (props.state?.phase === 'playing') {
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (props.actionFeedback ?? null),
-        selectionMode: (props.selectionMode ?? null),
-        selectedCandidateId: (props.selectedCandidateId ?? null),
+        selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }, ...__VLS_functionalComponentArgsRest(__VLS_53));
     let __VLS_56;
     let __VLS_57;
@@ -3050,21 +3094,18 @@ if (props.state?.phase === 'playing') {
     const __VLS_61 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    const __VLS_62 = {
-        onSelectionChange: (__VLS_ctx.onSelectionChange)
-    };
     var __VLS_55;
 }
-const __VLS_63 = {}.Teleport;
+const __VLS_62 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_64 = __VLS_asFunctionalComponent(__VLS_63, new __VLS_63({
+const __VLS_63 = __VLS_asFunctionalComponent(__VLS_62, new __VLS_62({
     to: "body",
 }));
-const __VLS_65 = __VLS_64({
+const __VLS_64 = __VLS_63({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_64));
-__VLS_66.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_63));
+__VLS_65.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3087,19 +3128,19 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "lg",
         }));
-        const __VLS_68 = __VLS_67({
+        const __VLS_67 = __VLS_66({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "lg",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_66));
     }
 }
-var __VLS_66;
+var __VLS_65;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3118,16 +3159,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_71 = __VLS_70({
+        const __VLS_70 = __VLS_69({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3293,8 +3334,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['candidate-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
@@ -3322,6 +3363,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             flowBottomRightPlayer: flowBottomRightPlayer,
             discardingCardId: discardingCardId,
             selectedDiscardCardId: selectedDiscardCardId,
+            selectedChiCardIds: selectedChiCardIds,
             flights: flights,
             showDealAnimation: showDealAnimation,
             dealerReveal: dealerReveal,
@@ -3357,10 +3399,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
-            selectedDiscardCardLabel: selectedDiscardCardLabel,
             displayPrivateHand: displayPrivateHand,
             handVisibleRangeLabel: handVisibleRangeLabel,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
+            chiSelectionAvailable: chiSelectionAvailable,
+            selectedChiCandidate: selectedChiCandidate,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
             compactCenterHint: compactCenterHint,
@@ -3378,17 +3421,16 @@ const __VLS_self = (await import('vue')).defineComponent({
             playerAccessibleSummary: playerAccessibleSummary,
             isTemporaryBotControl: isTemporaryBotControl,
             playerHandCount: playerHandCount,
-            canDiscardCard: canDiscardCard,
+            isChiCardSelectable: isChiCardSelectable,
+            canSelectHandCard: canSelectHandCard,
             isDiscardProtectedCard: isDiscardProtectedCard,
-            selectDiscardCard: selectDiscardCard,
+            selectHandCard: selectHandCard,
+            ensureHandCardSelected: ensureHandCardSelected,
+            clearChiSelection: clearChiSelection,
             updateHandScrollState: updateHandScrollState,
             scrollHand: scrollHand,
             confirmDiscard: confirmDiscard,
             onSubmitAction: onSubmitAction,
-            onSelectionChange: onSelectionChange,
-            isCandidateCard: isCandidateCard,
-            isSelectedCandidateCard: isSelectedCandidateCard,
-            candidateBadgeText: candidateBadgeText,
             cardLabel: cardLabel,
             handCardAccessibleLabel: handCardAccessibleLabel,
             setSeatRef: setSeatRef,

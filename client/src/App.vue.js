@@ -580,34 +580,14 @@ const interactionPausedMessage = computed(() => {
     }
     return "正在恢复牌局，请稍候";
 });
-const selectionMode = ref(null);
-const selectedCandidateId = ref(null);
 const pendingDeferredChiCandidateId = ref(null);
 const pendingDeferredGrab = ref(false);
-const activeCandidates = computed(() => {
-    if (!selectionMode.value) {
-        return [];
-    }
-    const item = availableActions.value.find((action) => action.action === selectionMode.value && (action.enabled || action.deferred));
-    return item?.candidates ?? [];
-});
 const candidateTargetCard = computed(() => {
     return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null);
 });
 const isPendingSpecialCard = computed(() => {
     const card = candidateTargetCard.value;
     return Boolean(card && (card.color === "gold" || card.type === "jiang"));
-});
-const candidatePromptText = computed(() => {
-    if (selectionMode.value === "chi" && isPendingSpecialCard.value) {
-        return state.value?.responsePhase === "collective"
-            ? "请选择一种吃法；系统会先等待其他玩家响应"
-            : "请选择一种吃法";
-    }
-    if (state.value?.responsePhase === "collective" && selectionMode.value === "chi") {
-        return "请先选吃的牌组；系统会先过待响，待无人胡/开/碰后自动吃";
-    }
-    return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
 const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, } = useResponsiveViewport();
 const displayPreferences = ref(readDisplayPreferences());
@@ -634,8 +614,6 @@ let inviteQrReturnFocus = null;
 const showRules = ref(false);
 const rulesPanelRef = ref(null);
 const rulesCloseButtonRef = ref(null);
-const candidatePanelRef = ref(null);
-const candidateCancelButtonRef = ref(null);
 const settlementPanelRef = ref(null);
 const confirmingNextRound = ref(false);
 const nextRoundTriggerRef = ref(null);
@@ -657,7 +635,6 @@ let roomNavigationGuardArmed = false;
 let roomNavigationGuardReleasing = false;
 let roomNavigationReleaseTimer = null;
 let rulesReturnFocus = null;
-let candidateReturnFocus = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 watch(showEndPanel, (visible) => {
     if (visible) {
@@ -692,13 +669,14 @@ function openRules() {
 function returnToDecision() {
     decisionControlFocusPending = true;
     void nextTick(() => {
-        if (focusReadyGameControl()) {
-            return;
-        }
+        focusReadyGameControl();
         // The settings/rules leave transition briefly remains aria-modal. Retry
-        // after that compositor-only transition instead of dropping focus.
+        // after that compositor-only transition, and verify that removing the
+        // dialog did not return focus to the document body.
         window.setTimeout(() => {
-            if (decisionControlFocusPending && settingsDecisionActive.value) {
+            const focusedDecisionControl = document.activeElement instanceof HTMLElement && Boolean(document.activeElement.matches(".hand-card.discard-selected:not(:disabled), .action-dock .btn:not(:disabled), .hand-card.playable:not(:disabled)"));
+            if (!focusedDecisionControl && settingsDecisionActive.value) {
+                decisionControlFocusPending = true;
                 focusReadyGameControl();
             }
         }, 220);
@@ -1026,10 +1004,6 @@ function closeTopmostRoomLayerForBack() {
         closeRules();
         return true;
     }
-    if (selectionMode.value) {
-        clearSelection(true);
-        return true;
-    }
     if (confirmingNextRound.value) {
         cancelNextRound();
         return true;
@@ -1217,21 +1191,6 @@ const declareProgressPercent = computed(() => {
     const percent = (remain / declareTotalMs.value) * 100;
     return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-function clearSelection(restoreFocus = false) {
-    const returnTarget = candidateReturnFocus;
-    candidateReturnFocus = null;
-    selectionMode.value = null;
-    selectedCandidateId.value = null;
-    if (!restoreFocus) {
-        return;
-    }
-    void nextTick(() => {
-        if (returnTarget?.isConnected &&
-            !(returnTarget instanceof HTMLButtonElement && returnTarget.disabled)) {
-            returnTarget.focus();
-        }
-    });
-}
 function clearSeatClaimPending() {
     seatClaimPending.value = null;
     if (seatClaimReceiptTimer !== null) {
@@ -1311,48 +1270,8 @@ async function handleLeaveRoom() {
     clearSeatClaimPending();
     clearLobbyReadyPending();
     clearSettlementTransitionPending();
-    clearSelection();
     await leaveRoom();
     entryInviteRoomId.value = "";
-}
-function onPanelSelectionChange(payload) {
-    if (!payload.mode) {
-        clearSelection(Boolean(selectionMode.value));
-        return;
-    }
-    if (!selectionMode.value) {
-        candidateReturnFocus = document.activeElement instanceof HTMLElement
-            ? document.activeElement
-            : null;
-    }
-    selectionMode.value = payload.mode;
-    selectedCandidateId.value = payload.selectedCandidateId;
-    void nextTick(() => {
-        const firstCandidate = candidatePanelRef.value?.querySelector(".candidate-item");
-        (firstCandidate ?? candidateCancelButtonRef.value ?? candidatePanelRef.value)?.focus();
-    });
-}
-function trapCandidateFocus(event) {
-    const panel = candidatePanelRef.value;
-    if (!panel) {
-        return;
-    }
-    const focusable = Array.from(panel.querySelectorAll("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")).filter((element) => !element.hasAttribute("hidden"));
-    if (!focusable.length) {
-        event.preventDefault();
-        panel.focus();
-        return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
-        event.preventDefault();
-        last.focus();
-    }
-    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
-        event.preventDefault();
-        first.focus();
-    }
 }
 function actionFromRequest(request) {
     return typeof request === "string" ? request : request.action;
@@ -1366,7 +1285,6 @@ function onPanelSubmit(request) {
     if (state.value?.responsePhase === "collective" && action === "pass" && isDeferred) {
         pendingDeferredGrab.value = true;
         sendAction("pass");
-        clearSelection();
         return;
     }
     if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
@@ -1375,52 +1293,14 @@ function onPanelSubmit(request) {
             pendingDeferredChiCandidateId.value = candidateId;
             sendAction("pass");
         }
-        clearSelection();
         return;
     }
     pendingDeferredChiCandidateId.value = null;
     pendingDeferredGrab.value = false;
     sendAction(request);
-    clearSelection();
-}
-function submitCandidate(candidateId) {
-    if (!selectionMode.value) {
-        return;
-    }
-    selectedCandidateId.value = candidateId;
-    onPanelSubmit({ action: selectionMode.value, candidateId });
-}
-function actionText(action) {
-    if (action === "kai") {
-        return "开";
-    }
-    if (action === "peng") {
-        return "碰";
-    }
-    return "吃";
-}
-function candidateSourceText(source) {
-    if (source === "hand+pool") {
-        return "手牌与已有明示牌";
-    }
-    return "手牌";
 }
 function cardLabel(card) {
     return getCardLabelText(card);
-}
-function parseCardIdToCard(cardId) {
-    const match = String(cardId ?? "").trim().match(/^([a-z]+)_([a-z]+)_\d+$/i);
-    if (!match) {
-        return null;
-    }
-    return {
-        id: cardId,
-        color: match[1].toLowerCase(),
-        type: match[2].toLowerCase(),
-    };
-}
-function candidateGroupCards(candidate) {
-    return candidate.cardIds.map((id) => parseCardIdToCard(id)).filter((card) => Boolean(card));
 }
 function submitDeferredChiIfReady() {
     const candidateId = pendingDeferredChiCandidateId.value;
@@ -1473,25 +1353,12 @@ function submitDeclaration(payload) {
     declareSetup(payload);
 }
 watch(() => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`, () => {
-    clearSelection();
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
 });
 watch(() => availableActions.value, () => {
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
-    if (!selectionMode.value) {
-        return;
-    }
-    const current = availableActions.value.find((item) => item.action === selectionMode.value && (item.enabled || item.deferred));
-    if (!current) {
-        clearSelection();
-        return;
-    }
-    if (selectedCandidateId.value &&
-        !Boolean(current.candidates?.some((candidate) => candidate.id === selectedCandidateId.value))) {
-        selectedCandidateId.value = null;
-    }
 }, { deep: true });
 watch(() => [
     roomNavigationProtected.value,
@@ -2087,14 +1954,6 @@ const turnHint = computed(() => {
     }
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
-const currentPlayerName = computed(() => {
-    const playerId = displayTurnPlayerId.value;
-    if (!playerId) {
-        return "-";
-    }
-    const player = players.value.find((x) => x.clientId === playerId);
-    return player ? participantDisplayName(player) : playerId;
-});
 const roundDealerCard = computed(() => {
     const card = state.value?.dealerCard ?? null;
     return card?.id ? card : null;
@@ -2479,8 +2338,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['game-tools-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['resume-cancel']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-hero']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-field']} */ ;
@@ -2496,12 +2353,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
-/** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-decision-reminder']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-section']} */ ;
@@ -2567,7 +2418,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['player-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-cards-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
@@ -2588,12 +2438,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-panel']} */ ;
@@ -2714,12 +2558,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['layout']} */ ;
-/** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
@@ -3179,7 +3017,6 @@ else {
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
-        ...{ 'onSelectionChange': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
@@ -3189,7 +3026,6 @@ else {
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
-        currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
@@ -3204,15 +3040,11 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
-        selectionMode: (__VLS_ctx.selectionMode),
-        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-        activeCandidates: (__VLS_ctx.activeCandidates),
     }));
     const __VLS_52 = __VLS_51({
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
         ...{ 'onRequestMoreTime': {} },
-        ...{ 'onSelectionChange': {} },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
@@ -3222,7 +3054,6 @@ else {
         canAct: (__VLS_ctx.canAct),
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
-        currentPlayerName: (__VLS_ctx.currentPlayerName),
         turnHint: (__VLS_ctx.turnHint),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
         canRequestMoreTime: (__VLS_ctx.decisionTimer.canRequestMoreTime),
@@ -3237,9 +3068,6 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
-        selectionMode: (__VLS_ctx.selectionMode),
-        selectedCandidateId: (__VLS_ctx.selectedCandidateId),
-        activeCandidates: (__VLS_ctx.activeCandidates),
     }, ...__VLS_functionalComponentArgsRest(__VLS_51));
     let __VLS_54;
     let __VLS_55;
@@ -3253,190 +3081,53 @@ else {
     const __VLS_59 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    const __VLS_60 = {
-        onSelectionChange: (__VLS_ctx.onPanelSelectionChange)
-    };
     var __VLS_53;
 }
 if (__VLS_ctx.inviteCopyFallbackUrl) {
     /** @type {[typeof InviteLinkFallbackDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_61 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
+    const __VLS_60 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
     }));
-    const __VLS_62 = __VLS_61({
+    const __VLS_61 = __VLS_60({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_61));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    let __VLS_63;
     let __VLS_64;
     let __VLS_65;
-    let __VLS_66;
-    const __VLS_67 = {
+    const __VLS_66 = {
         onClose: (__VLS_ctx.closeInviteCopyFallback)
     };
-    var __VLS_63;
+    var __VLS_62;
 }
 if (__VLS_ctx.inviteQrUrl) {
-    const __VLS_68 = {}.FriendInviteQrDialog;
+    const __VLS_67 = {}.FriendInviteQrDialog;
     /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_69 = __VLS_asFunctionalComponent(__VLS_68, new __VLS_68({
+    const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
     }));
-    const __VLS_70 = __VLS_69({
+    const __VLS_69 = __VLS_68({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteQrUrl),
         roomId: (__VLS_ctx.inviteQrRoomId),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_69));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_68));
+    let __VLS_71;
     let __VLS_72;
     let __VLS_73;
-    let __VLS_74;
-    const __VLS_75 = {
+    const __VLS_74 = {
         onClose: (__VLS_ctx.closeInviteQr)
     };
-    var __VLS_71;
-}
-if (__VLS_ctx.isPlaying && __VLS_ctx.selectionMode) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
-                    return;
-                __VLS_ctx.clearSelection(true);
-            } },
-        ...{ class: "candidate-mask" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ onKeydown: (...[$event]) => {
-                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
-                    return;
-                __VLS_ctx.clearSelection(true);
-            } },
-        ...{ onKeydown: (__VLS_ctx.trapCandidateFocus) },
-        ref: "candidatePanelRef",
-        ...{ class: "candidate-panel" },
-        'data-testid': "candidate-panel",
-        role: "dialog",
-        'aria-modal': "true",
-        'aria-labelledby': "candidate-panel-title",
-        'aria-describedby': "candidate-panel-description",
-        tabindex: "-1",
-    });
-    /** @type {typeof __VLS_ctx.candidatePanelRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "candidate-head" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
-        id: "candidate-panel-title",
-    });
-    (__VLS_ctx.actionText(__VLS_ctx.selectionMode));
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (...[$event]) => {
-                if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
-                    return;
-                __VLS_ctx.clearSelection(true);
-            } },
-        ref: "candidateCancelButtonRef",
-        ...{ class: "ghost" },
-        'data-testid': "candidate-cancel",
-    });
-    /** @type {typeof __VLS_ctx.candidateCancelButtonRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        id: "candidate-panel-description",
-        ...{ class: "candidate-desc" },
-    });
-    (__VLS_ctx.candidatePromptText);
-    if (__VLS_ctx.activeCandidates.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "candidate-list" },
-        });
-        for (const [candidate, index] of __VLS_getVForSourceType((__VLS_ctx.activeCandidates))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-                ...{ onClick: (...[$event]) => {
-                        if (!(__VLS_ctx.isPlaying && __VLS_ctx.selectionMode))
-                            return;
-                        if (!(__VLS_ctx.activeCandidates.length))
-                            return;
-                        __VLS_ctx.submitCandidate(candidate.id);
-                    } },
-                key: (candidate.id),
-                ...{ class: "candidate-item" },
-                'data-testid': "candidate-option",
-                ...{ class: ({ selected: __VLS_ctx.selectedCandidateId === candidate.id }) },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "candidate-title" },
-            });
-            (index + 1);
-            (candidate.title);
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "candidate-cards-preview" },
-            });
-            if (__VLS_ctx.candidateTargetCard) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                    ...{ class: "preview-col target" },
-                });
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_76 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    card: (__VLS_ctx.candidateTargetCard),
-                    size: "sm",
-                    mode: (__VLS_ctx.resolvedTableCardMode),
-                }));
-                const __VLS_77 = __VLS_76({
-                    card: (__VLS_ctx.candidateTargetCard),
-                    size: "sm",
-                    mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_76));
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "preview-col group" },
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-            if (__VLS_ctx.candidateGroupCards(candidate).length) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                    ...{ class: "preview-cards" },
-                });
-                for (const [card] of __VLS_getVForSourceType((__VLS_ctx.candidateGroupCards(candidate)))) {
-                    /** @type {[typeof CardComp, ]} */ ;
-                    // @ts-ignore
-                    const __VLS_79 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                        key: (`cand-${candidate.id}-${card.id}`),
-                        card: (card),
-                        size: "sm",
-                        mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }));
-                    const __VLS_80 = __VLS_79({
-                        key: (`cand-${candidate.id}-${card.id}`),
-                        card: (card),
-                        size: "sm",
-                        mode: (__VLS_ctx.resolvedOwnCardMode),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_79));
-                }
-            }
-            else {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
-                    ...{ class: "candidate-raw" },
-                });
-                (candidate.cardIds.join("、") || "无需手牌");
-            }
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
-            (__VLS_ctx.candidateSourceText(candidate.source));
-        }
-    }
-    else {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "candidate-empty" },
-        });
-    }
+    var __VLS_70;
 }
 if (__VLS_ctx.shouldShowDeclarePanel) {
     /** @type {[typeof DeclarationPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_82 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+    const __VLS_75 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -3454,7 +3145,7 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
     }));
-    const __VLS_83 = __VLS_82({
+    const __VLS_76 = __VLS_75({
         ...{ 'onSubmit': {} },
         ...{ 'onRequestMoreTime': {} },
         hand: (__VLS_ctx.privateHand),
@@ -3471,17 +3162,17 @@ if (__VLS_ctx.shouldShowDeclarePanel) {
         untimed: (__VLS_ctx.decisionTimer.untimed),
         moreTimeSeconds: (__VLS_ctx.decisionTimer.extensionSeconds),
         decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_82));
-    let __VLS_85;
-    let __VLS_86;
-    let __VLS_87;
-    const __VLS_88 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_75));
+    let __VLS_78;
+    let __VLS_79;
+    let __VLS_80;
+    const __VLS_81 = {
         onSubmit: (__VLS_ctx.submitDeclaration)
     };
-    const __VLS_89 = {
+    const __VLS_82 = {
         onRequestMoreTime: (__VLS_ctx.requestMoreTime)
     };
-    var __VLS_84;
+    var __VLS_77;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3672,18 +3363,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_90 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_83 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
                             }));
-                            const __VLS_91 = __VLS_90({
+                            const __VLS_84 = __VLS_83({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_90));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_83));
                         }
                     }
                 }
@@ -3720,18 +3411,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_93 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_86 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                             }));
-                            const __VLS_94 = __VLS_93({
+                            const __VLS_87 = __VLS_86({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_93));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_86));
                         }
                     }
                 }
@@ -3742,18 +3433,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_96 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_89 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_97 = __VLS_96({
+                        const __VLS_90 = __VLS_89({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_96));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_89));
                     }
                 }
                 else {
@@ -3817,18 +3508,18 @@ if (__VLS_ctx.showEndPanel) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_99 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_92 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_100 = __VLS_99({
+                const __VLS_93 = __VLS_92({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_99));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_92));
             }
         }
     }
@@ -4212,22 +3903,6 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['entry-kicker']} */ ;
 /** @type {__VLS_StyleScopedClasses['entry-desc']} */ ;
 /** @type {__VLS_StyleScopedClasses['resume-cancel']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-mask']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-desc']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-list']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-item']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-title']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-cards-preview']} */ ;
-/** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
-/** @type {__VLS_StyleScopedClasses['target']} */ ;
-/** @type {__VLS_StyleScopedClasses['preview-col']} */ ;
-/** @type {__VLS_StyleScopedClasses['group']} */ ;
-/** @type {__VLS_StyleScopedClasses['preview-cards']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-raw']} */ ;
-/** @type {__VLS_StyleScopedClasses['candidate-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['hu-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['settlement-fixed-head']} */ ;
@@ -4406,11 +4081,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             interactionPausedMessage: interactionPausedMessage,
-            selectionMode: selectionMode,
-            selectedCandidateId: selectedCandidateId,
-            activeCandidates: activeCandidates,
-            candidateTargetCard: candidateTargetCard,
-            candidatePromptText: candidatePromptText,
             effectiveHeight: effectiveHeight,
             effectiveWidth: effectiveWidth,
             isCompactViewport: isCompactViewport,
@@ -4434,8 +4104,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             showRules: showRules,
             rulesPanelRef: rulesPanelRef,
             rulesCloseButtonRef: rulesCloseButtonRef,
-            candidatePanelRef: candidatePanelRef,
-            candidateCancelButtonRef: candidateCancelButtonRef,
             settlementPanelRef: settlementPanelRef,
             confirmingNextRound: confirmingNextRound,
             nextRoundTriggerRef: nextRoundTriggerRef,
@@ -4478,18 +4146,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             screenWakeLockSupported: screenWakeLockSupported,
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
-            clearSelection: clearSelection,
             requestSeatClaim: requestSeatClaim,
             requestLobbyReady: requestLobbyReady,
             handleLeaveRoom: handleLeaveRoom,
-            onPanelSelectionChange: onPanelSelectionChange,
-            trapCandidateFocus: trapCandidateFocus,
             onPanelSubmit: onPanelSubmit,
-            submitCandidate: submitCandidate,
-            actionText: actionText,
-            candidateSourceText: candidateSourceText,
             cardLabel: cardLabel,
-            candidateGroupCards: candidateGroupCards,
             submitDeclaration: submitDeclaration,
             endPanelTitle: endPanelTitle,
             derivedWinnerId: derivedWinnerId,
@@ -4514,7 +4175,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             settlementScoreLines: settlementScoreLines,
             endSummary: endSummary,
             turnHint: turnHint,
-            currentPlayerName: currentPlayerName,
             roundDealerCard: roundDealerCard,
             enterLobby: enterLobby,
             randomizeNickname: randomizeNickname,

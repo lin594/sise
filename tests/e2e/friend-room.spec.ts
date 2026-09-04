@@ -455,10 +455,10 @@ test("a later friend can choose a collective response before their polling turn"
     ).toMatchObject({ scenario: "early_collective_choice", ok: true });
 
     const guidance = host.getByTestId("action-guidance");
-    await expect(guidance).toContainText("现在可以先选");
-    await expect(guidance).not.toContainText("还剩");
+    await expect(guidance).toContainText(/该你操作了|现在可以先选/);
     await expect(host.getByTestId("action-peng")).toBeEnabled();
-    await expect(guest.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(guest.getByTestId("action-guidance")).toHaveCount(0);
+    await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 
     await host.getByTestId("action-pass").click();
@@ -468,7 +468,8 @@ test("a later friend can choose a collective response before their polling turn"
     await host.waitForTimeout(1_800);
     await expect(receipt).toHaveCount(0);
     await expect(host.getByTestId("action-pass")).toHaveCount(0);
-    await expect(host.getByTestId("action-waiting")).toContainText("先响应牌友正在操作");
+    await expect(host.getByTestId("action-waiting")).toHaveCount(0);
+    await expect(host.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
   } finally {
     await guestContext.close();
     await hostContext.close();

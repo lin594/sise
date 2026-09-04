@@ -93,6 +93,18 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: chi_local_upper#${seq}`;
+  } else if (scenario === "chi_four_zu") {
+    add("zu-red", "red", "zu");
+    add("zu-green", "green", "zu");
+    add("zu-white", "white", "zu");
+    add("zu-spare", "red", "ma");
+    context.setPendingResponse(createPendingResponse(seatId, { id: "zu-yellow", color: "yellow", type: "zu" }, "upper"));
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_upper";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: chi_four_zu#${seq}`;
   } else if (scenario === "mode2_pass" || scenario === "local_draw_pass") {
     add("d5", "yellow", "ju");
     add("d6", "white", "xiang");

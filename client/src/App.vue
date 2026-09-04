@@ -170,7 +170,6 @@
         :can-act="canAct"
         :is-current-turn="isMyTurn"
         :response-phase="state?.responsePhase || ''"
-        :current-player-name="currentPlayerName"
         :turn-hint="turnHint"
         :interaction-paused-message="interactionPausedMessage"
         :can-request-more-time="decisionTimer.canRequestMoreTime"
@@ -185,13 +184,9 @@
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
-        :selection-mode="selectionMode"
-        :selected-candidate-id="selectedCandidateId"
-        :active-candidates="activeCandidates"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
         @request-more-time="requestMoreTime"
-        @selection-change="onPanelSelectionChange"
       />
     </template>
 
@@ -207,60 +202,6 @@
       :room-id="inviteQrRoomId"
       @close="closeInviteQr"
     />
-
-    <div v-if="isPlaying && selectionMode" class="candidate-mask" @click.self="clearSelection(true)">
-      <div
-        ref="candidatePanelRef"
-        class="candidate-panel"
-        data-testid="candidate-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="candidate-panel-title"
-        aria-describedby="candidate-panel-description"
-        tabindex="-1"
-        @keydown.esc.stop.prevent="clearSelection(true)"
-        @keydown.tab="trapCandidateFocus"
-      >
-        <div class="candidate-head">
-          <h3 id="candidate-panel-title">{{ actionText(selectionMode) }}候选牌组</h3>
-          <button ref="candidateCancelButtonRef" class="ghost" data-testid="candidate-cancel" @click="clearSelection(true)">取消</button>
-        </div>
-        <p id="candidate-panel-description" class="candidate-desc">{{ candidatePromptText }}</p>
-        <div v-if="activeCandidates.length" class="candidate-list">
-          <button
-            v-for="(candidate, index) in activeCandidates"
-            :key="candidate.id"
-            class="candidate-item"
-            data-testid="candidate-option"
-            :class="{ selected: selectedCandidateId === candidate.id }"
-            @click="submitCandidate(candidate.id)"
-          >
-            <span class="candidate-title">{{ index + 1 }}. {{ candidate.title }}</span>
-            <div class="candidate-cards-preview">
-              <div class="preview-col target" v-if="candidateTargetCard">
-                <small>目标牌</small>
-                <CardComp :card="candidateTargetCard" size="sm" :mode="resolvedTableCardMode" />
-              </div>
-              <div class="preview-col group">
-                <small>组合牌</small>
-                <div v-if="candidateGroupCards(candidate).length" class="preview-cards">
-                  <CardComp
-                    v-for="card in candidateGroupCards(candidate)"
-                    :key="`cand-${candidate.id}-${card.id}`"
-                    :card="card"
-                    size="sm"
-                    :mode="resolvedOwnCardMode"
-                  />
-                </div>
-                <small v-else class="candidate-raw">{{ candidate.cardIds.join("、") || "无需手牌" }}</small>
-              </div>
-            </div>
-            <small>{{ candidateSourceText(candidate.source) }}</small>
-          </button>
-        </div>
-        <p v-else class="candidate-empty">当前没有可选牌组</p>
-      </div>
-    </div>
 
     <DeclarationPanel
       v-if="shouldShowDeclarePanel"
@@ -725,7 +666,6 @@ import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
-  ActionCandidate,
   ActionRequest,
   AvailableAction,
   Card,
@@ -1440,36 +1380,14 @@ const interactionPausedMessage = computed(() => {
   }
   return "正在恢复牌局，请稍候";
 });
-const selectionMode = ref<"kai" | "peng" | "chi" | null>(null);
-const selectedCandidateId = ref<string | null>(null);
 const pendingDeferredChiCandidateId = ref<string | null>(null);
 const pendingDeferredGrab = ref(false);
-const activeCandidates = computed<ActionCandidate[]>(() => {
-  if (!selectionMode.value) {
-    return [];
-  }
-  const item = availableActions.value.find(
-    (action) => action.action === selectionMode.value && (action.enabled || action.deferred),
-  );
-  return item?.candidates ?? [];
-});
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
 });
 const isPendingSpecialCard = computed(() => {
   const card = candidateTargetCard.value;
   return Boolean(card && (card.color === "gold" || card.type === "jiang"));
-});
-const candidatePromptText = computed(() => {
-  if (selectionMode.value === "chi" && isPendingSpecialCard.value) {
-    return state.value?.responsePhase === "collective"
-      ? "请选择一种吃法；系统会先等待其他玩家响应"
-      : "请选择一种吃法";
-  }
-  if (state.value?.responsePhase === "collective" && selectionMode.value === "chi") {
-    return "请先选吃的牌组；系统会先过待响，待无人胡/开/碰后自动吃";
-  }
-  return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
 const {
   effectiveHeight,
@@ -1515,8 +1433,6 @@ let inviteQrReturnFocus: HTMLElement | null = null;
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
-const candidatePanelRef = ref<HTMLElement | null>(null);
-const candidateCancelButtonRef = ref<HTMLButtonElement | null>(null);
 const settlementPanelRef = ref<HTMLElement | null>(null);
 const confirmingNextRound = ref(false);
 const nextRoundTriggerRef = ref<HTMLButtonElement | null>(null);
@@ -1539,7 +1455,6 @@ let roomNavigationGuardArmed = false;
 let roomNavigationGuardReleasing = false;
 let roomNavigationReleaseTimer: number | null = null;
 let rulesReturnFocus: HTMLElement | null = null;
-let candidateReturnFocus: HTMLElement | null = null;
 const showEndPanel = computed(() => Boolean(huResult.value) || Boolean(roundResult.value) || isEnded.value);
 watch(
   showEndPanel,
@@ -1587,13 +1502,18 @@ function openRules(): void {
 function returnToDecision(): void {
   decisionControlFocusPending = true;
   void nextTick(() => {
-    if (focusReadyGameControl()) {
-      return;
-    }
+    focusReadyGameControl();
     // The settings/rules leave transition briefly remains aria-modal. Retry
-    // after that compositor-only transition instead of dropping focus.
+    // after that compositor-only transition, and verify that removing the
+    // dialog did not return focus to the document body.
     window.setTimeout(() => {
-      if (decisionControlFocusPending && settingsDecisionActive.value) {
+      const focusedDecisionControl = document.activeElement instanceof HTMLElement && Boolean(
+        document.activeElement.matches(
+          ".hand-card.discard-selected:not(:disabled), .action-dock .btn:not(:disabled), .hand-card.playable:not(:disabled)",
+        ),
+      );
+      if (!focusedDecisionControl && settingsDecisionActive.value) {
+        decisionControlFocusPending = true;
         focusReadyGameControl();
       }
     }, 220);
@@ -1959,10 +1879,6 @@ function closeTopmostRoomLayerForBack(): boolean {
     closeRules();
     return true;
   }
-  if (selectionMode.value) {
-    clearSelection(true);
-    return true;
-  }
   if (confirmingNextRound.value) {
     cancelNextRound();
     return true;
@@ -2172,24 +2088,6 @@ const declareProgressPercent = computed(() => {
   const percent = (remain / declareTotalMs.value) * 100;
   return Math.max(0, Math.min(100, Number(percent.toFixed(1))));
 });
-function clearSelection(restoreFocus = false) {
-  const returnTarget = candidateReturnFocus;
-  candidateReturnFocus = null;
-  selectionMode.value = null;
-  selectedCandidateId.value = null;
-  if (!restoreFocus) {
-    return;
-  }
-  void nextTick(() => {
-    if (
-      returnTarget?.isConnected &&
-      !(returnTarget instanceof HTMLButtonElement && returnTarget.disabled)
-    ) {
-      returnTarget.focus();
-    }
-  });
-}
-
 function clearSeatClaimPending(): void {
   seatClaimPending.value = null;
   if (seatClaimReceiptTimer !== null) {
@@ -2281,53 +2179,8 @@ async function handleLeaveRoom(): Promise<void> {
   clearSeatClaimPending();
   clearLobbyReadyPending();
   clearSettlementTransitionPending();
-  clearSelection();
   await leaveRoom();
   entryInviteRoomId.value = "";
-}
-
-function onPanelSelectionChange(payload: { mode: "kai" | "peng" | "chi" | null; selectedCandidateId: string | null }) {
-  if (!payload.mode) {
-    clearSelection(Boolean(selectionMode.value));
-    return;
-  }
-  if (!selectionMode.value) {
-    candidateReturnFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-  }
-  selectionMode.value = payload.mode;
-  selectedCandidateId.value = payload.selectedCandidateId;
-  void nextTick(() => {
-    const firstCandidate = candidatePanelRef.value?.querySelector<HTMLElement>(".candidate-item");
-    (firstCandidate ?? candidateCancelButtonRef.value ?? candidatePanelRef.value)?.focus();
-  });
-}
-
-function trapCandidateFocus(event: KeyboardEvent): void {
-  const panel = candidatePanelRef.value;
-  if (!panel) {
-    return;
-  }
-  const focusable = Array.from(
-    panel.querySelectorAll<HTMLElement>(
-      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-    ),
-  ).filter((element) => !element.hasAttribute("hidden"));
-  if (!focusable.length) {
-    event.preventDefault();
-    panel.focus();
-    return;
-  }
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) {
-    event.preventDefault();
-    first.focus();
-  }
 }
 
 function actionFromRequest(request: ActionRequest): string {
@@ -2344,7 +2197,6 @@ function onPanelSubmit(request: ActionRequest) {
   if (state.value?.responsePhase === "collective" && action === "pass" && isDeferred) {
     pendingDeferredGrab.value = true;
     sendAction("pass");
-    clearSelection();
     return;
   }
   if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
@@ -2353,58 +2205,15 @@ function onPanelSubmit(request: ActionRequest) {
       pendingDeferredChiCandidateId.value = candidateId;
       sendAction("pass");
     }
-    clearSelection();
     return;
   }
   pendingDeferredChiCandidateId.value = null;
   pendingDeferredGrab.value = false;
   sendAction(request);
-  clearSelection();
-}
-
-function submitCandidate(candidateId: string) {
-  if (!selectionMode.value) {
-    return;
-  }
-  selectedCandidateId.value = candidateId;
-  onPanelSubmit({ action: selectionMode.value, candidateId });
-}
-
-function actionText(action: "kai" | "peng" | "chi"): string {
-  if (action === "kai") {
-    return "开";
-  }
-  if (action === "peng") {
-    return "碰";
-  }
-  return "吃";
-}
-
-function candidateSourceText(source: ActionCandidate["source"]): string {
-  if (source === "hand+pool") {
-    return "手牌与已有明示牌";
-  }
-  return "手牌";
 }
 
 function cardLabel(card: Card): string {
   return getCardLabelText(card);
-}
-
-function parseCardIdToCard(cardId: string): Card | null {
-  const match = String(cardId ?? "").trim().match(/^([a-z]+)_([a-z]+)_\d+$/i);
-  if (!match) {
-    return null;
-  }
-  return {
-    id: cardId,
-    color: match[1].toLowerCase(),
-    type: match[2].toLowerCase(),
-  };
-}
-
-function candidateGroupCards(candidate: ActionCandidate): Card[] {
-  return candidate.cardIds.map((id) => parseCardIdToCard(id)).filter((card): card is Card => Boolean(card));
 }
 
 function submitDeferredChiIfReady() {
@@ -2465,7 +2274,6 @@ function submitDeclaration(payload: { declaredKongs: number; fishCardIds: string
 watch(
   () => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`,
   () => {
-    clearSelection();
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
   },
@@ -2476,22 +2284,6 @@ watch(
   () => {
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
-    if (!selectionMode.value) {
-      return;
-    }
-    const current = availableActions.value.find(
-      (item) => item.action === selectionMode.value && (item.enabled || item.deferred),
-    );
-    if (!current) {
-      clearSelection();
-      return;
-    }
-    if (
-      selectedCandidateId.value &&
-      !Boolean(current.candidates?.some((candidate) => candidate.id === selectedCandidateId.value))
-    ) {
-      selectedCandidateId.value = null;
-    }
   },
   { deep: true },
 );
@@ -3161,15 +2953,6 @@ const turnHint = computed(() => {
   return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
 
-const currentPlayerName = computed(() => {
-  const playerId = displayTurnPlayerId.value;
-  if (!playerId) {
-    return "-";
-  }
-  const player = players.value.find((x) => x.clientId === playerId);
-  return player ? participantDisplayName(player) : playerId;
-});
-
 const roundDealerCard = computed<Card | null>(() => {
   const card = state.value?.dealerCard ?? null;
   return card?.id ? card : null;
@@ -3732,7 +3515,6 @@ watch(
 
 .layout.game-tools-active .hu-mask,
 .layout.game-tools-active .rules-mask,
-.layout.game-tools-active .candidate-mask,
 .layout.game-tools-active :deep(.declare-mask) {
   top: calc(var(--game-header-height) + 0.45rem);
 }
@@ -4010,124 +3792,6 @@ watch(
   z-index: 92;
   padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
     max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
-}
-
-.candidate-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.68);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 95;
-  padding: max(0.35rem, var(--safe-top)) max(0.35rem, var(--safe-right))
-    max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
-}
-
-.candidate-panel {
-  width: min(760px, 96vw);
-  max-height: 82vh;
-  overflow: auto;
-  background: #0b1220;
-  border: 1px solid #1e3a5f;
-  border-radius: 12px;
-  color: #e2e8f0;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.candidate-panel:focus-visible {
-  outline: 3px solid #7dd3fc;
-  outline-offset: 2px;
-}
-
-.candidate-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  position: sticky;
-  top: -12px;
-  z-index: 3;
-  padding: 12px 0 8px;
-  background: linear-gradient(180deg, #0b1220 78%, rgba(11, 18, 32, 0));
-}
-
-.candidate-head h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.candidate-desc {
-  margin: 0;
-  color: #bfdbfe;
-  font-size: 14px;
-}
-
-.candidate-list {
-  display: grid;
-  gap: 8px;
-}
-
-.candidate-item {
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #e2e8f0;
-  border-radius: 10px;
-  padding: 10px;
-  text-align: left;
-  display: grid;
-  gap: 4px;
-  cursor: pointer;
-  min-height: 48px;
-}
-
-.candidate-item.selected {
-  border-color: #f59e0b;
-  background: #3f2d0f;
-}
-
-.candidate-item:focus-visible {
-  outline: 3px solid #bae6fd;
-  outline-offset: 2px;
-  border-color: #38bdf8;
-}
-
-.candidate-cards-preview {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-}
-
-.preview-col {
-  display: grid;
-  gap: 4px;
-}
-
-.preview-col small {
-  color: #93c5fd;
-}
-
-.preview-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.candidate-raw {
-  color: #cbd5e1;
-}
-
-.candidate-title {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.candidate-empty {
-  margin: 0;
-  color: #fca5a5;
 }
 
 .rules-panel {
@@ -4873,12 +4537,10 @@ watch(
 }
 
 .layout.compact-viewport .hu-mask,
-.layout.compact-viewport .rules-mask,
-.layout.compact-viewport .candidate-mask {
+.layout.compact-viewport .rules-mask {
   align-items: stretch;
 }
 
-.layout.compact-viewport .candidate-panel,
 .layout.compact-viewport .rules-panel,
 .layout.compact-viewport .hu-panel {
   width: 100%;
@@ -5077,15 +4739,6 @@ watch(
   width: clamp(2rem, 9vh, 2.25rem);
   height: clamp(2.2rem, 10vh, 2.5rem);
   font-size: clamp(1rem, 4.4vh, 1.15rem);
-}
-
-.layout.compact-viewport .candidate-panel {
-  padding: 0.65rem;
-}
-
-.layout.compact-viewport .candidate-head {
-  top: -0.65rem;
-  padding: 0.65rem 0 0.45rem;
 }
 
 .layout.compact-viewport .hu-panel > .end-actions {
