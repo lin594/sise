@@ -15,6 +15,10 @@
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
     :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
     :data-connection-state="connectionState"
+    :style="{
+      '--physical-viewport-width': `${viewportWidth}px`,
+      '--physical-viewport-height': `${viewportHeight}px`,
+    }"
   >
     <header
       class="top"
@@ -1286,6 +1290,8 @@ const {
   isLegacyCompactViewport,
   isRotatedPhonePortrait,
   isUltraCompactViewport,
+  viewportHeight,
+  viewportWidth,
 } = useResponsiveViewport();
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
 function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
@@ -3034,16 +3040,20 @@ watch(
 
 <style scoped>
 .layout {
-  --effective-viewport-width: 100dvw;
-  --effective-viewport-height: 100dvh;
-  --compact-board-self-row-height: clamp(6.75rem, 31dvh, 7.5rem);
+  --effective-viewport-width: var(--physical-viewport-width, 100vw);
+  --effective-viewport-height: var(--physical-viewport-height, 100vh);
+  --compact-board-self-row-height: clamp(
+    6.75rem,
+    calc(var(--physical-viewport-height, 100vh) * 0.31),
+    7.5rem
+  );
   --game-header-height: 3rem;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   width: 100%;
-  height: 100dvh;
+  height: var(--physical-viewport-height, 100vh);
   max-width: none;
   margin: 0 auto;
   display: grid;
@@ -3055,18 +3065,22 @@ watch(
 }
 
 .layout.rotated-phone-portrait {
-  --effective-viewport-width: 100dvh;
-  --effective-viewport-height: 100dvw;
-  --compact-board-self-row-height: clamp(6.75rem, 31dvw, 7.5rem);
+  --effective-viewport-width: var(--physical-viewport-height, 100vh);
+  --effective-viewport-height: var(--physical-viewport-width, 100vw);
+  --compact-board-self-row-height: clamp(
+    6.75rem,
+    calc(var(--physical-viewport-width, 100vw) * 0.31),
+    7.5rem
+  );
   --safe-top: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-right, 0px);
   --safe-left: env(safe-area-inset-bottom, 0px);
   position: fixed;
   top: 0;
-  left: 100dvw;
-  width: 100dvh;
-  height: 100dvw;
+  left: var(--physical-viewport-width, 100vw);
+  width: var(--physical-viewport-height, 100vh);
+  height: var(--physical-viewport-width, 100vw);
   transform: rotate(90deg);
   transform-origin: top left;
 }
@@ -4161,8 +4175,8 @@ watch(
 }
 
 .table-return-dialog {
-  width: min(23rem, calc(var(--effective-viewport-width, 100dvw) - 1.4rem));
-  max-height: calc(var(--effective-viewport-height, 100dvh) - 1.4rem);
+  width: min(23rem, calc(var(--effective-viewport-width, 100vw) - 1.4rem));
+  max-height: calc(var(--effective-viewport-height, 100vh) - 1.4rem);
   overflow: auto;
   padding: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.48);

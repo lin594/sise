@@ -480,6 +480,8 @@ test.describe("clear first-time entry", () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
     const portraitGeometry = await page.evaluate(() => {
+      const layout = document.querySelector<HTMLElement>("main.layout")!;
+      const layoutStyle = getComputedStyle(layout);
       const elements = [
         ...document.querySelectorAll<HTMLElement>(".mode-card"),
         document.querySelector<HTMLElement>("[data-testid='lobby-start']")!,
@@ -488,13 +490,20 @@ test.describe("clear first-time entry", () => {
       ];
       return {
         noPageOverflow: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+        physicalViewportWidth: layoutStyle.getPropertyValue("--physical-viewport-width").trim(),
+        physicalViewportHeight: layoutStyle.getPropertyValue("--physical-viewport-height").trim(),
         allControlsInPhysicalViewport: elements.every((element) => {
           const rect = element.getBoundingClientRect();
           return rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
         }),
       };
     });
-    expect(portraitGeometry).toEqual({ noPageOverflow: true, allControlsInPhysicalViewport: true });
+    expect(portraitGeometry).toEqual({
+      noPageOverflow: true,
+      physicalViewportWidth: "320px",
+      physicalViewportHeight: "568px",
+      allControlsInPhysicalViewport: true,
+    });
     await page.screenshot({ path: testInfo.outputPath("legacy-mode-lobby-320x568.png") });
 
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -523,12 +532,15 @@ test.describe("phone portrait landscape canvas", () => {
 
     const geometry = await layout.evaluate((element) => {
       const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
       return {
         offsetWidth: (element as HTMLElement).offsetWidth,
         offsetHeight: (element as HTMLElement).offsetHeight,
         rectWidth: Math.round(rect.width),
         rectHeight: Math.round(rect.height),
-        transform: getComputedStyle(element).transform,
+        transform: style.transform,
+        physicalViewportWidth: style.getPropertyValue("--physical-viewport-width").trim(),
+        physicalViewportHeight: style.getPropertyValue("--physical-viewport-height").trim(),
       };
     });
     expect(geometry).toMatchObject({
@@ -536,6 +548,8 @@ test.describe("phone portrait landscape canvas", () => {
       offsetHeight: 375,
       rectWidth: 375,
       rectHeight: 667,
+      physicalViewportWidth: "375px",
+      physicalViewportHeight: "667px",
     });
     expect(geometry.transform).not.toBe("none");
 
@@ -566,11 +580,14 @@ test.describe("phone portrait landscape canvas", () => {
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
     const geometry = await layout.evaluate((element) => {
       const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
       return {
         offsetWidth: (element as HTMLElement).offsetWidth,
         offsetHeight: (element as HTMLElement).offsetHeight,
         rectWidth: Math.round(rect.width),
         rectHeight: Math.round(rect.height),
+        physicalViewportWidth: style.getPropertyValue("--physical-viewport-width").trim(),
+        physicalViewportHeight: style.getPropertyValue("--physical-viewport-height").trim(),
       };
     });
     expect(geometry).toEqual({
@@ -578,6 +595,8 @@ test.describe("phone portrait landscape canvas", () => {
       offsetHeight: 320,
       rectWidth: 320,
       rectHeight: 568,
+      physicalViewportWidth: "320px",
+      physicalViewportHeight: "568px",
     });
   });
 

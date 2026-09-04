@@ -1257,8 +1257,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .waiting-leave-dialog {
-  width: min(23rem, calc(100dvw - 1.4rem));
-  max-height: calc(100dvh - 1.4rem);
+  width: min(23rem, calc(var(--effective-viewport-width, 100vw) - 1.4rem));
+  max-height: calc(var(--effective-viewport-height, 100vh) - 1.4rem);
   overflow: auto;
   padding: 1.1rem;
   border-radius: 1.15rem;
@@ -1331,7 +1331,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .guest-profile-dialog {
-  width: min(30rem, calc(100dvw - 1.4rem));
+  width: min(30rem, calc(var(--effective-viewport-width, 100vw) - 1.4rem));
   padding: 0.85rem;
   text-align: left;
 }
@@ -1663,7 +1663,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .waiting-leave-dialog {
-    width: min(26rem, calc(100dvw - 0.8rem));
+    width: min(26rem, calc(var(--effective-viewport-width, 100vw) - 0.8rem));
     padding: 0.65rem;
   }
 

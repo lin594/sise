@@ -207,7 +207,7 @@ server/src/rules/                     牌堆、动作候选、胡牌拆解
 server/src/schema/                    公开同步 Schema
 ```
 
-触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布，并通过 `--effective-viewport-width`、`--effective-viewport-height` 向下游组件提供唯一尺寸来源。根布局内的设置、记录和确认层必须使用这组变量或容器百分比，不能直接假定 `100dvw/100dvh` 与游戏坐标轴一致。紧凑牌桌的底部手牌操作行由根布局提供 `--compact-board-self-row-height`：横持按 `dvh`、自动旋转时按对应的 `dvw` 计算，`GameBoard` 不再直接把物理高度当成游戏高度。牌桌内部三行只能分配实际剩余空间，内容溢出由各牌区自行滚动，牌桌根网格不得产生被 `overflow: hidden` 裁掉的行。显示偏好由根布局统一持久化；游戏内 `reduceMotion` 或操作系统 `prefers-reduced-motion` 任一生效时，根布局对所有子组件统一关闭非必要动画，手牌滚动逻辑同时改用即时行为，不改变服务端状态机时间。
+触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布。`useResponsiveViewport` 把 `window.innerWidth/innerHeight` 暴露为随尺寸变化更新的 `--physical-viewport-width/height` 像素变量；根布局在普通方向直接引用它们，自动旋转时交换宽高，再通过 `--effective-viewport-width/height` 向下游组件提供唯一游戏坐标来源。根节点在脚本加载前保留 `100vh` 后备，不能把旧浏览器不认识的 `dvh/dvw` 当作唯一尺寸。设置、记录、确认层和紧凑牌桌的底部手牌操作行都使用上述变量或容器百分比，`GameBoard` 不再直接把物理高度当成游戏高度。牌桌内部三行只能分配实际剩余空间，内容溢出由各牌区自行滚动，牌桌根网格不得产生被 `overflow: hidden` 裁掉的行。显示偏好由根布局统一持久化；游戏内 `reduceMotion` 或操作系统 `prefers-reduced-motion` 任一生效时，根布局对所有子组件统一关闭非必要动画，手牌滚动逻辑同时改用即时行为，不改变服务端状态机时间。
 
 ## 8. 当前边界
 

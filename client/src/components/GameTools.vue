@@ -870,8 +870,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 0.42rem);
   right: 0;
-  width: min(18rem, calc(var(--effective-viewport-width, 100dvw) - 1rem));
-  max-height: calc(var(--effective-viewport-height, 100dvh) - var(--game-header-height, 3rem) - 0.8rem);
+  width: min(18rem, calc(var(--effective-viewport-width, 100vw) - 1rem));
+  max-height: calc(var(--effective-viewport-height, 100vh) - var(--game-header-height, 3rem) - 0.8rem);
   overflow: auto;
   padding: 0.8rem;
   border-radius: 1rem;
@@ -891,7 +891,7 @@ onBeforeUnmount(() => {
 }
 
 .history-panel {
-  width: min(22rem, calc(var(--effective-viewport-width, 100dvw) - 1rem));
+  width: min(22rem, calc(var(--effective-viewport-width, 100vw) - 1rem));
   padding: 0.8rem;
 }
 
@@ -1340,7 +1340,7 @@ onBeforeUnmount(() => {
 @media (max-width: 960px), (max-height: 500px) {
   .settings-panel,
   .history-panel {
-    width: min(16rem, calc(var(--effective-viewport-width, 100dvw) - 0.5rem));
+    width: min(16rem, calc(var(--effective-viewport-width, 100vw) - 0.5rem));
     padding: 0.6rem;
   }
 

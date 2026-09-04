@@ -3925,7 +3925,7 @@ watch(
 @media (max-width: 960px), (max-height: 500px) {
   .board {
     grid-template-columns: clamp(6rem, 15vw, 7.5rem) minmax(0, 1fr) clamp(8.4rem, 21vw, 10.5rem);
-    grid-template-rows: minmax(0, 1fr) var(--compact-board-self-row-height, clamp(6.75rem, 31dvh, 7.5rem));
+    grid-template-rows: minmax(0, 1fr) var(--compact-board-self-row-height, clamp(6.75rem, 31vh, 7.5rem));
     gap: 0.4vh;
   }
 

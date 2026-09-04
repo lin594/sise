@@ -34,6 +34,11 @@ export function useResponsiveViewport() {
     }, 80);
   };
 
+  const handleVisualViewportResize = () => {
+    updateViewport();
+    keepFocusedControlVisible();
+  };
+
   const isPhoneLike = computed(
     () => coarsePointer.value && Math.min(viewportWidth.value, viewportHeight.value) <= PHONE_SHORT_EDGE_MAX,
   );
@@ -66,14 +71,14 @@ export function useResponsiveViewport() {
     window.addEventListener("resize", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
     coarsePointerQuery.addEventListener?.("change", updateViewport);
-    window.visualViewport?.addEventListener("resize", keepFocusedControlVisible);
+    window.visualViewport?.addEventListener("resize", handleVisualViewportResize);
   });
 
   onUnmounted(() => {
     window.removeEventListener("resize", updateViewport);
     window.removeEventListener("orientationchange", updateViewport);
     coarsePointerQuery?.removeEventListener?.("change", updateViewport);
-    window.visualViewport?.removeEventListener("resize", keepFocusedControlVisible);
+    window.visualViewport?.removeEventListener("resize", handleVisualViewportResize);
     if (focusVisibilityTimer !== null) {
       window.clearTimeout(focusVisibilityTimer);
     }
@@ -87,5 +92,7 @@ export function useResponsiveViewport() {
     isPhoneLike,
     isRotatedPhonePortrait,
     isUltraCompactViewport,
+    viewportHeight,
+    viewportWidth,
   };
 }

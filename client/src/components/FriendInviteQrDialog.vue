@@ -292,7 +292,7 @@ h2 {
   }
 
   .qr-frame {
-    width: min(16rem, 68dvw);
+    width: min(16rem, calc(var(--physical-viewport-width, 100vw) * 0.68));
   }
 }
 
@@ -345,7 +345,7 @@ h2 {
   }
 
   .qr-frame {
-    width: min(11.5rem, 50dvh);
+    width: min(11.5rem, calc(var(--physical-viewport-height, 100vh) * 0.5));
   }
 
   h2 {

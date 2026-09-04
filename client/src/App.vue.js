@@ -480,7 +480,7 @@ const candidatePromptText = computed(() => {
     }
     return selectionMode.value ? `请点击一个牌组确认${actionText(selectionMode.value)}` : "请点击一个牌组确认";
 });
-const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, } = useResponsiveViewport();
+const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, } = useResponsiveViewport();
 const displayPreferences = ref(readDisplayPreferences());
 function resolveCardDisplayMode(mode) {
     if (mode !== "adaptive") {
@@ -2392,6 +2392,10 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
     'data-reduce-motion': (__VLS_ctx.displayPreferences.reduceMotion ? 'true' : 'false'),
     'data-connection-state': (__VLS_ctx.connectionState),
+    ...{ style: ({
+            '--physical-viewport-width': `${__VLS_ctx.viewportWidth}px`,
+            '--physical-viewport-height': `${__VLS_ctx.viewportHeight}px`,
+        }) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
@@ -3934,6 +3938,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             isLegacyCompactViewport: isLegacyCompactViewport,
             isRotatedPhonePortrait: isRotatedPhonePortrait,
             isUltraCompactViewport: isUltraCompactViewport,
+            viewportHeight: viewportHeight,
+            viewportWidth: viewportWidth,
             displayPreferences: displayPreferences,
             resolvedOwnCardMode: resolvedOwnCardMode,
             resolvedTableCardMode: resolvedTableCardMode,
