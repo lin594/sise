@@ -949,10 +949,10 @@ test.describe("compact landscape gameplay", () => {
     expect(seatAccessibleLabels.every((label) => /剩余手牌 \d+ 张/.test(label))).toBe(true);
     expect(seatAccessibleLabels.every((label) => /公开牌组 \d+ 组/.test(label))).toBe(true);
     await expectDedicatedGameHeader(page);
-    const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
-    expect(fixedDeckPosition).not.toBeNull();
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
+    expect(fixedDeckPosition).not.toBeNull();
     await expectFiveButtonActionGrid(page);
     const gameHistory = page.getByTestId("game-history");
     await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
