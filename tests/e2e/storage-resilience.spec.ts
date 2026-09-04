@@ -28,7 +28,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     expect((await nickname.inputValue()).trim().length).toBeGreaterThan(0);
     const limitation = page.getByTestId("storage-limited-note");
     await expect(limitation).toContainText("本次仍可正常游戏");
-    await expect(limitation).toContainText("关闭页面后");
+    await expect(limitation).toContainText("刷新或关闭页面后");
 
     const entryGeometry = await page.evaluate(() => {
       const note = document.querySelector<HTMLElement>("[data-testid='storage-limited-note']")!;
