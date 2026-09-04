@@ -52,6 +52,39 @@ test("a passwordless local profile stays private and updates after settlement", 
   expect(geometry).toMatchObject({ insideViewport: true, pageFits: true });
   expect(geometry.smallestTextSize).toBeGreaterThanOrEqual(13);
 
+  await expect(summary).toHaveAttribute("aria-haspopup", "dialog");
+  await summary.click();
+  const profileDialog = page.getByTestId("guest-profile-dialog");
+  await expect(profileDialog).toBeVisible();
+  await expect(profileDialog).toContainText("档案牌友");
+  await expect(page.getByTestId("guest-profile-rounds")).toHaveText("0");
+  await expect(page.getByTestId("guest-profile-wins")).toHaveText("0");
+  await expect(page.getByTestId("guest-profile-win-rate")).toHaveText("—");
+  await expect(page.getByTestId("guest-profile-score")).toHaveText("0分");
+  await expect(profileDialog).toContainText("清除浏览器数据后无法找回");
+  const dialogGeometry = await profileDialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const textSizes = Array.from(element.querySelectorAll("strong, span, p"), (child) =>
+      Number.parseFloat(getComputedStyle(child).fontSize),
+    ).filter(Number.isFinite);
+    return {
+      insideViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+      smallestTextSize: Math.min(...textSizes),
+      pageFits: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+    };
+  });
+  expect(dialogGeometry).toMatchObject({ insideViewport: true, pageFits: true });
+  expect(dialogGeometry.smallestTextSize).toBeGreaterThanOrEqual(13);
+  await page.screenshot({ path: testInfo.outputPath("guest-profile-details-zero-568x320.png") });
+  await expect(page.getByTestId("close-guest-profile")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("close-guest-profile")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByTestId("close-guest-profile")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(profileDialog).toBeHidden();
+  await expect(summary).toBeFocused();
+
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await applySettlementScenario(page);
@@ -62,6 +95,13 @@ test("a passwordless local profile stays private and updates after settlement", 
   await expect(page.getByText("游戏模式选择")).toBeVisible();
   await expect(summary).toContainText("已玩 1 局");
   await expect(summary).toContainText("胡 1 局");
+  await summary.click();
+  await expect(page.getByTestId("guest-profile-rounds")).toHaveText("1");
+  await expect(page.getByTestId("guest-profile-wins")).toHaveText("1");
+  await expect(page.getByTestId("guest-profile-win-rate")).toHaveText("100%");
+  await expect(page.getByTestId("guest-profile-score")).toHaveText(/[+-]?\d+分/);
+  await page.getByTestId("close-guest-profile").click();
+  await expect(summary).toBeFocused();
   expect(await page.evaluate(() => localStorage.getItem("sise_guest_profile_token_v1"))).toBe(profileToken);
   expect(page.url()).not.toContain("gp_");
   expect(requestUrls.some((url) => url.includes(profileToken ?? "gp_"))).toBe(false);

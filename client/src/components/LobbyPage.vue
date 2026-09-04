@@ -14,16 +14,23 @@
         <p class="lobby-rule-tip">{{ subtitle }}</p>
       </div>
       <div class="lobby-head-actions">
-        <div
+        <button
           v-if="modes.length && guestProfileSummary"
+          ref="guestProfileButtonRef"
           class="guest-profile-summary"
           data-testid="guest-profile-summary"
-          role="status"
-          aria-live="polite"
+          type="button"
+          aria-haspopup="dialog"
+          :aria-expanded="guestProfileOpen"
+          aria-label="查看本机临时档案详情"
+          @click="openGuestProfile"
         >
-          <strong>本机临时档案</strong>
-          <span>{{ guestProfileSummary }}</span>
-        </div>
+          <span class="guest-profile-summary-copy" aria-live="polite">
+            <strong>本机临时档案</strong>
+            <span>{{ guestProfileSummary }}</span>
+          </span>
+          <span class="guest-profile-summary-view" aria-hidden="true">查看</span>
+        </button>
         <button v-if="roomId" class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
         <button
           v-if="(roomMode === 'friends' || roomMode === 'match') && roomId"
@@ -291,6 +298,53 @@
 
     <Teleport to=".layout">
       <div
+        v-if="guestProfileOpen"
+        class="waiting-leave-mask guest-profile-mask"
+        data-testid="guest-profile-mask"
+        @click.self="closeGuestProfile"
+      >
+        <section
+          ref="guestProfileDialogRef"
+          class="waiting-leave-dialog guest-profile-dialog"
+          data-testid="guest-profile-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="guest-profile-title"
+          aria-describedby="guest-profile-description"
+          tabindex="-1"
+          @keydown.esc.stop.prevent="closeGuestProfile"
+          @keydown.tab="trapGuestProfileFocus"
+        >
+          <header class="guest-profile-dialog-head">
+            <span aria-hidden="true">牌友</span>
+            <div>
+              <small>当前浏览器</small>
+              <h2 id="guest-profile-title">本机临时档案</h2>
+            </div>
+          </header>
+          <p class="guest-profile-name">昵称：<strong>{{ guestProfileName || "牌友" }}</strong></p>
+          <div class="guest-profile-stats" aria-label="本机临时档案统计">
+            <div><span data-testid="guest-profile-rounds">{{ normalizedProfileRounds }}</span><small>已玩局数</small></div>
+            <div><span data-testid="guest-profile-wins">{{ normalizedProfileWins }}</span><small>胡牌局数</small></div>
+            <div><span data-testid="guest-profile-win-rate">{{ guestProfileWinRate }}</span><small>胡牌率</small></div>
+            <div><span data-testid="guest-profile-score">{{ signedScore(normalizedProfileScore) }}分</span><small>累计总分</small></div>
+          </div>
+          <p id="guest-profile-description" class="guest-profile-explanation">
+            成绩按服务端结算记录，只凭当前浏览器保存的临时凭证找回。清除浏览器数据后无法找回，这不是正式账号。
+          </p>
+          <button
+            ref="guestProfileCloseButtonRef"
+            class="guest-profile-close"
+            type="button"
+            data-testid="close-guest-profile"
+            @click="closeGuestProfile"
+          >知道了</button>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to=".layout">
+      <div
         v-if="departureIntent"
         class="waiting-leave-mask"
         data-testid="waiting-leave-mask"
@@ -375,6 +429,10 @@ const props = defineProps<{
   scoringMode: ScoringMode;
   completedRounds: number;
   guestProfileSummary: string;
+  guestProfileName: string;
+  guestProfileRounds: number;
+  guestProfileWins: number;
+  guestProfileScore: number;
 }>();
 
 const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
@@ -411,6 +469,10 @@ const startButtonRef = ref<HTMLButtonElement | null>(null);
 const lobbyTitleRef = ref<HTMLHeadingElement | null>(null);
 const leaveDialogRef = ref<HTMLElement | null>(null);
 const leaveCancelButtonRef = ref<HTMLButtonElement | null>(null);
+const guestProfileButtonRef = ref<HTMLButtonElement | null>(null);
+const guestProfileDialogRef = ref<HTMLElement | null>(null);
+const guestProfileCloseButtonRef = ref<HTMLButtonElement | null>(null);
+const guestProfileOpen = ref(false);
 let fillRequestTimer: number | null = null;
 let focusStartAfterFillRequested = false;
 const leaveRoomDescription = computed(() => {
@@ -473,6 +535,16 @@ const cumulativeRanking = computed(() =>
   [...props.players].sort((left, right) =>
     right.cumulativeScore - left.cumulativeScore || left.seatIndex - right.seatIndex,
   ),
+);
+const normalizedProfileRounds = computed(() => Math.max(0, Math.trunc(Number(props.guestProfileRounds) || 0)));
+const normalizedProfileWins = computed(() =>
+  Math.min(normalizedProfileRounds.value, Math.max(0, Math.trunc(Number(props.guestProfileWins) || 0))),
+);
+const normalizedProfileScore = computed(() => Math.trunc(Number(props.guestProfileScore) || 0));
+const guestProfileWinRate = computed(() =>
+  normalizedProfileRounds.value > 0
+    ? `${Math.round((normalizedProfileWins.value / normalizedProfileRounds.value) * 100)}%`
+    : "—",
 );
 
 function signedScore(value: number): string {
@@ -568,12 +640,41 @@ function confirmDeparture(): void {
   }
 }
 
+async function openGuestProfile(): Promise<void> {
+  guestProfileOpen.value = true;
+  await nextTick();
+  guestProfileCloseButtonRef.value?.focus();
+}
+
+async function closeGuestProfile(): Promise<void> {
+  if (!guestProfileOpen.value) {
+    return;
+  }
+  guestProfileOpen.value = false;
+  await nextTick();
+  guestProfileButtonRef.value?.focus();
+}
+
 function handleNavigationBack(): boolean {
+  if (guestProfileOpen.value) {
+    void closeGuestProfile();
+    return true;
+  }
   if (!departureIntent.value) {
     return false;
   }
   void cancelLeaveRoom();
   return true;
+}
+
+function trapGuestProfileFocus(event: KeyboardEvent): void {
+  const dialog = guestProfileDialogRef.value;
+  const button = guestProfileCloseButtonRef.value;
+  if (!dialog || !button) {
+    return;
+  }
+  event.preventDefault();
+  button.focus();
 }
 
 defineExpose({
@@ -667,19 +768,48 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   border-radius: 0.72rem;
   background: rgba(7, 89, 133, 0.34);
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.55rem;
   gap: 0.1rem;
   color: #e0f2fe;
   text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 
-.guest-profile-summary strong {
+.guest-profile-summary:hover,
+.guest-profile-summary:focus-visible {
+  border-color: #7dd3fc;
+  background: rgba(3, 105, 161, 0.5);
+}
+
+.guest-profile-summary:focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 2px;
+}
+
+.guest-profile-summary-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.guest-profile-summary-copy strong {
   color: #fef08a;
   font-size: 0.78rem;
 }
 
-.guest-profile-summary span {
+.guest-profile-summary-copy > span {
   font-size: 0.9rem;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.guest-profile-summary-view {
+  align-self: center;
+  color: #bae6fd;
+  font-size: 0.75rem;
+  font-weight: 850;
   white-space: nowrap;
 }
 
@@ -1192,6 +1322,105 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   background: #b91c1c;
 }
 
+.guest-profile-dialog {
+  width: min(30rem, calc(100dvw - 1.4rem));
+  padding: 0.85rem;
+  text-align: left;
+}
+
+.guest-profile-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.guest-profile-dialog-head > span {
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #075985;
+  color: #fef08a;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.guest-profile-dialog-head div {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.guest-profile-dialog-head small {
+  color: #7dd3fc;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.guest-profile-dialog h2 {
+  font-size: 1.2rem;
+}
+
+.guest-profile-dialog .guest-profile-name {
+  margin-top: 0.5rem;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.guest-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.guest-profile-stats > div {
+  min-width: 0;
+  padding: 0.48rem 0.3rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.08rem;
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  border-radius: 0.7rem;
+  background: rgba(7, 89, 133, 0.28);
+  text-align: center;
+}
+
+.guest-profile-stats span {
+  color: #fef08a;
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.guest-profile-stats small {
+  color: #bae6fd;
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.guest-profile-dialog .guest-profile-explanation {
+  margin-top: 0.55rem;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.guest-profile-close {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.6rem;
+  border: 1px solid #38bdf8;
+  border-radius: 0.72rem;
+  background: #0369a1;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 850;
+}
+
 @media (max-width:700px) and (pointer:fine) {
   .mode-grid,
   .seat-grid {
@@ -1288,12 +1517,22 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     gap: 0.4rem;
   }
 
-  .mode-selection .guest-profile-summary strong {
+  .mode-selection .guest-profile-summary-copy {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .mode-selection .guest-profile-summary-copy strong {
     font-size: 0.82rem;
   }
 
-  .mode-selection .guest-profile-summary span {
+  .mode-selection .guest-profile-summary-copy > span {
     font-size: 0.9rem;
+  }
+
+  .mode-selection .guest-profile-summary-view {
+    font-size: 0.82rem;
   }
 
   .head-action {
