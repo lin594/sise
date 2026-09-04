@@ -125,11 +125,12 @@
       :players="players"
       :can-share-invite="canShareInvite"
       :invite-pending="inviteActionPending"
+      :seat-claim-pending="seatClaimPending"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
       @show-invite-qr="showInviteQr"
-      @claim-seat="claimSeat"
+      @claim-seat="requestSeatClaim"
       @add-bot="addBot($event, 50)"
       @fill-bots="fillBots"
       @update-bot="updateBot"
@@ -888,6 +889,8 @@ const startingRoomMode = ref<StartingRoomMode>(null);
 const pendingPracticeAutoStart = ref(false);
 const roundStartPending = ref(false);
 let roundStartReceiptTimer: number | null = null;
+const seatClaimPending = ref<number | null>(null);
+let seatClaimReceiptTimer: number | null = null;
 const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
 watch(state, (nextState) => {
   if (nextState && startingRoomMode.value !== null) {
@@ -2069,10 +2072,51 @@ function clearSelection(restoreFocus = false) {
   });
 }
 
+function clearSeatClaimPending(): void {
+  seatClaimPending.value = null;
+  if (seatClaimReceiptTimer !== null) {
+    window.clearTimeout(seatClaimReceiptTimer);
+    seatClaimReceiptTimer = null;
+  }
+}
+
+function requestSeatClaim(seatIndex: number): boolean {
+  if (
+    seatClaimPending.value !== null ||
+    state.value?.phase !== "waiting" ||
+    state.value?.roomMode !== "friends"
+  ) {
+    return false;
+  }
+  globalError.value = "";
+  if (!claimSeat(seatIndex)) {
+    globalError.value = "网络未连接，座位选择没有发送，请稍候重试。";
+    return false;
+  }
+  seatClaimPending.value = seatIndex;
+  const requestedRoomId = activeRoomId.value;
+  const previousSeatId = mySeatId.value;
+  seatClaimReceiptTimer = window.setTimeout(() => {
+    seatClaimReceiptTimer = null;
+    if (
+      seatClaimPending.value !== seatIndex ||
+      state.value?.phase !== "waiting" ||
+      activeRoomId.value !== requestedRoomId ||
+      mySeatId.value !== previousSeatId
+    ) {
+      return;
+    }
+    seatClaimPending.value = null;
+    globalError.value = "暂未确认座位，请重新选择。";
+  }, 8_000);
+  return true;
+}
+
 async function handleLeaveRoom(): Promise<void> {
   globalError.value = "";
   pendingPracticeAutoStart.value = false;
   clearRoundStartPending();
+  clearSeatClaimPending();
   clearSettlementTransitionPending();
   clearSelection();
   await leaveRoom();
@@ -2341,6 +2385,7 @@ onUnmounted(() => {
     globalNoticeTimer = null;
   }
   clearRoundStartPending();
+  clearSeatClaimPending();
   clearSettlementTransitionPending();
 });
 
@@ -2358,6 +2403,9 @@ watch(joinError, (message) => {
     if (settlementTransitionPending.value !== null) {
       clearSettlementTransitionPending();
     }
+    if (seatClaimPending.value !== null) {
+      clearSeatClaimPending();
+    }
   }
 });
 
@@ -2369,6 +2417,15 @@ watch(connected, (isConnected) => {
     if (settlementTransitionPending.value !== null) {
       clearSettlementTransitionPending();
     }
+    if (seatClaimPending.value !== null) {
+      clearSeatClaimPending();
+    }
+  }
+});
+
+watch(mySeatId, (seatId, previousSeatId) => {
+  if (seatId !== previousSeatId && seatClaimPending.value !== null) {
+    clearSeatClaimPending();
   }
 });
 
@@ -2446,6 +2503,9 @@ watch(
     }
     if (phase && phase !== "ended") {
       clearSettlementTransitionPending();
+    }
+    if (phase && phase !== "waiting") {
+      clearSeatClaimPending();
     }
   },
 );
@@ -3268,6 +3328,7 @@ watch(
 watch(activeRoomId, (roomId, previousRoomId) => {
   if (roomId !== previousRoomId) {
     clearRoundStartPending();
+    clearSeatClaimPending();
     clearSettlementTransitionPending();
     closeInviteQr(false);
   }

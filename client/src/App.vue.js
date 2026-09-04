@@ -128,6 +128,8 @@ const startingRoomMode = ref(null);
 const pendingPracticeAutoStart = ref(false);
 const roundStartPending = ref(false);
 let roundStartReceiptTimer = null;
+const seatClaimPending = ref(null);
+let seatClaimReceiptTimer = null;
 const selectedLobbyMode = ref("practice_bots");
 watch(state, (nextState) => {
     if (nextState && startingRoomMode.value !== null) {
@@ -1179,10 +1181,45 @@ function clearSelection(restoreFocus = false) {
         }
     });
 }
+function clearSeatClaimPending() {
+    seatClaimPending.value = null;
+    if (seatClaimReceiptTimer !== null) {
+        window.clearTimeout(seatClaimReceiptTimer);
+        seatClaimReceiptTimer = null;
+    }
+}
+function requestSeatClaim(seatIndex) {
+    if (seatClaimPending.value !== null ||
+        state.value?.phase !== "waiting" ||
+        state.value?.roomMode !== "friends") {
+        return false;
+    }
+    globalError.value = "";
+    if (!claimSeat(seatIndex)) {
+        globalError.value = "网络未连接，座位选择没有发送，请稍候重试。";
+        return false;
+    }
+    seatClaimPending.value = seatIndex;
+    const requestedRoomId = activeRoomId.value;
+    const previousSeatId = mySeatId.value;
+    seatClaimReceiptTimer = window.setTimeout(() => {
+        seatClaimReceiptTimer = null;
+        if (seatClaimPending.value !== seatIndex ||
+            state.value?.phase !== "waiting" ||
+            activeRoomId.value !== requestedRoomId ||
+            mySeatId.value !== previousSeatId) {
+            return;
+        }
+        seatClaimPending.value = null;
+        globalError.value = "暂未确认座位，请重新选择。";
+    }, 8_000);
+    return true;
+}
 async function handleLeaveRoom() {
     globalError.value = "";
     pendingPracticeAutoStart.value = false;
     clearRoundStartPending();
+    clearSeatClaimPending();
     clearSettlementTransitionPending();
     clearSelection();
     await leaveRoom();
@@ -1413,6 +1450,7 @@ onUnmounted(() => {
         globalNoticeTimer = null;
     }
     clearRoundStartPending();
+    clearSeatClaimPending();
     clearSettlementTransitionPending();
 });
 watch(globalError, (message) => {
@@ -1428,6 +1466,9 @@ watch(joinError, (message) => {
         if (settlementTransitionPending.value !== null) {
             clearSettlementTransitionPending();
         }
+        if (seatClaimPending.value !== null) {
+            clearSeatClaimPending();
+        }
     }
 });
 watch(connected, (isConnected) => {
@@ -1438,6 +1479,14 @@ watch(connected, (isConnected) => {
         if (settlementTransitionPending.value !== null) {
             clearSettlementTransitionPending();
         }
+        if (seatClaimPending.value !== null) {
+            clearSeatClaimPending();
+        }
+    }
+});
+watch(mySeatId, (seatId, previousSeatId) => {
+    if (seatId !== previousSeatId && seatClaimPending.value !== null) {
+        clearSeatClaimPending();
     }
 });
 watch(displayPreferences, (preferences) => {
@@ -1497,6 +1546,9 @@ watch(() => state.value?.phase, (phase) => {
     }
     if (phase && phase !== "ended") {
         clearSettlementTransitionPending();
+    }
+    if (phase && phase !== "waiting") {
+        clearSeatClaimPending();
     }
 });
 // 更直接的兜底：一旦收到手牌，说明游戏已实际开始，立即清除 pending。
@@ -2274,6 +2326,7 @@ watch(() => state.value?.phase, (phase) => {
 watch(activeRoomId, (roomId, previousRoomId) => {
     if (roomId !== previousRoomId) {
         clearRoundStartPending();
+        clearSeatClaimPending();
         clearSettlementTransitionPending();
         closeInviteQr(false);
     }
@@ -2874,6 +2927,7 @@ else if (__VLS_ctx.showModeLobby) {
         players: (__VLS_ctx.players),
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
+        seatClaimPending: (__VLS_ctx.seatClaimPending),
     }));
     const __VLS_29 = __VLS_28({
         ...{ 'onStart': {} },
@@ -2916,6 +2970,7 @@ else if (__VLS_ctx.showModeLobby) {
         players: (__VLS_ctx.players),
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
+        seatClaimPending: (__VLS_ctx.seatClaimPending),
     }, ...__VLS_functionalComponentArgsRest(__VLS_28));
     let __VLS_31;
     let __VLS_32;
@@ -2939,7 +2994,7 @@ else if (__VLS_ctx.showModeLobby) {
         onShowInviteQr: (__VLS_ctx.showInviteQr)
     };
     const __VLS_38 = {
-        onClaimSeat: (__VLS_ctx.claimSeat)
+        onClaimSeat: (__VLS_ctx.requestSeatClaim)
     };
     const __VLS_39 = {
         onAddBot: (...[$event]) => {
@@ -4145,7 +4200,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             setScoringMode: setScoringMode,
             setLobbyReady: setLobbyReady,
             setAutoPlay: setAutoPlay,
-            claimSeat: claimSeat,
             addBot: addBot,
             fillBots: fillBots,
             updateBot: updateBot,
@@ -4155,6 +4209,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,
             roundStartPending: roundStartPending,
+            seatClaimPending: seatClaimPending,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
             abandonSessionResume: abandonSessionResume,
@@ -4252,6 +4307,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             declareSecondsLeft: declareSecondsLeft,
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,
+            requestSeatClaim: requestSeatClaim,
             handleLeaveRoom: handleLeaveRoom,
             onPanelSelectionChange: onPanelSelectionChange,
             trapCandidateFocus: trapCandidateFocus,

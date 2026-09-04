@@ -1714,7 +1714,7 @@ export function useRoom(playerName = "Player") {
     }
     function claimSeat(seatIndex) {
         joinError.value = "";
-        safeRoomSend("claim_seat", { seatIndex });
+        return safeRoomSend("claim_seat", { seatIndex });
     }
     function addBot(seatIndex, strength = 50) {
         joinError.value = "";

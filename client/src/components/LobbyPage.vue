@@ -197,9 +197,12 @@
                 class="ghost mini"
                 type="button"
                 :data-testid="`claim-seat-${slot.seatIndex}`"
+                :disabled="seatClaimPending !== null"
                 @click="$emit('claim-seat', slot.seatIndex)"
               >
-                {{ mySeatId ? "换到这里" : "选择此座" }}
+                {{ seatClaimPending === slot.seatIndex
+                  ? (mySeatId ? "正在换座…" : "正在入座…")
+                  : (mySeatId ? "换到这里" : "选择此座") }}
               </button>
               <button
                 v-if="isHost"
@@ -214,6 +217,13 @@
           </template>
         </article>
       </div>
+      <p
+        v-if="seatClaimPending !== null"
+        class="seat-claim-status"
+        data-testid="seat-claim-status"
+        role="status"
+        aria-live="polite"
+      >正在确认 {{ seatNames[seatClaimPending] }}，请稍候</p>
 
       <section v-if="roomMode === 'friends' && roomId" class="scoring-card" data-testid="scoring-mode-card">
         <div class="scoring-copy">
@@ -431,6 +441,7 @@ const props = defineProps<{
   players: LobbyPlayer[];
   canShareInvite: boolean;
   invitePending: boolean;
+  seatClaimPending: number | null;
   scoringMode: ScoringMode;
   completedRounds: number;
   guestProfileSummary: string;
@@ -1200,6 +1211,15 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   font-size: 0.875rem;
   font-weight: 650;
   line-height: 1.25;
+}
+
+.seat-claim-status {
+  margin: 0;
+  color: #fef08a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .error {

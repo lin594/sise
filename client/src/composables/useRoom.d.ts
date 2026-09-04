@@ -762,7 +762,7 @@ export declare function useRoom(playerName?: string): {
     setLobbyReady: (ready: boolean) => void;
     setAutoPlay: (enabled: boolean) => void;
     leaveRoom: () => Promise<void>;
-    claimSeat: (seatIndex: number) => void;
+    claimSeat: (seatIndex: number) => boolean;
     addBot: (seatIndex: number, strength?: number) => void;
     fillBots: () => void;
     updateBot: (seatIndex: number, strength: number) => void;
