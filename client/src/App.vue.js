@@ -127,6 +127,11 @@ const joiningFriendInvite = ref(false);
 const startingRoomMode = ref(null);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref("practice_bots");
+watch(state, (nextState) => {
+    if (nextState && startingRoomMode.value !== null) {
+        startingRoomMode.value = null;
+    }
+});
 const lobbyModes = [
     {
         id: "practice_bots",
@@ -1925,7 +1930,9 @@ async function startQuickMatchLobby() {
     }
     finally {
         enteringLobby.value = false;
-        startingRoomMode.value = null;
+        if (!connected.value) {
+            startingRoomMode.value = null;
+        }
     }
 }
 function requestPracticeAutoStart() {
@@ -1969,7 +1976,9 @@ async function startPracticeLobby() {
     }
     finally {
         enteringLobby.value = false;
-        startingRoomMode.value = null;
+        if (!connected.value) {
+            startingRoomMode.value = null;
+        }
     }
 }
 async function startFriendLobby() {
@@ -2008,7 +2017,9 @@ async function startFriendLobby() {
     }
     finally {
         enteringLobby.value = false;
-        startingRoomMode.value = null;
+        if (!connected.value) {
+            startingRoomMode.value = null;
+        }
     }
 }
 function buildInviteUrl() {

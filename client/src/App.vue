@@ -876,6 +876,11 @@ type StartingRoomMode = "practice" | "friends" | "quick_match" | null;
 const startingRoomMode = ref<StartingRoomMode>(null);
 const pendingPracticeAutoStart = ref(false);
 const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
+watch(state, (nextState) => {
+  if (nextState && startingRoomMode.value !== null) {
+    startingRoomMode.value = null;
+  }
+});
 const lobbyModes: LobbyMode[] = [
   {
     id: "practice_bots" as const,
@@ -2889,7 +2894,9 @@ async function startQuickMatchLobby() {
     globalError.value = error instanceof Error ? error.message : "暂时无法快速配桌，请稍后重试。";
   } finally {
     enteringLobby.value = false;
-    startingRoomMode.value = null;
+    if (!connected.value) {
+      startingRoomMode.value = null;
+    }
   }
 }
 
@@ -2933,7 +2940,9 @@ async function startPracticeLobby() {
     globalError.value = error instanceof Error ? error.message : "进入大厅失败";
   } finally {
     enteringLobby.value = false;
-    startingRoomMode.value = null;
+    if (!connected.value) {
+      startingRoomMode.value = null;
+    }
   }
 }
 
@@ -2971,7 +2980,9 @@ async function startFriendLobby() {
     globalError.value = error instanceof Error ? error.message : "创建好友房失败";
   } finally {
     enteringLobby.value = false;
-    startingRoomMode.value = null;
+    if (!connected.value) {
+      startingRoomMode.value = null;
+    }
   }
 }
 
