@@ -1850,9 +1850,9 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("set_scoring_mode", { mode });
   }
 
-  function setLobbyReady(ready: boolean) {
+  function setLobbyReady(ready: boolean): boolean {
     joinError.value = "";
-    safeRoomSend("set_lobby_ready", { ready });
+    return safeRoomSend("set_lobby_ready", { ready });
   }
 
   function setAutoPlay(enabled: boolean) {

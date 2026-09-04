@@ -288,10 +288,17 @@
           :class="{ active: myLobbyReady }"
           type="button"
           data-testid="lobby-ready"
+          :disabled="readyPending !== null"
           :aria-pressed="myLobbyReady"
           @click="$emit('set-lobby-ready', !myLobbyReady)"
         >
-          {{ myLobbyReady ? "取消准备" : "我准备好了" }}
+          {{ readyPending === true
+            ? "正在准备…"
+            : readyPending === false
+            ? "正在取消准备…"
+            : myLobbyReady
+            ? "取消准备"
+            : "我准备好了" }}
         </button>
         <button
           v-else-if="showStartAction"
@@ -442,6 +449,7 @@ const props = defineProps<{
   canShareInvite: boolean;
   invitePending: boolean;
   seatClaimPending: number | null;
+  readyPending: boolean | null;
   scoringMode: ScoringMode;
   completedRounds: number;
   guestProfileSummary: string;

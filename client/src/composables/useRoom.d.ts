@@ -759,7 +759,7 @@ export declare function useRoom(playerName?: string): {
     returnLobby: () => boolean;
     dissolveRoom: () => void;
     setScoringMode: (mode: "single" | "cumulative") => void;
-    setLobbyReady: (ready: boolean) => void;
+    setLobbyReady: (ready: boolean) => boolean;
     setAutoPlay: (enabled: boolean) => void;
     leaveRoom: () => Promise<void>;
     claimSeat: (seatIndex: number) => boolean;

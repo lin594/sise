@@ -126,6 +126,7 @@
       :can-share-invite="canShareInvite"
       :invite-pending="inviteActionPending"
       :seat-claim-pending="seatClaimPending"
+      :ready-pending="lobbyReadyPending"
       @start="startSelectedMode"
       @select-mode="selectedLobbyMode = $event as LobbyModeId"
       @copy-invite="copyInviteLink"
@@ -138,7 +139,7 @@
       @leave-room="handleLeaveRoom"
       @dissolve-room="dissolveRoom"
       @set-scoring-mode="setScoringMode"
-      @set-lobby-ready="setLobbyReady"
+      @set-lobby-ready="requestLobbyReady"
     />
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
@@ -891,6 +892,8 @@ const roundStartPending = ref(false);
 let roundStartReceiptTimer: number | null = null;
 const seatClaimPending = ref<number | null>(null);
 let seatClaimReceiptTimer: number | null = null;
+const lobbyReadyPending = ref<boolean | null>(null);
+let lobbyReadyReceiptTimer: number | null = null;
 const selectedLobbyMode = ref<LobbyModeId>("practice_bots");
 watch(state, (nextState) => {
   if (nextState && startingRoomMode.value !== null) {
@@ -1237,6 +1240,7 @@ const lobbyStartLabel = computed(() => {
 const lobbyStartHint = computed(() => {
   if (!hasLobbySession.value) return enteringLobby.value ? "请稍候，不用重复点击" : "";
   if (roundStartPending.value) return "开局请求已发送，请稍候";
+  if (lobbyReadyPending.value !== null) return "准备状态已发送，请稍候";
   if (!isWaiting.value) return "";
   if (!mySeatId.value) return "请先选择一个空座位";
   if (state.value?.roomMode === "match") {
@@ -2112,11 +2116,56 @@ function requestSeatClaim(seatIndex: number): boolean {
   return true;
 }
 
+function clearLobbyReadyPending(): void {
+  lobbyReadyPending.value = null;
+  if (lobbyReadyReceiptTimer !== null) {
+    window.clearTimeout(lobbyReadyReceiptTimer);
+    lobbyReadyReceiptTimer = null;
+  }
+}
+
+function requestLobbyReady(ready: boolean): boolean {
+  if (
+    lobbyReadyPending.value !== null ||
+    state.value?.phase !== "waiting" ||
+    state.value?.roomMode !== "friends" ||
+    !mySeatId.value ||
+    isHost.value ||
+    Boolean(mePlayer.value?.lobbyReady) === ready
+  ) {
+    return false;
+  }
+  globalError.value = "";
+  if (!setLobbyReady(ready)) {
+    globalError.value = "网络未连接，准备状态没有发送，请稍候重试。";
+    return false;
+  }
+  lobbyReadyPending.value = ready;
+  const requestedRoomId = activeRoomId.value;
+  const requestedSeatId = mySeatId.value;
+  lobbyReadyReceiptTimer = window.setTimeout(() => {
+    lobbyReadyReceiptTimer = null;
+    if (
+      lobbyReadyPending.value !== ready ||
+      state.value?.phase !== "waiting" ||
+      activeRoomId.value !== requestedRoomId ||
+      mySeatId.value !== requestedSeatId ||
+      Boolean(mePlayer.value && Boolean(mePlayer.value.lobbyReady) === ready)
+    ) {
+      return;
+    }
+    lobbyReadyPending.value = null;
+    globalError.value = "暂未确认准备状态，请再点一次。";
+  }, 8_000);
+  return true;
+}
+
 async function handleLeaveRoom(): Promise<void> {
   globalError.value = "";
   pendingPracticeAutoStart.value = false;
   clearRoundStartPending();
   clearSeatClaimPending();
+  clearLobbyReadyPending();
   clearSettlementTransitionPending();
   clearSelection();
   await leaveRoom();
@@ -2386,6 +2435,7 @@ onUnmounted(() => {
   }
   clearRoundStartPending();
   clearSeatClaimPending();
+  clearLobbyReadyPending();
   clearSettlementTransitionPending();
 });
 
@@ -2406,6 +2456,9 @@ watch(joinError, (message) => {
     if (seatClaimPending.value !== null) {
       clearSeatClaimPending();
     }
+    if (lobbyReadyPending.value !== null) {
+      clearLobbyReadyPending();
+    }
   }
 });
 
@@ -2420,14 +2473,31 @@ watch(connected, (isConnected) => {
     if (seatClaimPending.value !== null) {
       clearSeatClaimPending();
     }
+    if (lobbyReadyPending.value !== null) {
+      clearLobbyReadyPending();
+    }
   }
 });
 
 watch(mySeatId, (seatId, previousSeatId) => {
-  if (seatId !== previousSeatId && seatClaimPending.value !== null) {
-    clearSeatClaimPending();
+  if (seatId !== previousSeatId) {
+    if (seatClaimPending.value !== null) {
+      clearSeatClaimPending();
+    }
+    if (lobbyReadyPending.value !== null) {
+      clearLobbyReadyPending();
+    }
   }
 });
+
+watch(
+  () => mePlayer.value?.lobbyReady,
+  (ready) => {
+    if (mePlayer.value && lobbyReadyPending.value !== null && Boolean(ready) === lobbyReadyPending.value) {
+      clearLobbyReadyPending();
+    }
+  },
+);
 
 watch(
   displayPreferences,
@@ -2506,6 +2576,7 @@ watch(
     }
     if (phase && phase !== "waiting") {
       clearSeatClaimPending();
+      clearLobbyReadyPending();
     }
   },
 );
@@ -3329,6 +3400,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
   if (roomId !== previousRoomId) {
     clearRoundStartPending();
     clearSeatClaimPending();
+    clearLobbyReadyPending();
     clearSettlementTransitionPending();
     closeInviteQr(false);
   }

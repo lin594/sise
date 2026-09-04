@@ -1673,7 +1673,7 @@ export function useRoom(playerName = "Player") {
     }
     function setLobbyReady(ready) {
         joinError.value = "";
-        safeRoomSend("set_lobby_ready", { ready });
+        return safeRoomSend("set_lobby_ready", { ready });
     }
     function setAutoPlay(enabled) {
         safeRoomSend("set_auto_play", { enabled });

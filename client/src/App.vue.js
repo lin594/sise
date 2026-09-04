@@ -130,6 +130,8 @@ const roundStartPending = ref(false);
 let roundStartReceiptTimer = null;
 const seatClaimPending = ref(null);
 let seatClaimReceiptTimer = null;
+const lobbyReadyPending = ref(null);
+let lobbyReadyReceiptTimer = null;
 const selectedLobbyMode = ref("practice_bots");
 watch(state, (nextState) => {
     if (nextState && startingRoomMode.value !== null) {
@@ -448,6 +450,8 @@ const lobbyStartHint = computed(() => {
         return enteringLobby.value ? "请稍候，不用重复点击" : "";
     if (roundStartPending.value)
         return "开局请求已发送，请稍候";
+    if (lobbyReadyPending.value !== null)
+        return "准备状态已发送，请稍候";
     if (!isWaiting.value)
         return "";
     if (!mySeatId.value)
@@ -1215,11 +1219,50 @@ function requestSeatClaim(seatIndex) {
     }, 8_000);
     return true;
 }
+function clearLobbyReadyPending() {
+    lobbyReadyPending.value = null;
+    if (lobbyReadyReceiptTimer !== null) {
+        window.clearTimeout(lobbyReadyReceiptTimer);
+        lobbyReadyReceiptTimer = null;
+    }
+}
+function requestLobbyReady(ready) {
+    if (lobbyReadyPending.value !== null ||
+        state.value?.phase !== "waiting" ||
+        state.value?.roomMode !== "friends" ||
+        !mySeatId.value ||
+        isHost.value ||
+        Boolean(mePlayer.value?.lobbyReady) === ready) {
+        return false;
+    }
+    globalError.value = "";
+    if (!setLobbyReady(ready)) {
+        globalError.value = "网络未连接，准备状态没有发送，请稍候重试。";
+        return false;
+    }
+    lobbyReadyPending.value = ready;
+    const requestedRoomId = activeRoomId.value;
+    const requestedSeatId = mySeatId.value;
+    lobbyReadyReceiptTimer = window.setTimeout(() => {
+        lobbyReadyReceiptTimer = null;
+        if (lobbyReadyPending.value !== ready ||
+            state.value?.phase !== "waiting" ||
+            activeRoomId.value !== requestedRoomId ||
+            mySeatId.value !== requestedSeatId ||
+            Boolean(mePlayer.value && Boolean(mePlayer.value.lobbyReady) === ready)) {
+            return;
+        }
+        lobbyReadyPending.value = null;
+        globalError.value = "暂未确认准备状态，请再点一次。";
+    }, 8_000);
+    return true;
+}
 async function handleLeaveRoom() {
     globalError.value = "";
     pendingPracticeAutoStart.value = false;
     clearRoundStartPending();
     clearSeatClaimPending();
+    clearLobbyReadyPending();
     clearSettlementTransitionPending();
     clearSelection();
     await leaveRoom();
@@ -1451,6 +1494,7 @@ onUnmounted(() => {
     }
     clearRoundStartPending();
     clearSeatClaimPending();
+    clearLobbyReadyPending();
     clearSettlementTransitionPending();
 });
 watch(globalError, (message) => {
@@ -1469,6 +1513,9 @@ watch(joinError, (message) => {
         if (seatClaimPending.value !== null) {
             clearSeatClaimPending();
         }
+        if (lobbyReadyPending.value !== null) {
+            clearLobbyReadyPending();
+        }
     }
 });
 watch(connected, (isConnected) => {
@@ -1482,11 +1529,24 @@ watch(connected, (isConnected) => {
         if (seatClaimPending.value !== null) {
             clearSeatClaimPending();
         }
+        if (lobbyReadyPending.value !== null) {
+            clearLobbyReadyPending();
+        }
     }
 });
 watch(mySeatId, (seatId, previousSeatId) => {
-    if (seatId !== previousSeatId && seatClaimPending.value !== null) {
-        clearSeatClaimPending();
+    if (seatId !== previousSeatId) {
+        if (seatClaimPending.value !== null) {
+            clearSeatClaimPending();
+        }
+        if (lobbyReadyPending.value !== null) {
+            clearLobbyReadyPending();
+        }
+    }
+});
+watch(() => mePlayer.value?.lobbyReady, (ready) => {
+    if (mePlayer.value && lobbyReadyPending.value !== null && Boolean(ready) === lobbyReadyPending.value) {
+        clearLobbyReadyPending();
     }
 });
 watch(displayPreferences, (preferences) => {
@@ -1549,6 +1609,7 @@ watch(() => state.value?.phase, (phase) => {
     }
     if (phase && phase !== "waiting") {
         clearSeatClaimPending();
+        clearLobbyReadyPending();
     }
 });
 // 更直接的兜底：一旦收到手牌，说明游戏已实际开始，立即清除 pending。
@@ -2327,6 +2388,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
     if (roomId !== previousRoomId) {
         clearRoundStartPending();
         clearSeatClaimPending();
+        clearLobbyReadyPending();
         clearSettlementTransitionPending();
         closeInviteQr(false);
     }
@@ -2928,6 +2990,7 @@ else if (__VLS_ctx.showModeLobby) {
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
         seatClaimPending: (__VLS_ctx.seatClaimPending),
+        readyPending: (__VLS_ctx.lobbyReadyPending),
     }));
     const __VLS_29 = __VLS_28({
         ...{ 'onStart': {} },
@@ -2971,6 +3034,7 @@ else if (__VLS_ctx.showModeLobby) {
         canShareInvite: (__VLS_ctx.canShareInvite),
         invitePending: (__VLS_ctx.inviteActionPending),
         seatClaimPending: (__VLS_ctx.seatClaimPending),
+        readyPending: (__VLS_ctx.lobbyReadyPending),
     }, ...__VLS_functionalComponentArgsRest(__VLS_28));
     let __VLS_31;
     let __VLS_32;
@@ -3024,7 +3088,7 @@ else if (__VLS_ctx.showModeLobby) {
         onSetScoringMode: (__VLS_ctx.setScoringMode)
     };
     const __VLS_46 = {
-        onSetLobbyReady: (__VLS_ctx.setLobbyReady)
+        onSetLobbyReady: (__VLS_ctx.requestLobbyReady)
     };
     /** @type {typeof __VLS_ctx.lobbyPageRef} */ ;
     var __VLS_47 = {};
@@ -4198,7 +4262,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             requestMoreTime: requestMoreTime,
             dissolveRoom: dissolveRoom,
             setScoringMode: setScoringMode,
-            setLobbyReady: setLobbyReady,
             setAutoPlay: setAutoPlay,
             addBot: addBot,
             fillBots: fillBots,
@@ -4210,6 +4273,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             enteringLobby: enteringLobby,
             roundStartPending: roundStartPending,
             seatClaimPending: seatClaimPending,
+            lobbyReadyPending: lobbyReadyPending,
             selectedLobbyMode: selectedLobbyMode,
             lobbyModes: lobbyModes,
             abandonSessionResume: abandonSessionResume,
@@ -4308,6 +4372,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             declareProgressPercent: declareProgressPercent,
             clearSelection: clearSelection,
             requestSeatClaim: requestSeatClaim,
+            requestLobbyReady: requestLobbyReady,
             handleLeaveRoom: handleLeaveRoom,
             onPanelSelectionChange: onPanelSelectionChange,
             trapCandidateFocus: trapCandidateFocus,
