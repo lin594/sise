@@ -1,5 +1,7 @@
 # iMac Private Same-Origin Gateway Implementation Plan
 
+> Status: completed and verified on the iMac HTTP/WS test environment. Production TLS remains a separate HTTPS/WSS deployment path.
+
 **Goal:** Provide a memorable no-port private试玩入口 while keeping the game API and WebSocket behind the existing Web container.
 
 ### Task 1: Add proxy regression coverage
