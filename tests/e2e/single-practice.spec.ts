@@ -36,8 +36,9 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   }
 }
 
-test("opening deal sends exactly one card flight per dealt card", async ({ page }) => {
-  await page.goto("/");
+test("each practice round presents one bounded deal sequence", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/?e2eDebug=1");
   await page.getByTestId("nickname-input").fill("只看一次发牌");
   await page.getByTestId("login-submit").click();
   await expect(page.getByText("游戏模式选择")).toBeVisible();
@@ -69,8 +70,29 @@ test("opening deal sends exactly one card flight per dealt card", async ({ page 
   await expect.poll(
     () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
     { timeout: 8_000 },
-  ).toBe(81);
-  await page.waitForTimeout(500);
+  ).toBeGreaterThan(0);
+  const firstRoundCount = await page.evaluate(
+    () => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+  );
+  expect(firstRoundCount).toBeLessThanOrEqual(81);
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(
+    () => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+  )).toBe(firstRoundCount);
+
+  await finishRoundThroughDebugHu(page);
+  await expect(page.getByTestId("settlement-panel")).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId("next-round-trigger").click();
+  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await expect.poll(
+    () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
+    { timeout: 8_000 },
+  ).toBeGreaterThan(firstRoundCount);
+  const secondRoundCount = await page.evaluate(
+    () => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+  );
+  expect(secondRoundCount - firstRoundCount).toBeLessThanOrEqual(81);
+  await page.waitForTimeout(350);
   expect(await page.evaluate(() => {
     const trackingWindow = window as Window & {
       __siseDealFlightCount?: number;
@@ -78,7 +100,7 @@ test("opening deal sends exactly one card flight per dealt card", async ({ page 
     };
     trackingWindow.__siseDealFlightObserver?.disconnect();
     return trackingWindow.__siseDealFlightCount ?? 0;
-  })).toBe(81);
+  })).toBe(secondRoundCount);
 });
 
 async function finishRoundThroughDebugHu(page: Page): Promise<void> {

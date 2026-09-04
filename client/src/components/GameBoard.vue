@@ -801,11 +801,11 @@ let dealerRevealSeq = 0;
 let dealerFlightSeq = 0;
 let flightSeq = 0;
 let dealRunSeq = 0;
-let dealTimer: ReturnType<typeof setTimeout> | null = null;
-let dealInterval: ReturnType<typeof setInterval> | null = null;
+let dealFrame: number | null = null;
+let preparedDealRoundKey = "";
+let presentedDealRoundKey = "";
 let dealerTimer: ReturnType<typeof setTimeout> | null = null;
 let dealerIntroTimer: ReturnType<typeof setTimeout> | null = null;
-let dealAnimatingUntil = 0;
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 let drawHideTimer: ReturnType<typeof setTimeout> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -1856,72 +1856,107 @@ function buildDealPlan(): string[] {
   return plan;
 }
 
-function clearDealAnimationRuntime(): void {
-  if (dealTimer) {
-    clearTimeout(dealTimer);
-    dealTimer = null;
-  }
-  if (dealInterval) {
-    clearInterval(dealInterval);
-    dealInterval = null;
-  }
-  visibleHandCount.value = props.privateHand.length;
+function currentDealRoundKey(): string {
+  const roomId = String(props.state?.roomId ?? "room");
+  const roundNumber = Math.max(1, Number(props.state?.completedRounds ?? 0) + 1);
+  return `${roomId}:${roundNumber}`;
 }
 
-function triggerDealAnimation(): number {
-  clearDealAnimationRuntime();
+function clearDealAnimationRuntime(revealFullHand = true): void {
+  dealRunSeq += 1;
+  if (dealFrame !== null) {
+    cancelAnimationFrame(dealFrame);
+    dealFrame = null;
+  }
+  showDealAnimation.value = false;
+  if (revealFullHand) {
+    visibleHandCount.value = props.privateHand.length;
+  }
+}
+
+function prepareOpeningRound(roundKey = currentDealRoundKey()): void {
+  if (preparedDealRoundKey === roundKey) {
+    return;
+  }
+  clearDealAnimationRuntime(false);
+  preparedDealRoundKey = roundKey;
+  visibleHandCount.value = 0;
+}
+
+function triggerDealAnimation(roundKey = currentDealRoundKey()): number {
+  prepareOpeningRound(roundKey);
+  if (presentedDealRoundKey === roundKey) {
+    return 0;
+  }
+  presentedDealRoundKey = roundKey;
+  clearDealAnimationRuntime(false);
   const plan = buildDealPlan();
   const start = dealStartPoint();
   if (!plan.length || !start) {
-    showDealAnimation.value = false;
-    dealAnimatingUntil = Date.now();
+    visibleHandCount.value = props.privateHand.length;
     return 0;
   }
 
   const runId = ++dealRunSeq;
   showDealAnimation.value = true;
   visibleHandCount.value = 0;
-  let index = 0;
-  const finishMs = plan.length * 32 + 320;
-  dealAnimatingUntil = Date.now() + finishMs;
-  const dispatch = () => {
-    if (runId !== dealRunSeq) {
-      return;
+  let dispatchedCount = 0;
+  const serverTimeLeft = Math.max(0, Number(props.state?.responseEndsAt ?? 0) - Date.now());
+  const finishMs = serverTimeLeft > 0 ? serverTimeLeft : plan.length * 32 + 320;
+  const settleMs = Math.min(320, Math.max(60, finishMs * 0.1));
+  const flightWindowMs = Math.max(1, finishMs - settleMs);
+  const startedAt = performance.now();
+
+  const dispatchUntil = (targetCount: number) => {
+    // When a device misses frames, advance directly to the absolute position
+    // in the sequence. Only materialize the most recent few flights so a
+    // delayed frame cannot cause a large catch-up burst and another freeze.
+    if (targetCount - dispatchedCount > 6) {
+      dispatchedCount = targetCount - 6;
     }
-    const targetSeat = plan[index];
-    const end = targetForPlayer(targetSeat);
-    if (end) {
-      spawnFlight({
-        mode: "deal",
-        sx: start.x - 10,
-        sy: start.y - 28,
-        ex: end.x - 10,
-        ey: end.y - 28,
-        width: 20,
-        height: 56,
-        duration: 230,
-        delay: 0,
-      });
-    }
-    index += 1;
-    const fullHand = props.privateHand.length;
-    if (fullHand > 0) {
-      const reveal = Math.min(fullHand, Math.ceil((index / plan.length) * fullHand));
-      visibleHandCount.value = Math.max(visibleHandCount.value, reveal);
-    }
-    if (index >= plan.length) {
-      clearDealAnimationRuntime();
-      dealTimer = setTimeout(() => {
-        if (runId === dealRunSeq) {
-          showDealAnimation.value = false;
-          visibleHandCount.value = props.privateHand.length;
-        }
-      }, 320);
+    while (dispatchedCount < targetCount) {
+      const targetSeat = plan[dispatchedCount];
+      const end = targetForPlayer(targetSeat);
+      if (end) {
+        spawnFlight({
+          mode: "deal",
+          sx: start.x - 10,
+          sy: start.y - 28,
+          ex: end.x - 10,
+          ey: end.y - 28,
+          width: 20,
+          height: 56,
+          duration: Math.min(230, Math.max(100, flightWindowMs / 5)),
+          delay: 0,
+        });
+      }
+      dispatchedCount += 1;
     }
   };
 
-  dispatch();
-  dealInterval = setInterval(dispatch, 32);
+  const renderFrame = (now: number) => {
+    if (runId !== dealRunSeq || presentedDealRoundKey !== roundKey) {
+      return;
+    }
+    const elapsed = Math.max(0, now - startedAt);
+    const progress = Math.min(1, elapsed / flightWindowMs);
+    const targetCount = Math.min(plan.length, Math.max(1, Math.floor(progress * plan.length)));
+    dispatchUntil(targetCount);
+    const fullHand = props.privateHand.length;
+    if (fullHand > 0) {
+      const reveal = Math.min(fullHand, Math.ceil((targetCount / plan.length) * fullHand));
+      visibleHandCount.value = Math.max(visibleHandCount.value, reveal);
+    }
+    if (elapsed >= finishMs) {
+      dealFrame = null;
+      showDealAnimation.value = false;
+      visibleHandCount.value = props.privateHand.length;
+      return;
+    }
+    dealFrame = requestAnimationFrame(renderFrame);
+  };
+
+  dealFrame = requestAnimationFrame(renderFrame);
   return finishMs;
 }
 
@@ -2031,13 +2066,16 @@ onUnmounted(() => {
 watch(
   () => props.state?.lastAction,
   (action) => {
+    const roundKey = currentDealRoundKey();
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
+      prepareOpeningRound(roundKey);
       triggerDealerReveal("picking", "正在翻定庄牌");
       return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
     if (dealerCardMatch) {
+      prepareOpeningRound(roundKey);
       const dealerId = dealerCardMatch[1];
       triggerDealerReveal("revealed", "定庄牌揭晓", dealerInfoCard.value, dealerId);
       return;
@@ -2046,8 +2084,11 @@ watch(
     if (dealerMatch && props.state?.phase === "declaring") {
       clearDealerReveal();
       triggerDealerFlight(dealerMatch[1]);
-      triggerDealAnimation();
+      triggerDealAnimation(roundKey);
       return;
+    }
+    if (props.state?.phase === "declaring" && /^DECLARING\b/.test(String(action ?? ""))) {
+      clearDealAnimationRuntime(true);
     }
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {

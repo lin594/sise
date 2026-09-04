@@ -1856,8 +1856,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.state.currentPlayerId = dealerId;
     this.state.responsePhase = "collective";
     this.state.declareEndsAt = 0;
-    this.syncAllPrivateHands();
+    // Publish the new round (including each recipient's private hand) before
+    // the legacy private_hand compatibility message. Otherwise a fast
+    // private_hand delivery can expose the next hand while the client still
+    // renders the previous round's settlement state.
+    this.updatePublicHandCounts();
     this.startDeclareIntroSequence(dealerId, pickerId);
+    this.syncAllPrivateHands();
     this.nextRoundSetup = null;
   }
 
