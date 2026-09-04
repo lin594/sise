@@ -2056,7 +2056,7 @@ test.describe("legacy small landscape gameplay", () => {
       const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
-        ".tag.turn, .response-caption, .center-seat-action, .dealer-badge, .self-seat-badge, .history-count",
+        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, .dealer-badge, .self-seat-badge, .history-count",
       ));
       const deckUnit = document.querySelector<HTMLElement>(".deck-number small")!;
       const handRect = hand.getBoundingClientRect();
