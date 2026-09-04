@@ -68,6 +68,7 @@ test.describe("牌局断线恢复", () => {
 
     await context.setOffline(true);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "offline", { timeout: 10_000 });
+    await page.setViewportSize({ width: 568, height: 320 });
     const offlineStatus = page.getByTestId("connection-status");
     await expect(offlineStatus).toContainText("断网 · 自动恢复中");
     const offlineStatusGeometry = await offlineStatus.evaluate((status) => {
@@ -116,11 +117,22 @@ test.describe("牌局断线恢复", () => {
     await expect(page.getByTestId("player-self")).toContainText("网络已断开，联网后自动恢复");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-offline.png") });
 
+    const reconnectPattern = "**/matchmake/joinById/**";
+    await page.route(reconnectPattern, (route) => route.abort("connectionfailed"));
     await context.setOffline(false);
+    const retryButton = page.getByTestId("retry-connection");
+    await expect(retryButton).toBeVisible({ timeout: 10_000 });
+    const retryGeometry = await retryButton.evaluate((button) => ({
+      height: button.getBoundingClientRect().height,
+      fontSize: Number.parseFloat(getComputedStyle(button).fontSize),
+    }));
+    expect(retryGeometry.height).toBeGreaterThanOrEqual(36);
+    expect(retryGeometry.fontSize).toBeGreaterThanOrEqual(14);
+    await page.unroute(reconnectPattern);
+    await retryButton.click();
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", /restored|connected/, {
       timeout: 20_000,
     });
-    await page.setViewportSize({ width: 568, height: 320 });
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
     await expect.poll(() => roomSocketCount).toBe(socketCountBeforeDisconnect + 1);
