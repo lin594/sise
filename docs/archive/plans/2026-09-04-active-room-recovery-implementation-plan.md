@@ -1,5 +1,7 @@
 # Active Room Recovery Implementation Plan
 
+> Status: completed and verified with a live iMac server-container restart.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Preserve an authoritative four-player game across server rebuilds and let existing player tokens reclaim the same room, seat and hand.
