@@ -68,7 +68,10 @@ try {
   });
   page.on("websocket", (socket) => {
     const url = new URL(socket.url());
-    if (url.host === baseUrl.host && url.pathname.startsWith("/matchmake/")) {
+    if (
+      url.host === baseUrl.host
+      && /^\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/u.test(url.pathname)
+    ) {
       sameOriginWebSocket = true;
     }
   });
