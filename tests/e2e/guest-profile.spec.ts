@@ -85,6 +85,25 @@ test("a passwordless local profile stays private and updates after settlement", 
   await expect(profileDialog).toBeHidden();
   await expect(summary).toBeFocused();
 
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect(page.locator(".layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+  await summary.click();
+  await expect(profileDialog).toBeVisible();
+  const rotatedDialogGeometry = await profileDialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      insidePhysicalViewport:
+        rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+      pageFits: document.body.scrollWidth <= innerWidth && document.body.scrollHeight <= innerHeight,
+    };
+  });
+  expect(rotatedDialogGeometry).toEqual({ insidePhysicalViewport: true, pageFits: true });
+  await page.screenshot({ path: testInfo.outputPath("guest-profile-details-zero-rotated-320x568.png") });
+  await page.getByTestId("guest-profile-mask").click({ position: { x: 2, y: 2 } });
+  await expect(profileDialog).toBeHidden();
+  await expect(summary).toBeFocused();
+  await page.setViewportSize({ width: 568, height: 320 });
+
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await applySettlementScenario(page);
