@@ -51,7 +51,6 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   font-weight: 700;
   color: #09090b;
   background: #fff;
-  transition: transform 0.2s ease;
   padding: 2px 0;
   overflow: hidden;
   box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.15);

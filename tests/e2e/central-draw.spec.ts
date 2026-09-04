@@ -160,6 +160,25 @@ test("red Xiang Peng hands off all three large cards to the public meld without 
   await expectRedXiangPengHandoff(page, "large");
 });
 
+test("a CPU-throttled meld still holds the exact final rectangles", async ({ page }) => {
+  await start(page, "upper_peng_xiang");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+  try {
+    await expect(page.getByTestId("action-peng")).toBeEnabled();
+    const responseId = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState().responseCard.id as string);
+    const expectedIds = [responseId, "red-xiang-1", "red-xiang-2"];
+    const handoff = await recordPengHandoff(page, expectedIds);
+    for (const id of expectedIds) {
+      expectRectClose(handoff.lastFlights[id], handoff.targets[id]);
+      expect(new Set(handoff.layoutSizes[id].map((size) => `${size.width}x${size.height}`)).size).toBe(1);
+      expect(handoff.visibleCounts[id]).toBe(1);
+    }
+  } finally {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  }
+});
+
 test.describe("desktop long-card meld handoff", () => {
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false });
 
@@ -173,12 +192,28 @@ test("draw flies face down, pauses, flips, then accepts B's eat with real cards"
   const flight = page.locator('[data-transition-kind="draw"]');
   await expect(flight).toBeVisible();
   await expect(flight.locator(".card-back")).toBeVisible();
+  await expect(flight).toHaveAttribute("data-transition-stage", "waiting");
+  const landedDraw = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const rect = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    };
+    return {
+      flight: read('[data-transition-kind="draw"]'),
+      target: read('[data-testid="pending-card"] .response-card-face'),
+    };
+  });
+  expectRectClose(landedDraw.flight, landedDraw.target);
   await expect(page.getByTestId("action-chi")).toHaveCount(0);
-  await expect(page.getByTestId("action-chi")).toBeEnabled();
+  await expect(page.getByTestId("action-chi")).toBeVisible();
+  await expect(page.getByTestId("action-chi")).toBeDisabled();
   await expect(flight).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__drawStages)).toEqual(["flying", "waiting", "flipping"]);
   await expect(page.getByTestId("pending-card")).toBeVisible();
   await expect(page.locator('.discard-token[data-face-id^="draw-ma"]')).toHaveCount(0);
+  await page.getByTestId("hand-card-red-ju").click();
+  await page.getByTestId("hand-card-red-pao").click();
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
   await page.getByTestId("action-chi").click();
   await expect(page.locator('[data-transition-kind="meld"]')).toHaveCount(3);
   await expect(page.getByTestId("discard-confirm")).toBeVisible();
@@ -222,7 +257,19 @@ test("declining a draw lands it in the drawer's outgoing flow without a second p
     return { id: state.responseCard.id, owner: state.pollOriginPlayerId };
   });
   await page.getByTestId("action-pass").click();
-  await expect(page.locator(`[data-transition-kind="flow"][data-transition-card-id="${origin.id}"]`)).toBeVisible();
+  const flowFlight = page.locator(`[data-transition-kind="flow"][data-transition-card-id="${origin.id}"]`);
+  await expect(flowFlight).toHaveAttribute("data-transition-stage", "landed");
+  const landedFlow = await page.evaluate((id) => {
+    const read = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    };
+    return {
+      flight: read(document.querySelector<HTMLElement>(`[data-transition-kind="flow"][data-transition-card-id="${id}"]`)!),
+      target: read(document.querySelector<HTMLElement>(`.discard-token[data-face-id="${id}"]`)!),
+    };
+  }, origin.id);
+  expectRectClose(landedFlow.flight, landedFlow.target);
   await expect(page.locator(`.discard-token[data-face-id="${origin.id}"]`)).toBeVisible();
   const events = await page.evaluate((id) => (window as any).__siseLocalTest.getRoomState().tableTransitions.filter((e: any) => e.moves.some((m: any) => m.card.id === id)), origin.id);
   expect(events.map((event: any) => event.kind)).toEqual(["draw", "flow"]);
@@ -234,33 +281,14 @@ test("reduced motion reveals at the central landing point without flight or flip
   await page.setViewportSize({ width: 320, height: 568 });
   await start(page, "draw_choice");
   const flight = page.locator('[data-transition-kind="draw"]');
-  await expect(flight).toBeVisible();
-  await expect(flight.locator(".card-back")).toHaveCount(0);
-  const readGeometry = () => page.evaluate(() => {
-    const read = (element: Element | null): RectSnapshot | null => {
-      if (!element) return null;
-      const rect = element.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-    };
-    return {
-      position: read(document.querySelector('[data-transition-kind="draw"]')),
-      landing: read(document.querySelector('[data-testid="pending-card"] .response-card-face')),
-    };
-  });
-  await expect.poll(async () => {
-    const geometry = await readGeometry();
-    if (!geometry.position || !geometry.landing) return Number.POSITIVE_INFINITY;
-    return Math.max(...(["left", "top", "width", "height"] as const)
-      .map((key) => Math.abs(geometry.position![key] - geometry.landing![key])));
-  }).toBeLessThanOrEqual(1);
-  const { position, landing } = await readGeometry();
-  expect(position).not.toBeNull();
-  expect(landing).not.toBeNull();
-  expect(position!.left).toBeGreaterThanOrEqual(0);
-  expect(position!.top).toBeGreaterThanOrEqual(0);
-  expect(position!.left + position!.width).toBeLessThanOrEqual(320);
-  expect(position!.top + position!.height).toBeLessThanOrEqual(568);
-  expectRectClose(position!, landing!);
-  await expect(flight.locator(".table-flight-turn")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
-  await expect(page.getByTestId("action-chi")).toBeEnabled();
+  await expect(flight).toHaveCount(0);
+  const landing = page.getByTestId("pending-card").locator(".response-card-face");
+  await expect(landing).toBeVisible();
+  const rect = await landing.boundingBox();
+  expect(rect).not.toBeNull();
+  expect(rect!.x).toBeGreaterThanOrEqual(0);
+  expect(rect!.y).toBeGreaterThanOrEqual(0);
+  expect(rect!.x + rect!.width).toBeLessThanOrEqual(320);
+  expect(rect!.y + rect!.height).toBeLessThanOrEqual(568);
+  await expect(page.getByTestId("action-chi")).toBeVisible();
 });

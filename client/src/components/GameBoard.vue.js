@@ -53,7 +53,6 @@ const flights = ref([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
 const dealerReveal = ref(null);
-const dealerFlight = ref(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 const tableRef = ref(null);
@@ -70,7 +69,6 @@ const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
 const seatRefMap = new Map();
 let dealerRevealSeq = 0;
-let dealerFlightSeq = 0;
 let flightSeq = 0;
 let dealRunSeq = 0;
 let dealFrame = null;
@@ -301,8 +299,8 @@ const tableEvents = computed(() => props.state?.tableTransitions ?? []);
 const lastCardRects = new Map();
 const tableFlightSources = new Map();
 const tableFlightDestinations = new Map();
-const missingDestinationTicks = new Map();
 let presentationScopeKey = "";
+let lastPresentationPaintAt = 0;
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
@@ -312,7 +310,7 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
         lastCardRects.clear();
         tableFlightSources.clear();
         tableFlightDestinations.clear();
-        missingDestinationTicks.clear();
+        lastPresentationPaintAt = 0;
     }
     const currentMoveKeys = new Set(tableEvents.value.flatMap((event) => event.moves.map((_, index) => `${event.round}:${event.id}:${index}`)));
     for (const key of tableFlightSources.keys()) {
@@ -323,12 +321,13 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
         if (!currentMoveKeys.has(key))
             tableFlightDestinations.delete(key);
     }
-    for (const key of missingDestinationTicks.keys()) {
-        if (!currentMoveKeys.has(key))
-            missingDestinationTicks.delete(key);
-    }
-    const render = () => {
-        presentationTick.value = Date.now();
+    const render = (frameTime = performance.now()) => {
+        // A short handoff remains clear at 30 visual updates per second. On an
+        // older phone, missed frames advance directly along the server timeline.
+        if (frameTime - lastPresentationPaintAt >= 32 || lastPresentationPaintAt === 0) {
+            lastPresentationPaintAt = frameTime;
+            presentationTick.value = Date.now();
+        }
         presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
             ? requestAnimationFrame(render) : null;
     };
@@ -358,8 +357,9 @@ onBeforeUpdate(() => {
         lastCardRects.delete(lastCardRects.keys().next().value);
 });
 function isMovingCard(id) {
-    return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
-        || (props.state?.phase === "playing" && tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === id)));
+    if (reducedTableMotion.value)
+        return false;
+    return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
 }
 function movingCardStyle(id) {
     return isMovingCard(id) ? { visibility: "hidden" } : {};
@@ -444,7 +444,7 @@ function interpolateRect(start, end, progress) {
         height: interpolate(start.height, end.height),
     };
 }
-const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
+const tableFlights = computed(() => reducedTableMotion.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
     const key = `${event.round}:${event.id}:${index}`;
     const exactEnd = tableLocationExactRect(move.to, move.card.id);
     const frozenEnd = tableFlightDestinations.get(key);
@@ -461,21 +461,9 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
     tableFlightSources.set(key, start);
     while (tableFlightSources.size > 128)
         tableFlightSources.delete(tableFlightSources.keys().next().value);
-    let end = frozenEnd ?? exactEnd;
-    if (!end) {
-        // Normal moves publish a hidden real destination in the same patch. Give
-        // Vue one paint to mount it before using a semantic zone fallback. Hu can
-        // legitimately have no table target because settlement owns the result.
-        const missedFrames = (missingDestinationTicks.get(key) ?? 0) + 1;
-        missingDestinationTicks.set(key, missedFrames);
-        if (event.kind !== "hu" && missedFrames < 2) {
-            return [];
-        }
-        end = tableLocationAnchorRect(move.to, start);
-    }
-    else {
-        missingDestinationTicks.delete(key);
-    }
+    const end = frozenEnd ?? exactEnd;
+    // A container center is not a card landing point. Without the real target,
+    // prefer the authoritative final state to a plausible but incorrect flight.
     if (!end)
         return [];
     // A flight is one visual transaction. Freeze its real destination on the
@@ -489,17 +477,19 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
     }
     const elapsed = presentationNow.value - event.startsAt;
     const draw = event.kind === "draw";
-    const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
+    // Arrive before the 350ms server handoff ends, then hold the exact rectangle
+    // for 150ms so low-frame devices can paint a stable landing.
+    const progress = Math.min(1, elapsed / 200);
     const eased = 1 - Math.pow(1 - progress, 3);
     const flipping = draw && elapsed >= 700;
-    const back = draw && elapsed < 950 && !reducedTableMotion.value;
-    const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
+    const back = draw && elapsed < 950;
+    const flip = Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
     const current = interpolateRect(start, end, eased);
     const scaleX = Math.max(0.01, current.width / start.width);
     const scaleY = Math.max(0.01, current.height / start.height);
     return [{ key, card: move.card, kind: event.kind,
-            back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
-            stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
+            back, rotation: draw ? (back ? flip : flip - 180) : 0,
+            stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
             style: {
                 width: `${Math.max(1, start.width)}px`,
                 height: `${Math.max(1, start.height)}px`,
@@ -812,7 +802,10 @@ function canDiscardCard(card) {
     return canDiscard.value && !isDiscardProtectedCard(card);
 }
 function canPreselectDiscardCard(card) {
-    return props.state?.phase === "playing" && !handPresentationBusy.value && !isDiscardProtectedCard(card);
+    return props.state?.phase === "playing" &&
+        !handPresentationBusy.value &&
+        !Boolean(selfPlayer.value?.isBot || selfPlayer.value?.isAutoPlay) &&
+        !isDiscardProtectedCard(card);
 }
 function isChiCardSelectable(cardId) {
     if (!chiSelectionAvailable.value) {
@@ -1105,6 +1098,10 @@ function groupOffsets(count) {
     ];
 }
 function spawnFlight(flight) {
+    // Legacy action flights aim at estimated zone centers. Keep only the
+    // symbolic opening-deal backs; exact table transitions own card movement.
+    if (flight.mode !== "deal")
+        return;
     const id = ++flightSeq;
     flights.value.push({ id, ...flight });
     const ttl = Math.max(120, flight.duration + flight.delay + 120);
@@ -1123,34 +1120,6 @@ function flightStyle(flight) {
         width: `${flight.width}px`,
         height: `${flight.height}px`,
     };
-}
-function dealerFlightStyle(flight) {
-    return {
-        "--sx": `${flight.sx}px`,
-        "--sy": `${flight.sy}px`,
-        "--ex": `${flight.ex}px`,
-        "--ey": `${flight.ey}px`,
-    };
-}
-function triggerDealerFlight(dealerId) {
-    const start = pointFromElement(tableRef.value);
-    const end = targetForPlayer(dealerId);
-    if (!start || !end) {
-        return;
-    }
-    const id = ++dealerFlightSeq;
-    dealerFlight.value = {
-        id,
-        sx: start.x - 26,
-        sy: start.y - 18,
-        ex: end.x - 26,
-        ey: end.y - 18,
-    };
-    window.setTimeout(() => {
-        if (dealerFlight.value?.id === id) {
-            dealerFlight.value = null;
-        }
-    }, 980);
 }
 function triggerDiscardAnimationFromElement(sourceEl, card) {
     const source = pointFromElement(sourceEl);
@@ -1369,8 +1338,8 @@ function triggerDealAnimation(roundKey = currentDealRoundKey()) {
         // When a device misses frames, advance directly to the absolute position
         // in the sequence. Only materialize the most recent few flights so a
         // delayed frame cannot cause a large catch-up burst and another freeze.
-        if (targetCount - dispatchedCount > 6) {
-            dispatchedCount = targetCount - 6;
+        if (targetCount - dispatchedCount > 2) {
+            dispatchedCount = targetCount - 2;
         }
         while (dispatchedCount < targetCount) {
             const targetSeat = plan[dispatchedCount];
@@ -1502,7 +1471,6 @@ onUnmounted(() => {
     }
     flashActorId.value = "";
     drawHiddenCardId.value = "";
-    dealerFlight.value = null;
     if (countdownTimer) {
         clearInterval(countdownTimer);
         countdownTimer = null;
@@ -1537,7 +1505,6 @@ watch(() => [
     const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
     if (dealerMatch && props.state?.phase === "declaring") {
         clearDealerReveal();
-        triggerDealerFlight(dealerMatch[1]);
         triggerDealAnimation(roundKey);
         return;
     }
@@ -1599,6 +1566,12 @@ watch(() => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|$
     if (props.state?.phase === "playing") {
         return;
     }
+    selectedDiscardCardId.value = null;
+    selectedChiCardIds.value = [];
+});
+watch(() => Boolean(selfPlayer.value?.isBot || selfPlayer.value?.isAutoPlay), (automatic) => {
+    if (!automatic)
+        return;
     selectedDiscardCardId.value = null;
     selectedChiCardIds.value = [];
 });
@@ -1918,8 +1891,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 // CSS variable injection 
@@ -2777,24 +2748,6 @@ if (__VLS_ctx.dealerReveal) {
         (__VLS_ctx.dealerReveal.dealerName);
     }
 }
-const __VLS_43 = {}.Transition;
-/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
-// @ts-ignore
-const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({
-    name: "dealer-flight",
-}));
-const __VLS_45 = __VLS_44({
-    name: "dealer-flight",
-}, ...__VLS_functionalComponentArgsRest(__VLS_44));
-__VLS_46.slots.default;
-if (__VLS_ctx.dealerFlight) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        key: (`dealer-flight-${__VLS_ctx.dealerFlight.id}`),
-        ...{ class: "dealer-flight" },
-        ...{ style: (__VLS_ctx.dealerFlightStyle(__VLS_ctx.dealerFlight)) },
-    });
-}
-var __VLS_46;
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-info-card" },
@@ -2849,16 +2802,16 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_47 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_43 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_48 = __VLS_47({
+            const __VLS_44 = __VLS_43({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_47));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_43));
         }
     }
     if (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs)) {
@@ -3019,24 +2972,24 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_50 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_46 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_51 = __VLS_50({
+        const __VLS_47 = __VLS_46({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_50));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_46));
     }
 }
 if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_53 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_49 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -3057,7 +3010,7 @@ if (props.state?.phase === 'playing') {
         actionFeedback: (props.actionFeedback ?? null),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
-    const __VLS_54 = __VLS_53({
+    const __VLS_50 = __VLS_49({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -3077,35 +3030,35 @@ if (props.state?.phase === 'playing') {
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (props.actionFeedback ?? null),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_53));
-    let __VLS_56;
-    let __VLS_57;
-    let __VLS_58;
-    const __VLS_59 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_49));
+    let __VLS_52;
+    let __VLS_53;
+    let __VLS_54;
+    const __VLS_55 = {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
-    const __VLS_60 = {
+    const __VLS_56 = {
         onRequestMoreTime: (...[$event]) => {
             if (!(props.state?.phase === 'playing'))
                 return;
             __VLS_ctx.emit('requestMoreTime');
         }
     };
-    const __VLS_61 = {
+    const __VLS_57 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    var __VLS_55;
+    var __VLS_51;
 }
-const __VLS_62 = {}.Teleport;
+const __VLS_58 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_63 = __VLS_asFunctionalComponent(__VLS_62, new __VLS_62({
+const __VLS_59 = __VLS_asFunctionalComponent(__VLS_58, new __VLS_58({
     to: "body",
 }));
-const __VLS_64 = __VLS_63({
+const __VLS_60 = __VLS_59({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_63));
-__VLS_65.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_59));
+__VLS_61.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3128,19 +3081,19 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_62 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "lg",
         }));
-        const __VLS_67 = __VLS_66({
+        const __VLS_63 = __VLS_62({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "lg",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_66));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_62));
     }
 }
-var __VLS_65;
+var __VLS_61;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3159,16 +3112,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_70 = __VLS_69({
+        const __VLS_66 = __VLS_65({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_65));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3305,7 +3258,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
@@ -3367,7 +3319,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             flights: flights,
             showDealAnimation: showDealAnimation,
             dealerReveal: dealerReveal,
-            dealerFlight: dealerFlight,
             flashActorId: flashActorId,
             tableRef: tableRef,
             boardRef: boardRef,
@@ -3435,7 +3386,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             handCardAccessibleLabel: handCardAccessibleLabel,
             setSeatRef: setSeatRef,
             flightStyle: flightStyle,
-            dealerFlightStyle: dealerFlightStyle,
         };
     },
     __typeEmits: {},

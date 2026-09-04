@@ -234,7 +234,7 @@ if (__VLS_ctx.showPanel) {
             ...{ class: "action-row" },
             'data-testid': "action-row",
         });
-        if (__VLS_ctx.timerLabel) {
+        if (__VLS_ctx.timerLabel && !__VLS_ctx.canRequestMoreTime) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "timer-chip" },
                 ...{ class: ({ urgent: __VLS_ctx.isUrgent }) },

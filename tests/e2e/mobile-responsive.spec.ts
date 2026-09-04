@@ -1400,7 +1400,7 @@ test.describe("compact landscape gameplay", () => {
     expect(leaveState).toEqual({ roomId: null, token: null, queryRoomId: null });
   });
 
-  test("keeps the self dealer card visible and reveals it before the dealer mark lands", async ({ page }, testInfo) => {
+  test("keeps the self dealer card visible and reveals it before the static dealer mark appears", async ({ page }, testInfo) => {
     await page.goto("/?e2eDebug=1");
     await page.getByTestId("nickname-input").fill("风棋童与老牌友");
     await page.getByTestId("login-submit").click();

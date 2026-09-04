@@ -473,16 +473,6 @@
         </div>
       </div>
 
-      <Transition name="dealer-flight">
-        <div
-          v-if="dealerFlight"
-          :key="`dealer-flight-${dealerFlight.id}`"
-          class="dealer-flight"
-          :style="dealerFlightStyle(dealerFlight)"
-        >
-          庄
-        </div>
-      </Transition>
     </div>
 
     <section
@@ -713,14 +703,6 @@ type CardRect = {
   height: number;
 };
 
-type DealerFlight = {
-  id: number;
-  sx: number;
-  sy: number;
-  ex: number;
-  ey: number;
-};
-
 type DealerReveal = {
   id: number;
   stage: "picking" | "revealed";
@@ -830,7 +812,6 @@ const flights = ref<CardFlight[]>([]);
 const showDealAnimation = ref(false);
 const visibleHandCount = ref(shouldConcealOpeningHand() ? 0 : props.privateHand.length);
 const dealerReveal = ref<DealerReveal | null>(null);
-const dealerFlight = ref<DealerFlight | null>(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 
@@ -849,7 +830,6 @@ const selfOpenRef = ref<HTMLElement | null>(null);
 const seatRefMap = new Map<string, HTMLElement>();
 
 let dealerRevealSeq = 0;
-let dealerFlightSeq = 0;
 let flightSeq = 0;
 let dealRunSeq = 0;
 let dealFrame: number | null = null;
@@ -1108,8 +1088,8 @@ const tableEvents = computed<TableTransition[]>(() => props.state?.tableTransiti
 const lastCardRects = new Map<string, CardRect>();
 const tableFlightSources = new Map<string, CardRect>();
 const tableFlightDestinations = new Map<string, CardRect>();
-const missingDestinationTicks = new Map<string, number>();
 let presentationScopeKey = "";
+let lastPresentationPaintAt = 0;
 watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions] as const, () => {
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   const nextScopeKey = `${String(props.state?.roomId ?? "")}:${Number(props.state?.completedRounds ?? 0)}`;
@@ -1118,7 +1098,7 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
     lastCardRects.clear();
     tableFlightSources.clear();
     tableFlightDestinations.clear();
-    missingDestinationTicks.clear();
+    lastPresentationPaintAt = 0;
   }
   const currentMoveKeys = new Set(tableEvents.value.flatMap((event) =>
     event.moves.map((_, index) => `${event.round}:${event.id}:${index}`),
@@ -1129,11 +1109,13 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
   for (const key of tableFlightDestinations.keys()) {
     if (!currentMoveKeys.has(key)) tableFlightDestinations.delete(key);
   }
-  for (const key of missingDestinationTicks.keys()) {
-    if (!currentMoveKeys.has(key)) missingDestinationTicks.delete(key);
-  }
-  const render = () => {
-    presentationTick.value = Date.now();
+  const render = (frameTime = performance.now()) => {
+    // A short handoff remains clear at 30 visual updates per second. On an
+    // older phone, missed frames advance directly along the server timeline.
+    if (frameTime - lastPresentationPaintAt >= 32 || lastPresentationPaintAt === 0) {
+      lastPresentationPaintAt = frameTime;
+      presentationTick.value = Date.now();
+    }
     presentationFrame = tableEvents.value.some((event) => event.endsAt > presentationNow.value)
       ? requestAnimationFrame(render) : null;
   };
@@ -1161,8 +1143,8 @@ onBeforeUpdate(() => {
   while (lastCardRects.size > 256) lastCardRects.delete(lastCardRects.keys().next().value!);
 });
 function isMovingCard(id: string): boolean {
-  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id))
-    || (props.state?.phase === "playing" && tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === id)));
+  if (reducedTableMotion.value) return false;
+  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
 }
 function movingCardStyle(id: string): Record<string, string> {
   return isMovingCard(id) ? { visibility: "hidden" } : {};
@@ -1249,7 +1231,7 @@ function interpolateRect(start: CardRect, end: CardRect, progress: number): Card
   };
 }
 
-const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
+const tableFlights = computed(() => reducedTableMotion.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
   const key = `${event.round}:${event.id}:${index}`;
   const exactEnd = tableLocationExactRect(move.to, move.card.id);
   const frozenEnd = tableFlightDestinations.get(key);
@@ -1265,20 +1247,9 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
   tableFlightSources.set(key, start);
   while (tableFlightSources.size > 128) tableFlightSources.delete(tableFlightSources.keys().next().value!);
 
-  let end = frozenEnd ?? exactEnd;
-  if (!end) {
-    // Normal moves publish a hidden real destination in the same patch. Give
-    // Vue one paint to mount it before using a semantic zone fallback. Hu can
-    // legitimately have no table target because settlement owns the result.
-    const missedFrames = (missingDestinationTicks.get(key) ?? 0) + 1;
-    missingDestinationTicks.set(key, missedFrames);
-    if (event.kind !== "hu" && missedFrames < 2) {
-      return [];
-    }
-    end = tableLocationAnchorRect(move.to, start);
-  } else {
-    missingDestinationTicks.delete(key);
-  }
+  const end = frozenEnd ?? exactEnd;
+  // A container center is not a card landing point. Without the real target,
+  // prefer the authoritative final state to a plausible but incorrect flight.
   if (!end) return [];
   // A flight is one visual transaction. Freeze its real destination on the
   // first painted frame so a hand scroll, late sibling mount, or responsive
@@ -1292,17 +1263,19 @@ const tableFlights = computed(() => activeTableEvents.value.flatMap((event) => e
 
   const elapsed = presentationNow.value - event.startsAt;
   const draw = event.kind === "draw";
-  const progress = reducedTableMotion.value ? 1 : Math.min(1, elapsed / 350);
+  // Arrive before the 350ms server handoff ends, then hold the exact rectangle
+  // for 150ms so low-frame devices can paint a stable landing.
+  const progress = Math.min(1, elapsed / 200);
   const eased = 1 - Math.pow(1 - progress, 3);
   const flipping = draw && elapsed >= 700;
-  const back = draw && elapsed < 950 && !reducedTableMotion.value;
-  const flip = reducedTableMotion.value ? 0 : Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
+  const back = draw && elapsed < 950;
+  const flip = Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
   const current = interpolateRect(start, end, eased);
   const scaleX = Math.max(0.01, current.width / start.width);
   const scaleY = Math.max(0.01, current.height / start.height);
   return [{ key, card: move.card, kind: event.kind,
-    back, rotation: draw && !reducedTableMotion.value ? (back ? flip : flip - 180) : 0,
-    stage: draw ? (elapsed < 350 ? "flying" : flipping ? "flipping" : "waiting") : "flying",
+    back, rotation: draw ? (back ? flip : flip - 180) : 0,
+    stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
     style: {
       width: `${Math.max(1, start.width)}px`,
       height: `${Math.max(1, start.height)}px`,
@@ -1667,7 +1640,10 @@ function canDiscardCard(card: Card): boolean {
 }
 
 function canPreselectDiscardCard(card: Card): boolean {
-  return props.state?.phase === "playing" && !handPresentationBusy.value && !isDiscardProtectedCard(card);
+  return props.state?.phase === "playing" &&
+    !handPresentationBusy.value &&
+    !Boolean(selfPlayer.value?.isBot || selfPlayer.value?.isAutoPlay) &&
+    !isDiscardProtectedCard(card);
 }
 
 function isChiCardSelectable(cardId: string): boolean {
@@ -1984,6 +1960,9 @@ function groupOffsets(count: number): Array<{ x: number; y: number }> {
 }
 
 function spawnFlight(flight: Omit<CardFlight, "id">): void {
+  // Legacy action flights aim at estimated zone centers. Keep only the
+  // symbolic opening-deal backs; exact table transitions own card movement.
+  if (flight.mode !== "deal") return;
   const id = ++flightSeq;
   flights.value.push({ id, ...flight });
   const ttl = Math.max(120, flight.duration + flight.delay + 120);
@@ -2003,36 +1982,6 @@ function flightStyle(flight: CardFlight): Record<string, string> {
     width: `${flight.width}px`,
     height: `${flight.height}px`,
   };
-}
-
-function dealerFlightStyle(flight: DealerFlight): Record<string, string> {
-  return {
-    "--sx": `${flight.sx}px`,
-    "--sy": `${flight.sy}px`,
-    "--ex": `${flight.ex}px`,
-    "--ey": `${flight.ey}px`,
-  };
-}
-
-function triggerDealerFlight(dealerId: string): void {
-  const start = pointFromElement(tableRef.value);
-  const end = targetForPlayer(dealerId);
-  if (!start || !end) {
-    return;
-  }
-  const id = ++dealerFlightSeq;
-  dealerFlight.value = {
-    id,
-    sx: start.x - 26,
-    sy: start.y - 18,
-    ex: end.x - 26,
-    ey: end.y - 18,
-  };
-  window.setTimeout(() => {
-    if (dealerFlight.value?.id === id) {
-      dealerFlight.value = null;
-    }
-  }, 980);
 }
 
 function triggerDiscardAnimationFromElement(sourceEl: HTMLElement, card: Card): void {
@@ -2267,8 +2216,8 @@ function triggerDealAnimation(roundKey = currentDealRoundKey()): number {
     // When a device misses frames, advance directly to the absolute position
     // in the sequence. Only materialize the most recent few flights so a
     // delayed frame cannot cause a large catch-up burst and another freeze.
-    if (targetCount - dispatchedCount > 6) {
-      dispatchedCount = targetCount - 6;
+    if (targetCount - dispatchedCount > 2) {
+      dispatchedCount = targetCount - 2;
     }
     while (dispatchedCount < targetCount) {
       const targetSeat = plan[dispatchedCount];
@@ -2412,7 +2361,6 @@ onUnmounted(() => {
   }
   flashActorId.value = "";
   drawHiddenCardId.value = "";
-  dealerFlight.value = null;
   if (countdownTimer) {
     clearInterval(countdownTimer);
     countdownTimer = null;
@@ -2450,7 +2398,6 @@ watch(
     const dealerMatch = String(action ?? "").match(/^DEALER\s+(\S+)/);
     if (dealerMatch && props.state?.phase === "declaring") {
       clearDealerReveal();
-      triggerDealerFlight(dealerMatch[1]);
       triggerDealAnimation(roundKey);
       return;
     }
@@ -2534,6 +2481,15 @@ watch(
     if (props.state?.phase === "playing") {
       return;
     }
+    selectedDiscardCardId.value = null;
+    selectedChiCardIds.value = [];
+  },
+);
+
+watch(
+  () => Boolean(selfPlayer.value?.isBot || selfPlayer.value?.isAutoPlay),
+  (automatic) => {
+    if (!automatic) return;
     selectedDiscardCardId.value = null;
     selectedChiCardIds.value = [];
   },
@@ -2825,7 +2781,6 @@ watch(
   font-size: clamp(0.9rem, 1.9vh, 1.2rem);
   line-height: 1;
   text-shadow: 0 0 8px rgba(34, 197, 94, 0.65);
-  animation: turn-arrow-bounce 0.85s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -4036,7 +3991,7 @@ watch(
   justify-items: center;
   align-items: center;
   gap: clamp(0.16rem, 0.5vh, 0.34rem);
-  animation: dealer-panel-arrive 0.32s ease-out both;
+  animation: dealer-panel-arrive 0.18s ease-out both;
 }
 
 .dealer-reveal-panel::before,
@@ -4090,7 +4045,6 @@ watch(
     inset 0 0 0 3px rgba(127, 29, 29, 0.72),
     0 8px 18px rgba(2, 6, 23, 0.52),
     0 0 20px rgba(248, 113, 113, 0.24);
-  animation: dealer-card-wait 0.82s ease-in-out infinite alternate;
 }
 
 .dealer-reveal-back span {
@@ -4113,11 +4067,10 @@ watch(
   min-height: clamp(4.9rem, 14vh, 6.6rem);
   display: grid;
   place-items: center;
-  animation: dealer-card-turn 0.62s cubic-bezier(0.2, 0.76, 0.22, 1) both;
+  animation: dealer-card-turn 0.18s ease-out both;
 }
 
 .dealer-reveal-card :deep(.card) {
-  transform: scale(1.2);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 10px 22px rgba(2, 6, 23, 0.52);
 }
 
@@ -4131,26 +4084,6 @@ watch(
   color: #fde68a;
   font-size: clamp(0.86rem, 2vh, 1.05rem);
   font-weight: 850;
-}
-
-.dealer-flight {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 40;
-  min-width: 52px;
-  text-align: center;
-  border-radius: 999px;
-  border: 1px solid rgba(245, 158, 11, 0.95);
-  background: rgba(15, 23, 42, 0.95);
-  color: #fbbf24;
-  font-size: clamp(0.78rem, 1.7vh, 0.96rem);
-  font-weight: 800;
-  padding: 0.18rem 0.55rem;
-  transform: translate(var(--sx), var(--sy));
-  animation: dealer-fly 0.9s cubic-bezier(0.22, 0.8, 0.24, 1) forwards;
-  box-shadow: 0 0 14px rgba(245, 158, 11, 0.38);
-  pointer-events: none;
 }
 
 .deal-fade-enter-active,
@@ -4173,16 +4106,6 @@ watch(
   opacity: 0;
 }
 
-.dealer-flight-enter-active,
-.dealer-flight-leave-active {
-  transition: opacity 0.18s ease;
-}
-
-.dealer-flight-enter-from,
-.dealer-flight-leave-to {
-  opacity: 0;
-}
-
 .center.my-turn {
   border-color: rgba(34, 197, 94, 0.7);
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
@@ -4200,89 +4123,42 @@ watch(
 
 @keyframes dealer-panel-arrive {
   0% {
-    transform: translateY(-8px) scale(0.92);
     opacity: 0;
   }
   100% {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes dealer-card-wait {
-  0% {
-    transform: translateY(1px) rotate(-1deg);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translateY(-3px) rotate(1deg);
     opacity: 1;
   }
 }
 
 @keyframes dealer-card-turn {
   0% {
-    transform: rotateY(88deg) scale(0.86);
     opacity: 0;
   }
-  55% {
-    transform: rotateY(-8deg) scale(1.06);
-    opacity: 1;
-  }
   100% {
-    transform: rotateY(0) scale(1);
     opacity: 1;
-  }
-}
-
-@keyframes turn-arrow-bounce {
-  0%,
-  100% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
-  50% {
-    transform: translateX(-50%) translateY(-4px);
-    opacity: 0.75;
   }
 }
 
 @keyframes actor-flash {
   0% {
-    transform: scale(0.96);
     opacity: 1;
   }
   100% {
-    transform: scale(1.08);
     opacity: 0;
-  }
-}
-
-@keyframes dealer-fly {
-  0% {
-    transform: translate(var(--sx), var(--sy)) scale(2.8);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(var(--ex), var(--ey)) scale(1);
-    opacity: 1;
   }
 }
 
 @keyframes fly-card {
   0% {
-    transform: translate(var(--sx), var(--sy)) scale(1);
+    transform: translate(var(--sx), var(--sy));
     opacity: 0.98;
   }
   75% {
     opacity: 0.98;
   }
   100% {
-    transform: translate(var(--ex), var(--ey)) scale(0.92);
-    opacity: 0.12;
+    transform: translate(var(--ex), var(--ey));
+    opacity: 0;
   }
 }
 
@@ -4726,21 +4602,16 @@ watch(
   .dealer-reveal,
   .dealer-reveal-panel,
   .dealer-reveal-back,
-  .dealer-reveal-card,
-  .dealer-flight {
+  .dealer-reveal-card {
     animation: none !important;
     transition-duration: 0.01ms !important;
-  }
-
-  .dealer-flight {
-    display: none;
   }
 }
 
 @media (max-width: 620px) and (max-height: 360px),
   (max-width: 360px) and (max-height: 620px) {
   .board {
-    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8rem, 22vw, 8.4rem);
+    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8.6rem, 24vw, 9rem);
     gap: 2px;
   }
 }

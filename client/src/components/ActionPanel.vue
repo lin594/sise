@@ -18,7 +18,7 @@
 
     <div v-else class="action-row" data-testid="action-row">
       <span
-        v-if="timerLabel"
+        v-if="timerLabel && !canRequestMoreTime"
         class="timer-chip"
         :class="{ urgent: isUrgent }"
         data-testid="action-timer"
