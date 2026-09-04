@@ -20,6 +20,9 @@ test("publishes a recognizable browser and home-screen identity", async ({ page 
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/icons/sise-180.png");
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#0b1220");
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /四人|四色牌/u);
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+  await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "四色牌");
+  await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute("content", "black");
 
   const manifestResponse = await page.request.get("/site.webmanifest");
   expect(manifestResponse.ok()).toBe(true);
