@@ -486,7 +486,12 @@ test.describe("clear first-time entry", () => {
 });
 
 test.describe("phone portrait landscape canvas", () => {
-  test.use({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true });
+  test.use({
+    viewport: { width: 375, height: 667 },
+    screen: { width: 375, height: 667 },
+    hasTouch: true,
+    isMobile: true,
+  });
 
   test("renders a fully interactive rotated canvas without an orientation guard", async ({ page }) => {
     await page.goto("/");
@@ -540,6 +545,114 @@ test.describe("phone portrait landscape canvas", () => {
     }));
     expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewportWidth);
     expect(overflow.bodyHeight).toBeLessThanOrEqual(overflow.viewportHeight);
+  });
+
+  test("keeps a portrait-locked game equivalent to native landscape without unsafe flights", async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await enterLobby(page, "/?e2eDebug=1");
+    await page.getByTestId("lobby-start").click();
+    const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
+    await confirmDeclaration.click();
+    const layout = page.locator("main.layout");
+    await expect(layout).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await applyLocalDebugScenario(page, "local_draw_pass");
+
+    const lockedOrientation = await page.evaluate(() => ({
+      mediaPortrait: matchMedia("(orientation: portrait)").matches,
+      screenType: screen.orientation?.type ?? "",
+      viewport: [innerWidth, innerHeight],
+    }));
+    expect(lockedOrientation).toEqual({
+      mediaPortrait: true,
+      screenType: "portrait-primary",
+      viewport: [375, 667],
+    });
+    await expect(layout).toHaveAttribute("data-effective-viewport", "667x375");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await expect(layout).toHaveClass(/\beffective-short-landscape\b/);
+
+    const readLogicalGeometry = () => page.evaluate(() => {
+      const readBox = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        return [element.offsetLeft, element.offsetTop, element.offsetWidth, element.offsetHeight];
+      };
+      const readSize = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        return [element.offsetWidth, element.offsetHeight];
+      };
+      const readStyle = (selector: string, property: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        return getComputedStyle(element).getPropertyValue(property);
+      };
+      return {
+        layout: readSize("main.layout"),
+        header: readBox("[data-testid='game-control-header']"),
+        board: readBox("[data-testid='game-board']"),
+        table: readBox(".table"),
+        center: readBox(".center"),
+        selfHand: readBox(".self-hand-card"),
+        handCard: readBox(".hand .card"),
+        actionDock: readBox(".action-dock"),
+        boardGap: readStyle(".board", "gap"),
+        tablePadding: readStyle(".table", "padding"),
+        actionPadding: readStyle(".action-dock", "padding"),
+      };
+    });
+
+    const portraitLockedGeometry = await readLogicalGeometry();
+    await page.screenshot({ path: testInfo.outputPath("portrait-lock-game-375x667.png") });
+
+    await page.setViewportSize({ width: 667, height: 375 });
+    await expect(layout).toHaveAttribute("data-effective-viewport", "667x375");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "false");
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
+    expect(await readLogicalGeometry()).toEqual(portraitLockedGeometry);
+
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await page.evaluate(() => {
+      const trackingWindow = window as Window & {
+        __portraitLockedFlightCount?: number;
+        __portraitLockedFlightObserver?: MutationObserver;
+      };
+      trackingWindow.__portraitLockedFlightCount = 0;
+      trackingWindow.__portraitLockedFlightObserver?.disconnect();
+      trackingWindow.__portraitLockedFlightObserver = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element)) continue;
+            if (node.matches(".table-flight, .fx-card")) trackingWindow.__portraitLockedFlightCount! += 1;
+            trackingWindow.__portraitLockedFlightCount! += node.querySelectorAll(".table-flight, .fx-card").length;
+          }
+        }
+      });
+      trackingWindow.__portraitLockedFlightObserver.observe(document.body, { childList: true, subtree: true });
+    });
+    await applyLocalDebugScenario(page, "draw_choice");
+    await expect(page.getByTestId("pending-card").locator(".response-card-face")).toBeVisible();
+    await page.waitForTimeout(1_400);
+    const flightResult = await page.evaluate(() => {
+      const trackingWindow = window as Window & {
+        __portraitLockedFlightCount?: number;
+        __portraitLockedFlightObserver?: MutationObserver;
+      };
+      trackingWindow.__portraitLockedFlightObserver?.disconnect();
+      return {
+        added: trackingWindow.__portraitLockedFlightCount ?? -1,
+        live: document.querySelectorAll(".table-flight, .fx-card").length,
+        everyVisibleCardSharesCanvas: Array.from(document.querySelectorAll<HTMLElement>("[data-face-id]"))
+          .filter((card) => card.getClientRects().length > 0 && getComputedStyle(card).visibility !== "hidden")
+          .every((card) => Boolean(card.closest("main.layout"))),
+      };
+    });
+    expect(flightResult).toEqual({ added: 0, live: 0, everyVisibleCardSharesCanvas: true });
   });
 
   test("rotates a legacy 320x568 portrait into the supported small canvas", async ({ page }) => {
