@@ -123,7 +123,7 @@
 
 好友邀请二维码完全由客户端根据当前页面来源、路径和公开 `roomId` 生成，不新增服务端二维码接口，也不把 `playerToken`、`hostKey` 等身份信息编码进去。生成失败时只退回可选择的同一公开邀请链接；普通 HTTP 试玩环境不依赖系统分享或现代剪贴板能力也能让身边牌友扫码加入。
 
-客户端后端地址由统一解析器生成：HTTPS 页面默认使用 HTTPS API 与 WSS，HTTP 页面默认使用 HTTP API 与 WS；显式配置其中一个 `VITE_SERVER_*` 地址时，另一条链路从同一主机、端口和路径推导，并清除查询串、片段及尾部斜杠。正式环境仍建议显式写出两项，Traefik 终止 TLS 后把 HTTPS/WSS 转发到容器内同一个 HTTP 服务。iMac 是 HTTP/WS 测试环境：专用 Compose 覆盖让 Web Nginx 在 80 端口同源代理 HTTP、`/matchmake/*` 与 WebSocket，3000 只保留旧书签兼容，2567 不再映射到宿主机；该路径不参与正式 TLS 配置。
+客户端后端地址由统一解析器生成：HTTPS 页面默认使用 HTTPS API 与 WSS，HTTP 页面默认使用 HTTP API 与 WS；显式配置其中一个 `VITE_SERVER_*` 地址时，另一条链路从同一主机、端口和路径推导，并清除查询串、片段及尾部斜杠。正式环境仍建议显式写出两项，Traefik 终止 TLS 后把 HTTPS/WSS 转发到容器内同一个 HTTP 服务。iMac 是 HTTP/WS 测试环境：专用 Compose 覆盖让 Web Nginx 在 80 端口同源代理 HTTP、`/matchmake/*` 与 WebSocket，3000 只保留旧书签兼容，2567 不再映射到宿主机；该路径不参与正式 TLS 配置。Web Nginx 通过 Docker 内置 DNS 动态解析 `server` 服务名，并把上游放在共享内存区；因此只替换服务端容器、其内网地址变化时，不必同时重启 Web 网关，已有页面可在短暂断线后继续用原房间凭证恢复。
 
 房间即使尚无任何连接也已进入业务生命周期：等待宽限内允许首名玩家加入，超时仍为空则主动断开并从房间注册表移除。最后一名玩家离开后复用同一机制重新计时，避免仅通过 HTTP 创建、从未完成 WebSocket 加入的房间永久驻留。
 

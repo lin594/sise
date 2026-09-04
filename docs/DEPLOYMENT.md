@@ -103,7 +103,7 @@ Web 镜像会同源提供 `/site.webmanifest`、favicon 和手机主屏图标。
 - 兼容旧书签：`http://imac.tajuren.cn:3000/`
 - 同源健康检查：`http://imac.tajuren.cn/health`
 
-无端口在这里表示标准 HTTP 80 端口，不代表 HTTPS。服务端 2567 不映射到宿主机，只允许 Web 容器通过 Compose 内网访问。正式环境仍必须按上一节配置 HTTPS/WSS；不要把 iMac 的 HTTP/WS 构建参数复制到公网部署，也不要使用自签证书制造浏览器安全警告。
+无端口在这里表示标准 HTTP 80 端口，不代表 HTTPS。服务端 2567 不映射到宿主机，只允许 Web 容器通过 Compose 内网访问。Web 镜像使用 Nginx 1.27（实际版本不得低于 1.27.3），通过 Docker DNS 动态跟踪 `server` 容器地址；单独强制重建服务端后不需要重启 Web 网关。正式环境仍必须按上一节配置 HTTPS/WSS；不要把 iMac 的 HTTP/WS 构建参数复制到公网部署，也不要使用自签证书制造浏览器安全警告。
 
 确认本地 commit 已推送后执行：
 
@@ -153,6 +153,8 @@ IMAC_CORS_ALLOWED_ORIGINS=http://test-host.example,http://test-host.example:3000
 ```bash
 npm run smoke:imac-gateway
 ```
+
+发布前还应按 [TESTING.md](TESTING.md) 运行 `LIVE_RECOVERY_RECREATE_SERVER=1` 的活动房恢复冒烟；它会真正替换 server 容器，同时断言 Web 网关容器未重启且原牌局可继续。
 
 ## 7. 环境变量
 

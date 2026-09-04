@@ -15,6 +15,7 @@ const backendUrl = new URL(process.env.LIVE_RECOVERY_BACKEND_URL || baseUrl.href
 const sshHost = process.env.LIVE_RECOVERY_SSH_HOST || "imac";
 const remotePath = process.env.LIVE_RECOVERY_REMOTE_PATH || "~/workspace/lin594/sise";
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL || "chrome";
+const recreateServer = process.env.LIVE_RECOVERY_RECREATE_SERVER === "1";
 
 assert.match(baseUrl.protocol, /^https?:$/);
 assert.match(backendUrl.protocol, /^https?:$/);
@@ -36,6 +37,21 @@ async function waitForHealth(timeoutMs = 30_000) {
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   throw new Error(`Health check did not recover within ${timeoutMs}ms`);
+}
+
+async function readRemoteContainerId(service) {
+  assert.match(service, /^(?:server|web)$/u);
+  const { stdout } = await execFileAsync(
+    "ssh",
+    [
+      sshHost,
+      `cd ${remotePath} && docker compose -f docker-compose.yml -f docker-compose.imac.yml ps -q ${service}`,
+    ],
+    { timeout: 30_000, maxBuffer: 1024 * 1024 },
+  );
+  const containerId = stdout.trim();
+  assert.ok(containerId, `${service} container is not running`);
+  return containerId;
 }
 
 async function readDeclarationSnapshot(page) {
@@ -90,12 +106,31 @@ try {
 
   // Give the debounced persistence writer enough time before inducing failure.
   await page.waitForTimeout(500);
+  const serverContainerIdBefore = recreateServer ? await readRemoteContainerId("server") : null;
+  const webContainerIdBefore = recreateServer ? await readRemoteContainerId("web") : null;
   const restartStartedAt = Date.now();
   await execFileAsync(
     "ssh",
-    [sshHost, `cd ${remotePath} && docker compose restart server`],
+    [
+      sshHost,
+      recreateServer
+        ? `cd ${remotePath} && docker compose -f docker-compose.yml -f docker-compose.imac.yml up -d --force-recreate --no-deps server`
+        : `cd ${remotePath} && docker compose restart server`,
+    ],
     { timeout: 120_000, maxBuffer: 1024 * 1024 },
   );
+  if (recreateServer) {
+    assert.notEqual(
+      await readRemoteContainerId("server"),
+      serverContainerIdBefore,
+      "server container was not recreated",
+    );
+    assert.equal(
+      await readRemoteContainerId("web"),
+      webContainerIdBefore,
+      "web gateway restarted during the server-only recovery test",
+    );
+  }
   await waitForHealth();
 
   const restoredNotice = page.locator('[data-testid="connection-status"][data-state="restored"]');
@@ -134,6 +169,8 @@ try {
     seatPreserved: true,
     privateHandCount: after.handLabels.length,
     recoveredDecisionAdvanced: true,
+    serverOperation: recreateServer ? "recreate" : "restart",
+    webGatewayPreserved: recreateServer || undefined,
   }));
 } catch (error) {
   if (page) {

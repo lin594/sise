@@ -18,7 +18,10 @@ test("the iMac override exposes only the same-origin web gateway", async () => {
 test("Nginx forwards every browser-facing game route and websocket upgrade", async () => {
   const nginx = await readFile(path.join(repositoryRoot, "client/nginx/default.conf"), "utf8");
 
-  expect(nginx).toMatch(/upstream\s+game_server\s*\{[\s\S]*?server\s+server:2567;/u);
+  expect(nginx).toMatch(
+    /upstream\s+game_server\s*\{[\s\S]*?zone\s+game_server\s+64k;[\s\S]*?resolver\s+127\.0\.0\.11\s+valid=10s\s+ipv6=off;[\s\S]*?server\s+server:2567\s+resolve;/u,
+  );
+  expect(nginx).toContain("resolver_timeout 5s;");
   expect(nginx).toContain("location ^~ /matchmake/");
   expect(nginx).toContain("error_page 418 = @game_websocket;");
   expect(nginx).toContain("if ($connection_upgrade = upgrade)");
@@ -29,4 +32,14 @@ test("Nginx forwards every browser-facing game route and websocket upgrade", asy
   expect(nginx).toContain("proxy_set_header Upgrade $http_upgrade;");
   expect(nginx).toContain("proxy_set_header Connection $connection_upgrade;");
   expect(nginx).toContain("proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;");
+});
+
+test("the recovery smoke can replace only the backend container", async () => {
+  const smoke = await readFile(path.join(repositoryRoot, "scripts/live-room-recovery-smoke.mjs"), "utf8");
+
+  expect(smoke).toContain('process.env.LIVE_RECOVERY_RECREATE_SERVER === "1"');
+  expect(smoke).toContain("up -d --force-recreate --no-deps server");
+  expect(smoke).toContain('readRemoteContainerId("server")');
+  expect(smoke).toContain('readRemoteContainerId("web")');
+  expect(smoke).toContain('"web gateway restarted during the server-only recovery test"');
 });
