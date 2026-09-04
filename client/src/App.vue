@@ -2495,7 +2495,9 @@ const roundOutcomeText = computed(() => {
 });
 
 const settlementPlayers = computed<RoundResultPlayer[]>(() => roundResult.value?.players ?? []);
-const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const settlementReady = computed(
+  () => isEnded.value && Boolean(roundResult.value) && settlementPlayers.value.length === 4,
+);
 const isCumulativeSettlement = computed(() => roundResult.value?.scoringMode === "cumulative");
 const settlementRoundNumber = computed(() => Math.max(1, Number(roundResult.value?.roundNumber ?? 1)));
 const mySettlementPlayer = computed<RoundResultPlayer | null>(() =>

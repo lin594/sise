@@ -1537,7 +1537,7 @@ const roundOutcomeText = computed(() => {
     return derivedWinnerId.value === mySeatId.value ? "你胡牌了" : `${winnerName.value} 胡牌`;
 });
 const settlementPlayers = computed(() => roundResult.value?.players ?? []);
-const settlementReady = computed(() => Boolean(roundResult.value) && settlementPlayers.value.length === 4);
+const settlementReady = computed(() => isEnded.value && Boolean(roundResult.value) && settlementPlayers.value.length === 4);
 const isCumulativeSettlement = computed(() => roundResult.value?.scoringMode === "cumulative");
 const settlementRoundNumber = computed(() => Math.max(1, Number(roundResult.value?.roundNumber ?? 1)));
 const mySettlementPlayer = computed(() => settlementPlayers.value.find((player) => player.clientId === mySeatId.value) ?? null);
