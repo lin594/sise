@@ -64,6 +64,22 @@ test("canChi allows exact same-color frame", () => {
   assert.equal(canChi(hand, response, []), true);
 });
 
+test("getChiPlans enumerates the exact duplicate cards a player may choose", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [
+    c("rm1", "red", "ma"),
+    c("rm2", "red", "ma"),
+    c("rp1", "red", "pao"),
+    c("rp2", "red", "pao"),
+  ];
+  const frames = getChiPlans(hand, response, []).filter((plan) => plan.kind === "jmp");
+  assert.equal(frames.length, 4);
+  assert.deepEqual(
+    new Set(frames.map((plan) => plan.handCards.map((card) => card.id).sort().join("|"))),
+    new Set(["rm1|rp1", "rm1|rp2", "rm2|rp1", "rm2|rp2"]),
+  );
+});
+
 test("canChi allows a gold response as a single exposed group", () => {
   const response = c("gold1", "gold", "gong");
   const hand = [c("rm", "red", "ma"), c("rp", "red", "pao")];
@@ -105,4 +121,15 @@ test("canChi pair mode with two exact cards consumes two from hand", () => {
   assert.ok(pair);
   assert.equal(pair!.handCards.length, 2);
   assert.equal(pair!.poolCards.length, 0);
+});
+
+test("getChiPlans lets a player choose any exact pair identities", () => {
+  const response = c("rj", "red", "ju");
+  const hand = [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju")];
+  const pairs = getChiPlans(hand, response, []).filter((plan) => plan.kind === "pair");
+  assert.equal(pairs.length, 3);
+  assert.deepEqual(
+    new Set(pairs.map((plan) => plan.handCards.map((card) => card.id).sort().join("|"))),
+    new Set(["rj1|rj2", "rj1|rj3", "rj2|rj3"]),
+  );
 });

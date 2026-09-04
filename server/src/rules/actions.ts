@@ -53,32 +53,45 @@ function countMatching(cards: Card[], target: Card): number {
   return cards.filter((card) => isSameFace(card, target)).length;
 }
 
-function buildConsumePlan(
-  requirements: FaceNeed[],
-  hand: Card[],
-  _wildcardPool: Card[],
-): ConsumePlan | null {
-  const picked: Card[] = [];
-  const consumed = new Set<string>();
-
-  for (const need of requirements) {
-    const exact = hand.find(
-      (card) => !consumed.has(card.id) && card.color === need.color && card.type === need.type,
-    );
-    if (exact) {
-      picked.push(exact);
-      consumed.add(exact.id);
-      continue;
+function buildConsumePlans(requirements: FaceNeed[], hand: Card[]): ConsumePlan[] {
+  const picks: Card[][] = [];
+  const walk = (index: number, picked: Card[], consumed: Set<string>): void => {
+    if (index >= requirements.length) {
+      picks.push([...picked]);
+      return;
     }
-    return null;
-  }
-
-  return {
-    handCards: picked,
-    poolCards: [],
-    wildcardFromHand: [],
-    wildcardFromPool: [],
+    const need = requirements[index]!;
+    for (const card of hand) {
+      if (
+        consumed.has(card.id) ||
+        card.color !== need.color ||
+        card.type !== need.type
+      ) {
+        continue;
+      }
+      consumed.add(card.id);
+      picked.push(card);
+      walk(index + 1, picked, consumed);
+      picked.pop();
+      consumed.delete(card.id);
+    }
   };
+  walk(0, [], new Set());
+
+  const seen = new Set<string>();
+  return picks.flatMap((handCards) => {
+    const fingerprint = handCards.map((card) => card.id).sort().join("|");
+    if (seen.has(fingerprint)) {
+      return [];
+    }
+    seen.add(fingerprint);
+    return [{
+      handCards,
+      poolCards: [],
+      wildcardFromHand: [],
+      wildcardFromPool: [],
+    }];
+  });
 }
 
 export function canPeng(hand: Card[], response: Card): boolean {
@@ -215,45 +228,44 @@ function chiRequirements(response: Card): Array<{ kind: ChiPlan["kind"]; needs: 
   return list;
 }
 
-function buildPairConsumePlan(response: Card, hand: Card[]): ConsumePlan | null {
+function buildPairConsumePlans(response: Card, hand: Card[]): ConsumePlan[] {
   const exactMatches = hand.filter((card) => card.color === response.color && card.type === response.type);
   if (exactMatches.length === 0) {
-    return null;
+    return [];
   }
   // 当手里已有两张同目标牌时，pair 响应按“三张组合”执行，避免降级为两张对子。
-  const consumeFromHand = exactMatches.length >= 2 ? exactMatches.slice(0, 2) : [exactMatches[0]];
-  return {
-    handCards: consumeFromHand,
+  const pickCount = exactMatches.length >= 2 ? 2 : 1;
+  return combinations(exactMatches, pickCount).map((handCards) => ({
+    handCards,
     poolCards: [],
     wildcardFromHand: [],
     wildcardFromPool: [],
-  };
+  }));
 }
 
-export function getChiPlans(hand: Card[], response: Card, wildcardPool: Card[] = []): ChiPlan[] {
+export function getChiPlans(hand: Card[], response: Card, _wildcardPool: Card[] = []): ChiPlan[] {
   const plans: ChiPlan[] = [];
   const seen = new Set<string>();
 
   for (const item of chiRequirements(response)) {
-    const consume =
+    const consumePlans =
       item.kind === "pair"
-        ? buildPairConsumePlan(response, hand)
-        : buildConsumePlan(item.needs, hand, wildcardPool);
-    if (!consume) {
-      continue;
+        ? buildPairConsumePlans(response, hand)
+        : buildConsumePlans(item.needs, hand);
+    for (const consume of consumePlans) {
+      const fp = [
+        item.kind,
+        ...consume.handCards.map((c) => c.id),
+        ...consume.poolCards.map((c) => c.id),
+      ]
+        .sort()
+        .join("|");
+      if (seen.has(fp)) {
+        continue;
+      }
+      seen.add(fp);
+      plans.push({ kind: item.kind, ...consume });
     }
-    const fp = [
-      item.kind,
-      ...consume.handCards.map((c) => c.id),
-      ...consume.poolCards.map((c) => c.id),
-    ]
-      .sort()
-      .join("|");
-    if (seen.has(fp)) {
-      continue;
-    }
-    seen.add(fp);
-    plans.push({ kind: item.kind, ...consume });
   }
 
   return plans;
