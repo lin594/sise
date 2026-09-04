@@ -2381,7 +2381,7 @@ watch(
   color: #e0f2fe;
   display: inline-grid;
   place-items: center;
-  font-size: clamp(0.66rem, 1.35vh, 0.78rem);
+  font-size: max(0.8125rem, 13px);
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
@@ -2414,7 +2414,7 @@ watch(
   color: #e0f2fe;
   display: inline-grid;
   place-items: center;
-  font-size: clamp(0.66rem, 1.4vh, 0.8rem);
+  font-size: max(0.8125rem, 13px);
   font-weight: 850;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -4126,7 +4126,7 @@ watch(
   }
 
   .discard-tip {
-    font-size: clamp(0.62rem, 2.7vh, 0.74rem);
+    font-size: max(0.8125rem, 13px);
   }
 
   .hand-scroll-tools {
@@ -4145,7 +4145,7 @@ watch(
     min-width: 4.25rem;
     height: 36px;
     padding: 0 0.28rem;
-    font-size: max(0.75rem, 12px);
+    font-size: max(0.8125rem, 13px);
   }
 
   .discard-token.mode-large {

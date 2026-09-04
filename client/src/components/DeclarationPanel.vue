@@ -1348,7 +1348,7 @@ button:focus-visible {
   min-width: 4.25rem;
   height: 36px;
   padding: 0 0.28rem;
-  font-size: max(0.75rem, 12px);
+  font-size: max(0.8125rem, 13px);
 }
 
 .declare-panel.compact .hand-rail {

@@ -50,6 +50,9 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   for (const countText of await page.getByTestId("opponent-hand-count").allTextContents()) {
     expect(countText.trim()).toMatch(/^\d+张$/);
   }
+  const counterFontSizes = await page.locator("[data-testid='opponent-hand-count'], [data-testid='bot-identity']")
+    .evaluateAll((elements) => elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)));
+  expect(Math.min(...counterFontSizes)).toBeGreaterThanOrEqual(13);
   await expect(page.getByTestId("dealer-badge")).toHaveCount(1);
   await expect(page.getByTestId("dealer-card")).toHaveCount(1);
   await expect(page.getByText(/抽牌者/)).toHaveCount(0);
@@ -1960,6 +1963,9 @@ test.describe("legacy small landscape gameplay", () => {
         minimumPagerFontSize: Math.min(
           ...pagerButtons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize)),
         ),
+        rangeFontSize: Number.parseFloat(getComputedStyle(
+          panel.querySelector<HTMLElement>("[data-testid='declare-hand-visible-range']")!,
+        ).fontSize),
         minimumPrimaryLabelFontSize: Math.min(
           ...primaryLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)),
         ),
@@ -1978,6 +1984,7 @@ test.describe("legacy small landscape gameplay", () => {
     expect(declarationGeometry.minimumPagerWidth).toBeGreaterThanOrEqual(44);
     expect(declarationGeometry.minimumPagerHeight).toBeGreaterThanOrEqual(36);
     expect(declarationGeometry.minimumPagerFontSize).toBeGreaterThanOrEqual(13);
+    expect(declarationGeometry.rangeFontSize).toBeGreaterThanOrEqual(13);
     expect(declarationGeometry.minimumPrimaryLabelFontSize).toBeGreaterThanOrEqual(14);
     expect(declarationGeometry.minimumHelperLabelFontSize).toBeGreaterThanOrEqual(12);
 
@@ -2022,6 +2029,10 @@ test.describe("legacy small landscape gameplay", () => {
       const self = document.querySelector<HTMLElement>(".self-info-card")!;
       const hand = document.querySelector<HTMLElement>(".hand")!;
       const dock = document.querySelector<HTMLElement>(".action-dock")!;
+      const opponentCounts = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count']"));
+      const botIdentities = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='bot-identity']"));
+      const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
+      const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const handRect = hand.getBoundingClientRect();
       const cardRects = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card")).map((card) => {
         const rect = card.getBoundingClientRect();
@@ -2060,6 +2071,14 @@ test.describe("legacy small landscape gameplay", () => {
         minimumCardFontSize: Math.min(...cardRects.map((rect) => rect.fontSize)),
         minimumDockButtonWidth: Math.min(...visibleDockButtons.map((button) => button.getBoundingClientRect().width)),
         minimumDockButtonHeight: Math.min(...visibleDockButtons.map((button) => button.getBoundingClientRect().height)),
+        minimumOpponentCountFontSize: Math.min(
+          ...opponentCounts.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        ),
+        minimumBotIdentityFontSize: Math.min(
+          ...botIdentities.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        ),
+        handCountFontSize: Number.parseFloat(getComputedStyle(handCount).fontSize),
+        handRangeFontSize: Number.parseFloat(getComputedStyle(handRange).fontSize),
       };
     });
 
@@ -2075,6 +2094,10 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.minimumCardFontSize).toBeGreaterThanOrEqual(22);
     expect(metrics.minimumDockButtonWidth).toBeGreaterThanOrEqual(40);
     expect(metrics.minimumDockButtonHeight).toBeGreaterThanOrEqual(40);
+    expect(metrics.minimumOpponentCountFontSize).toBeGreaterThanOrEqual(13);
+    expect(metrics.minimumBotIdentityFontSize).toBeGreaterThanOrEqual(13);
+    expect(metrics.handCountFontSize).toBeGreaterThanOrEqual(13);
+    expect(metrics.handRangeFontSize).toBeGreaterThanOrEqual(13);
     const landscapeTableGeometry = await expectCompactTableContained(page);
     const handScrollTools = page.getByTestId("hand-scroll-tools");
     const handScrollPrev = page.getByTestId("hand-scroll-prev");
@@ -2121,6 +2144,15 @@ test.describe("legacy small landscape gameplay", () => {
         ),
         minimumButtonWidth: Math.min(...buttons.map((button) => button.offsetWidth)),
         minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
+        minimumCounterFontSize: Math.min(
+          ...Array.from(
+            document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count'], [data-testid='bot-identity']"),
+          ).map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        ),
+        handCountFontSize: Number.parseFloat(getComputedStyle(document.querySelector<HTMLElement>(".discard-tip")!).fontSize),
+        handRangeFontSize: Number.parseFloat(getComputedStyle(
+          document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!,
+        ).fontSize),
       };
     });
     expect(rotatedControls.minimumCardWidth).toBeGreaterThanOrEqual(40);
@@ -2128,6 +2160,9 @@ test.describe("legacy small landscape gameplay", () => {
     expect(rotatedControls.minimumGlyphFontSize).toBeGreaterThanOrEqual(22);
     expect(rotatedControls.minimumButtonWidth).toBeGreaterThanOrEqual(40);
     expect(rotatedControls.minimumButtonHeight).toBeGreaterThanOrEqual(40);
+    expect(rotatedControls.minimumCounterFontSize).toBeGreaterThanOrEqual(13);
+    expect(rotatedControls.handCountFontSize).toBeGreaterThanOrEqual(13);
+    expect(rotatedControls.handRangeFontSize).toBeGreaterThanOrEqual(13);
     const rotatedHandRange = await readVisibleHandRange(handVisibleRange);
     expect(rotatedHandRange.start).toBe(1);
     expect(rotatedHandRange.end).toBeLessThan(rotatedHandRange.total);
