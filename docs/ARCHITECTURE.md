@@ -71,6 +71,7 @@
 - `seatId` 是 `seat_0` 至 `seat_3` 的固定逻辑座位，回合和规则始终按 seatId 运转。
 - 第一次加入时确定 `playerToken + seatId`；客户端按房间保存 token，重连时用它恢复原座。新 token 使用系统加密随机源生成 192 位随机值；服务端仍接受旧格式，避免升级后把已有玩家踢出原座。
 - `profileToken` 是当前浏览器的免注册档案凭证，跨房间但不代表正式账号；它只关联昵称与聚合战绩，清除浏览器数据后不可恢复。
+- 客户端所有业务存储都经过 `safeStorage`：读取依次尝试 `localStorage`、`sessionStorage` 和模块内存，写入与删除覆盖所有可用层；任一属性读取或方法调用抛错都被隔离。只有 `localStorage` 真实可读写时，界面才宣称设备会长期记住昵称并显示本机档案。Colyseus 客户端初始化也在同一保护边界内，避免第三方 SDK 读取被禁用的 Web Storage 时中断入房。
 - 同一 `playerToken + seatId` 同时只允许一个活动会话。新窗口或新设备恢复座位时，服务端先向旧连接发送 `session_replaced`，再用 4102 关闭码结束旧连接；旧客户端必须停止重连，不能与新会话反复抢座。
 - 昵称在首次入座时完成 Unicode 归一化、去除不可见控制字符并成为该座位的稳定显示名；同房真人同名会自动追加“（2）”等后缀。预先配置的机器人创建时从友好昵称池随机选择一个未被本桌占用的名称，此后该座位名称保持稳定；重连请求不能借机改名。
 - 昵称页进入未连接的玩法大厅时只更新本机 `sise_entry_name` 与历史列表，不创建房间或签发 token。玩家可以从玩法大厅返回修改昵称；只有选择单人练习、好友同桌或打开邀请链接后才发起房间连接，因此返回修改不需要执行离房流程。
@@ -187,6 +188,7 @@ client/src/App.vue                    页面阶段、设置、声明与结算
 client/src/composables/useGuestProfile.ts 本机档案凭证、读取与结算后刷新
 client/src/composables/useRoom.ts     连接、重连、消息和个人退出
 client/src/composables/useTurnAlert.ts 单次响铃、震动、标题和可选中文语音提醒
+client/src/utils/safeStorage.ts       无异常的本地/会话/页面内存存储适配
 client/src/components/GameBoard.vue  牌桌、座位、牌组、手牌与操作坞
 client/src/components/ActionPanel.vue 合法动作和弃牌确认
 server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
