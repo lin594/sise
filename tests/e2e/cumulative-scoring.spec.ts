@@ -49,6 +49,21 @@ test("friend-room cumulative scoring survives a lobby return and adds the next r
   await finishRoundThroughDebugHu(page);
   await expect(page.getByTestId("round-overview")).toContainText("本桌第 1 局");
   await expect(page.getByTestId("round-overview")).toContainText("你本桌累计");
+  const cumulativeHeaderGeometry = await page.getByTestId("round-overview").evaluate((overview) => {
+    const fixedHead = overview.closest<HTMLElement>(".settlement-fixed-head")!;
+    const visibleItems = [...overview.children].filter((item) =>
+      getComputedStyle(item).position !== "absolute",
+    ) as HTMLElement[];
+    return {
+      fixedHeadHeight: fixedHead.offsetHeight,
+      rowCount: new Set(visibleItems.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return Math.round((rect.top + rect.height / 2) / 2) * 2;
+      })).size,
+    };
+  });
+  expect(cumulativeHeaderGeometry.fixedHeadHeight).toBeLessThanOrEqual(64);
+  expect(cumulativeHeaderGeometry.rowCount).toBeLessThanOrEqual(2);
   const firstMe = page.locator(".settlement-item").filter({ hasText: "累计牌友（你）" });
   const firstRoundScore = scoreFromText(await firstMe.locator(".score-total").textContent());
   const firstCumulative = scoreFromText(await firstMe.locator(".cumulative-total").textContent());

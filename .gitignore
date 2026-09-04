@@ -8,6 +8,7 @@ dist/
 !.env.example
 
 test-results/
+output/playwright/
 client/src/**/*.js
 client/src/**/*.d.ts
 !client/src/env.d.ts

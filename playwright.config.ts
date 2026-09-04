@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  outputDir: "./output/playwright/test-results",
   // Stateful game-flow specs share one local Colyseus process. Running them in
   // parallel makes their operation timers contend and produces false timeouts.
   workers: 1,
@@ -12,9 +13,24 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173",
     headless: true,
-    channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     trace: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        browserName: "chromium",
+        channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
+      },
+    },
+    {
+      name: "webkit-responsive",
+      testMatch: /responsive-release\.spec\.ts/,
+      use: {
+        browserName: "webkit",
+      },
+    },
+  ],
   webServer: process.env.PLAYWRIGHT_USE_EXTERNAL_SERVERS
     ? undefined
     : [

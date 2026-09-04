@@ -306,7 +306,7 @@
               你本桌累计
               <b :class="scoreToneClass(mySettlementPlayer.cumulativeScore)">{{ signedScore(mySettlementPlayer.cumulativeScore) }}分</b>
             </span>
-            <small>你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
+            <small class="settlement-overview-help">你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
           </div>
         </div>
 
@@ -4907,32 +4907,116 @@ watch(
   padding: 0.65rem;
 }
 
-.layout.compact-viewport .settlement-scroll-region {
-  margin-top: 0.45rem;
-  padding-right: 0.15rem;
+.layout.compact-viewport .settlement-fixed-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
 }
 
-.layout.compact-viewport .settlement-list {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.35rem;
+.layout.compact-viewport .settlement-fixed-head h2 {
+  flex: 0 0 auto;
+  font-size: 1.08rem;
+  line-height: 1.15;
 }
 
 .layout.compact-viewport .round-overview,
 .layout.compact-viewport .settlement-loading {
-  padding: 0.55rem 0.7rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+  padding: 0.28rem 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.55rem;
+  row-gap: 0.12rem;
+  line-height: 1.15;
+}
+
+.layout.compact-viewport .round-overview strong,
+.layout.compact-viewport .settlement-loading strong {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.layout.compact-viewport .round-overview > span,
+.layout.compact-viewport .settlement-loading > span {
+  flex: 0 0 auto;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.layout.compact-viewport .round-overview .round-number {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.layout.compact-viewport .round-overview .cumulative-overview {
+  width: auto;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.84rem;
+}
+
+.layout.compact-viewport .settlement-overview-help {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.layout.compact-viewport .settlement-scroll-region {
+  margin-top: 0.3rem;
+  padding-right: 0.15rem;
+}
+
+.layout.compact-viewport .end-global-info {
+  display: none;
+}
+
+.layout.compact-viewport .settlement-player-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.layout.compact-viewport .settlement-player-section > h3 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.layout.compact-viewport .settlement-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.25rem;
 }
 
 .layout.compact-viewport .settlement-name {
-  font-size: 1rem;
+  margin-bottom: 0.1rem;
+  font-size: 0.94rem;
   font-weight: 750;
 }
 
 .layout.compact-viewport .settlement-item {
-  padding: 0.35rem 0.55rem;
+  padding: 0.14rem 0.45rem;
 }
 
 .layout.compact-viewport .settlement-head {
   min-height: 2.5rem;
+  gap: 0.45rem;
 }
 
 .layout.compact-viewport .settlement-item[open] > .settlement-head {
@@ -4958,6 +5042,21 @@ watch(
   line-height: 1.4;
 }
 
+.layout.compact-viewport .settlement-meta,
+.layout.compact-viewport .settlement-toggle-label {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.layout.compact-viewport .score-total {
+  font-size: 1rem;
+}
+
+.layout.compact-viewport .score-caption,
+.layout.compact-viewport .cumulative-total {
+  font-size: 0.7rem;
+}
+
 .layout.compact-viewport .settlement-cards :deep(.size-sm.mode-large) {
   width: clamp(2rem, 9vh, 2.25rem);
   height: clamp(2.2rem, 10vh, 2.5rem);
@@ -4974,8 +5073,8 @@ watch(
 }
 
 .layout.compact-viewport .hu-panel > .end-actions {
-  margin-top: 0.45rem;
-  padding-top: 0.45rem;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
 }
 
 .layout.compact-viewport .ghost.mini,
@@ -4995,131 +5094,6 @@ watch(
 
 .layout.ultra-compact-viewport .rules-list {
   line-height: 1.45;
-}
-
-.layout.ultra-compact-viewport .settlement-fixed-head {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.layout.ultra-compact-viewport .settlement-fixed-head h2 {
-  flex: 0 0 auto;
-  font-size: 1.08rem;
-  line-height: 1.15;
-}
-
-.layout.ultra-compact-viewport .round-overview,
-.layout.ultra-compact-viewport .settlement-loading {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-top: 0;
-  padding: 0.32rem 0.55rem;
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  line-height: 1.15;
-}
-
-.layout.ultra-compact-viewport .round-overview strong,
-.layout.ultra-compact-viewport .settlement-loading strong {
-  font-size: 1rem;
-  white-space: nowrap;
-}
-
-.layout.ultra-compact-viewport .round-overview > span,
-.layout.ultra-compact-viewport .settlement-loading > span {
-  font-size: 0.88rem;
-  white-space: nowrap;
-}
-
-.layout.ultra-compact-viewport .round-overview small {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.layout.ultra-compact-viewport .round-overview .cumulative-overview {
-  position: static;
-  width: auto;
-  height: auto;
-  margin: 0;
-  padding: 0.2rem 0.42rem;
-  overflow: visible;
-  clip: auto;
-  white-space: nowrap;
-  border: 0;
-  font-size: 0.84rem;
-}
-
-.layout.ultra-compact-viewport .settlement-scroll-region {
-  margin-top: 0.3rem;
-}
-
-.layout.ultra-compact-viewport .end-global-info {
-  display: none;
-}
-
-.layout.ultra-compact-viewport .settlement-player-section {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.layout.ultra-compact-viewport .settlement-player-section > h3 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.layout.ultra-compact-viewport .settlement-list {
-  gap: 0.25rem;
-}
-
-.layout.ultra-compact-viewport .settlement-item {
-  padding: 0.14rem 0.45rem;
-}
-
-.layout.ultra-compact-viewport .settlement-head {
-  min-height: 2.5rem;
-  gap: 0.45rem;
-}
-
-.layout.ultra-compact-viewport .settlement-name {
-  margin-bottom: 0.1rem;
-  font-size: 0.94rem;
-}
-
-.layout.ultra-compact-viewport .settlement-meta,
-.layout.ultra-compact-viewport .settlement-toggle-label {
-  font-size: 0.75rem;
-  line-height: 1.2;
-}
-
-.layout.ultra-compact-viewport .score-total {
-  font-size: 1rem;
-}
-
-.layout.ultra-compact-viewport .score-caption,
-.layout.ultra-compact-viewport .cumulative-total {
-  font-size: 0.7rem;
-}
-
-.layout.ultra-compact-viewport .hu-panel > .end-actions {
-  margin-top: 0.3rem;
-  padding-top: 0.3rem;
 }
 
 .layout.reduce-motion :deep(*),

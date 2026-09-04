@@ -11,6 +11,7 @@
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
     "e2e": "npm run build && playwright test",
+    "e2e:responsive": "npm run build && playwright test tests/e2e/responsive-release.spec.ts",
     "e2e:headed": "npm run build && playwright test --headed",
     "smoke:imac-gateway": "node scripts/imac-gateway-smoke.mjs",
     "smoke:live-recovery": "node scripts/live-room-recovery-smoke.mjs",

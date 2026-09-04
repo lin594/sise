@@ -21,6 +21,7 @@ npm run dev
 ```bash
 npm run build
 npm --prefix server test
+npm run e2e:responsive
 npm run e2e
 ```
 

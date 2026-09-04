@@ -42,20 +42,21 @@
         </div>
       </header>
 
-      <div v-if="!untimed" class="declare-progress" aria-hidden="true">
-        <div class="declare-progress-fill" :style="{ width: `${progressPercent}%` }"></div>
-      </div>
+      <div class="declare-scroll-region">
+        <div v-if="!untimed" class="declare-progress" aria-hidden="true">
+          <div class="declare-progress-fill" :style="{ width: `${progressPercent}%` }"></div>
+        </div>
 
-      <p v-if="submitted" class="declare-submitted" role="status">
-        <span>✓</span> 声明已提交，正在等待其他玩家
-      </p>
+        <p v-if="submitted" class="declare-submitted" role="status">
+          <span>✓</span> 声明已提交，正在等待其他玩家
+        </p>
 
-      <p v-else-if="!handReady" class="declare-syncing" role="status" aria-live="polite">
-        <span class="loading-mark"></span>
-        <span><strong>正在同步完整手牌</strong><small>手牌到齐后才能调整和确认声明，请稍候。</small></span>
-      </p>
+        <p v-else-if="!handReady" class="declare-syncing" role="status" aria-live="polite">
+          <span class="loading-mark"></span>
+          <span><strong>正在同步完整手牌</strong><small>手牌到齐后才能调整和确认声明，请稍候。</small></span>
+        </p>
 
-      <template v-if="handReady && hand.length">
+        <template v-if="handReady && hand.length">
         <section class="hand-preview" aria-labelledby="declare-hand-title">
           <div class="section-heading compact-heading">
             <div>
@@ -186,11 +187,12 @@
             <p class="kong-note">亮鱼变化时会重新计算；手动选择后会保留你的数量。</p>
           </section>
         </div>
-      </template>
+        </template>
 
-      <div v-else-if="handReady" class="declaration-loading" role="status">
-        <span class="loading-mark"></span>
-        正在同步手牌…
+        <div v-else-if="handReady" class="declaration-loading" role="status">
+          <span class="loading-mark"></span>
+          正在同步手牌…
+        </div>
       </div>
 
       <footer class="declare-footer">
@@ -646,7 +648,7 @@ onBeforeUnmount(() => {
   --kong-soft: #fff1d6;
   width: min(96vw, 1080px);
   max-height: 92vh;
-  overflow: auto;
+  overflow: hidden;
   color: var(--ink);
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 20px;
@@ -661,17 +663,26 @@ onBeforeUnmount(() => {
   -webkit-overflow-scrolling: touch;
 }
 
+.declare-scroll-region {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .declare-header {
-  position: sticky;
-  top: calc(-1 * clamp(0.8rem, 2vh, 1.15rem));
+  position: relative;
   z-index: 5;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: calc(-1 * clamp(0.8rem, 2vh, 1.15rem));
-  padding: clamp(0.8rem, 2vh, 1.15rem) 0 0.55rem;
-  background: linear-gradient(180deg, #fffefa 84%, rgba(255, 254, 250, 0));
+  margin-top: 0;
+  padding: 0 0 0.55rem;
+  background: #fffefa;
 }
 
 .declare-heading {
@@ -1146,16 +1157,16 @@ onBeforeUnmount(() => {
 }
 
 .declare-footer {
-  position: sticky;
-  bottom: calc(-1 * clamp(0.8rem, 2vh, 1.15rem));
+  position: relative;
   z-index: 5;
   display: grid;
   grid-template-columns: minmax(11rem, auto) minmax(20rem, 1fr);
   align-items: center;
   gap: 0.7rem;
-  margin: 0 calc(-1 * clamp(0.8rem, 2vh, 1.15rem)) calc(-1 * clamp(0.8rem, 2vh, 1.15rem));
-  padding: 0.6rem clamp(0.8rem, 2vh, 1.15rem) clamp(0.8rem, 2vh, 1.15rem);
-  background: linear-gradient(180deg, rgba(247, 243, 233, 0), #f7f3e9 24%);
+  margin: 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--line);
+  background: #f7f3e9;
 }
 
 .footer-meta {
@@ -1275,9 +1286,11 @@ button:focus-visible {
 }
 
 .declare-panel.compact .declare-header {
-  top: -0.55rem;
-  margin-top: -0.55rem;
-  padding: 0.55rem 0 0.3rem;
+  padding: 0 0 0.3rem;
+}
+
+.declare-panel.compact .declare-scroll-region {
+  gap: 0.42rem;
 }
 
 .declare-panel.compact .declare-heading p {
@@ -1397,10 +1410,9 @@ button:focus-visible {
 }
 
 .declare-panel.compact .declare-footer {
-  bottom: -0.55rem;
   grid-template-columns: minmax(12rem, auto) minmax(19rem, 1fr);
-  margin: 0 -0.55rem -0.55rem;
-  padding: 0.4rem 0.55rem 0.55rem;
+  margin: 0;
+  padding: 0.4rem 0 0;
 }
 
 .declare-panel.compact .confirm-declaration {

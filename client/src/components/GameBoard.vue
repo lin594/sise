@@ -1179,7 +1179,12 @@ const displayPrivateHand = computed<Card[]>(() => {
     return [];
   }
   const shouldLimit = showDealAnimation.value || openingDealIntroActive.value;
-  const limit = shouldLimit ? Math.max(0, visibleHandCount.value || 0) : props.privateHand.length;
+  const authoritativeLimit = openingDealIntroActive.value
+    ? Math.max(0, props.privateHand.length - 1)
+    : props.privateHand.length;
+  const limit = shouldLimit
+    ? Math.min(authoritativeLimit, Math.max(0, visibleHandCount.value || 0))
+    : props.privateHand.length;
   return props.privateHand.slice(0, limit);
 });
 const handVisibleRangeLabel = computed(() => {
@@ -1962,7 +1967,9 @@ function triggerDealAnimation(roundKey = currentDealRoundKey()): number {
   const plan = buildDealPlan();
   const start = dealStartPoint();
   if (!plan.length || !start) {
-    visibleHandCount.value = props.privateHand.length;
+    visibleHandCount.value = isOpeningDealIntroState()
+      ? Math.max(0, props.privateHand.length - 1)
+      : props.privateHand.length;
     return 0;
   }
 
@@ -2013,13 +2020,16 @@ function triggerDealAnimation(roundKey = currentDealRoundKey()): number {
     dispatchUntil(targetCount);
     const fullHand = props.privateHand.length;
     if (fullHand > 0) {
-      const reveal = Math.min(fullHand, Math.ceil((targetCount / plan.length) * fullHand));
+      const authoritativeLimit = isOpeningDealIntroState() ? Math.max(0, fullHand - 1) : fullHand;
+      const reveal = Math.min(authoritativeLimit, Math.ceil((targetCount / plan.length) * fullHand));
       visibleHandCount.value = Math.max(visibleHandCount.value, reveal);
     }
     if (elapsed >= finishMs) {
       dealFrame = null;
       showDealAnimation.value = false;
-      visibleHandCount.value = props.privateHand.length;
+      visibleHandCount.value = isOpeningDealIntroState()
+        ? Math.max(0, props.privateHand.length - 1)
+        : props.privateHand.length;
       return;
     }
     dealFrame = requestAnimationFrame(renderFrame);

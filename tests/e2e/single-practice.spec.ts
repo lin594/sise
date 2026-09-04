@@ -27,13 +27,15 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
       handCount: board.handCards.length,
       bodyExcerpt: board.bodyExcerpt,
     });
-    if (board.handCards.length >= 20) {
-      throw new Error(
-        `Opening deal intro revealed a full hand before declaration. Samples=${JSON.stringify(samples.slice(-8))}`,
-      );
-    }
     await page.waitForTimeout(80);
   }
+  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
+  expect(fullHandCount).toBeGreaterThan(0);
+  expect(
+    samples.every((sample) => sample.handCount < fullHandCount),
+    `Opening deal intro revealed a full ${fullHandCount}-card hand before declaration. Samples=${JSON.stringify(samples.slice(-8))}`,
+  ).toBe(true);
 }
 
 test("each practice round presents one bounded deal sequence", async ({ page }) => {
@@ -66,7 +68,7 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
   });
 
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await assertOpeningDealDoesNotRevealFullHand(page);
   await expect.poll(
     () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
     { timeout: 8_000 },
@@ -83,7 +85,7 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
   await finishRoundThroughDebugHu(page);
   await expect(page.getByTestId("settlement-panel")).toBeVisible({ timeout: 20_000 });
   await page.getByTestId("next-round-trigger").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await assertOpeningDealDoesNotRevealFullHand(page);
   await expect.poll(
     () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
     { timeout: 8_000 },
