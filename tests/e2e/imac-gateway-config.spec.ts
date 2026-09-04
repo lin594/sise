@@ -20,6 +20,9 @@ test("Nginx forwards every browser-facing game route and websocket upgrade", asy
 
   expect(nginx).toMatch(/upstream\s+game_server\s*\{[\s\S]*?server\s+server:2567;/u);
   expect(nginx).toContain("location ^~ /matchmake/");
+  expect(nginx).toContain("error_page 418 = @game_websocket;");
+  expect(nginx).toContain("if ($connection_upgrade = upgrade)");
+  expect(nginx).toContain("location @game_websocket");
   for (const route of ["/health", "/guest-profile", "/room-id", "/rooms", "/reset-room", "/private-state"]) {
     expect(nginx).toContain(`location = ${route}`);
   }
