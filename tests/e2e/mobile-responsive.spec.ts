@@ -1554,7 +1554,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText("真人在线");
   });
 
-  test("keeps long exposed cards readable without covering their faces", async ({ page }, testInfo) => {
+  test("keeps exposed cards readable and opponent groups folded in every mode", async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("sise_game_display_preferences_v2", JSON.stringify({
         ownCards: "adaptive",
@@ -1615,6 +1615,23 @@ test.describe("compact landscape gameplay", () => {
     expect(desktopGeometry.height).toBeGreaterThanOrEqual(44);
     expect(desktopGeometry.fontSize).toBeGreaterThanOrEqual(12);
     await page.screenshot({ path: testInfo.outputPath("long-exposed-cards-1280x720.png") });
+
+    await page.setViewportSize({ width: 667, height: 375 });
+    await page.getByTestId("game-settings").click();
+    await page.getByTestId("card-mode-table-large").click();
+    await page.getByRole("button", { name: "关闭设置" }).click();
+    await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+
+    const opponentStrip = page.getByTestId("player-top").locator(".mini-card-strip.stacked").first();
+    const opponentCards = opponentStrip.locator(".mini-card.mode-large");
+    await expect(opponentCards).toHaveCount(3);
+    const largeGeometry = await opponentCards.evaluateAll((items) => items.map((item) => {
+      const rect = item.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, width: rect.width };
+    }));
+    expect(largeGeometry[1].left).toBeLessThan(largeGeometry[0].right);
+    expect(largeGeometry[0].right - largeGeometry[1].left).toBeLessThan(largeGeometry[0].width * 0.45);
+    await page.screenshot({ path: testInfo.outputPath("large-folded-opponent-group-667x375.png") });
   });
 
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {

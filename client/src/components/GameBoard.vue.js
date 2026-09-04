@@ -1306,10 +1306,19 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
@@ -1317,6 +1326,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-zone']} */ ;
@@ -1680,7 +1690,7 @@ if (__VLS_ctx.topPlayer) {
                 (group.badge);
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "mini-card-strip" },
+                ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
@@ -1852,7 +1862,7 @@ if (__VLS_ctx.leftPlayer) {
                 (group.badge);
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "mini-card-strip" },
+                ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
@@ -2132,7 +2142,7 @@ if (__VLS_ctx.rightPlayer) {
                 (group.badge);
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-                ...{ class: "mini-card-strip" },
+                ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
@@ -2745,6 +2755,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
@@ -2773,6 +2784,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-board']} */ ;
@@ -2824,6 +2836,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;

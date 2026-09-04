@@ -85,7 +85,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`top-group-card-${card.id}`"
@@ -179,7 +179,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`left-group-card-${card.id}`"
@@ -329,7 +329,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
               <CardComp
                 v-for="card in group.cards"
                 :key="`right-group-card-${card.id}`"
@@ -2693,7 +2693,8 @@ watch(
   min-width: 0;
 }
 
-.mini-card-strip.mode-long {
+.mini-card-strip.mode-long,
+.mini-card-strip.stacked {
   flex-wrap: nowrap;
   gap: 0;
   padding-right: 0.22rem;
@@ -2703,7 +2704,12 @@ watch(
   margin-left: -0.32rem;
 }
 
-.mini-card-strip.mode-long .mini-card:nth-child(even) {
+.mini-card-strip.stacked:not(.mode-long) .mini-card + .mini-card {
+  margin-left: -0.28rem;
+}
+
+.mini-card-strip.mode-long .mini-card:nth-child(even),
+.mini-card-strip.stacked .mini-card:nth-child(even) {
   transform: translateY(2px);
 }
 
