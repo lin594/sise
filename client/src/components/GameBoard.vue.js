@@ -845,6 +845,7 @@ const compactCenterHint = computed(() => {
     }
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
+const crowdedActionDock = computed(() => canAct.value && (props.actions ?? []).filter((action) => action.enabled || Boolean(action.deferred)).length >= 4);
 const centerPointerDirection = computed(() => {
     if (String(props.state?.responsePhase ?? "") === "collective") {
         return null;
@@ -1987,6 +1988,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['corner-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
@@ -2086,6 +2088,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
@@ -2093,6 +2097,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ onKeydown: (__VLS_ctx.clearChiSelection) },
     ref: "boardRef",
     ...{ class: "board" },
+    ...{ class: ({ 'crowded-action-dock': __VLS_ctx.crowdedActionDock }) },
     'data-testid': "game-board",
     'data-response-phase': (props.responsePhase ?? ''),
     'data-response-placement': (__VLS_ctx.responseCardPlacement),
@@ -3561,6 +3566,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             seatCountdownPercent: seatCountdownPercent,
             passiveCollectiveWait: passiveCollectiveWait,
             compactCenterHint: compactCenterHint,
+            crowdedActionDock: crowdedActionDock,
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
             dealerCeremonyCard: dealerCeremonyCard,

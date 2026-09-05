@@ -313,6 +313,17 @@ onBeforeUnmount(clearMoreTimeRetryTimer);
   align-items: center;
   justify-content: center;
   gap: clamp(0.3rem, calc(var(--effective-vw, 1vw) * 0.8), 0.55rem);
+}
+
+.action-row {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-content: center;
+  overflow: visible;
+}
+
+.compact-status {
   overflow: hidden;
 }
 

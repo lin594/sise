@@ -2,6 +2,7 @@
   <div
     ref="boardRef"
     class="board"
+    :class="{ 'crowded-action-dock': crowdedActionDock }"
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
@@ -1705,6 +1706,10 @@ const compactCenterHint = computed(() => {
   }
   return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
+
+const crowdedActionDock = computed(() =>
+  canAct.value && (props.actions ?? []).filter((action) => action.enabled || Boolean(action.deferred)).length >= 4,
+);
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
   if (String(props.state?.responsePhase ?? "") === "collective") {
@@ -4492,6 +4497,10 @@ watch(
     gap: calc(var(--effective-vh, 1vh) * 0.4);
   }
 
+  .board.crowded-action-dock {
+    grid-template-columns: clamp(6rem, calc(var(--effective-vw, 1vw) * 15), 7.5rem) minmax(0, 1fr) clamp(10.5rem, calc(var(--effective-vw, 1vw) * 21), 12rem);
+  }
+
   .table {
     height: 100%;
     max-height: none;
@@ -4860,6 +4869,10 @@ watch(
   .board {
     grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(8.25rem, 23vw, 9rem);
     gap: 2px;
+  }
+
+  .board.crowded-action-dock {
+    grid-template-columns: clamp(5.4rem, 15vw, 6rem) minmax(0, 1fr) clamp(10.5rem, 30vw, 11rem);
   }
 }
 

@@ -178,6 +178,8 @@ let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
