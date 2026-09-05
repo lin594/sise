@@ -21,6 +21,7 @@ export interface DebugScenarioContext {
   broadcastAvailableActions: () => void;
   startCollectivePolling: () => void;
   tickBots: () => void;
+  setHumanForcedPassDelayMs: (delayMs: number) => void;
   endRound: (lastAction: string, winnerId: string, groups: string[]) => void;
 }
 
@@ -111,6 +112,18 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_collective_zu4" || scenario === "chi_local_upper_zu4") {
+    for (const id of context.playerOrder) {
+      const tablePlayer = context.state.players.get(id);
+      if (tablePlayer) tablePlayer.declaredKongs = 0;
+      if (id !== seatId) {
+        // Keep this fixture about the human's deferred Chi only. Reusing the
+        // random opening hands can give a bot two white Zu cards, whose valid
+        // Peng correctly outranks Chi and makes the regression nondeterministic.
+        context.playerHands.set(id, [
+          { id: `chi-bystander-${id}-${seq}`, color: "red", type: "shi" },
+        ]);
+      }
+    }
     add("shared-zu-yellow", "yellow", "zu");
     add("shared-zu-red", "red", "zu");
     add("shared-zu-green", "green", "zu");
@@ -155,7 +168,31 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
-  } else if (scenario === "collective_no_actions") {
+  } else if (scenario === "collective_no_actions" || scenario === "collective_passive_wait") {
+    if (scenario === "collective_passive_wait") {
+      // Give the second browser enough time to consume its independent state
+      // and private-message queues. Production keeps the configured 3 seconds.
+      context.setHumanForcedPassDelayMs(5_000);
+      const selfIndex = context.playerOrder.indexOf(seatId);
+      const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
+      for (const id of context.playerOrder) {
+        context.playerHands.set(id, [
+          { id: `passive-${id}-shi-${seq}`, color: "red", type: "shi" },
+          { id: `passive-${id}-xiang-${seq}`, color: "green", type: "xiang" },
+          { id: `passive-${id}-zu-${seq}`, color: "white", type: "zu" },
+        ]);
+      }
+      context.setPendingResponse(
+        createPendingResponse(ownerId, { id: `passive-response-${seq}`, color: "yellow", type: "ju" }, "upper"),
+      );
+      context.state.phase = "playing";
+      context.state.responsePhase = "collective";
+      context.state.currentPlayerId = ownerId;
+      context.state.currentTurnPlayerId = ownerId;
+      context.state.pollOriginPlayerId = ownerId;
+      context.setResponseCard(context.getPendingResponse()!.card, "upper");
+      context.state.lastAction = `DEBUG: collective_passive_wait#${seq}`;
+    } else {
     add("d8", "red", "shi");
     add("d9", "green", "xiang");
     add("d10", "white", "zu");
@@ -167,6 +204,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = context.getPendingResponse()!.ownerId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
+    }
   } else if (scenario === "early_collective_choice") {
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
@@ -428,6 +466,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   }
   if (
     scenario === "collective_no_actions" ||
+    scenario === "collective_passive_wait" ||
     scenario === "early_collective_choice" ||
     scenario === "chi_collective_zu4" ||
     scenario === "hu_fail_case"

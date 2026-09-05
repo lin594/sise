@@ -67,7 +67,7 @@ test("entering discard after a collective meld restores the winner as the displa
   }
 });
 
-test("online human forced pass waits for the fairness window even after an early Pass", async () => {
+test("online human forced pass keeps the fairness window without exposing a Pass control", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.humanForcedPassDelayMs = 40;
   room.pendingResponse = {
@@ -95,13 +95,11 @@ test("online human forced pass waits for the fairness window even after an early
   assert.equal(room.pendingResponse.collectives.has("B"), false);
   assert.equal(room.state.responseEndsAt >= startedAt + 30, true);
   assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
-
-  const decisionKey = room.buildDecisionTimerSnapshot("B").decisionKey;
-  room.handleAction(client, { action: "pass", decisionKey });
-  assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "pass", candidateId: undefined });
+  assert.equal(room.buildDecisionTimerSnapshot("C").endsAt, room.state.responseEndsAt);
+  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
   assert.equal(resolved, false);
   assert.equal(room.collectiveCursor, 0);
-  assert.equal(sent.some((message) => message.event === "action_received"), true);
+  assert.equal(sent.some((message) => message.event === "action_received"), false);
 
   await new Promise((resolve) => setTimeout(resolve, 15));
   assert.equal(resolved, false);
@@ -131,9 +129,31 @@ test("a private preselection cannot make a human responder vanish instantly", as
   assert.equal(room.collectiveResponderId, "B");
   assert.equal(room.collectiveCursor, 0);
   assert.equal(resolved, false);
+  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(room.collectiveCursor, 1);
   assert.equal(resolved, true);
+});
+
+test("a collective responder with a meaningful choice still receives Pass", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.humanForcedPassDelayMs = 40;
+  room.playerHands.set("B", [
+    mkCard("peng-1", "red", "ju", "upper"),
+    mkCard("peng-2", "red", "ju", "upper"),
+    mkCard("spare", "green", "ma", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("peng-target", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "B";
+
+  const actions = room.buildClientDecisionView("B").availableActions;
+  assert.equal(actions.some((entry: { action: string }) => entry.action === "peng"), true);
+  assert.equal(actions.some((entry: { action: string }) => entry.action === "pass"), true);
 });
 
 test("no-response on upper enters local_upper for next player", () => {
@@ -410,6 +430,18 @@ test("a valid action gets an authoritative receipt before the room advances", ()
       message: "操作已收到，正在继续牌局。",
     },
   );
+
+  room.handleAction(client, { action: "pass", decisionKey: "play:12" });
+  assert.equal(room.pendingResponse.collectives.size, 1);
+  assert.equal(
+    sent.filter((message) => message.event === "action_received").length,
+    1,
+  );
+  assert.equal(
+    sent.at(-1)?.event,
+    "available_actions",
+  );
+  assert.deepEqual(sent.at(-1)?.payload?.items, []);
 });
 
 test("a delayed discard from an older decision window cannot remove a card", () => {

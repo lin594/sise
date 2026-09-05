@@ -225,7 +225,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
-  private readonly humanForcedPassDelayMs = Math.max(
+  private humanForcedPassDelayMs = Math.max(
     0,
     Number(process.env.HUMAN_FORCED_PASS_DELAY_MS ?? 3000),
   );
@@ -422,17 +422,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         const ok = canUseDebugScenario(this.debugScenariosEnabled, seatId, this.state.hostPlayerId)
           ? this.applyDebugScenario(seatId!, scenario)
           : false;
-        // Make the debug acknowledgement a real synchronization barrier. The
-        // Schema patch and this message otherwise travel independently, so a
-        // browser test can observe the new lastAction with the previous card.
+        // Make the debug acknowledgement a table-wide synchronization barrier.
+        // Schema patches and private messages otherwise travel independently,
+        // so a second browser can still be rendering the previous decision.
         if (ok) {
-          this.syncClientState(client);
+          for (const connectedClient of this.clients) {
+            this.syncClientState(connectedClient);
+          }
         }
         client.send("debug_applied", {
           scenario,
           ok,
           ts: Date.now(),
-          actions: ok && seatId ? this.getAvailableActions(seatId) : [],
+          actions: ok && seatId ? this.buildClientDecisionView(seatId).availableActions : [],
         });
       });
     }
@@ -1999,8 +2001,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     decisionKey: string;
   } {
     const untimed = this.isPracticeDecisionUntimed(seatId);
-    const preselecting = this.canSeatPreselectCollective(seatId);
-    const totalMs = untimed || preselecting
+    const totalMs = untimed
       ? 0
       : this.state.phase === "declaring"
         ? this.declareTimerTotalMs || this.declareTimeoutMs
@@ -2012,7 +2013,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       canRequestMoreTime: this.canSeatRequestMoreTime(seatId),
       extensionSeconds: Math.ceil(this.timeExtensionMs / 1000),
       totalMs,
-      endsAt: untimed || preselecting
+      endsAt: untimed
         ? 0
         : this.state.phase === "declaring"
           ? this.state.declareEndsAt
@@ -2453,6 +2454,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!this.acceptsDecisionKey(seatId, decisionKey)) {
       this.traceStep("action_stale", `seat=${seatId} decision=${decisionKey ?? "-"}`);
       this.rejectAction(client, "stale_decision", seatId);
+      this.sendAvailableActionsToClient(client, seatId);
+      return;
+    }
+    if (this.state.responsePhase === "collective" && pending.collectives.has(seatId)) {
+      this.traceStep("action_duplicate_collective", `seat=${seatId} action=${action}`);
+      this.rejectAction(client, "action_unavailable", seatId);
       this.sendAvailableActionsToClient(client, seatId);
       return;
     }
@@ -3255,6 +3262,41 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return filteredEntries;
   }
 
+  /**
+   * 作用：把内部规则动作投影成当前客户端仍能改变的真实操作。
+   * 关键输入/输出：输入座位 ID；输出该座位可提交的动作与现有决策计时。
+   * 副作用：无。仅收紧私有动作列表，不改变公共轮询和超时推进。
+   */
+  private buildClientDecisionView(seatId: string): {
+    availableActions: AvailableActionEntry[];
+    decisionTimer: ReturnType<FourColorGameRoom["buildDecisionTimerSnapshot"]>;
+  } {
+    const decisionTimer = this.buildDecisionTimerSnapshot(seatId);
+    const internalActions = this.getAvailableActions(seatId);
+    if (this.state.phase !== "playing") {
+      return { availableActions: [], decisionTimer };
+    }
+
+    if (this.state.responsePhase === "collective") {
+      const canStillChoose = Boolean(
+        this.pendingResponse &&
+        !this.pendingResponse.collectives.has(seatId) &&
+        (this.collectiveResponderId === seatId || this.canSeatPreselectCollective(seatId)),
+      );
+      const hasMeaningfulChoice = internalActions.some(
+        (entry) => entry.action !== "pass" && (entry.enabled || Boolean(entry.deferred)),
+      );
+      if (!canStillChoose || !hasMeaningfulChoice) {
+        return { availableActions: [], decisionTimer };
+      }
+    }
+
+    return {
+      availableActions: internalActions.filter((entry) => entry.enabled || Boolean(entry.deferred)),
+      decisionTimer,
+    };
+  }
+
   // ===== 日志与广播 =====
 
   /**
@@ -3281,9 +3323,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private sendAvailableActionsToClient(client: Client, seatId: string): void {
+    const decisionView = this.buildClientDecisionView(seatId);
     client.send("available_actions", {
-      items: this.getAvailableActions(seatId),
-      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
+      items: decisionView.availableActions,
+      decisionTimer: decisionView.decisionTimer,
     });
   }
 
@@ -3405,14 +3448,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private buildClientRoomSnapshot(seatId: string) {
+    const decisionView = this.buildClientDecisionView(seatId);
     return {
       ...this.buildRoomSnapshot(),
       privateHand: (this.playerHands.get(seatId) ?? []).map((card) => ({
         ...card,
         isHidden: false,
       })),
-      availableActions: this.getAvailableActions(seatId),
-      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
+      availableActions: decisionView.availableActions,
+      decisionTimer: decisionView.decisionTimer,
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
     };
   }
@@ -3422,6 +3466,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!seatId) {
       return null;
     }
+    const decisionView = this.buildClientDecisionView(seatId);
     return {
       seatId,
       roomId: this.roomId,
@@ -3429,8 +3474,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ...card,
         isHidden: false,
       })),
-      availableActions: this.getAvailableActions(seatId),
-      decisionTimer: this.buildDecisionTimerSnapshot(seatId),
+      availableActions: decisionView.availableActions,
+      decisionTimer: decisionView.decisionTimer,
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
     };
   }
@@ -4171,6 +4216,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
         startCollectivePolling: () => this.startCollectivePolling(),
         tickBots: () => this.tickBots(),
+        setHumanForcedPassDelayMs: (delayMs) => {
+          this.humanForcedPassDelayMs = Math.max(0, Math.trunc(delayMs));
+        },
         endRound: (lastAction, winnerId, groups) => this.endRound(lastAction, winnerId, groups),
       },
       seatId,

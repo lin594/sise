@@ -1648,7 +1648,7 @@ t("room: later human may preselect without advancing or cancelling the current r
     ?.candidates?.[0]?.id;
   assert.ok(candidateId);
   assert.equal(earlyActions.find((item: any) => item.action === "peng")?.enabled, true);
-  assert.equal(room.buildDecisionTimerSnapshot("C").endsAt, 0);
+  assert.equal(room.buildDecisionTimerSnapshot("C").endsAt, room.state.responseEndsAt);
 
   room.handleAction({ sessionId: "sessC", send: () => {} }, { action: "peng", candidateId });
 
