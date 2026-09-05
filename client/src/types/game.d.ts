@@ -12,9 +12,11 @@ export interface GameDisplayPreferences {
     seatDirection: SeatDirection;
     turnAlert: TurnAlertMode;
     spokenTurnGuidance: boolean;
+    showCardColorAssist: boolean;
     reduceMotion: boolean;
     keepScreenAwake: boolean;
 }
+export type ActionSendResult = "sent" | "locked" | "disconnected" | "invalid";
 export interface Card {
     id: string;
     color: string;

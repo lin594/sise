@@ -165,12 +165,7 @@ const actionFeedback = computed<ActionFeedback | null>(() => {
   if (feedback?.decisionKey && props.decisionKey && feedback.decisionKey !== props.decisionKey) {
     return null;
   }
-  if (!feedback || feedback.visible !== false) {
-    return feedback;
-  }
-  return feedback.status === "received" && feedback.decisionKey === props.decisionKey && needsDecision.value
-    ? { ...feedback, message: "已收到", visible: true }
-    : null;
+  return feedback?.status === "rejected" && feedback.visible !== false ? feedback : null;
 });
 const submissionLocked = computed(
   () => Boolean(props.decisionKey) && rawActionFeedback.value?.decisionKey === props.decisionKey &&
@@ -249,10 +244,7 @@ function isClickable(item: PanelAction): boolean {
 
 function isActionEnabled(item: PanelAction): boolean {
   if (!props.canAct || busy.value || submissionLocked.value || !isClickable(item)) return false;
-  if (item.action !== "chi" || !item.candidates?.length) return true;
-  return Boolean(
-    props.selectedChiCandidateId && item.candidates.some((candidate) => candidate.id === props.selectedChiCandidateId),
-  );
+  return item.action !== "chi" || Boolean(item.candidates?.length);
 }
 
 function actionText(item: PanelAction): string {
@@ -263,7 +255,6 @@ function actionText(item: PanelAction): string {
 }
 
 function actionAccessibleLabel(item: PanelAction): string {
-  if (item.action === "chi" && !isActionEnabled(item)) return "吃，请先直接选择组成吃法的手牌";
   return actionText(item);
 }
 

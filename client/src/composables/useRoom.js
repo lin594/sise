@@ -13,7 +13,6 @@ const HTTP_URL = BACKEND_HTTP_URL;
 const MAX_RECONNECT_DELAY_MS = 15000;
 const RESTORED_NOTICE_MS = 6000;
 const ACTION_RECEIPT_WAIT_MS = 2500;
-const ACTION_RECEIVED_VISIBLE_MS = 1600;
 const ACTION_REJECTED_VISIBLE_MS = 3600;
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
@@ -478,8 +477,9 @@ export function useRoom(playerName = "Player") {
     function beginActionSubmission(decisionKey) {
         showActionFeedback({
             status: "pending",
-            message: "操作已提交，正在确认。",
+            message: "",
             decisionKey,
+            visible: false,
         });
         actionFeedbackTimer = window.setTimeout(() => {
             actionFeedbackTimer = null;
@@ -487,7 +487,7 @@ export function useRoom(playerName = "Player") {
                 return;
             }
             if (decisionTimer.value.decisionKey && decisionTimer.value.decisionKey !== decisionKey) {
-                showActionFeedback({ status: "received", message: "牌局已继续。", decisionKey }, ACTION_RECEIVED_VISIBLE_MS);
+                showActionFeedback({ status: "received", message: "", decisionKey, visible: false });
                 return;
             }
             showActionFeedback({
@@ -1396,9 +1396,10 @@ export function useRoom(playerName = "Player") {
                 }
                 showActionFeedback({
                     status: "received",
-                    message: String(payload?.message ?? "").trim() || "操作已收到，正在继续牌局。",
+                    message: "",
                     decisionKey,
-                }, ACTION_RECEIVED_VISIBLE_MS);
+                    visible: false,
+                });
             });
             joined.onMessage("action_rejected", (payload) => {
                 if (!isCurrentJoinedRoom()) {
@@ -1507,7 +1508,7 @@ export function useRoom(playerName = "Player") {
                 if (!isCurrentJoinedRoom()) {
                     return;
                 }
-                declareError.value = payload?.reason ?? "声明提交失败";
+                declareError.value = payload?.reason ?? "开局确认失败";
                 pushLog(`DECLARE_REJECTED ${declareError.value}`);
             });
             joined.onLeave((code) => {
@@ -1593,48 +1594,52 @@ export function useRoom(playerName = "Player") {
     }
     function sendAction(input) {
         if (!room.value) {
-            return;
+            return "disconnected";
         }
         if (typeof input === "string") {
             const action = normalizeAction(input);
             if (!action) {
-                return;
+                return "invalid";
             }
             const decisionKey = decisionTimer.value.decisionKey;
             if (actionSubmissionLocked(decisionKey)) {
-                return;
+                return "locked";
             }
             if (safeRoomSend("action", decisionKey ? { action, decisionKey } : { action })) {
                 beginActionSubmission(decisionKey);
+                return "sent";
             }
             else {
                 reportUnsentAction(decisionKey);
+                return "disconnected";
             }
-            return;
         }
         const action = normalizeAction(input.action);
         if (!action) {
-            return;
+            return "invalid";
         }
         const candidateId = typeof input.candidateId === "string" ? input.candidateId.trim() : "";
         const decisionKey = decisionTimer.value.decisionKey;
         if (actionSubmissionLocked(decisionKey)) {
-            return;
+            return "locked";
         }
         if (candidateId) {
             if (safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) })) {
                 beginActionSubmission(decisionKey);
+                return "sent";
             }
             else {
                 reportUnsentAction(decisionKey);
+                return "disconnected";
             }
-            return;
         }
         if (safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) })) {
             beginActionSubmission(decisionKey);
+            return "sent";
         }
         else {
             reportUnsentAction(decisionKey);
+            return "disconnected";
         }
     }
     function sendDiscardCard(cardId) {
@@ -1658,7 +1663,7 @@ export function useRoom(playerName = "Player") {
     function declareSetup(payload) {
         declareError.value = "";
         if (!connected.value || !safeRoomSend("declare_setup", payload)) {
-            declareError.value = "网络连接不稳定，声明没有发出；恢复后请重新提交。";
+            declareError.value = "网络连接不稳定，确认没有发出；恢复后请重新提交。";
             return false;
         }
         return true;

@@ -20,6 +20,7 @@ let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;

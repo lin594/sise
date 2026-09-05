@@ -17,6 +17,7 @@ import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { getCardLabelText } from "@/utils/cardText";
+import { getRoundKey, isQuietSelfDiscardWait } from "@/utils/gameFlowPresentation";
 const FriendInviteQrDialog = defineAsyncComponent(() => import("@/components/FriendInviteQrDialog.vue"));
 const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
@@ -39,6 +40,7 @@ function readDisplayPreferences() {
                 seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
                 turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
                 spokenTurnGuidance: parsed.spokenTurnGuidance === true,
+                showCardColorAssist: parsed.showCardColorAssist === true,
                 reduceMotion: parsed.reduceMotion === true,
                 keepScreenAwake: parsed.keepScreenAwake !== false,
             };
@@ -54,6 +56,7 @@ function readDisplayPreferences() {
         seatDirection: "counterclockwise",
         turnAlert: "sound-vibration",
         spokenTurnGuidance: false,
+        showCardColorAssist: false,
         reduceMotion: false,
         keepScreenAwake: true,
     };
@@ -580,7 +583,7 @@ const interactionPausedMessage = computed(() => {
     }
     return "正在恢复牌局，请稍候";
 });
-const pendingDeferredChiCandidateId = ref(null);
+const pendingDeferredChiIntent = ref(null);
 const pendingDeferredGrab = ref(false);
 const candidateTargetCard = computed(() => {
     return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null);
@@ -1289,13 +1292,19 @@ function onPanelSubmit(request) {
     }
     if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
         const candidateId = candidateIdFromRequest(request);
-        if (candidateId) {
-            pendingDeferredChiCandidateId.value = candidateId;
-            sendAction("pass");
-        }
+        const targetCardId = String(candidateTargetCard.value?.id ?? "");
+        if (!candidateId || !targetCardId)
+            return;
+        pendingDeferredChiIntent.value = {
+            roundKey: getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase),
+            targetCardId,
+            candidateId,
+            collectiveDecisionKey: decisionTimer.value.decisionKey,
+        };
+        sendAction("pass");
         return;
     }
-    pendingDeferredChiCandidateId.value = null;
+    pendingDeferredChiIntent.value = null;
     pendingDeferredGrab.value = false;
     sendAction(request);
 }
@@ -1303,29 +1312,42 @@ function cardLabel(card) {
     return getCardLabelText(card);
 }
 function submitDeferredChiIfReady() {
-    const candidateId = pendingDeferredChiCandidateId.value;
-    if (!candidateId) {
+    const intent = pendingDeferredChiIntent.value;
+    if (!intent) {
+        return;
+    }
+    const currentRoundKey = getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase);
+    const targetCardId = String(candidateTargetCard.value?.id ?? "");
+    if (currentRoundKey !== intent.roundKey || (targetCardId && targetCardId !== intent.targetCardId)) {
+        pendingDeferredChiIntent.value = null;
         return;
     }
     const phase = String(state.value?.responsePhase ?? "");
     if (phase === "collective") {
         return;
     }
-    const isLocalChiPhase = (phase === "local_upper" || phase === "local_draw") && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+    const isLocalChiPhase = phase === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
     if (!isLocalChiPhase) {
-        pendingDeferredChiCandidateId.value = null;
+        pendingDeferredChiIntent.value = null;
         return;
     }
+    const decisionKey = decisionTimer.value.decisionKey;
+    if (!decisionKey || decisionKey === intent.collectiveDecisionKey)
+        return;
     const chiEntry = availableActions.value.find((item) => item.action === "chi" && item.enabled);
     if (!chiEntry) {
+        if (availableActions.value.length > 0)
+            pendingDeferredChiIntent.value = null;
         return;
     }
-    if (!chiEntry.candidates?.some((candidate) => candidate.id === candidateId)) {
-        pendingDeferredChiCandidateId.value = null;
+    if (!chiEntry.candidates?.some((candidate) => candidate.id === intent.candidateId)) {
+        pendingDeferredChiIntent.value = null;
         return;
     }
-    pendingDeferredChiCandidateId.value = null;
-    sendAction({ action: "chi", candidateId });
+    const result = sendAction({ action: "chi", candidateId: intent.candidateId });
+    if (result === "sent" || result === "invalid") {
+        pendingDeferredChiIntent.value = null;
+    }
 }
 function submitDeferredGrabIfReady() {
     if (!pendingDeferredGrab.value) {
@@ -1360,6 +1382,12 @@ watch(() => availableActions.value, () => {
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
 }, { deep: true });
+watch(() => decisionTimer.value.decisionKey, () => submitDeferredChiIfReady());
+watch(() => `${connectionState.value}|${actionFeedback.value?.decisionKey ?? ""}|${actionFeedback.value?.status ?? ""}`, () => submitDeferredChiIfReady());
+watch(() => Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay), (automatic) => {
+    if (automatic)
+        pendingDeferredChiIntent.value = null;
+});
 watch(() => [
     roomNavigationProtected.value,
     activeRoomId.value,
@@ -1388,9 +1416,11 @@ onMounted(() => {
         nowMs.value = Date.now();
     }, 500);
     writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+    document.documentElement.classList.toggle("show-card-color-assist", displayPreferences.value.showCardColorAssist);
     void resumeStoredRoomSession();
 });
 onUnmounted(() => {
+    document.documentElement.classList.remove("show-card-color-assist");
     roomNavigationGuardMounted = false;
     window.removeEventListener("popstate", handleRoomNavigationPopState);
     if (roomNavigationReleaseTimer !== null) {
@@ -1465,6 +1495,7 @@ watch(() => mePlayer.value?.lobbyReady, (ready) => {
 });
 watch(displayPreferences, (preferences) => {
     writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
+    document.documentElement.classList.toggle("show-card-color-assist", preferences.showCardColorAssist);
 }, { deep: true });
 function clearRoundStartPending() {
     roundStartPending.value = false;
@@ -1947,6 +1978,14 @@ const turnHint = computed(() => {
         return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
     }
     if (state.value?.responsePhase === "collective") {
+        if (isQuietSelfDiscardWait({
+            responsePhase: state.value.responsePhase,
+            responseSource: state.value.responseCard?.source,
+            originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
+            viewerPlayerId: mySeatId.value,
+        })) {
+            return "";
+        }
         if (canAct.value) {
             return "全局待响阶段：你可以选择胡/开/碰/过";
         }
@@ -2612,10 +2651,12 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
             'rotated-phone-portrait': __VLS_ctx.isRotatedPhonePortrait,
             'game-tools-active': __VLS_ctx.showGameTools,
             'reduce-motion': __VLS_ctx.displayPreferences.reduceMotion,
+            'show-card-color-assist': __VLS_ctx.displayPreferences.showCardColorAssist,
         }) },
     'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
     'data-reduce-motion': (__VLS_ctx.displayPreferences.reduceMotion ? 'true' : 'false'),
+    'data-card-color-assist': (__VLS_ctx.displayPreferences.showCardColorAssist ? 'true' : 'false'),
     'data-connection-state': (__VLS_ctx.connectionState),
     ...{ style: ({
             '--physical-viewport-width': `${__VLS_ctx.viewportWidth}px`,

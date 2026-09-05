@@ -1,4 +1,4 @@
-import type { ActionFeedback, ActionRequest, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
+import type { ActionFeedback, ActionRequest, ActionSendResult, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
 type ConnectOptions = {
     nameOverride?: string;
     roomId?: string;
@@ -801,7 +801,7 @@ export declare function useRoom(playerName?: string): {
     connect: (options?: string | ConnectOptions) => Promise<boolean>;
     retryConnection: () => void;
     clearActionLogs: () => void;
-    sendAction: (input: ActionRequest) => void;
+    sendAction: (input: ActionRequest) => ActionSendResult;
     sendDiscardCard: (cardId: string) => void;
     declareKongs: (count: number) => void;
     declareSetup: (payload: {

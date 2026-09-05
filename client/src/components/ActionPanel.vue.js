@@ -54,12 +54,7 @@ const actionFeedback = computed(() => {
     if (feedback?.decisionKey && props.decisionKey && feedback.decisionKey !== props.decisionKey) {
         return null;
     }
-    if (!feedback || feedback.visible !== false) {
-        return feedback;
-    }
-    return feedback.status === "received" && feedback.decisionKey === props.decisionKey && needsDecision.value
-        ? { ...feedback, message: "已收到", visible: true }
-        : null;
+    return feedback?.status === "rejected" && feedback.visible !== false ? feedback : null;
 });
 const submissionLocked = computed(() => Boolean(props.decisionKey) && rawActionFeedback.value?.decisionKey === props.decisionKey &&
     (rawActionFeedback.value.status === "pending" || rawActionFeedback.value.status === "received"));
@@ -129,9 +124,7 @@ function isClickable(item) {
 function isActionEnabled(item) {
     if (!props.canAct || busy.value || submissionLocked.value || !isClickable(item))
         return false;
-    if (item.action !== "chi" || !item.candidates?.length)
-        return true;
-    return Boolean(props.selectedChiCandidateId && item.candidates.some((candidate) => candidate.id === props.selectedChiCandidateId));
+    return item.action !== "chi" || Boolean(item.candidates?.length);
 }
 function actionText(item) {
     if (item.deferredKind === "pass" || (item.action === "pass" && props.responsePhase === "local_upper")) {
@@ -140,8 +133,6 @@ function actionText(item) {
     return { hu: "胡", kai: "开", peng: "碰", chi: "吃", pass: "过" }[item.action];
 }
 function actionAccessibleLabel(item) {
-    if (item.action === "chi" && !isActionEnabled(item))
-        return "吃，请先直接选择组成吃法的手牌";
     return actionText(item);
 }
 function onClick(item) {

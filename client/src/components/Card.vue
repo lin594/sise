@@ -82,7 +82,7 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   border-radius: 999px;
   background: rgba(255, 253, 247, 0.92);
   color: #111827;
-  display: grid;
+  display: none;
   place-items: center;
   font-family: "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
   font-size: 9px;
@@ -90,6 +90,10 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   line-height: 1;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
   pointer-events: none;
+}
+
+:global(html.show-card-color-assist .color-seal) {
+  display: grid;
 }
 
 .mode-long .color-seal {

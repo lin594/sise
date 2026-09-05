@@ -11,10 +11,12 @@
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
       'reduce-motion': displayPreferences.reduceMotion,
+      'show-card-color-assist': displayPreferences.showCardColorAssist,
     }"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
     :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
+    :data-card-color-assist="displayPreferences.showCardColorAssist ? 'true' : 'false'"
     :data-connection-state="connectionState"
     :style="{
       '--physical-viewport-width': `${viewportWidth}px`,
@@ -606,7 +608,7 @@
           <ul class="rules-list">
             <li>牌有黄、红、绿、白四色，将、士、象、车、马、炮、卒各 4 张，另有公侯伯子男 5 张金条牌。</li>
             <li>定庄牌会决定谁是庄家，而且这张牌本身也属于庄家的手牌，所以庄家比别人多 1 张。</li>
-            <li>开局先模拟发牌，再声明暗坎和亮鱼，四家都确认后正式进入出牌循环。</li>
+            <li>开局先模拟发牌，再确认鱼和坎，四家都确认后正式进入出牌循环。</li>
           </ul>
         </section>
 
@@ -623,7 +625,7 @@
           <h3>常见牌组</h3>
           <ul class="rules-list">
             <li>吃牌可形成：车马炮架、将士象架、三异色卒、四异色卒、对子、单将组、单金条组。</li>
-            <li>碰是 3 张同色同字的明示组；开是在已有暗坎基础上接第 4 张；鱼是亮出的 4 张同牌或 4/5 张金条。</li>
+            <li>碰是 3 张同色同字的明示组；开是在已有坎基础上接第 4 张；鱼是 4 张同牌或 4/5 张金条。</li>
             <li>将和金条都不能主动弃牌，通常只会在抓到后被组成单张组、架子、开，或者直接拿来胡。</li>
           </ul>
         </section>
@@ -682,6 +684,7 @@ import type {
   TurnAlertMode,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
+import { getRoundKey, isQuietSelfDiscardWait } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
   () => import("@/components/FriendInviteQrDialog.vue"),
@@ -726,6 +729,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
         seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
         turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
         spokenTurnGuidance: parsed.spokenTurnGuidance === true,
+        showCardColorAssist: parsed.showCardColorAssist === true,
         reduceMotion: parsed.reduceMotion === true,
         keepScreenAwake: parsed.keepScreenAwake !== false,
       };
@@ -741,6 +745,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
     seatDirection: "counterclockwise",
     turnAlert: "sound-vibration",
     spokenTurnGuidance: false,
+    showCardColorAssist: false,
     reduceMotion: false,
     keepScreenAwake: true,
   };
@@ -1385,7 +1390,13 @@ const interactionPausedMessage = computed(() => {
   }
   return "正在恢复牌局，请稍候";
 });
-const pendingDeferredChiCandidateId = ref<string | null>(null);
+type DeferredChiIntent = {
+  roundKey: string;
+  targetCardId: string;
+  candidateId: string;
+  collectiveDecisionKey: string;
+};
+const pendingDeferredChiIntent = ref<DeferredChiIntent | null>(null);
 const pendingDeferredGrab = ref(false);
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
@@ -2206,13 +2217,18 @@ function onPanelSubmit(request: ActionRequest) {
   }
   if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
     const candidateId = candidateIdFromRequest(request);
-    if (candidateId) {
-      pendingDeferredChiCandidateId.value = candidateId;
-      sendAction("pass");
-    }
+    const targetCardId = String(candidateTargetCard.value?.id ?? "");
+    if (!candidateId || !targetCardId) return;
+    pendingDeferredChiIntent.value = {
+      roundKey: getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase),
+      targetCardId,
+      candidateId,
+      collectiveDecisionKey: decisionTimer.value.decisionKey,
+    };
+    sendAction("pass");
     return;
   }
-  pendingDeferredChiCandidateId.value = null;
+  pendingDeferredChiIntent.value = null;
   pendingDeferredGrab.value = false;
   sendAction(request);
 }
@@ -2222,30 +2238,40 @@ function cardLabel(card: Card): string {
 }
 
 function submitDeferredChiIfReady() {
-  const candidateId = pendingDeferredChiCandidateId.value;
-  if (!candidateId) {
+  const intent = pendingDeferredChiIntent.value;
+  if (!intent) {
+    return;
+  }
+  const currentRoundKey = getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase);
+  const targetCardId = String(candidateTargetCard.value?.id ?? "");
+  if (currentRoundKey !== intent.roundKey || (targetCardId && targetCardId !== intent.targetCardId)) {
+    pendingDeferredChiIntent.value = null;
     return;
   }
   const phase = String(state.value?.responsePhase ?? "");
   if (phase === "collective") {
     return;
   }
-  const isLocalChiPhase =
-    (phase === "local_upper" || phase === "local_draw") && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+  const isLocalChiPhase = phase === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
   if (!isLocalChiPhase) {
-    pendingDeferredChiCandidateId.value = null;
+    pendingDeferredChiIntent.value = null;
     return;
   }
+  const decisionKey = decisionTimer.value.decisionKey;
+  if (!decisionKey || decisionKey === intent.collectiveDecisionKey) return;
   const chiEntry = availableActions.value.find((item) => item.action === "chi" && item.enabled);
   if (!chiEntry) {
+    if (availableActions.value.length > 0) pendingDeferredChiIntent.value = null;
     return;
   }
-  if (!chiEntry.candidates?.some((candidate) => candidate.id === candidateId)) {
-    pendingDeferredChiCandidateId.value = null;
+  if (!chiEntry.candidates?.some((candidate) => candidate.id === intent.candidateId)) {
+    pendingDeferredChiIntent.value = null;
     return;
   }
-  pendingDeferredChiCandidateId.value = null;
-  sendAction({ action: "chi", candidateId });
+  const result = sendAction({ action: "chi", candidateId: intent.candidateId });
+  if (result === "sent" || result === "invalid") {
+    pendingDeferredChiIntent.value = null;
+  }
 }
 
 function submitDeferredGrabIfReady() {
@@ -2294,6 +2320,23 @@ watch(
 );
 
 watch(
+  () => decisionTimer.value.decisionKey,
+  () => submitDeferredChiIfReady(),
+);
+
+watch(
+  () => `${connectionState.value}|${actionFeedback.value?.decisionKey ?? ""}|${actionFeedback.value?.status ?? ""}`,
+  () => submitDeferredChiIfReady(),
+);
+
+watch(
+  () => Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay),
+  (automatic) => {
+    if (automatic) pendingDeferredChiIntent.value = null;
+  },
+);
+
+watch(
   () => [
     roomNavigationProtected.value,
     activeRoomId.value,
@@ -2325,10 +2368,12 @@ onMounted(() => {
     nowMs.value = Date.now();
   }, 500);
   writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
+  document.documentElement.classList.toggle("show-card-color-assist", displayPreferences.value.showCardColorAssist);
   void resumeStoredRoomSession();
 });
 
 onUnmounted(() => {
+  document.documentElement.classList.remove("show-card-color-assist");
   roomNavigationGuardMounted = false;
   window.removeEventListener("popstate", handleRoomNavigationPopState);
   if (roomNavigationReleaseTimer !== null) {
@@ -2414,6 +2459,7 @@ watch(
   displayPreferences,
   (preferences) => {
     writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
+    document.documentElement.classList.toggle("show-card-color-assist", preferences.showCardColorAssist);
   },
   { deep: true },
 );
@@ -2950,6 +2996,14 @@ const turnHint = computed(() => {
     return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
   }
   if (state.value?.responsePhase === "collective") {
+    if (isQuietSelfDiscardWait({
+      responsePhase: state.value.responsePhase,
+      responseSource: state.value.responseCard?.source,
+      originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
+      viewerPlayerId: mySeatId.value,
+    })) {
+      return "";
+    }
     if (canAct.value) {
       return "全局待响阶段：你可以选择胡/开/碰/过";
     }

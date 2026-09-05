@@ -279,6 +279,22 @@
           class="setting-switch"
           type="button"
           role="switch"
+          data-testid="card-color-assist"
+          :aria-checked="props.modelValue.showCardColorAssist"
+          @click="setCardColorAssist(!props.modelValue.showCardColorAssist)"
+        >
+          <span>
+            <strong>牌面辅助颜色</strong>
+            <small>在牌面上额外显示黄 / 红 / 绿 / 白 / 金</small>
+          </span>
+          <span class="switch-state" :class="{ active: props.modelValue.showCardColorAssist }">
+            {{ props.modelValue.showCardColorAssist ? "开启" : "关闭" }}
+          </span>
+        </button>
+        <button
+          class="setting-switch"
+          type="button"
+          role="switch"
           data-testid="reduce-motion"
           :aria-checked="props.modelValue.reduceMotion"
           @click="setReduceMotion(!props.modelValue.reduceMotion)"
@@ -663,6 +679,10 @@ function setKeepScreenAwake(keepScreenAwake: boolean): void {
 
 function setReduceMotion(reduceMotion: boolean): void {
   emit("update:modelValue", { ...props.modelValue, reduceMotion });
+}
+
+function setCardColorAssist(showCardColorAssist: boolean): void {
+  emit("update:modelValue", { ...props.modelValue, showCardColorAssist });
 }
 
 function openRules(): void {

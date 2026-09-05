@@ -2,6 +2,7 @@ import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch 
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
+import { getRoundKey, isQuietSelfDiscardWait, projectResponseCardPlacement, } from "@/utils/gameFlowPresentation";
 const props = defineProps();
 const emit = defineEmits();
 const nowMs = ref(Date.now());
@@ -49,6 +50,9 @@ const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
 const selectedChiCardIds = ref([]);
 const chiAutoSelectionBlockedKey = ref("");
+const chiValidationMessage = ref("");
+const retainedUpperResponseCardId = ref("");
+const viewerChiKnowledge = ref(null);
 let activeChiSelectionContextKey = "";
 const locallyAnimatedDiscardCardId = ref(null);
 const flights = ref([]);
@@ -275,9 +279,55 @@ const activeFlowTargetPlayerId = computed(() => {
     }
     return getNextPlayer(sourcePlayerId)?.clientId ?? "";
 });
+const viewerHasLegalChi = computed(() => {
+    const targetCardId = responseCard.value?.id ?? "";
+    const chi = (props.actions ?? []).find((action) => action.action === "chi" && (action.enabled || action.deferred));
+    if (chi?.candidates?.length)
+        return true;
+    if (viewerChiKnowledge.value?.targetCardId === targetCardId) {
+        return viewerChiKnowledge.value.hasLegalChi;
+    }
+    const viewerIsReceiver = Boolean(props.mySeatId) && props.state?.currentPlayerId === props.mySeatId;
+    const presentationPending = Number(props.state?.presentationUntil ?? 0) >
+        Date.now() + Number(props.state?.presentationClockOffsetMs ?? 0);
+    // During the short center→flow handoff, the server intentionally withholds
+    // actions. Keep an unknown receiver view stable in the center; the first
+    // authoritative local action list then resolves it to center or flow.
+    return viewerIsReceiver && props.state?.responsePhase === "local_upper" && presentationPending;
+});
+watch(() => `${responseCard.value?.id ?? ""}|${props.state?.responsePhase ?? ""}|${props.state?.currentPlayerId ?? ""}|${(props.actions ?? []).map((action) => `${action.action}:${action.enabled}:${action.deferred}:${action.candidates?.length ?? 0}`).join(";")}`, () => {
+    const targetCardId = responseCard.value?.id ?? "";
+    if (!targetCardId)
+        return;
+    const chi = (props.actions ?? []).find((action) => action.action === "chi" && (action.enabled || action.deferred));
+    if (chi?.candidates?.length) {
+        viewerChiKnowledge.value = { targetCardId, hasLegalChi: true };
+        return;
+    }
+    const isLocalReceiver = props.state?.responsePhase === "local_upper" &&
+        props.state?.currentPlayerId === props.mySeatId;
+    const isCollectiveUpperReceiver = props.state?.responsePhase === "collective" &&
+        responseCard.value?.source === "upper" && activeFlowTargetPlayerId.value === props.mySeatId;
+    if ((isLocalReceiver || isCollectiveUpperReceiver) && (props.actions ?? []).length > 0) {
+        viewerChiKnowledge.value = { targetCardId, hasLegalChi: false };
+    }
+}, { immediate: true });
+const responseCardPlacement = computed(() => projectResponseCardPlacement({
+    phase: String(props.state?.phase ?? ""),
+    responsePhase: String(props.state?.responsePhase ?? ""),
+    hasResponseCard: Boolean(responseCard.value),
+    currentPlayerId: String(props.state?.currentPlayerId ?? ""),
+    viewerPlayerId: props.mySeatId,
+    viewerHasLegalChi: viewerHasLegalChi.value,
+}));
+watch(() => `${responseCard.value?.id ?? ""}|${responseCardPlacement.value}|${props.state?.responsePhase ?? ""}`, () => {
+    if (props.state?.responsePhase === "local_upper" && responseCardPlacement.value === "center") {
+        retainedUpperResponseCardId.value = responseCard.value?.id ?? "";
+    }
+}, { immediate: true });
 function shouldAppendPendingToFlow(playerId) {
     const pending = responseCard.value;
-    if (!pending || pending.source !== "upper" || (props.state?.tablePresentationVersion && props.state?.responsePhase !== "local_upper")) {
+    if (!pending || pending.source !== "upper" || responseCardPlacement.value !== "flow") {
         return false;
     }
     if (activeFlowTargetPlayerId.value !== playerId) {
@@ -288,7 +338,7 @@ function shouldAppendPendingToFlow(playerId) {
 }
 function flowCards(playerId) {
     const owner = flowOwner(playerId);
-    const cards = owner?.discardPile ? [...owner.discardPile].filter((card) => !(props.state?.tablePresentationVersion && props.state?.responsePhase === "collective" && responseCard.value?.id === card.id)) : [];
+    const cards = owner?.discardPile ? [...owner.discardPile].filter((card) => !(responseCardPlacement.value === "center" && responseCard.value?.id === card.id)) : [];
     if (shouldAppendPendingToFlow(playerId) && responseCard.value) {
         cards.push(responseCard.value);
     }
@@ -297,7 +347,22 @@ function flowCards(playerId) {
 const presentationTick = ref(Date.now());
 let presentationFrame = null;
 const presentationNow = computed(() => presentationTick.value + Number(props.state?.presentationClockOffsetMs ?? 0));
-const tableEvents = computed(() => props.state?.tableTransitions ?? []);
+const rawTableEvents = computed(() => props.state?.tableTransitions ?? []);
+const tableEvents = computed(() => rawTableEvents.value.flatMap((event) => {
+    const moves = event.moves.flatMap((move) => {
+        if (responseCardPlacement.value === "center" &&
+            responseCard.value?.id === move.card.id &&
+            move.to.zone === "flow")
+            return [];
+        if (move.card.id === retainedUpperResponseCardId.value &&
+            move.to.zone === "meld" &&
+            move.to.playerId === props.mySeatId &&
+            move.from.zone === "flow")
+            return [{ ...move, from: { zone: "center" } }];
+        return [move];
+    });
+    return moves.length ? [{ ...event, moves }] : [];
+}));
 const lastCardRects = new Map();
 const tableFlightSources = new Map();
 const tableFlightDestinations = new Map();
@@ -313,10 +378,10 @@ watch(() => props.viewportTransformKey, () => {
     flights.value = [];
     lastPresentationPaintAt = 0;
 }, { flush: "sync" });
-watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tableTransitions], () => {
+watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.phase, props.state?.tableTransitions], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
-    const nextScopeKey = `${String(props.state?.roomId ?? "")}:${Number(props.state?.completedRounds ?? 0)}`;
+    const nextScopeKey = getRoundKey(props.state?.roomId, props.state?.completedRounds, props.state?.phase);
     if (nextScopeKey !== presentationScopeKey) {
         presentationScopeKey = nextScopeKey;
         lastCardRects.clear();
@@ -347,10 +412,10 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.tab
 }, { immediate: true });
 const activeTableEvents = computed(() => tableEvents.value.filter((event) => event.startsAt <= presentationNow.value && event.endsAt > presentationNow.value));
 const centerCardVisible = computed(() => {
+    if (responseCardPlacement.value !== "center")
+        return false;
     if (!props.state?.tablePresentationVersion)
         return true;
-    if (props.state?.phase === "ended" || props.state?.responsePhase === "local_upper")
-        return false;
     return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === responseCard.value?.id));
 });
 const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -637,6 +702,14 @@ const selectedChiCandidate = computed(() => {
         return candidateIds.length === selected.length && candidateIds.every((id, index) => id === selected[index]);
     }) ?? null;
 });
+const effectiveActionFeedback = computed(() => chiValidationMessage.value
+    ? {
+        status: "rejected",
+        message: chiValidationMessage.value,
+        decisionKey: props.decisionKey ?? "",
+        visible: true,
+    }
+    : props.actionFeedback ?? null);
 const extendableChiCandidates = computed(() => {
     const selected = new Set(selectedChiCardIds.value);
     return activeChiCandidates.value.filter((candidate) => selectedChiCardIds.value.length <= candidate.cardIds.length &&
@@ -738,6 +811,13 @@ const compactCenterHint = computed(() => {
         return "选择手牌后确认出牌";
     }
     if (String(props.state?.responsePhase ?? "") === "collective") {
+        if (isQuietSelfDiscardWait({
+            responsePhase: String(props.state?.responsePhase ?? ""),
+            responseSource: responseCard.value?.source,
+            originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
+            viewerPlayerId: props.mySeatId,
+        }))
+            return "";
         return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
     }
     if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
@@ -828,7 +908,7 @@ function seatMetaText(groupCount, declaredKongs) {
         parts.push(`牌组 ${groupCount} 组`);
     }
     if (declaredKongs > 0) {
-        parts.push(`暗坎 ${declaredKongs}`);
+        parts.push(`坎 ${declaredKongs}`);
     }
     return parts.join(" · ");
 }
@@ -837,7 +917,7 @@ function playerAccessibleSummary(player, groupCount) {
         player.clientId === props.mySeatId ? `${player.name}，你的位置` : player.name,
         `剩余手牌 ${playerHandCount(player)} 张`,
         `公开牌组 ${groupCount} 组`,
-        `暗坎 ${Number(player.declaredKongs ?? 0)} 组`,
+        `坎 ${Number(player.declaredKongs ?? 0)} 组`,
         statusText(player),
     ];
     if (isDealer(player.clientId)) {
@@ -1041,6 +1121,16 @@ function confirmDiscard() {
     }, 2500);
 }
 function onSubmitAction(request) {
+    if (typeof request !== "string" && request.action === "chi" && activeChiCandidates.value.length > 0) {
+        if (!selectedChiCandidate.value) {
+            chiValidationMessage.value = selectedChiCardIds.value.length === 0
+                ? "请先选择要吃的手牌"
+                : "这不是一个合法的吃牌组合";
+            return;
+        }
+        request = { ...request, candidateId: selectedChiCandidate.value.id };
+    }
+    chiValidationMessage.value = "";
     const keepsDeferredChiDraft = typeof request !== "string" &&
         request.action === "chi" &&
         props.responsePhase === "collective" &&
@@ -1326,15 +1416,10 @@ function buildDealPlan() {
     return plan;
 }
 function currentDealRoundKey() {
-    const roomId = String(props.state?.roomId ?? "room");
-    const roundNumber = Math.max(1, Number(props.state?.completedRounds ?? 0) + 1);
-    return `${roomId}:${roundNumber}`;
+    return getRoundKey(props.state?.roomId, props.state?.completedRounds, props.state?.phase);
 }
 function currentAnimationRoundKey() {
-    const roomId = String(props.state?.roomId ?? "room");
-    const completedRounds = Math.max(0, Number(props.state?.completedRounds ?? 0));
-    const roundNumber = props.state?.phase === "ended" ? Math.max(1, completedRounds) : completedRounds + 1;
-    return `${roomId}:${roundNumber}`;
+    return getRoundKey(props.state?.roomId, props.state?.completedRounds, props.state?.phase);
 }
 function shouldAnimateAuthoritativeAction(action) {
     const roundKey = currentAnimationRoundKey();
@@ -1642,8 +1727,13 @@ watch(() => chiSelectionContextKey.value, (contextKey) => {
     activeChiSelectionContextKey = contextKey;
     chiAutoSelectionBlockedKey.value = "";
     selectedChiCardIds.value = [];
+    chiValidationMessage.value = "";
 }, { immediate: true });
 watch(() => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`, () => {
+    if (props.state?.phase !== "playing")
+        retainedUpperResponseCardId.value = "";
+    if (props.state?.phase !== "playing")
+        viewerChiKnowledge.value = null;
     if (props.state?.phase === "playing") {
         return;
     }
@@ -1675,6 +1765,9 @@ watch(() => activeChiCandidates.value.map((candidate) => candidate.id).join("|")
         selectedChiCardIds.value = [...defaultCandidate.cardIds];
     }
 }, { immediate: true });
+watch(() => selectedChiCardIds.value.join("|"), () => {
+    chiValidationMessage.value = "";
+});
 watch(() => props.actionFeedback?.status, (status) => {
     if (status !== "rejected" || !discardingCardId.value) {
         return;
@@ -1985,6 +2078,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "board" },
     'data-testid': "game-board",
     'data-response-phase': (props.responsePhase ?? ''),
+    'data-response-placement': (__VLS_ctx.responseCardPlacement),
 });
 /** @type {typeof __VLS_ctx.boardRef} */ ;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3091,7 +3185,7 @@ if (props.state?.phase === 'playing') {
         canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
-        actionFeedback: (props.actionFeedback ?? null),
+        actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
     const __VLS_50 = __VLS_49({
@@ -3112,7 +3206,7 @@ if (props.state?.phase === 'playing') {
         canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
         moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
-        actionFeedback: (props.actionFeedback ?? null),
+        actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }, ...__VLS_functionalComponentArgsRest(__VLS_49));
     let __VLS_52;
@@ -3425,6 +3519,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             responseCard: responseCard,
             flowTitle: flowTitle,
             flowAccessibleTitle: flowAccessibleTitle,
+            responseCardPlacement: responseCardPlacement,
             centerCardVisible: centerCardVisible,
             isMovingCard: isMovingCard,
             movingCardStyle: movingCardStyle,
@@ -3442,6 +3537,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             chiSelectionDraftActive: chiSelectionDraftActive,
             selectedChiCandidate: selectedChiCandidate,
+            effectiveActionFeedback: effectiveActionFeedback,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
             compactCenterHint: compactCenterHint,

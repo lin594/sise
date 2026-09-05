@@ -11,18 +11,17 @@
       tabindex="-1"
       @keydown.tab="trapFocus"
     >
-      <span id="declare-description" class="sr-only">系统已经按规则选好推荐方案。可以直接开始游戏，也可以查看手牌并调整亮鱼和暗坎。</span>
+      <span id="declare-description" class="sr-only">已按推荐选好，需要时可调整鱼和坎。</span>
       <header class="declare-header">
         <div class="declare-heading">
-          <span class="declare-kicker">开局标识</span>
-          <h2 id="declare-title">声明亮鱼与暗坎</h2>
-          <p aria-hidden="true">系统已选好推荐方案；点击牌组或数字即可调整。</p>
+          <h2 id="declare-title">开局确认</h2>
+          <p>已按推荐选好，需要时可调整</p>
         </div>
         <div class="declare-timer-tools">
           <div
             class="declare-timer"
             :class="{ urgent: !untimed && secondsLeft <= 10, untimed }"
-            :aria-label="untimed ? '练习模式声明不限时' : '声明剩余时间'"
+            :aria-label="untimed ? '练习模式开局确认不限时' : '开局确认剩余时间'"
           >
             <strong>{{ untimed ? "不限时" : secondsLeft }}</strong>
             <span>{{ untimed ? "练习模式" : "秒" }}</span>
@@ -48,32 +47,31 @@
         </div>
 
         <p v-if="submitted" class="declare-submitted" role="status">
-          <span>✓</span> 声明已提交，正在等待其他玩家
+          <span>✓</span> 已确认，等待其他玩家
         </p>
 
         <p v-else-if="!handReady" class="declare-syncing" role="status" aria-live="polite">
           <span class="loading-mark"></span>
-          <span><strong>正在同步完整手牌</strong><small>手牌到齐后才能调整和确认声明，请稍候。</small></span>
+          <span><strong>正在整理手牌</strong></span>
         </p>
 
         <template v-if="handReady && hand.length">
         <section class="hand-preview" aria-labelledby="declare-hand-title">
           <div class="section-heading compact-heading">
             <div>
-              <span class="section-index">01</span>
-              <h3 id="declare-hand-title">查看手牌</h3>
+              <h3 id="declare-hand-title">手牌</h3>
             </div>
             <div class="hand-heading-tools">
               <span class="hand-total">共 {{ hand.length }} 张</span>
-              <div class="legend" aria-label="手牌标记说明">
-                <span class="legend-item fish"><i></i>已选亮鱼</span>
-                <span class="legend-item kong"><i></i>可成暗坎</span>
+              <div v-if="fishOptions.length || hiddenKongAnalysis.count" class="legend" aria-label="手牌标记说明">
+                <span v-if="fishOptions.length" class="legend-item fish"><i></i>鱼</span>
+                <span v-if="hiddenKongAnalysis.count" class="legend-item kong"><i></i>坎</span>
               </div>
               <div v-if="handHasOverflow" class="declare-hand-scroll-tools" data-testid="declare-hand-scroll-tools">
                 <button
                   type="button"
                   data-testid="declare-hand-scroll-prev"
-                  aria-label="向前翻看声明手牌"
+                  aria-label="向前翻看手牌"
                   :disabled="!handCanScrollBackward"
                   @click="scrollHandPreview('backward')"
                 >‹ 前翻</button>
@@ -85,7 +83,7 @@
                 <button
                   type="button"
                   data-testid="declare-hand-scroll-next"
-                  aria-label="向后翻看更多声明手牌"
+                  aria-label="向后翻看更多手牌"
                   :disabled="!handCanScrollForward"
                   @click="scrollHandPreview('forward')"
                 >后翻 ›</button>
@@ -114,17 +112,16 @@
           </div>
         </section>
 
-        <div class="declare-controls">
-          <section class="declare-section fish-section" aria-labelledby="fish-title">
+        <div v-if="fishOptions.length || hiddenKongAnalysis.count" class="declare-controls">
+          <section v-if="fishOptions.length" class="declare-section fish-section" aria-labelledby="fish-title">
             <div class="section-heading">
               <div>
-                <span class="section-index">02</span>
-                <h3 id="fish-title">选择亮鱼</h3>
+                <h3 id="fish-title">鱼</h3>
               </div>
               <span class="section-result">{{ selectedFishOptionIds.size }}/{{ fishOptions.length }} 组</span>
             </div>
 
-            <div v-if="fishOptions.length" class="fish-options">
+            <div class="fish-options">
               <button
                 v-for="option in fishOptions"
                 :key="option.id"
@@ -132,14 +129,11 @@
                 :class="{ selected: selectedFishOptionIds.has(option.id) }"
                 type="button"
                 :aria-pressed="selectedFishOptionIds.has(option.id)"
+                :aria-label="`${fishOptionTitle(option)}，${selectedFishOptionIds.has(option.id) ? '已选' : '未选'}`"
                 :disabled="isLocked"
                 :data-testid="`fish-option-${option.id}`"
                 @click="toggleFish(option)"
               >
-                <span class="fish-option-copy">
-                  <strong>{{ fishOptionTitle(option) }}</strong>
-                  <small>{{ selectedFishOptionIds.has(option.id) ? "已亮出" : "保留手中" }}</small>
-                </span>
                 <span class="fish-option-cards" aria-hidden="true">
                   <CardComp
                     v-for="card in option.cards"
@@ -152,22 +146,17 @@
                 <span class="option-check" aria-hidden="true">✓</span>
               </button>
             </div>
-            <div v-else class="empty-option">
-              <strong>没有可亮的鱼</strong>
-              <span>这项无需操作</span>
-            </div>
           </section>
 
-          <section class="declare-section kong-section" aria-labelledby="kong-title">
+          <section v-if="hiddenKongAnalysis.count" class="declare-section kong-section" aria-labelledby="kong-title">
             <div class="section-heading">
               <div>
-                <span class="section-index">03</span>
-                <h3 id="kong-title">声明暗坎</h3>
+                <h3 id="kong-title">坎</h3>
               </div>
               <span class="section-result amber">建议 {{ hiddenKongAnalysis.count }} 个</span>
             </div>
 
-            <div class="kong-choices" role="radiogroup" aria-label="暗坎声明数量">
+            <div class="kong-choices" role="radiogroup" aria-label="坎数量">
               <button
                 v-for="count in kongChoices"
                 :key="count"
@@ -184,7 +173,6 @@
                 <span>个</span>
               </button>
             </div>
-            <p class="kong-note">亮鱼变化时会重新计算；手动选择后会保留你的数量。</p>
           </section>
         </div>
         </template>
@@ -203,7 +191,7 @@
             :disabled="isLocked || !initialized || isAtRecommendation"
             @click="restoreRecommendation"
           >
-            恢复系统建议
+            恢复推荐
           </button>
           <p v-if="untimed" class="untimed-message">
             <span class="untimed-dot"></span>{{ ultraCompact ? "上下滑调整 · 手牌可前后翻 · 练习不限时" : "不限时，请按自己的节奏确认" }}
@@ -220,7 +208,8 @@
           @click="submit"
         >
           <span v-if="!connectionReady">等待网络恢复</span>
-          <span v-else-if="submitted">已提交，等待其他玩家</span>
+          <span v-else-if="submitted">已确认，等待其他玩家</span>
+          <span v-else-if="!handReady">正在整理手牌</span>
           <span v-else-if="submitPending">提交中…</span>
           <span v-else>{{ confirmationText }}</span>
           <small v-if="connectionReady && !submitted && !submitPending">确认后不可修改</small>
