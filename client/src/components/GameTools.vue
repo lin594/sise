@@ -256,25 +256,35 @@
           </div>
         </div>
         <button
+          v-if="props.spokenTurnGuidanceSupported"
           class="setting-switch"
           type="button"
           role="switch"
           data-testid="spoken-turn-guidance"
-          :disabled="!props.spokenTurnGuidanceSupported"
-          :aria-checked="props.spokenTurnGuidanceSupported && props.modelValue.spokenTurnGuidance"
+          :aria-checked="props.modelValue.spokenTurnGuidance"
           @click="setSpokenTurnGuidance(!props.modelValue.spokenTurnGuidance)"
         >
           <span>
             <strong>语音提示轮到我</strong>
-            <small>{{ props.spokenTurnGuidanceSupported ? "轮到你时读出下一步" : "此浏览器不支持语音" }}</small>
+            <small>轮到你时读出下一步</small>
           </span>
-          <span
-            class="switch-state"
-            :class="{ active: props.spokenTurnGuidanceSupported && props.modelValue.spokenTurnGuidance }"
-          >
-            {{ !props.spokenTurnGuidanceSupported ? "不可用" : props.modelValue.spokenTurnGuidance ? "开启" : "关闭" }}
+          <span class="switch-state" :class="{ active: props.modelValue.spokenTurnGuidance }">
+            {{ props.modelValue.spokenTurnGuidance ? "开启" : "关闭" }}
           </span>
         </button>
+        <div
+          v-else
+          class="setting-switch unavailable-setting"
+          data-testid="spoken-turn-guidance"
+          role="status"
+          aria-label="语音提示轮到我，不可用"
+        >
+          <span>
+            <strong>语音提示轮到我</strong>
+            <small>此浏览器不支持语音</small>
+          </span>
+          <span class="switch-state">不可用</span>
+        </div>
         <button
           class="setting-switch"
           type="button"
@@ -308,25 +318,35 @@
           </span>
         </button>
         <button
+          v-if="props.screenWakeLockSupported"
           class="setting-switch"
           type="button"
           role="switch"
           data-testid="keep-screen-awake"
-          :disabled="!props.screenWakeLockSupported"
-          :aria-checked="props.screenWakeLockSupported && props.modelValue.keepScreenAwake"
+          :aria-checked="props.modelValue.keepScreenAwake"
           @click="setKeepScreenAwake(!props.modelValue.keepScreenAwake)"
         >
           <span>
             <strong>牌局中屏幕常亮</strong>
-            <small>{{ props.screenWakeLockSupported ? "切到后台或牌局结束会自动释放" : "当前环境不支持屏幕常亮" }}</small>
+            <small>切到后台或牌局结束会自动释放</small>
           </span>
-          <span
-            class="switch-state"
-            :class="{ active: props.screenWakeLockSupported && props.modelValue.keepScreenAwake }"
-          >
-            {{ !props.screenWakeLockSupported ? "不可用" : props.modelValue.keepScreenAwake ? "开启" : "关闭" }}
+          <span class="switch-state" :class="{ active: props.modelValue.keepScreenAwake }">
+            {{ props.modelValue.keepScreenAwake ? "开启" : "关闭" }}
           </span>
         </button>
+        <div
+          v-else
+          class="setting-switch unavailable-setting"
+          data-testid="keep-screen-awake"
+          role="status"
+          aria-label="牌局中屏幕常亮，不可用"
+        >
+          <span>
+            <strong>牌局中屏幕常亮</strong>
+            <small>当前环境不支持屏幕常亮</small>
+          </span>
+          <span class="switch-state">不可用</span>
+        </div>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
@@ -1200,12 +1220,11 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.setting-switch:disabled {
-  cursor: not-allowed;
+.unavailable-setting {
   border-color: rgba(100, 116, 139, 0.46);
   background: rgba(15, 23, 42, 0.55);
   color: #94a3b8;
-  opacity: 1;
+  cursor: default;
 }
 
 .setting-switch > span:first-child {

@@ -73,8 +73,10 @@ test("friend-room cumulative scoring survives a lobby return and adds the next r
   await page.getByTestId("confirm-table-return").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await expect(page.getByTestId("cumulative-scoreboard")).toBeVisible();
-  await expect(page.getByTestId("scoring-mode-single")).toBeDisabled();
-  await expect(page.getByTestId("scoring-mode-cumulative")).toBeDisabled();
+  await expect(page.getByTestId("scoring-mode-single")).toHaveCount(0);
+  await expect(page.getByTestId("scoring-mode-cumulative")).toHaveCount(0);
+  await expect(page.getByTestId("scoring-mode-summary")).toContainText("本桌累计");
+  await expect(page.getByTestId("scoring-mode-summary")).toContainText("本桌已锁定");
   const myLobbyScore = page.getByTestId("cumulative-scoreboard").locator("li").filter({ hasText: "累计牌友" });
   await expect(myLobbyScore).toContainText(`${firstCumulative > 0 ? "+" : ""}${firstCumulative}分`);
 

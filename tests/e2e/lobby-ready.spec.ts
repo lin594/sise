@@ -20,6 +20,10 @@ test("friend-room guests explicitly prepare before the host can start", async ({
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");
+    await expect(guest.getByTestId("scoring-mode-single")).toHaveCount(0);
+    await expect(guest.getByTestId("scoring-mode-cumulative")).toHaveCount(0);
+    await expect(guest.getByTestId("scoring-mode-summary")).toContainText("每局单算");
+    await expect(guest.getByTestId("scoring-mode-summary")).toContainText("由房主设置");
 
     await host.getByTestId("fill-bots").click();
     const hostStart = host.getByTestId("lobby-start");
@@ -64,6 +68,11 @@ test("friend-room guests explicitly prepare before the host can start", async ({
     await expect(guest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(host.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
     await expect(guest.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+    await host.getByTestId("confirm-declaration").click();
+    await expect(host.getByTestId("confirm-declaration")).toHaveCount(0);
+    await expect(host.getByTestId("declaration-status")).toContainText("已确认，等待其他玩家");
+    await expect(host.locator("button.fish-option, button.kong-choice")).toHaveCount(0);
+    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled();
   } finally {
     await guestContext.close();
     await hostContext.close();

@@ -118,9 +118,10 @@ test("unsupported browsers explain why spoken guidance is unavailable", async ({
   const voiceSetting = page.getByTestId("spoken-turn-guidance");
   await expect(voiceSetting).toBeAttached({ timeout: 5_000 });
   await voiceSetting.scrollIntoViewIfNeeded();
-  await expect(voiceSetting).toBeDisabled();
+  await expect(voiceSetting).toHaveRole("status");
+  await expect(voiceSetting).not.toHaveRole("switch");
   await expect(voiceSetting).toContainText("此浏览器不支持语音");
-  await expect(voiceSetting).toHaveAttribute("aria-checked", "false");
+  await expect(voiceSetting).not.toHaveAttribute("aria-checked", /.+/);
 });
 
 test("insecure or unsupported browsers do not pretend screen wake lock is active", async ({ page }) => {
@@ -134,8 +135,9 @@ test("insecure or unsupported browsers do not pretend screen wake lock is active
   const wakeLockSetting = page.getByTestId("keep-screen-awake");
   await expect(wakeLockSetting).toBeAttached({ timeout: 5_000 });
   await wakeLockSetting.scrollIntoViewIfNeeded();
-  await expect(wakeLockSetting).toBeDisabled();
+  await expect(wakeLockSetting).toHaveRole("status");
+  await expect(wakeLockSetting).not.toHaveRole("switch");
   await expect(wakeLockSetting).toContainText("当前环境不支持屏幕常亮");
   await expect(wakeLockSetting).toContainText("不可用");
-  await expect(wakeLockSetting).toHaveAttribute("aria-checked", "false");
+  await expect(wakeLockSetting).not.toHaveAttribute("aria-checked", /.+/);
 });

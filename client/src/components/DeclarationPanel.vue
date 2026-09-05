@@ -46,15 +46,6 @@
           <div class="declare-progress-fill" :style="{ width: `${progressPercent}%` }"></div>
         </div>
 
-        <p v-if="submitted" class="declare-submitted" role="status">
-          <span>✓</span> 已确认，等待其他玩家
-        </p>
-
-        <p v-else-if="!handReady" class="declare-syncing" role="status" aria-live="polite">
-          <span class="loading-mark"></span>
-          <span><strong>正在整理手牌</strong></span>
-        </p>
-
         <template v-if="handReady && hand.length">
         <section class="hand-preview" aria-labelledby="declare-hand-title">
           <div class="section-heading compact-heading">
@@ -123,6 +114,7 @@
 
             <div class="fish-options">
               <button
+                v-if="!isLocked"
                 v-for="option in fishOptions"
                 :key="option.id"
                 class="fish-option"
@@ -130,7 +122,6 @@
                 type="button"
                 :aria-pressed="selectedFishOptionIds.has(option.id)"
                 :aria-label="`${fishOptionTitle(option)}，${selectedFishOptionIds.has(option.id) ? '已选' : '未选'}`"
-                :disabled="isLocked"
                 :data-testid="`fish-option-${option.id}`"
                 @click="toggleFish(option)"
               >
@@ -145,6 +136,27 @@
                 </span>
                 <span class="option-check" aria-hidden="true">✓</span>
               </button>
+              <div
+                v-else
+                v-for="option in fishOptions"
+                :key="option.id"
+                class="fish-option static-selection"
+                :class="{ selected: selectedFishOptionIds.has(option.id) }"
+                role="img"
+                :aria-label="`${fishOptionTitle(option)}，${selectedFishOptionIds.has(option.id) ? '已选' : '未选'}`"
+                :data-testid="`fish-option-${option.id}`"
+              >
+                <span class="fish-option-cards" aria-hidden="true">
+                  <CardComp
+                    v-for="card in option.cards"
+                    :key="`${option.id}-${card.id}`"
+                    :card="card"
+                    size="sm"
+                    :mode="cardMode"
+                  />
+                </span>
+                <span class="option-check" aria-hidden="true">✓</span>
+              </div>
             </div>
           </section>
 
@@ -156,7 +168,7 @@
               <span class="section-result amber">建议 {{ hiddenKongAnalysis.count }} 个</span>
             </div>
 
-            <div class="kong-choices" role="radiogroup" aria-label="坎数量">
+            <div v-if="!isLocked" class="kong-choices" role="radiogroup" aria-label="坎数量">
               <button
                 v-for="count in kongChoices"
                 :key="count"
@@ -165,13 +177,22 @@
                 type="button"
                 role="radio"
                 :aria-checked="declaredKongs === count"
-                :disabled="isLocked"
                 :data-testid="`kong-count-${count}`"
                 @click="selectKongCount(count)"
               >
                 <strong>{{ count }}</strong>
                 <span>个</span>
               </button>
+            </div>
+            <div
+              v-else
+              class="kong-selection-summary"
+              data-testid="kong-selection-summary"
+              role="status"
+              :aria-label="`已选坎 ${declaredKongs} 个`"
+            >
+              <strong>{{ declaredKongs }}</strong>
+              <span>个</span>
             </div>
           </section>
         </div>
@@ -186,9 +207,9 @@
       <footer class="declare-footer">
         <div class="footer-meta">
           <button
+            v-if="canRestoreRecommendation"
             class="reset-recommendation"
             type="button"
-            :disabled="isLocked || !initialized || isAtRecommendation"
             @click="restoreRecommendation"
           >
             恢复推荐
@@ -200,20 +221,27 @@
           <p v-if="displayedError" class="declare-error" role="alert">{{ displayedError }}</p>
         </div>
         <button
+          v-if="canSubmit"
           ref="confirmButtonRef"
           class="confirm-declaration"
           type="button"
-          :disabled="isLocked || !initialized"
           data-testid="confirm-declaration"
           @click="submit"
         >
-          <span v-if="!connectionReady">等待网络恢复</span>
-          <span v-else-if="submitted">已确认，等待其他玩家</span>
-          <span v-else-if="!handReady">正在整理手牌</span>
-          <span v-else-if="submitPending">提交中…</span>
-          <span v-else>{{ confirmationText }}</span>
-          <small v-if="connectionReady && !submitted && !submitPending">确认后不可修改</small>
+          <span>{{ confirmationText }}</span>
+          <small>确认后不可修改</small>
         </button>
+        <div
+          v-else
+          class="declaration-status"
+          data-testid="declaration-status"
+          role="status"
+          aria-live="polite"
+        >
+          <span v-if="submitPending" class="loading-mark" aria-hidden="true"></span>
+          <span v-else-if="submitted" aria-hidden="true">✓</span>
+          <strong>{{ declarationStatusText }}</strong>
+        </div>
       </footer>
     </div>
   </div>
@@ -322,6 +350,7 @@ const kongChoices = computed(() => Array.from({ length: hiddenKongAnalysis.value
 const isLocked = computed(
   () => !props.handReady || !props.connectionReady || props.submitted || submitPending.value,
 );
+const canSubmit = computed(() => initialized.value && !isLocked.value);
 const displayedError = computed(() => {
   if (!props.connectionReady) {
     return "网络已断开，恢复后可继续提交；刚才的选择还在。";
@@ -337,8 +366,18 @@ const isAtRecommendation = computed(() => {
   }
   return [...recommendedFishOptionIds.value].every((id) => selectedFishOptionIds.value.has(id));
 });
+const canRestoreRecommendation = computed(
+  () => initialized.value && !isLocked.value && !isAtRecommendation.value,
+);
 const confirmationText = computed(() => {
   return getDeclarationStartLabel(selectedFishOptionIds.value.size, declaredKongs.value);
+});
+const declarationStatusText = computed(() => {
+  if (!props.connectionReady) return "等待网络恢复";
+  if (props.submitted) return "已确认，等待其他玩家";
+  if (!props.handReady || !initialized.value) return "正在整理手牌";
+  if (submitPending.value) return "提交中…";
+  return "正在整理手牌";
 });
 
 function focusableControls(): HTMLElement[] {
@@ -770,52 +809,6 @@ onBeforeUnmount(() => {
   transition: width 0.3s ease;
 }
 
-.declare-submitted {
-  margin: 0;
-  padding: 0.55rem 0.75rem;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-  border-radius: 10px;
-  background: #f0fdf4;
-  font-weight: 700;
-}
-
-.declare-submitted span {
-  display: inline-grid;
-  place-items: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  margin-right: 0.3rem;
-  color: white;
-  border-radius: 50%;
-  background: #16a34a;
-}
-
-.declare-syncing {
-  margin: 0;
-  min-height: 4.5rem;
-  padding: 0.75rem;
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
-  background: #f0f9ff;
-  color: #075985;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  text-align: left;
-}
-
-.declare-syncing > span:last-child {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.declare-syncing small {
-  color: #475569;
-  font-weight: 500;
-}
-
 .hand-preview,
 .declare-section {
   min-width: 0;
@@ -1019,6 +1012,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
 }
 
+.fish-option.static-selection {
+  cursor: default;
+}
+
+.fish-option.static-selection:not(.selected) {
+  opacity: 0.62;
+}
+
 .fish-option-copy {
   display: grid;
   gap: 0.08rem;
@@ -1118,6 +1119,28 @@ onBeforeUnmount(() => {
   border-color: var(--kong);
   background: linear-gradient(145deg, #d97706, #92400e);
   box-shadow: 0 5px 14px rgba(180, 83, 9, 0.22);
+}
+
+.kong-selection-summary {
+  min-height: 54px;
+  padding: 0.25rem 0.8rem;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem;
+  justify-self: start;
+  color: white;
+  border: 1px solid var(--kong);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #d97706, #92400e);
+}
+
+.kong-selection-summary strong {
+  font-size: 1.15rem;
+}
+
+.kong-selection-summary span {
+  font-size: 0.7rem;
 }
 
 .kong-note {
@@ -1234,6 +1257,25 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.declaration-status {
+  min-height: 54px;
+  padding: 0.55rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+
+.declaration-status > span:not(.loading-mark) {
+  color: var(--fish);
+  font-weight: 900;
+}
+
 .confirm-declaration small {
   margin-top: 0.08rem;
   color: #ccfbf1;
@@ -1258,9 +1300,9 @@ button:focus-visible {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .fish-option:not(:disabled):hover,
-  .kong-choice:not(:disabled):hover,
-  .reset-recommendation:not(:disabled):hover {
+  button.fish-option:hover,
+  button.kong-choice:hover,
+  .reset-recommendation:hover {
     transform: translateY(-2px);
   }
 }
@@ -1404,7 +1446,8 @@ button:focus-visible {
   padding: 0.4rem 0 0;
 }
 
-.declare-panel.compact .confirm-declaration {
+.declare-panel.compact .confirm-declaration,
+.declare-panel.compact .declaration-status {
   min-height: 50px;
 }
 

@@ -18,10 +18,11 @@ test("a disconnected declaration stays visible and becomes retryable after recov
 
   await context.setOffline(true);
   await expect(page.getByTestId("connection-status")).toHaveAttribute("data-state", "offline");
-  await expect(confirm).toBeDisabled();
-  await expect(confirm).toContainText("等待网络恢复");
+  await expect(confirm).toHaveCount(0);
+  await expect(page.getByTestId("declaration-status")).toContainText("等待网络恢复");
+  await expect(page.locator("button.fish-option, button.kong-choice")).toHaveCount(0);
   await expect(page.locator(".declare-error")).toContainText("刚才的选择还在");
-  if (selectedKongCountBefore) await expect(page.locator(".kong-choice").first()).toBeDisabled();
+  if (selectedKongCountBefore) await expect(page.getByTestId("kong-selection-summary")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("declaration-offline-568x320.png") });
 
   await context.setOffline(false);

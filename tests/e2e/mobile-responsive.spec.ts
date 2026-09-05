@@ -1045,11 +1045,14 @@ test.describe("compact landscape gameplay", () => {
       expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
     }
 
+    const restoreRecommendation = page.getByRole("button", { name: "恢复推荐" });
+    await expect(restoreRecommendation).toHaveCount(0);
     const selectedFishOptions = page.locator(".fish-option.selected");
     while (await selectedFishOptions.count()) {
       await selectedFishOptions.first().click();
     }
     if (await page.getByTestId("kong-count-0").count()) await page.getByTestId("kong-count-0").click();
+    await expect(restoreRecommendation).toBeVisible();
     await expect(confirmDeclaration.locator("span")).toHaveText("开始游戏");
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });

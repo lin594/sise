@@ -242,7 +242,12 @@
           <p v-if="completedRounds > 0">本桌已完成 {{ completedRounds }} 局，计分方式已锁定到解散。</p>
           <p v-else>{{ isHost ? "开局前选择；开始后整桌保持不变。" : "由房主在开局前选择。" }}</p>
         </div>
-        <div class="scoring-options" role="radiogroup" aria-label="好友房计分方式">
+        <div
+          v-if="isHost && completedRounds === 0"
+          class="scoring-options"
+          role="radiogroup"
+          aria-label="好友房计分方式"
+        >
           <button
             v-for="option in scoringOptions"
             :key="option.mode"
@@ -251,12 +256,22 @@
             :data-testid="`scoring-mode-${option.mode}`"
             :aria-checked="scoringMode === option.mode"
             :class="{ active: scoringMode === option.mode }"
-            :disabled="!isHost || completedRounds > 0"
             @click="$emit('set-scoring-mode', option.mode)"
           >
             <strong>{{ option.label }}</strong>
             <small>{{ option.hint }}</small>
           </button>
+        </div>
+        <div
+          v-else
+          class="scoring-mode-summary"
+          data-testid="scoring-mode-summary"
+          role="status"
+          :aria-label="`当前计分方式：${currentScoringOption.label}`"
+        >
+          <strong>{{ currentScoringOption.label }}</strong>
+          <small>{{ currentScoringOption.hint }}</small>
+          <span>{{ completedRounds > 0 ? "本桌已锁定" : "由房主设置" }}</span>
         </div>
         <ol
           v-if="scoringMode === 'cumulative' && completedRounds > 0"
@@ -480,6 +495,9 @@ const scoringOptions: Array<{ mode: ScoringMode; label: string; hint: string }> 
   { mode: "single", label: "每局单算", hint: "只看这一局" },
   { mode: "cumulative", label: "本桌累计", hint: "一直算到解散" },
 ];
+const currentScoringOption = computed(
+  () => scoringOptions.find((option) => option.mode === props.scoringMode) ?? scoringOptions[0]!,
+);
 const emit = defineEmits<{
   "open-rules": [];
   start: [];
@@ -993,16 +1011,30 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24);
 }
 
-.scoring-options button:disabled {
-  opacity: 1;
-  cursor: default;
-}
-
-.scoring-options button:not(.active):disabled {
-  opacity: 0.58;
-}
-
 .scoring-options small {
+  font-size: 0.75rem;
+}
+
+.scoring-mode-summary {
+  min-height: 50px;
+  padding: 0.5rem 0.65rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.2rem 0.55rem;
+  border: 1px solid rgba(251, 191, 36, 0.68);
+  border-radius: 0.72rem;
+  background: rgba(113, 63, 18, 0.66);
+  color: #fef3c7;
+}
+
+.scoring-mode-summary small {
+  color: #fde68a;
+  font-size: 0.75rem;
+}
+
+.scoring-mode-summary span {
+  color: #bfdbfe;
   font-size: 0.75rem;
 }
 
@@ -1656,6 +1688,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   .scoring-options button {
     min-height: 42px;
     padding: 0.28rem 0.42rem;
+  }
+
+  .scoring-mode-summary {
+    min-height: 42px;
+    padding: 0.35rem 0.5rem;
   }
 
   .invite-card p {
