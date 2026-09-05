@@ -17,6 +17,7 @@
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
     :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
     :data-card-color-assist="displayPreferences.showCardColorAssist ? 'true' : 'false'"
+    :data-decision-attention="decisionAttention"
     :data-connection-state="connectionState"
     :style="{
       '--physical-viewport-width': `${viewportWidth}px`,
@@ -1332,25 +1333,70 @@ const openingDealSecondsLeft = computed(() => {
   return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
 });
 const tablePresentationActive = computed(() => Number(state.value?.presentationUntil ?? 0) > nowMs.value + Number(state.value?.presentationClockOffsetMs ?? 0));
-const pendingActionDecision = computed(
+const currentActionSubmissionLocked = computed(() => Boolean(
+  decisionTimer.value.decisionKey &&
+  actionFeedback.value?.decisionKey === decisionTimer.value.decisionKey &&
+  (actionFeedback.value.status === "pending" || actionFeedback.value.status === "received"),
+));
+const hasAvailableAction = computed(() =>
+  availableActions.value.some((action) => action.enabled || action.deferred),
+);
+const actionWindowActive = computed(
   () =>
     connected.value &&
     !mePlayer.value?.isAutoPlay &&
     !openingDealActive.value &&
     !tablePresentationActive.value &&
     isPlaying.value &&
-    availableActions.value.some((x) => x.enabled || x.deferred),
+    hasAvailableAction.value &&
+    !currentActionSubmissionLocked.value,
 );
-const pendingDiscardDecision = computed(
+const discardWindowActive = computed(
   () =>
     connected.value &&
+    !mePlayer.value?.isAutoPlay &&
     !openingDealActive.value &&
     !tablePresentationActive.value &&
     isPlaying.value &&
     isMyTurn.value &&
     state.value?.responsePhase === "local_draw" &&
-    availableActions.value.length === 0,
+    !hasAvailableAction.value &&
+    !currentActionSubmissionLocked.value,
 );
+const passiveCollectiveWindow = computed(() => {
+  if (
+    !connected.value ||
+    mePlayer.value?.isAutoPlay ||
+    openingDealActive.value ||
+    tablePresentationActive.value ||
+    !isPlaying.value ||
+    !isMyTurn.value ||
+    state.value?.responsePhase !== "collective" ||
+    hasAvailableAction.value ||
+    currentActionSubmissionLocked.value
+  ) {
+    return false;
+  }
+  if (isQuietSelfDiscardWait({
+    responsePhase: state.value.responsePhase,
+    responseSource: state.value.responseCard?.source,
+    originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
+    viewerPlayerId: mySeatId.value,
+  })) {
+    return false;
+  }
+  const endsAt = Number(decisionTimer.value.endsAt || state.value.responseEndsAt || 0);
+  return endsAt > nowMs.value;
+});
+type DecisionAttention = "action" | "discard" | "passive_collective" | "none";
+const decisionAttention = computed<DecisionAttention>(() => {
+  if (actionWindowActive.value) return "action";
+  if (discardWindowActive.value) return "discard";
+  if (passiveCollectiveWindow.value) return "passive_collective";
+  return "none";
+});
+const pendingActionDecision = computed(() => decisionAttention.value === "action");
+const pendingDiscardDecision = computed(() => decisionAttention.value === "discard");
 const privateHandSynchronized = computed(() => {
   if (localTestPrivateHandReadyOverride.value !== null) {
     return localTestPrivateHandReadyOverride.value;
@@ -1494,7 +1540,7 @@ const shouldShowDeclarePanel = computed(
     !Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay),
 );
 const settingsDecisionActive = computed(
-  () => pendingActionDecision.value || pendingDiscardDecision.value,
+  () => decisionAttention.value === "action" || decisionAttention.value === "discard",
 );
 const settingsDecisionSecondsLeft = computed(() => {
   if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
@@ -2259,9 +2305,13 @@ function submitDeferredChiIfReady() {
   }
   const decisionKey = decisionTimer.value.decisionKey;
   if (!decisionKey || decisionKey === intent.collectiveDecisionKey) return;
-  const chiEntry = availableActions.value.find((item) => item.action === "chi" && item.enabled);
-  if (!chiEntry) {
-    if (availableActions.value.length > 0) pendingDeferredChiIntent.value = null;
+  const chiEntry = availableActions.value.find((item) => item.action === "chi");
+  if (!chiEntry?.enabled) {
+    // The local_upper room snapshot is broadcast immediately before its private
+    // action list. Keep waiting while the previous collective list still
+    // contains the same deferred Chi entry; otherwise that message boundary
+    // can erase a valid intent before the new decision becomes submit-ready.
+    if (!chiEntry && availableActions.value.length > 0) pendingDeferredChiIntent.value = null;
     return;
   }
   if (!chiEntry.candidates?.some((candidate) => candidate.id === intent.candidateId)) {
@@ -3002,6 +3052,9 @@ const turnHint = computed(() => {
       originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
       viewerPlayerId: mySeatId.value,
     })) {
+      return "";
+    }
+    if (passiveCollectiveWindow.value) {
       return "";
     }
     if (canAct.value) {

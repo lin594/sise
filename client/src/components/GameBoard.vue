@@ -247,7 +247,10 @@
                   :class="{ 'draw-pending-hidden': isResponseCardDrawHidden || isMovingCard(responseCard.id) }"
                   data-testid="pending-card"
                 >
-                  <span class="response-caption">待响</span>
+                  <span
+                    class="response-caption"
+                    :data-testid="passiveCollectiveWait ? 'passive-collective-status' : undefined"
+                  >{{ passiveCollectiveWait ? `全局响应 · ${seatCountdownSeconds}s` : "待响" }}</span>
                   <CardComp
                     :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
                     :card="responseCard"
@@ -1656,6 +1659,24 @@ const playDecisionEndsAt = computed(() => {
   return Number(props.state?.responseEndsAt ?? 0);
 });
 
+const passiveCollectiveWait = computed(() => {
+  if (
+    String(props.state?.responsePhase ?? "") !== "collective" ||
+    seatCountdownSeconds.value === null ||
+    Number(props.decisionTimerTotalMs ?? 0) <= 0 ||
+    Number(props.decisionTimerTotalMs ?? 0) > 5_000 ||
+    !String(props.state?.activeResponderId ?? "")
+  ) {
+    return false;
+  }
+  return !isQuietSelfDiscardWait({
+    responsePhase: String(props.state?.responsePhase ?? ""),
+    responseSource: responseCard.value?.source,
+    originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
+    viewerPlayerId: props.mySeatId,
+  });
+});
+
 const compactCenterHint = computed(() => {
   if (effectiveInteractionPausedMessage.value) {
     return effectiveInteractionPausedMessage.value;
@@ -1673,6 +1694,7 @@ const compactCenterHint = computed(() => {
       originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
       viewerPlayerId: props.mySeatId,
     })) return "";
+    if (passiveCollectiveWait.value) return "";
     return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
   }
   if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {

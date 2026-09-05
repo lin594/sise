@@ -800,6 +800,21 @@ const playDecisionEndsAt = computed(() => {
     }
     return Number(props.state?.responseEndsAt ?? 0);
 });
+const passiveCollectiveWait = computed(() => {
+    if (String(props.state?.responsePhase ?? "") !== "collective" ||
+        seatCountdownSeconds.value === null ||
+        Number(props.decisionTimerTotalMs ?? 0) <= 0 ||
+        Number(props.decisionTimerTotalMs ?? 0) > 5_000 ||
+        !String(props.state?.activeResponderId ?? "")) {
+        return false;
+    }
+    return !isQuietSelfDiscardWait({
+        responsePhase: String(props.state?.responsePhase ?? ""),
+        responseSource: responseCard.value?.source,
+        originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
+        viewerPlayerId: props.mySeatId,
+    });
+});
 const compactCenterHint = computed(() => {
     if (effectiveInteractionPausedMessage.value) {
         return effectiveInteractionPausedMessage.value;
@@ -817,6 +832,8 @@ const compactCenterHint = computed(() => {
             originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
             viewerPlayerId: props.mySeatId,
         }))
+            return "";
+        if (passiveCollectiveWait.value)
             return "";
         return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
     }
@@ -2523,7 +2540,9 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "response-caption" },
+        'data-testid': (__VLS_ctx.passiveCollectiveWait ? 'passive-collective-status' : undefined),
     });
+    (__VLS_ctx.passiveCollectiveWait ? `全局响应 · ${__VLS_ctx.seatCountdownSeconds}s` : "待响");
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
     const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -3540,6 +3559,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             effectiveActionFeedback: effectiveActionFeedback,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
+            passiveCollectiveWait: passiveCollectiveWait,
             compactCenterHint: compactCenterHint,
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
