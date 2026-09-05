@@ -275,11 +275,15 @@ export function applyPlayingStartAfterDeclaring(
 /**
  * 作用：写入进入待弃牌阶段时的关键状态。
  * 关键输入/输出：输入牌主和动作标签，输出无返回值。
- * 副作用：修改 `responsePhase/currentPlayerId/lastAction`。
+ * 副作用：修改 `responsePhase/currentPlayerId/currentTurnPlayerId/lastAction`。
  */
 export function applyEnterDiscardStageState(state: GameState, ownerId: string, tag: string): void {
   state.responsePhase = "local_draw";
   state.currentPlayerId = ownerId;
+  // Collective resolution can finish on a different responder from the
+  // peng/kai winner. Keep the display turn aligned with the authoritative
+  // discard owner or that player will see an empty, locked action dock.
+  state.currentTurnPlayerId = ownerId;
   state.lastAction = `${ownerId} ${tag}`;
 }
 

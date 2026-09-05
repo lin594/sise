@@ -521,7 +521,7 @@ test("a host refresh keeps ownership while a confirmed exit transfers it immedia
   }
 });
 
-test("a later friend can choose a collective response before their polling turn", async ({ browser }, testInfo) => {
+test("a later friend can preselect while the current peng winner receives the discard turn", async ({ browser }, testInfo) => {
   const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const guestContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const host = await hostContext.newPage();
@@ -584,6 +584,15 @@ test("a later friend can choose a collective response before their polling turn"
     await expect(host.getByTestId("action-pass")).toHaveCount(0);
     await expect(host.getByTestId("action-waiting")).toHaveCount(0);
     await expect(host.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
+
+    // The two compact boards share a live countdown and can reflow by a few
+    // pixels while Playwright is computing the click point. Dispatch through
+    // the visible, enabled control so this regression stays focused on the
+    // authoritative post-peng turn owner.
+    await guest.getByTestId("action-peng").evaluate((button: HTMLButtonElement) => button.click());
+    await expect(guest.getByTestId("discard-confirm")).toBeVisible({ timeout: 10_000 });
+    await expect(guest.getByTestId("player-self")).toContainText("当前回合");
+    await expect(host.getByTestId("player-self")).not.toContainText("当前回合");
   } finally {
     await guestContext.close();
     await hostContext.close();

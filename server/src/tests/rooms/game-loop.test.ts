@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
 import { decideActionDispatch, getAvailableActionsFlow } from "../../rooms/flow/playing-flow.js";
+import { applyEnterDiscardStageState } from "../../rooms/flow/support.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 import type { Card } from "../../rules/types.js";
 
@@ -48,6 +49,22 @@ test("collective order for upper starts from next and includes owner at tail", (
   };
   const order = room.getCollectiveOrder(pending);
   assert.deepEqual(order, ["B", "C", "D", "A"]);
+});
+
+test("entering discard after a collective meld restores the winner as the displayed turn", () => {
+  for (const tag of ["PENG", "KAI"]) {
+    const state = new GameState();
+    state.responsePhase = "collective";
+    state.currentPlayerId = "D";
+    state.currentTurnPlayerId = "D";
+
+    applyEnterDiscardStageState(state, "B", tag);
+
+    assert.equal(state.responsePhase, "local_draw");
+    assert.equal(state.currentPlayerId, "B");
+    assert.equal(state.currentTurnPlayerId, "B");
+    assert.equal(state.lastAction, `B ${tag}`);
+  }
 });
 
 test("online human forced pass waits for the fairness window even after an early Pass", async () => {
