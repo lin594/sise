@@ -93,6 +93,45 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: chi_local_upper#${seq}`;
+  } else if (scenario === "chi_unique_jmp" || scenario === "chi_unique_duplicate_jmp") {
+    add("unique-yellow-ju-1", "yellow", "ju");
+    if (scenario === "chi_unique_duplicate_jmp") add("unique-yellow-ju-2", "yellow", "ju");
+    add("unique-yellow-ma", "yellow", "ma");
+    add("unique-red-shi", "red", "shi");
+    const seatIndex = context.playerOrder.indexOf(seatId);
+    const originId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    context.setPendingResponse(
+      createPendingResponse(seatId, { id: "unique-yellow-pao", color: "yellow", type: "pao" }, "upper"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_upper";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.state.pollOriginPlayerId = originId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_collective_zu4" || scenario === "chi_local_upper_zu4") {
+    add("shared-zu-yellow", "yellow", "zu");
+    add("shared-zu-red", "red", "zu");
+    add("shared-zu-green", "green", "zu");
+    add("shared-red-ma", "red", "ma");
+    const seatIndex = context.playerOrder.indexOf(seatId);
+    const originId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    const local = scenario === "chi_local_upper_zu4";
+    context.setPendingResponse(
+      createPendingResponse(
+        local ? seatId : originId,
+        { id: "shared-zu-white", color: "white", type: "zu" },
+        "upper",
+      ),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = local ? "local_upper" : "collective";
+    context.state.currentPlayerId = local ? seatId : originId;
+    context.state.currentTurnPlayerId = local ? seatId : originId;
+    context.state.pollOriginPlayerId = originId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_four_zu") {
     add("zu-red", "red", "zu");
     add("zu-green", "green", "zu");
@@ -380,7 +419,12 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     // which would allow the declaration dialog to cover the reveal.
     return true;
   }
-  if (scenario === "collective_no_actions" || scenario === "early_collective_choice" || scenario === "hu_fail_case") {
+  if (
+    scenario === "collective_no_actions" ||
+    scenario === "early_collective_choice" ||
+    scenario === "chi_collective_zu4" ||
+    scenario === "hu_fail_case"
+  ) {
     context.startCollectivePolling();
     return true;
   }

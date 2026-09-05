@@ -48,6 +48,8 @@ const flowBottomRightPlayer = computed(() => props.seatDirection === "clockwise"
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
 const selectedChiCardIds = ref([]);
+const chiAutoSelectionBlockedKey = ref("");
+let activeChiSelectionContextKey = "";
 const locallyAnimatedDiscardCardId = ref(null);
 const flights = ref([]);
 const showDealAnimation = ref(false);
@@ -607,6 +609,14 @@ const activeChiCandidates = computed(() => {
     return entry?.candidates ?? [];
 });
 const chiSelectionAvailable = computed(() => activeChiCandidates.value.length > 0);
+const chiSelectionContextKey = computed(() => {
+    const targetId = responseCard.value?.id ?? props.state?.targetCard?.id ?? "";
+    if (!targetId || props.state?.phase !== "playing") {
+        return "";
+    }
+    return `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${targetId}`;
+});
+const chiSelectionDraftActive = computed(() => chiSelectionAvailable.value || Boolean(chiSelectionContextKey.value && selectedChiCardIds.value.length > 0));
 const selectedChiCandidate = computed(() => {
     const selected = [...selectedChiCardIds.value].sort();
     return activeChiCandidates.value.find((candidate) => {
@@ -619,6 +629,33 @@ const extendableChiCandidates = computed(() => {
     return activeChiCandidates.value.filter((candidate) => selectedChiCardIds.value.length <= candidate.cardIds.length &&
         [...selected].every((cardId) => candidate.cardIds.includes(cardId)));
 });
+function chiCandidateFaceSignature(candidate) {
+    const cardsById = new Map(props.privateHand.map((card) => [card.id, card]));
+    const faces = candidate.cardIds.map((cardId) => {
+        const card = cardsById.get(cardId);
+        return card ? `${card.color}:${card.type}` : `missing:${cardId}`;
+    }).sort();
+    return `${faces.length}|${faces.join("|")}`;
+}
+function uniqueVisibleChiCandidate() {
+    const byVisibleComposition = new Map();
+    for (const candidate of activeChiCandidates.value) {
+        const signature = chiCandidateFaceSignature(candidate);
+        const entries = byVisibleComposition.get(signature) ?? [];
+        entries.push(candidate);
+        byVisibleComposition.set(signature, entries);
+    }
+    if (byVisibleComposition.size !== 1) {
+        return null;
+    }
+    return [...(byVisibleComposition.values().next().value ?? [])]
+        .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
+}
+function blockChiAutoSelectionForCurrentTarget() {
+    if (chiSelectionContextKey.value) {
+        chiAutoSelectionBlockedKey.value = chiSelectionContextKey.value;
+    }
+}
 const ACTION_LABELS = {
     DISCARD: "出牌",
     PENG: "碰",
@@ -832,7 +869,7 @@ function isChiCardSelectable(cardId) {
     return extendableChiCandidates.value.some((candidate) => candidate.cardIds.includes(cardId));
 }
 function canSelectHandCard(card) {
-    if (chiSelectionAvailable.value) {
+    if (chiSelectionDraftActive.value) {
         return isChiCardSelectable(card.id);
     }
     return canPreselectDiscardCard(card);
@@ -851,13 +888,14 @@ function selectDiscardCard(cardId) {
     selectedDiscardCardId.value = selectedDiscardCardId.value === cardId ? null : cardId;
 }
 function selectHandCard(cardId) {
-    if (!chiSelectionAvailable.value) {
+    if (!chiSelectionDraftActive.value) {
         selectDiscardCard(cardId);
         return;
     }
     if (!isChiCardSelectable(cardId)) {
         return;
     }
+    blockChiAutoSelectionForCurrentTarget();
     if (selectedChiCardIds.value.includes(cardId)) {
         selectedChiCardIds.value = selectedChiCardIds.value.filter((id) => id !== cardId);
         return;
@@ -865,7 +903,7 @@ function selectHandCard(cardId) {
     selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
 }
 function ensureHandCardSelected(cardId) {
-    if (!chiSelectionAvailable.value) {
+    if (!chiSelectionDraftActive.value) {
         const picked = props.privateHand.find((card) => card.id === cardId);
         if (picked && canPreselectDiscardCard(picked)) {
             selectedDiscardCardId.value = cardId;
@@ -873,6 +911,7 @@ function ensureHandCardSelected(cardId) {
         return;
     }
     if (isChiCardSelectable(cardId) && !selectedChiCardIds.value.includes(cardId)) {
+        blockChiAutoSelectionForCurrentTarget();
         selectedChiCardIds.value = [...selectedChiCardIds.value, cardId];
     }
 }
@@ -881,6 +920,7 @@ function clearChiSelection(event) {
         return;
     }
     event?.preventDefault();
+    blockChiAutoSelectionForCurrentTarget();
     selectedChiCardIds.value = [];
 }
 function updateHandScrollState() {
@@ -988,7 +1028,11 @@ function confirmDiscard() {
     }, 2500);
 }
 function onSubmitAction(request) {
-    if (typeof request !== "string" && request.action === "chi") {
+    const keepsDeferredChiDraft = typeof request !== "string" &&
+        request.action === "chi" &&
+        props.responsePhase === "collective" &&
+        responseCard.value?.source !== "draw";
+    if (typeof request !== "string" && request.action === "chi" && !keepsDeferredChiDraft) {
         selectedChiCardIds.value = [];
     }
     emit("submitAction", request);
@@ -997,7 +1041,7 @@ function cardLabel(card) {
     return getCardLabelText(card);
 }
 function handCardAccessibleLabel(card) {
-    const state = chiSelectionAvailable.value
+    const state = chiSelectionDraftActive.value
         ? selectedChiCardIds.value.includes(card.id)
             ? "已选入吃牌组合"
             : isChiCardSelectable(card.id)
@@ -1568,15 +1612,24 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     if (selectedDiscardCardId.value && !props.privateHand.some((card) => card.id === selectedDiscardCardId.value)) {
         selectedDiscardCardId.value = null;
     }
-    selectedChiCardIds.value = selectedChiCardIds.value.filter((cardId) => props.privateHand.some((card) => card.id === cardId));
+    const retainedChiCardIds = selectedChiCardIds.value.filter((cardId) => props.privateHand.some((card) => card.id === cardId));
+    if (retainedChiCardIds.length !== selectedChiCardIds.value.length) {
+        blockChiAutoSelectionForCurrentTarget();
+        selectedChiCardIds.value = [];
+    }
     void nextTick(updateHandScrollState);
 });
 watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(() => observeHandScroller(selfHandRef.value)));
 watch(() => props.ownCardMode, () => void nextTick(updateHandScrollState));
 watch(selfHandRef, observeHandScroller, { immediate: true });
-watch(() => `${props.state?.responseCard?.id ?? props.state?.targetCard?.id ?? ""}|${props.responsePhase ?? ""}`, () => {
+watch(() => chiSelectionContextKey.value, (contextKey) => {
+    if (contextKey === activeChiSelectionContextKey) {
+        return;
+    }
+    activeChiSelectionContextKey = contextKey;
+    chiAutoSelectionBlockedKey.value = "";
     selectedChiCardIds.value = [];
-});
+}, { immediate: true });
 watch(() => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`, () => {
     if (props.state?.phase === "playing") {
         return;
@@ -1592,15 +1645,23 @@ watch(() => Boolean(selfPlayer.value?.isBot || selfPlayer.value?.isAutoPlay), (a
 });
 watch(() => activeChiCandidates.value.map((candidate) => candidate.id).join("|"), () => {
     if (!chiSelectionAvailable.value) {
-        selectedChiCardIds.value = [];
         return;
     }
     const selected = selectedChiCardIds.value;
     if (selected.length > 0 &&
         !activeChiCandidates.value.some((candidate) => selected.every((cardId) => candidate.cardIds.includes(cardId)))) {
         selectedChiCardIds.value = [];
+        blockChiAutoSelectionForCurrentTarget();
+        return;
     }
-});
+    if (selected.length > 0 || chiAutoSelectionBlockedKey.value === chiSelectionContextKey.value) {
+        return;
+    }
+    const defaultCandidate = uniqueVisibleChiCandidate();
+    if (defaultCandidate) {
+        selectedChiCardIds.value = [...defaultCandidate.cardIds];
+    }
+}, { immediate: true });
 watch(() => props.actionFeedback?.status, (status) => {
     if (status !== "rejected" || !discardingCardId.value) {
         return;
@@ -2960,15 +3021,15 @@ if (__VLS_ctx.selfPlayer) {
                     playable: __VLS_ctx.canSelectHandCard(card),
                     blocked: __VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card),
                     'gold-blocked': __VLS_ctx.canDiscard && card.color === 'gold',
-                    'discard-selected': !__VLS_ctx.chiSelectionAvailable && __VLS_ctx.selectedDiscardCardId === card.id,
+                    'discard-selected': !__VLS_ctx.chiSelectionDraftActive && __VLS_ctx.selectedDiscardCardId === card.id,
                     'candidate-active': __VLS_ctx.isChiCardSelectable(card.id),
                     'candidate-selected': __VLS_ctx.selectedChiCardIds.includes(card.id),
                 }) },
-            'aria-pressed': (__VLS_ctx.chiSelectionAvailable ? __VLS_ctx.selectedChiCardIds.includes(card.id) : __VLS_ctx.selectedDiscardCardId === card.id),
+            'aria-pressed': (__VLS_ctx.chiSelectionDraftActive ? __VLS_ctx.selectedChiCardIds.includes(card.id) : __VLS_ctx.selectedDiscardCardId === card.id),
             'aria-label': (__VLS_ctx.handCardAccessibleLabel(card)),
             disabled: (!__VLS_ctx.canSelectHandCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
-        if (!__VLS_ctx.chiSelectionAvailable && __VLS_ctx.selectedDiscardCardId === card.id) {
+        if (!__VLS_ctx.chiSelectionDraftActive && __VLS_ctx.selectedDiscardCardId === card.id) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "discard-selection-badge" },
                 'aria-hidden': "true",
@@ -3369,7 +3430,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             displayPrivateHand: displayPrivateHand,
             handVisibleRangeLabel: handVisibleRangeLabel,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
-            chiSelectionAvailable: chiSelectionAvailable,
+            chiSelectionDraftActive: chiSelectionDraftActive,
             selectedChiCandidate: selectedChiCandidate,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,

@@ -64,6 +64,87 @@ test("a player composes chi directly from the real hand without a candidate dial
   await expect(discard).toBeDisabled();
 });
 
+test("the only visible chi composition is selected without submitting it", async ({ page }) => {
+  await enterPractice(page);
+  await setupChiScenario(page, "chi_unique_jmp");
+
+  const ju = page.getByTestId("hand-card-unique-yellow-ju-1");
+  const ma = page.getByTestId("hand-card-unique-yellow-ma");
+  const chi = page.getByTestId("action-chi");
+  await expect(ju).toHaveAttribute("aria-pressed", "true");
+  await expect(ma).toHaveAttribute("aria-pressed", "true");
+  await expect(chi).toBeEnabled();
+
+  await page.keyboard.press("Escape");
+  await expect(ju).toHaveAttribute("aria-pressed", "false");
+  await expect(ma).toHaveAttribute("aria-pressed", "false");
+  await expect(chi).toBeDisabled();
+  await page.waitForTimeout(250);
+  await expect(ju).toHaveAttribute("aria-pressed", "false");
+  await expect(ma).toHaveAttribute("aria-pressed", "false");
+});
+
+test("duplicate physical cards still count as one visible chi composition", async ({ page }) => {
+  await enterPractice(page);
+  await setupChiScenario(page, "chi_unique_duplicate_jmp");
+
+  await expect(page.getByTestId("hand-card-unique-yellow-ma")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
+  await expect.poll(() => page.locator('[data-testid^="hand-card-unique-yellow-ju-"][aria-pressed="true"]').count())
+    .toBe(1);
+});
+
+test("a complete chi draft survives collective to local_upper for the same card", async ({ page }) => {
+  await enterPractice(page);
+  await setupChiScenario(page, "chi_collective_zu4");
+
+  const selected = [
+    page.getByTestId("hand-card-shared-zu-yellow"),
+    page.getByTestId("hand-card-shared-zu-red"),
+    page.getByTestId("hand-card-shared-zu-green"),
+  ];
+  await expect(page.getByTestId("action-chi")).toBeVisible();
+  await selected[0].click();
+  await expect(selected[0]).toHaveAttribute("aria-pressed", "true");
+  await selected[1].click();
+  await expect(selected[1]).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
+  await selected[2].click();
+  await expect(selected[2]).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
+
+  await setupChiScenario(page, "chi_local_upper_zu4");
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-response-phase", "local_upper");
+  for (const card of selected) await expect(card).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
+});
+
+test("a confirmed collective chi is deferred and applied exactly once", async ({ page }) => {
+  await enterPractice(page);
+  await setupChiScenario(page, "chi_collective_zu4");
+
+  await expect(page.getByTestId("action-chi")).toBeVisible();
+  for (const id of ["shared-zu-yellow", "shared-zu-red", "shared-zu-green"]) {
+    await page.getByTestId(`hand-card-${id}`).click();
+  }
+  const chi = page.getByTestId("action-chi");
+  await expect(chi).toBeEnabled();
+  await chi.click();
+
+  const exposedCounts = () => page.evaluate(() => {
+    const state = (window as Window & { __siseLocalTest?: { getRoomState: () => any } })
+      .__siseLocalTest?.getRoomState();
+    const exposedIds = (state?.players ?? []).flatMap((player: any) =>
+      (player.exposedArea ?? []).map((card: any) => card.id),
+    );
+    return ["shared-zu-yellow", "shared-zu-red", "shared-zu-green", "shared-zu-white"]
+      .map((id) => exposedIds.filter((exposedId: string) => exposedId === id).length);
+  });
+  await expect.poll(exposedCounts).toEqual([1, 1, 1, 1]);
+  await page.waitForTimeout(500);
+  await expect.poll(exposedCounts).toEqual([1, 1, 1, 1]);
+});
+
 test("a player can freely choose a three-color or four-color zu chi from the hand", async ({ page }) => {
   await enterPractice(page);
   await setupChiScenario(page, "chi_four_zu");
