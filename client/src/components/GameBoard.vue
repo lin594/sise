@@ -628,10 +628,16 @@
     <Teleport to="body">
       <div v-for="flight in tableFlights" :key="flight.key" class="table-flight"
         :style="flight.style" :data-transition-kind="flight.kind" :data-transition-card-id="flight.card.id"
-        :data-transition-stage="flight.stage" aria-hidden="true">
+        :data-transition-stage="flight.stage" :data-transition-to="flight.destinationZone" aria-hidden="true">
         <div class="table-flight-turn" :style="{ transform: `rotateY(${flight.rotation}deg)` }">
           <div v-if="flight.back" class="card-back"></div>
-          <CardComp v-else :card="flight.card" :mode="props.tableCardMode" size="lg" />
+          <CardComp
+            v-else
+            :card="flight.card"
+            :mode="props.tableCardMode"
+            :size="flight.cardSize"
+            :class="flight.cardClass"
+          />
         </div>
       </div>
     </Teleport>
@@ -1250,6 +1256,16 @@ function interpolateRect(start: CardRect, end: CardRect, progress: number): Card
   };
 }
 
+function tableFlightCardVisual(location: TableLocation): {
+  size: "xs" | "lg";
+  className: "discard-token" | "mini-card" | "response-card-face" | "";
+} {
+  if (location.zone === "flow") return { size: "xs", className: "discard-token" };
+  if (location.zone === "meld") return { size: "xs", className: "mini-card" };
+  if (location.zone === "center") return { size: "lg", className: "response-card-face" };
+  return { size: "xs", className: "" };
+}
+
 const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : activeTableEvents.value.flatMap((event) => event.moves.flatMap((move, index) => {
   const key = `${event.round}:${event.id}:${index}`;
   const exactEnd = tableLocationExactRect(move.to, move.card.id);
@@ -1290,14 +1306,18 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
   const back = draw && elapsed < 950;
   const flip = Math.min(1, Math.max(0, (elapsed - 700) / 500)) * 180;
   const current = interpolateRect(start, end, eased);
-  const scaleX = Math.max(0.01, current.width / start.width);
-  const scaleY = Math.max(0.01, current.height / start.height);
+  const scaleX = Math.max(0.01, current.width / end.width);
+  const scaleY = Math.max(0.01, current.height / end.height);
+  const destinationVisual = tableFlightCardVisual(move.to);
   return [{ key, card: move.card, kind: event.kind,
     back, rotation: draw ? (back ? flip : flip - 180) : 0,
     stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
+    destinationZone: move.to.zone,
+    cardSize: destinationVisual.size,
+    cardClass: destinationVisual.className,
     style: {
-      width: `${Math.max(1, start.width)}px`,
-      height: `${Math.max(1, start.height)}px`,
+      width: `${Math.max(1, end.width)}px`,
+      height: `${Math.max(1, end.height)}px`,
       transform: `translate3d(${current.left}px, ${current.top}px, 0) scale(${scaleX}, ${scaleY})`,
     },
   }];

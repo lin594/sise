@@ -9,6 +9,11 @@ type RectSnapshot = {
   height: number;
 };
 
+type GlyphRatio = {
+  width: number;
+  height: number;
+};
+
 type MeldHandoff = {
   done: boolean;
   histories: Record<string, RectSnapshot[]>;
@@ -18,6 +23,8 @@ type MeldHandoff = {
   handCounts: Record<string, number>;
   visibleCounts: Record<string, number>;
   targetModes: Record<string, string | null>;
+  lastFlightGlyphRatios: Record<string, GlyphRatio>;
+  targetGlyphRatios: Record<string, GlyphRatio>;
 };
 
 async function start(page: Page, scenario: string) {
@@ -58,6 +65,8 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
       handCounts: {},
       visibleCounts: {},
       targetModes: {},
+      lastFlightGlyphRatios: {},
+      targetGlyphRatios: {},
     };
     trackingWindow.__siseMeldHandoff = result;
 
@@ -77,6 +86,17 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
         && rect.width > 0
         && rect.height > 0;
     };
+    const glyphRatio = (card: HTMLElement): GlyphRatio => {
+      const cardRect = card.getBoundingClientRect();
+      const glyph = card.querySelector<HTMLElement>(".text-top")!;
+      const glyphRange = document.createRange();
+      glyphRange.selectNodeContents(glyph);
+      const glyphRect = glyphRange.getBoundingClientRect();
+      return {
+        width: glyphRect.width / cardRect.width,
+        height: glyphRect.height / cardRect.height,
+      };
+    };
 
     const sample = () => {
       const flights = Array.from(document.querySelectorAll<HTMLElement>('[data-transition-kind="meld"]'));
@@ -92,6 +112,8 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
             height: flight.offsetHeight,
           });
           result.lastFlights[id] = snapshot;
+          const face = flight.querySelector<HTMLElement>("[data-face-id]");
+          if (face) result.lastFlightGlyphRatios[id] = glyphRatio(face);
         }
       } else if (result.seen) {
         for (const id of ids) {
@@ -99,6 +121,7 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
           if (targets[0]) {
             result.targets[id] = rectOf(targets[0]);
             result.targetModes[id] = targets[0].dataset.cardMode ?? null;
+            result.targetGlyphRatios[id] = glyphRatio(targets[0]);
           }
           result.handCounts[id] = elementsWithId(".hand-card [data-face-id]", id).length;
           result.visibleCounts[id] = elementsWithId("[data-face-id]", id).filter(isVisible).length;
@@ -133,6 +156,11 @@ function expectSizeConverges(history: RectSnapshot[], target: RectSnapshot) {
   }
 }
 
+function expectGlyphRatioClose(actual: GlyphRatio, expected: GlyphRatio) {
+  expect(Math.abs(actual.width - expected.width), "glyph/card width ratio").toBeLessThanOrEqual(0.04);
+  expect(Math.abs(actual.height - expected.height), "glyph/card height ratio").toBeLessThanOrEqual(0.04);
+}
+
 async function expectRedXiangPengHandoff(page: Page, mode: "large" | "long") {
   await start(page, "upper_peng_xiang");
   await selectTableCardMode(page, mode);
@@ -145,6 +173,7 @@ async function expectRedXiangPengHandoff(page: Page, mode: "large" | "long") {
   expect(Object.keys(handoff.targets).sort()).toEqual([...expectedIds].sort());
   for (const id of expectedIds) {
     expectRectClose(handoff.lastFlights[id], handoff.targets[id]);
+    expectGlyphRatioClose(handoff.lastFlightGlyphRatios[id], handoff.targetGlyphRatios[id]);
     expectSizeConverges(handoff.histories[id], handoff.targets[id]);
     expect(new Set(handoff.layoutSizes[id].map((size) => `${size.width}x${size.height}`)).size,
       `${id} must animate size on the compositor without per-frame layout`).toBe(1);
@@ -180,7 +209,7 @@ test("a CPU-throttled meld still holds the exact final rectangles", async ({ pag
 });
 
 test.describe("desktop long-card meld handoff", () => {
-  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false });
+  test.use({ viewport: { width: 1920, height: 1241 }, hasTouch: false, isMobile: false });
 
   test("red Xiang Peng converges to long-card meld geometry", async ({ page }) => {
     await expectRedXiangPengHandoff(page, "long");
@@ -204,16 +233,31 @@ test("draw flies face down, pauses, flips, then accepts B's eat with real cards"
     };
   });
   expectRectClose(landedDraw.flight, landedDraw.target);
+  await expect(flight).toHaveAttribute("data-transition-stage", "flipping");
+  await expect(flight.locator("[data-face-id]")).toBeVisible();
+  const drawGlyphRatios = await page.evaluate(() => {
+    const ratio = (card: HTMLElement) => {
+      const cardRect = card.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(card.querySelector<HTMLElement>(".text-top")!);
+      const glyphRect = range.getBoundingClientRect();
+      return { width: glyphRect.width / cardRect.width, height: glyphRect.height / cardRect.height };
+    };
+    return {
+      flight: ratio(document.querySelector<HTMLElement>('[data-transition-kind="draw"] [data-face-id]')!),
+      target: ratio(document.querySelector<HTMLElement>('[data-testid="pending-card"] .response-card-face')!),
+    };
+  });
+  expectGlyphRatioClose(drawGlyphRatios.flight, drawGlyphRatios.target);
   await expect(page.getByTestId("action-chi")).toHaveCount(0);
   await expect(page.getByTestId("action-chi")).toBeVisible();
-  await expect(page.getByTestId("action-chi")).toBeDisabled();
+  await expect(page.getByTestId("hand-card-red-ju")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("hand-card-red-pao")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect(flight).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__drawStages)).toEqual(["flying", "waiting", "flipping"]);
   await expect(page.getByTestId("pending-card")).toBeVisible();
   await expect(page.locator('.discard-token[data-face-id^="draw-ma"]')).toHaveCount(0);
-  await page.getByTestId("hand-card-red-ju").click();
-  await page.getByTestId("hand-card-red-pao").click();
-  await expect(page.getByTestId("action-chi")).toBeEnabled();
   await page.getByTestId("action-chi").click();
   await expect(page.locator('[data-transition-kind="meld"]')).toHaveCount(3);
   await expect(page.getByTestId("discard-confirm")).toBeVisible();
@@ -270,7 +314,21 @@ test("declining a draw lands it in the drawer's outgoing flow without a second p
     };
   }, origin.id);
   expectRectClose(landedFlow.flight, landedFlow.target);
-  await expect(page.locator(`.discard-token[data-face-id="${origin.id}"]`)).toBeVisible();
+  const flowGlyphRatios = await page.evaluate((id) => {
+    const ratio = (card: HTMLElement) => {
+      const cardRect = card.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(card.querySelector<HTMLElement>(".text-top")!);
+      const glyphRect = range.getBoundingClientRect();
+      return { width: glyphRect.width / cardRect.width, height: glyphRect.height / cardRect.height };
+    };
+    return {
+      flight: ratio(document.querySelector<HTMLElement>(`[data-transition-kind="flow"][data-transition-card-id="${id}"] [data-face-id]`)! ),
+      target: ratio(document.querySelector<HTMLElement>(`[data-testid="game-board"] .discard-token[data-face-id="${id}"]`)! ),
+    };
+  }, origin.id);
+  expectGlyphRatioClose(flowGlyphRatios.flight, flowGlyphRatios.target);
+  await expect(page.getByTestId("game-board").locator(`.discard-token[data-face-id="${origin.id}"]`)).toBeVisible();
   const events = await page.evaluate((id) => (window as any).__siseLocalTest.getRoomState().tableTransitions.filter((e: any) => e.moves.some((m: any) => m.card.id === id)), origin.id);
   expect(events.map((event: any) => event.kind)).toEqual(["draw", "flow"]);
   expect(events[1].moves[0].to).toEqual({ zone: "flow", playerId: origin.owner });
