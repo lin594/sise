@@ -8,7 +8,11 @@ export type TurnAlertMode = "sound-vibration" | "sound" | "off";
 export type RoomConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "retry_wait" | "offline" | "restored" | "closed" | "failed";
 export interface ListeningRoute {
     discardCardId: string;
-    waits: Card[];
+    waits: ListeningWait[];
+}
+export interface ListeningWait {
+    card: Card;
+    visibleRemaining: number;
 }
 export interface ListeningHints {
     stateRevision: number;

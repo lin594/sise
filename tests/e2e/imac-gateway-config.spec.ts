@@ -10,6 +10,7 @@ test("the iMac override exposes only the same-origin web gateway", async () => {
   expect(compose).toContain('VITE_SERVER_URL: "${IMAC_VITE_SERVER_URL:-ws://imac.tajuren.cn}"');
   expect(compose).toContain('VITE_SERVER_HTTP_URL: "${IMAC_VITE_SERVER_HTTP_URL:-http://imac.tajuren.cn}"');
   expect(compose).toContain('CORS_ALLOWED_ORIGINS: "${IMAC_CORS_ALLOWED_ORIGINS:-http://imac.tajuren.cn,http://imac.tajuren.cn:3000}"');
+  expect(compose).toContain('PUBLIC_WEB_ORIGIN: "${IMAC_PUBLIC_WEB_ORIGIN:-http://imac.tajuren.cn}"');
   expect(compose).toContain('TRUST_PROXY_HOPS: "1"');
   expect(compose).toMatch(/server:[\s\S]*?ports:\s*!override\s*\[\]/u);
   expect(compose).toMatch(/web:[\s\S]*?ports:\s*!override[\s\S]*?-\s*"80:80"[\s\S]*?-\s*"3000:80"/u);

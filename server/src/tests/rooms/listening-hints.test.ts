@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FourColorGameRoom } from '../../rooms/GameRoom.js';
 import { GameState, PlayerState } from '../../schema/game-state.schema.js';
 import { buildChiCandidates } from '../../rooms/flow/action-candidates.js';
-import { findListeningDiscards } from '../../rooms/flow/listening-hints.js';
+import { buildVisibleRemainingByFace, findListeningDiscards } from '../../rooms/flow/listening-hints.js';
 import type { Card } from '../../rules/types.js';
 
 test('private hints cache, chi projection and revision invalidation use only the requesting hand', () => {
@@ -25,7 +25,10 @@ test('private hints cache, chi projection and revision invalidation use only the
   let actions: unknown[] = [];
   room.buildClientDecisionView = () => ({ availableActions: actions, decisionTimer: { decisionKey: 'play:1' } });
   const initial = room.buildListeningHints('A');
-  assert.deepEqual(initial.discards, findListeningDiscards(hand));
+  assert.deepEqual(
+    initial.discards,
+    findListeningDiscards(hand, 0, buildVisibleRemainingByFace(room.buildListeningKnownCards('A'))),
+  );
   room.deck = new Proxy([], { get() { throw new Error('Hints must not inspect deck'); } });
   room.playerHands.set('B', new Proxy([], { get() { throw new Error('Hints must not inspect opponents'); } }));
   room.state.stateRevision = 2;
@@ -42,7 +45,14 @@ test('private hints cache, chi projection and revision invalidation use only the
   for (const item of preview.chi) {
     const plan = candidates.find((c) => c.candidate.id === item.candidateId)!.plan;
     const removed = new Set(plan.handCards.map((c) => c.id));
-    assert.deepEqual(item.discards, findListeningDiscards(hand.filter((c) => !removed.has(c.id))));
+    assert.deepEqual(
+      item.discards,
+      findListeningDiscards(
+        hand.filter((c) => !removed.has(c.id)),
+        0,
+        buildVisibleRemainingByFace(room.buildListeningKnownCards('A')),
+      ),
+    );
   }
   actions = [];
   assert.deepEqual(room.buildListeningHints('A').chi, []);

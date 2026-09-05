@@ -250,8 +250,8 @@
                 >
                   <span
                     class="response-caption"
-                    :data-testid="passiveCollectiveWait ? 'passive-collective-status' : undefined"
-                  >{{ passiveCollectiveWait ? `全局响应 · ${seatCountdownSeconds}s` : "待响" }}</span>
+                    :data-testid="showCollectiveCountdown ? 'collective-response-countdown' : undefined"
+                  >{{ showCollectiveCountdown ? `全局响应 · ${seatCountdownSeconds}s` : "待响" }}</span>
                   <CardComp
                     :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
                     :card="responseCard"
@@ -529,7 +529,7 @@
     <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div class="decision-status" data-testid="decision-status">
         <strong>{{ fixedStatusText }}</strong>
-        <span class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
+        <span v-if="showDecisionClock" class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
         <button v-if="canRequestMoreTime && !effectiveInteractionPausedMessage" type="button" data-testid="request-more-time"
           :aria-label="`需要更多时间，增加${moreTimeSeconds ?? 20}秒`"
           :disabled="nowMs < moreTimePendingUntil" @click="requestFixedMoreTime">{{ nowMs < moreTimePendingUntil ? '加时中…' : `+${moreTimeSeconds ?? 20}秒` }}</button>
@@ -545,13 +545,18 @@
         <template v-if="selectedDiscardListeningRoute?.waits.length">
           <span class="selected-preview-wait-label" aria-hidden="true">等</span>
           <span class="selected-preview-waits" aria-hidden="true">
-            <CardComp
-              v-for="card in selectedDiscardListeningRoute.waits"
-              :key="`selected-wait-${card.id}`"
-              :card="card"
-              size="xs"
-              mode="large"
-            />
+            <span
+              v-for="wait in selectedDiscardListeningRoute.waits"
+              :key="`selected-wait-${wait.card.id}`"
+              class="selected-preview-wait"
+              :class="{ exhausted: wait.visibleRemaining === 0 }"
+              :data-card-id="wait.card.id"
+              :data-visible-remaining="wait.visibleRemaining"
+              data-testid="listening-wait"
+            >
+              <CardComp :card="wait.card" size="xs" mode="large" />
+              <span class="wait-count-badge" data-testid="listening-wait-count">{{ wait.visibleRemaining }}张</span>
+            </span>
           </span>
         </template>
       </div>
@@ -1688,7 +1693,9 @@ const selectedPreviewAccessibleLabel = computed(() => {
   if (!selected) return "";
   const waits = selectedDiscardListeningRoute.value?.waits ?? [];
   if (!waits.length) return `已选出牌预览：${getCardAccessibleText(selected)}`;
-  return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits.map(getCardAccessibleText).join("、")}`;
+  return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits
+    .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
+    .join("；")}`;
 });
 
 const seatCountdownSeconds = computed<number | null>(() => {
@@ -1733,23 +1740,22 @@ const playDecisionEndsAt = computed(() => {
   return Number(props.state?.responseEndsAt ?? 0);
 });
 
-const passiveCollectiveWait = computed(() => {
-  if (
-    String(props.state?.responsePhase ?? "") !== "collective" ||
-    seatCountdownSeconds.value === null ||
-    Number(props.decisionTimerTotalMs ?? 0) <= 0 ||
-    Number(props.decisionTimerTotalMs ?? 0) > 5_000 ||
-    !String(props.state?.activeResponderId ?? "")
-  ) {
-    return false;
-  }
-  return !isQuietSelfDiscardWait({
-    responsePhase: String(props.state?.responsePhase ?? ""),
-    responseSource: responseCard.value?.source,
-    originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
-    viewerPlayerId: props.mySeatId,
-  });
-});
+const hasMeaningfulCollectiveAction = computed(() =>
+  (props.actions ?? []).some((action) =>
+    action.action !== "pass" && (action.enabled || Boolean(action.deferred)),
+  ),
+);
+const showCollectiveCountdown = computed(() =>
+  String(props.state?.responsePhase ?? "") === "collective" &&
+  String(props.state?.activeResponderId ?? "") === props.mySeatId &&
+  hasMeaningfulCollectiveAction.value &&
+  seatCountdownSeconds.value !== null,
+);
+const showDecisionClock = computed(() =>
+  String(props.state?.phase ?? "") !== "playing" ||
+  String(props.state?.responsePhase ?? "") !== "collective" ||
+  showCollectiveCountdown.value,
+);
 
 const compactCenterHint = computed(() => {
   if (effectiveInteractionPausedMessage.value) {
@@ -1768,7 +1774,6 @@ const compactCenterHint = computed(() => {
       originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
       viewerPlayerId: props.mySeatId,
     })) return "";
-    if (passiveCollectiveWait.value) return "";
     return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
   }
   if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
@@ -5049,6 +5054,10 @@ watch(
 .selected-card-preview { position: absolute; right: 4px; bottom: calc(100% + 4px); z-index: 8; max-width: min(70vw, 28rem); display: flex; align-items: center; gap: 6px; background: #0f172a; border: 1px solid #34d399; padding: 4px; border-radius: 6px; pointer-events: none; }
 .selected-preview-wait-label { color: #a7f3d0; font-size: 12px; font-weight: 800; }
 .selected-preview-waits { min-width: 0; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.selected-preview-wait { position: relative; display: inline-flex; }
+.selected-preview-wait.exhausted :deep(.card) { filter: grayscale(1); opacity: 0.48; }
+.wait-count-badge { position: absolute; right: -2px; top: -4px; z-index: 2; min-width: 22px; padding: 0 3px; border-radius: 999px; background: #065f46; color: #ecfdf5; box-shadow: 0 0 0 1px #0f172a; font-size: 9px; line-height: 14px; font-weight: 800; text-align: center; white-space: nowrap; }
+.selected-preview-wait.exhausted .wait-count-badge { background: #475569; color: #e2e8f0; }
 .turn-countdown, .self-turn-timer { display: none; }
 .board.board-declaring { grid-template-rows: minmax(0, 1fr) auto; }
 .board-declaring .self-info-card { display: none; }

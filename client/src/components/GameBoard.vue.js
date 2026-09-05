@@ -802,7 +802,9 @@ const selectedPreviewAccessibleLabel = computed(() => {
     const waits = selectedDiscardListeningRoute.value?.waits ?? [];
     if (!waits.length)
         return `已选出牌预览：${getCardAccessibleText(selected)}`;
-    return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits.map(getCardAccessibleText).join("、")}`;
+    return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits
+        .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
+        .join("；")}`;
 });
 const seatCountdownSeconds = computed(() => {
     if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
@@ -836,21 +838,14 @@ const playDecisionEndsAt = computed(() => {
     }
     return Number(props.state?.responseEndsAt ?? 0);
 });
-const passiveCollectiveWait = computed(() => {
-    if (String(props.state?.responsePhase ?? "") !== "collective" ||
-        seatCountdownSeconds.value === null ||
-        Number(props.decisionTimerTotalMs ?? 0) <= 0 ||
-        Number(props.decisionTimerTotalMs ?? 0) > 5_000 ||
-        !String(props.state?.activeResponderId ?? "")) {
-        return false;
-    }
-    return !isQuietSelfDiscardWait({
-        responsePhase: String(props.state?.responsePhase ?? ""),
-        responseSource: responseCard.value?.source,
-        originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
-        viewerPlayerId: props.mySeatId,
-    });
-});
+const hasMeaningfulCollectiveAction = computed(() => (props.actions ?? []).some((action) => action.action !== "pass" && (action.enabled || Boolean(action.deferred))));
+const showCollectiveCountdown = computed(() => String(props.state?.responsePhase ?? "") === "collective" &&
+    String(props.state?.activeResponderId ?? "") === props.mySeatId &&
+    hasMeaningfulCollectiveAction.value &&
+    seatCountdownSeconds.value !== null);
+const showDecisionClock = computed(() => String(props.state?.phase ?? "") !== "playing" ||
+    String(props.state?.responsePhase ?? "") !== "collective" ||
+    showCollectiveCountdown.value);
 const compactCenterHint = computed(() => {
     if (effectiveInteractionPausedMessage.value) {
         return effectiveInteractionPausedMessage.value;
@@ -868,8 +863,6 @@ const compactCenterHint = computed(() => {
             originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
             viewerPlayerId: props.mySeatId,
         }))
-            return "";
-        if (passiveCollectiveWait.value)
             return "";
         return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
     }
@@ -2189,6 +2182,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['single-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
+/** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
+/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2651,9 +2649,9 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "response-caption" },
-        'data-testid': (__VLS_ctx.passiveCollectiveWait ? 'passive-collective-status' : undefined),
+        'data-testid': (__VLS_ctx.showCollectiveCountdown ? 'collective-response-countdown' : undefined),
     });
-    (__VLS_ctx.passiveCollectiveWait ? `全局响应 · ${__VLS_ctx.seatCountdownSeconds}s` : "待响");
+    (__VLS_ctx.showCollectiveCountdown ? `全局响应 · ${__VLS_ctx.seatCountdownSeconds}s` : "待响");
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
     const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -3171,12 +3169,14 @@ if (__VLS_ctx.selfPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.fixedStatusText);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "fixed-clock" },
-        ...{ class: ({ urgent: /^\d+秒$/.test(__VLS_ctx.fixedClockText) && parseInt(__VLS_ctx.fixedClockText) <= 5 }) },
-        'data-testid': "decision-countdown",
-    });
-    (__VLS_ctx.fixedClockText);
+    if (__VLS_ctx.showDecisionClock) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "fixed-clock" },
+            ...{ class: ({ urgent: /^\d+秒$/.test(__VLS_ctx.fixedClockText) && parseInt(__VLS_ctx.fixedClockText) <= 5 }) },
+            'data-testid': "decision-countdown",
+        });
+        (__VLS_ctx.fixedClockText);
+    }
     if (__VLS_ctx.canRequestMoreTime && !__VLS_ctx.effectiveInteractionPausedMessage) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestFixedMoreTime) },
@@ -3215,21 +3215,32 @@ if (__VLS_ctx.selfPlayer) {
                 ...{ class: "selected-preview-waits" },
                 'aria-hidden': "true",
             });
-            for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedDiscardListeningRoute.waits))) {
+            for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.selectedDiscardListeningRoute.waits))) {
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    key: (`selected-wait-${wait.card.id}`),
+                    ...{ class: "selected-preview-wait" },
+                    ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
+                    'data-card-id': (wait.card.id),
+                    'data-visible-remaining': (wait.visibleRemaining),
+                    'data-testid': "listening-wait",
+                });
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
                 const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`selected-wait-${card.id}`),
-                    card: (card),
+                    card: (wait.card),
                     size: "xs",
                     mode: "large",
                 }));
                 const __VLS_52 = __VLS_51({
-                    key: (`selected-wait-${card.id}`),
-                    card: (card),
+                    card: (wait.card),
                     size: "xs",
                     mode: "large",
                 }, ...__VLS_functionalComponentArgsRest(__VLS_51));
+                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                    ...{ class: "wait-count-badge" },
+                    'data-testid': "listening-wait-count",
+                });
+                (wait.visibleRemaining);
             }
         }
     }
@@ -3693,6 +3704,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
+/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
@@ -3795,7 +3808,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedPreviewAccessibleLabel: selectedPreviewAccessibleLabel,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
-            passiveCollectiveWait: passiveCollectiveWait,
+            showCollectiveCountdown: showCollectiveCountdown,
+            showDecisionClock: showDecisionClock,
             compactCenterHint: compactCenterHint,
             crowdedActionDock: crowdedActionDock,
             centerPointerDirection: centerPointerDirection,

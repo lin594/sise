@@ -9,6 +9,13 @@ async function openFriendInvitation(page: Page) {
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 }
 
+function invitationUrlFromRoomPage(page: Page): string {
+  const roomPageUrl = new URL(page.url());
+  const roomId = roomPageUrl.searchParams.get("roomId");
+  if (!roomId) throw new Error("Room page has no roomId");
+  return new URL(`/invite/${encodeURIComponent(roomId)}`, roomPageUrl.origin).toString();
+}
+
 async function observeDealFlights(page: Page): Promise<void> {
   await page.evaluate(() => {
     const trackingWindow = window as Window & {
@@ -161,8 +168,10 @@ test("host invites a friend, configures bots, and starts a shared game", async (
 
     await expect(host.getByTestId("seat-grid")).toBeVisible();
     await expect(host.getByTestId("seat-0")).toContainText("房主");
-    const inviteUrl = host.url();
-    expect(inviteUrl).toContain("roomId=");
+    const roomPageUrl = host.url();
+    const inviteUrl = invitationUrlFromRoomPage(host);
+    expect(roomPageUrl).toContain("roomId=");
+    expect(inviteUrl).toContain("/invite/");
     expect(inviteUrl).not.toContain("playerToken");
     expect(inviteUrl).not.toContain("hostKey");
     await expect(host.getByText("把邀请链接发给朋友，或点击“补齐 3 位电脑”后开始。")).toBeVisible();
@@ -330,6 +339,35 @@ test("host invites a friend, configures bots, and starts a shared game", async (
   }
 });
 
+test("invite card exposes cultural metadata and auto-joins with a confirmed local nickname", async ({ browser }) => {
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  try {
+    await openFriendInvitation(host);
+    const inviteUrl = invitationUrlFromRoomPage(host);
+    const roomId = new URL(host.url()).searchParams.get("roomId");
+    const response = await guest.request.get(inviteUrl);
+    expect(response.ok()).toBe(true);
+    const html = await response.text();
+    expect(html).toContain('property="og:title" content="邀请你一起传承四色牌文化"');
+    expect(html).toContain(`好友房 ${roomId}`);
+    expect(html).toContain("/share-card.png");
+    expect(html).not.toContain("playerToken");
+    expect(html).not.toContain("hostKey");
+
+    await guest.addInitScript(() => localStorage.setItem("sise_entry_name", "文化传承者"));
+    await guest.goto(inviteUrl);
+    await expect(guest.getByTestId("seat-grid")).toBeVisible({ timeout: 15_000 });
+    await expect(guest.getByTestId("nickname-input")).toHaveCount(0);
+    expect(new URL(guest.url()).searchParams.get("roomId")).toBe(roomId);
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+});
+
 test.describe("friend room invitation QR", () => {
   test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
@@ -342,8 +380,8 @@ test("is local, readable, and safe on a legacy phone", async ({ page }, testInfo
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await expect.poll(() => page.url()).toContain("roomId=");
 
-  const inviteUrl = page.url();
-  const roomId = new URL(inviteUrl).searchParams.get("roomId");
+  const roomId = new URL(page.url()).searchParams.get("roomId");
+  const inviteUrl = invitationUrlFromRoomPage(page);
   expect(roomId).toBeTruthy();
   expect(inviteUrl).not.toContain("playerToken");
   expect(inviteUrl).not.toContain("hostKey");
@@ -458,7 +496,7 @@ test("falls back to a selectable local link when canvas generation fails", async
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await expect.poll(() => page.url()).toContain("roomId=");
 
-  const inviteUrl = page.url();
+  const inviteUrl = invitationUrlFromRoomPage(page);
   await page.getByTestId("show-invite-qr").click();
   const fallback = page.getByTestId("friend-invite-qr-fallback-url");
   await expect(fallback).toBeVisible();
@@ -792,9 +830,9 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   const shared = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem("sise_test_shared_invite") ?? "{}") as ShareData,
   );
-  const inviteUrl = page.url();
-  const roomId = new URL(inviteUrl).searchParams.get("roomId");
-  expect(shared).toEqual({ text: `加入好友房 ${roomId}，一起玩四色牌\n${inviteUrl}` });
+  const roomId = new URL(page.url()).searchParams.get("roomId");
+  const inviteUrl = invitationUrlFromRoomPage(page);
+  expect(shared).toEqual({ text: `邀请你一起传承四色牌文化\n好友房 ${roomId}\n${inviteUrl}` });
   expect(shared.text).not.toContain("playerToken");
   expect(shared.text).not.toContain("hostKey");
 });
@@ -892,7 +930,7 @@ for (const legacyCopy of [false, true]) {
     const shareButton = page.getByTestId("share-invite");
     await shareButton.click();
     await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
-    expect(await page.evaluate(() => sessionStorage.getItem("sise_test_copied_invite"))).toBe(page.url());
+    expect(await page.evaluate(() => sessionStorage.getItem("sise_test_copied_invite"))).toBe(invitationUrlFromRoomPage(page));
     await expect(shareButton).toBeFocused();
     await expect(page.getByTestId("copy-invite")).toBeEnabled();
   });
@@ -1014,7 +1052,7 @@ for (const action of ["copy", "share"] as const) {
     await expect(fallback).toBeVisible();
     await expect(linkField).toBeFocused();
     const inviteUrl = await linkField.inputValue();
-    expect(inviteUrl).toContain("roomId=");
+    expect(inviteUrl).toContain("/invite/");
     expect(inviteUrl).not.toContain("playerToken");
     expect(inviteUrl).not.toContain("hostKey");
     expect(await page.evaluate(() => (window as Window & { __legacyPromptCalled?: boolean }).__legacyPromptCalled)).not.toBe(true);

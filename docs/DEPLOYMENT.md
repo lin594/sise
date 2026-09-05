@@ -83,6 +83,7 @@ docker compose -f docker-compose.traefik.yml up --build -d
 VITE_SERVER_URL=wss://sise-api.example.com
 VITE_SERVER_HTTP_URL=https://sise-api.example.com
 CORS_ALLOWED_ORIGINS=https://sise.example.com
+PUBLIC_WEB_ORIGIN=https://sise.example.com
 TRAEFIK_WEB_RULE=Host(`sise.example.com`)
 TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 ```
@@ -94,6 +95,8 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 正式页面通过 HTTPS 提供时，浏览器链路必须分别是 HTTPS API 和 WSS，不能配置 `http://` 或 `ws://` 造成混合内容。客户端在只设置其中一项时会从相同主机、端口和路径推导另一项，例如 `https://sise-api.example.com` 对应 `wss://sise-api.example.com`；正式部署仍建议像上例一样同时显式填写，便于上线前审阅。地址中的查询参数、片段和尾部斜杠不会进入运行时基础地址。
 
 Web 镜像会同源提供 `/site.webmanifest`、favicon 和手机主屏图标。正式 HTTPS 页面可由浏览器添加到主屏；当前没有注册 Service Worker，也不支持离线牌局，部署时不要额外给 API、WebSocket 或首页套用离线缓存。图标文件可长期缓存，Manifest 和首页保持可重新验证，以便升级后及时更新入口信息。
+
+`PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 生成绝对卡片链接和分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。
 
 ## 6. iMac 试玩环境
 
@@ -165,10 +168,11 @@ npm run smoke:imac-gateway
 - `MATCH_FULL_START_MS`：快速桌四名真人到齐后的短展示时间，默认 900ms。
 - `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人执行吃牌、抓牌和出牌等可见动作的思考延时，默认 450–850ms。
 - `BOT_COLLECTIVE_THINK_MIN_MS` / `BOT_COLLECTIVE_THINK_MAX_MS`：机器人处理胡、开、碰或过等集体待响的短延时，默认 80–180ms，避免多名机器人依次等待。
-- `HUMAN_FORCED_PASS_DELAY_MS`：好友房和快速桌中，在线真人没有胡、开、碰等选择时自动过牌前保留的公平等待，默认 3000ms；玩家提前点“过”也不会缩短该窗口，避免用零延迟跳过推断暗牌。单人练习、机器人和托管座位不受影响。
+- `HUMAN_FORCED_PASS_DELAY_MS`：好友房和快速桌中在线真人全局响应的公开释放下限，生产环境不低于 3000ms；无动作自动过、提前吃/过和私下预选都不能缩短该窗口，避免用响应时长推断暗牌。单人练习、机器人和托管座位不受影响。
 - `LOBBY_SEAT_HOLD_MS`：等待大厅断线座位保留时间。
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
 - `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。
+- `PUBLIC_WEB_ORIGIN`：正式 Web 站点来源，用于好友房 Open Graph 邀请卡和入房跳转。
 - `ENABLE_MONITOR`：是否开放 Colyseus 管理监控页；生产环境默认 `0`，仅可信诊断环境临时设为 `1`。
 - `TRUST_PROXY_HOPS`：可信反向代理跳数；直接暴露端口保持 `0`，Traefik 单层代理使用 `1`，不能在不受控直连端口上开启。
 - `HTTP_RATE_LIMIT_WINDOW_MS`：HTTP 限流统计窗口，默认 60000ms。
@@ -190,7 +194,7 @@ npm run smoke:imac-gateway
 
 - `VITE_SERVER_URL`：浏览器连接的 WebSocket 地址。
 - `VITE_SERVER_HTTP_URL`：浏览器请求的 HTTP API 地址。
-- `IMAC_VITE_SERVER_URL` / `IMAC_VITE_SERVER_HTTP_URL` / `IMAC_CORS_ALLOWED_ORIGINS`：只供 iMac 测试覆盖文件使用；正式部署不读取它们作为 Traefik/TLS 地址。
+- `IMAC_VITE_SERVER_URL` / `IMAC_VITE_SERVER_HTTP_URL` / `IMAC_CORS_ALLOWED_ORIGINS` / `IMAC_PUBLIC_WEB_ORIGIN`：只供 iMac 测试覆盖文件使用；正式部署不读取它们作为 Traefik/TLS 地址。
 - `NODE_IMAGE`、`NGINX_IMAGE`、`REDIS_IMAGE`：构建使用的基础镜像。
 - `NPM_CONFIG_REGISTRY`：容器构建使用的 npm registry，默认 `https://registry.npmjs.org`；只有确认镜像站稳定时才覆盖。
 - `TRAEFIK_NETWORK`、`TRAEFIK_CERT_RESOLVER`、`TRAEFIK_WEB_RULE`、`TRAEFIK_SERVER_RULE`：Traefik 配置。

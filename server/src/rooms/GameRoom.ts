@@ -1,4 +1,8 @@
-import { findListeningDiscards, type ListeningHints } from "./flow/listening-hints.js";
+import {
+  buildVisibleRemainingByFace,
+  findListeningDiscards,
+  type ListeningHints,
+} from "./flow/listening-hints.js";
 import { Room, Client, CloseCode } from "@colyseus/core";
 import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
@@ -227,7 +231,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
   private humanForcedPassDelayMs = Math.max(
-    0,
+    process.env.NODE_ENV === "test" ? 0 : 3000,
     Number(process.env.HUMAN_FORCED_PASS_DELAY_MS ?? 3000),
   );
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
@@ -283,6 +287,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private declareDecisionWindowId = 0;
   private responseDecisionWindowId = 0;
   private collectivePrivacyDelaySeatId: string | null = null;
+  private collectivePrivacyFloorSeatId: string | null = null;
+  private collectivePrivacyFloorEndsAt = 0;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
@@ -2495,8 +2501,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (decision === "collective_accept") {
       this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
+      const privacyFloorRemainingMs =
+        isCurrentResponder && this.collectivePrivacyFloorSeatId === seatId
+          ? Math.max(0, this.collectivePrivacyFloorEndsAt - Date.now())
+          : 0;
       const waitsForResponsePrivacyDelay =
-        isCurrentResponder && this.collectivePrivacyDelaySeatId === seatId;
+        isCurrentResponder &&
+        (this.collectivePrivacyDelaySeatId === seatId || privacyFloorRemainingMs > 0);
       if (isCurrentResponder && !waitsForResponsePrivacyDelay) {
         this.clearCollectiveTimer();
       }
@@ -2513,6 +2524,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
       );
       if (waitsForResponsePrivacyDelay) {
+        if (privacyFloorRemainingMs > 0 && this.collectivePrivacyDelaySeatId !== seatId) {
+          this.scheduleCollectiveTimeout(privacyFloorRemainingMs, true, true);
+        }
         this.broadcastAvailableActions();
         return;
       }
@@ -2669,22 +2683,29 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   /**
-   * Give an online human a fixed response slot even when their private hand
-   * has no action beyond Pass. Synchronously skipping that seat exposes hidden
-   * hand information through public turn timing. Practice games and seats
-   * already controlled by the server retain their fast path.
+   * Give an online human a fixed response slot when an automatic pass or a
+   * private preselection would otherwise skip the seat. Every other manual
+   * response also observes the same minimum through the separate privacy floor.
    */
   private responsePrivacyDelayForSeat(seatId: string): number {
-    if (this.state.roomMode === "practice" || this.humanForcedPassDelayMs <= 0) {
+    const privacyMinimumMs = this.responsePrivacyMinimumForSeat(seatId);
+    if (privacyMinimumMs <= 0) {
+      return 0;
+    }
+    return this.pendingResponse?.collectives.has(seatId) || !this.hasCollectiveActionBeyondPass(seatId)
+      ? privacyMinimumMs
+      : 0;
+  }
+
+  private responsePrivacyMinimumForSeat(seatId: string): number {
+    if (this.state.roomMode === "practice") {
       return 0;
     }
     const player = this.state.players.get(seatId);
     if (!player?.connected || player.isConfiguredBot || this.botIds.has(seatId)) {
       return 0;
     }
-    return this.pendingResponse?.collectives.has(seatId) || !this.hasCollectiveActionBeyondPass(seatId)
-      ? this.humanForcedPassDelayMs
-      : 0;
+    return this.humanForcedPassDelayMs;
   }
 
   private canSeatPreselectCollective(seatId: string): boolean {
@@ -3450,19 +3471,48 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private listeningCache = new Map<string, { key: string; value: ListeningHints }>();
 
+  private buildListeningKnownCards(seatId: string): Array<{ id: string; color: string; type: string }> {
+    const cards: Array<{ id: string; color: string; type: string }> = [];
+    const append = (items: Iterable<{ id: string; color: string; type: string }>) => {
+      for (const card of items) {
+        if (card.id) cards.push({ id: card.id, color: card.color, type: card.type });
+      }
+    };
+    append(this.playerHands.get(seatId) ?? []);
+    append(this.state.publicDiscardPile);
+    append(this.publicGeneralPool);
+    if (this.dealerCard) append([this.dealerCard]);
+    if (this.pendingResponse?.card) append([this.pendingResponse.card]);
+    if (this.state.targetCard.id) append([this.state.targetCard]);
+    if (this.state.responseCard.id) append([this.state.responseCard]);
+    for (const player of this.state.players.values()) {
+      append(player.discardPile);
+      append(player.exposedArea);
+      append(player.generalArea);
+      append(player.wildcardPool);
+      append(player.fishArea);
+    }
+    return cards;
+  }
+
   private buildListeningHints(seatId: string): ListeningHints {
     const decision = this.buildClientDecisionView(seatId);
     const hand = this.playerHands.get(seatId) ?? [];
     const kongs = this.state.players.get(seatId)?.declaredKongs ?? 0;
     const candidates = decision.availableActions.find((a) => a.action === "chi")?.candidates ?? [];
     const canDiscard = this.state.phase === "playing" && this.awaitingDiscardOwnerId === seatId;
-    const key = JSON.stringify([decision.decisionTimer.decisionKey, this.pendingResponse?.card, hand, kongs, canDiscard, candidates]);
+    const knownCards = this.buildListeningKnownCards(seatId);
+    const visibleRemainingByFace = buildVisibleRemainingByFace(knownCards);
+    const knownCardSignature = [...new Map(knownCards.map((card) => [card.id, card])).values()]
+      .map((card) => `${card.id}:${card.color}:${card.type}`)
+      .sort();
+    const key = JSON.stringify([decision.decisionTimer.decisionKey, this.pendingResponse?.card, hand, kongs, canDiscard, candidates, knownCardSignature]);
     const cached = this.listeningCache.get(seatId);
     if (cached?.key === key) return { ...cached.value, stateRevision: this.state.stateRevision };
     const value: ListeningHints = {
       stateRevision: this.state.stateRevision,
       decisionKey: decision.decisionTimer.decisionKey,
-      discards: canDiscard ? findListeningDiscards(hand, kongs) : [],
+      discards: canDiscard ? findListeningDiscards(hand, kongs, visibleRemainingByFace) : [],
       chi: [],
     };
     if (this.pendingResponse && candidates.length) {
@@ -3471,7 +3521,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       for (const { candidate, plan } of buildChiCandidates(base, response, this.ops.getWildcardPoolCards(seatId))) {
         if (!candidates.some((item) => item.id === candidate.id)) continue;
         const consumed = new Set(plan.handCards.map((card) => card.id));
-        value.chi.push({ candidateId: candidate.id, discards: findListeningDiscards(base.filter((card) => !consumed.has(card.id)), kongs) });
+        value.chi.push({
+          candidateId: candidate.id,
+          discards: findListeningDiscards(
+            base.filter((card) => !consumed.has(card.id)),
+            kongs,
+            visibleRemainingByFace,
+          ),
+        });
       }
     }
     this.listeningCache.set(seatId, { key, value });
@@ -3862,6 +3919,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.collectiveTimer = null;
     }
     this.collectivePrivacyDelaySeatId = null;
+    this.collectivePrivacyFloorSeatId = null;
+    this.collectivePrivacyFloorEndsAt = 0;
     this.state.responseEndsAt = 0;
   }
 
@@ -3939,6 +3998,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const isCollectivePhase = this.state.responsePhase === "collective";
     const baseTimeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
     const timeoutMs = Math.max(1, timeoutOverrideMs ?? baseTimeoutMs);
+    const existingPrivacyFloorSeatId = this.collectivePrivacyFloorSeatId;
+    const existingPrivacyFloorEndsAt = this.collectivePrivacyFloorEndsAt;
     this.clearCollectiveTimer();
     if (!preserveExtensionState) {
       this.responseTimeExtensionUsed = false;
@@ -3954,6 +4015,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         `phase=${this.state.responsePhase} seat=${decisionSeatId} awaiting=${this.awaitingDiscardOwnerId ?? "-"}`,
       );
       return;
+    }
+    if (
+      preserveExtensionState &&
+      !responsePrivacyDelay &&
+      existingPrivacyFloorSeatId === decisionSeatId &&
+      existingPrivacyFloorEndsAt > Date.now()
+    ) {
+      this.collectivePrivacyFloorSeatId = existingPrivacyFloorSeatId;
+      this.collectivePrivacyFloorEndsAt = existingPrivacyFloorEndsAt;
+    } else if (!preserveExtensionState && isCollectivePhase && this.responsePrivacyMinimumForSeat(decisionSeatId) > 0) {
+      this.collectivePrivacyFloorSeatId = decisionSeatId;
+      this.collectivePrivacyFloorEndsAt = Date.now() + this.responsePrivacyMinimumForSeat(decisionSeatId);
     }
     this.collectivePrivacyDelaySeatId = responsePrivacyDelay ? decisionSeatId : null;
     this.state.responseEndsAt = Date.now() + timeoutMs;

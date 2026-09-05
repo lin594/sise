@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("a passive human response keeps the public privacy countdown without controls or alerts", async ({ browser }) => {
+test("a passive human response keeps the privacy window without exposing a countdown or controls", async ({ browser }) => {
   test.setTimeout(90_000);
   const hostContext = await browser.newContext({ viewport: { width: 568, height: 320 } });
   const guestContext = await browser.newContext({ viewport: { width: 568, height: 320 } });
@@ -64,14 +64,16 @@ test("a passive human response keeps the public privacy countdown without contro
     expect(Math.abs(Number(hostClock.decisionTimer.endsAt) - Number(guestClock.decisionTimer.endsAt))).toBeLessThan(150);
 
     await Promise.all([
-      expect(host.locator("main.layout")).toHaveAttribute("data-decision-attention", "passive_collective"),
-      expect(host.getByTestId("passive-collective-status")).toContainText(/全局响应 · [1-5]s/),
+      expect(host.locator("main.layout")).toHaveAttribute("data-decision-attention", "none"),
+      expect(host.getByTestId("pending-card").locator(".response-caption")).toHaveText("待响"),
+      expect(host.getByTestId("decision-countdown")).toHaveCount(0),
       expect(host.locator(".action-dock .btn")).toHaveCount(0),
       expect(host.getByTestId("action-guidance")).toHaveCount(0),
-      expect(host.locator(".self-info-hint")).toHaveText(""),
+      expect(host.locator(".self-info-hint")).toHaveText("等待其他玩家操作"),
       expect(host).not.toHaveTitle(/轮到你/),
       expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "牌局设置"),
-      expect(guest.getByTestId("passive-collective-status")).toContainText(/全局响应 · [1-5]s/, { timeout: 1_000 }),
+      expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveText("待响"),
+      expect(guest.getByTestId("decision-countdown")).toHaveCount(0),
     ]);
 
     await host.getByTestId("game-settings").click();
@@ -82,11 +84,10 @@ test("a passive human response keeps the public privacy countdown without contro
     await expect(host.getByTestId("rules-decision-reminder")).toHaveCount(0);
     await host.getByTestId("close-rules").click();
 
-    await expect(host.locator("main.layout")).not.toHaveAttribute(
-      "data-decision-attention",
-      "passive_collective",
+    await expect.poll(
+      async () => (await readClock(host)).activeResponderId,
       { timeout: 6_000 },
-    );
+    ).not.toBe(hostSeatId);
   } finally {
     await guestContext.close();
     await hostContext.close();

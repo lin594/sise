@@ -515,11 +515,14 @@ export declare function useRoom(playerName?: string): {
         discards: {
             discardCardId: string;
             waits: {
-                id: string;
-                color: string;
-                type: string;
-                source?: "upper" | "draw" | undefined;
-                isResponseCard?: boolean | undefined;
+                card: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                };
+                visibleRemaining: number;
             }[];
         }[];
         chi: {
@@ -527,11 +530,14 @@ export declare function useRoom(playerName?: string): {
             discards: {
                 discardCardId: string;
                 waits: {
-                    id: string;
-                    color: string;
-                    type: string;
-                    source?: "upper" | "draw" | undefined;
-                    isResponseCard?: boolean | undefined;
+                    card: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    };
+                    visibleRemaining: number;
                 }[];
             }[];
         }[];
@@ -541,11 +547,14 @@ export declare function useRoom(playerName?: string): {
         discards: {
             discardCardId: string;
             waits: {
-                id: string;
-                color: string;
-                type: string;
-                source?: "upper" | "draw" | undefined;
-                isResponseCard?: boolean | undefined;
+                card: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                };
+                visibleRemaining: number;
             }[];
         }[];
         chi: {
@@ -553,11 +562,14 @@ export declare function useRoom(playerName?: string): {
             discards: {
                 discardCardId: string;
                 waits: {
-                    id: string;
-                    color: string;
-                    type: string;
-                    source?: "upper" | "draw" | undefined;
-                    isResponseCard?: boolean | undefined;
+                    card: {
+                        id: string;
+                        color: string;
+                        type: string;
+                        source?: "upper" | "draw" | undefined;
+                        isResponseCard?: boolean | undefined;
+                    };
+                    visibleRemaining: number;
                 }[];
             }[];
         }[];

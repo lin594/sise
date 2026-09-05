@@ -41,6 +41,7 @@ export default defineConfig({
           env: {
             ...process.env,
             NODE_ENV: "test",
+            PUBLIC_WEB_ORIGIN: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173",
             MIN_PLAYERS: "1",
             ROOM_CREATE_RATE_LIMIT: "1000",
             GUEST_PROFILE_RATE_LIMIT: "1000",

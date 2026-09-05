@@ -71,6 +71,8 @@ test('listening marks stay in the hand and only discard selection opens a previe
   await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute('aria-label', /打出后等待/);
   await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+  await expect(preview.getByTestId('listening-wait-count').first()).toHaveText(/^\d张$/);
+  await expect(preview).toHaveAttribute('aria-label', /可见余量\d张/);
 
   const ordinaryDiscard = page.locator('.hand-card:not(.deal-concealed):not(:has([data-testid="listening-mark"]))').first();
   await ordinaryDiscard.click();

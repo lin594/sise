@@ -127,8 +127,11 @@ function removeLocalTestBridge() {
 }
 const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
-const entryName = ref(readStoredValue(ENTRY_NAME_KEY).trim());
-const nicknameHistory = ref(readNicknameHistory());
+const storedEntryNameAtBoot = readStoredValue(ENTRY_NAME_KEY).trim();
+const nicknameHistoryAtBoot = readNicknameHistory();
+const confirmedInviteNameAtBoot = storedEntryNameAtBoot || nicknameHistoryAtBoot[0] || "";
+const entryName = ref(storedEntryNameAtBoot);
+const nicknameHistory = ref(nicknameHistoryAtBoot);
 const entryInviteRoomId = ref(new URLSearchParams(window.location.search).get("roomId")?.trim() || "");
 const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
@@ -221,6 +224,17 @@ async function resumeStoredRoomSession() {
     finally {
         enteringLobby.value = false;
         restoringStoredSession.value = false;
+    }
+}
+async function bootstrapRoomEntry() {
+    const storedSession = readStoredRoomSession();
+    if (storedSession) {
+        await resumeStoredRoomSession();
+        return;
+    }
+    if (entryInviteRoomId.value && confirmedInviteNameAtBoot) {
+        entryName.value = confirmedInviteNameAtBoot;
+        await enterLobby();
     }
 }
 async function abandonSessionResume() {
@@ -556,36 +570,11 @@ const discardWindowActive = computed(() => connected.value &&
     state.value?.responsePhase === "local_draw" &&
     !hasAvailableAction.value &&
     !currentActionSubmissionLocked.value);
-const passiveCollectiveWindow = computed(() => {
-    if (!connected.value ||
-        mePlayer.value?.isAutoPlay ||
-        openingDealActive.value ||
-        tablePresentationActive.value ||
-        !isPlaying.value ||
-        !isMyTurn.value ||
-        state.value?.responsePhase !== "collective" ||
-        hasAvailableAction.value ||
-        currentActionSubmissionLocked.value) {
-        return false;
-    }
-    if (isQuietSelfDiscardWait({
-        responsePhase: state.value.responsePhase,
-        responseSource: state.value.responseCard?.source,
-        originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
-        viewerPlayerId: mySeatId.value,
-    })) {
-        return false;
-    }
-    const endsAt = Number(decisionTimer.value.endsAt || state.value.responseEndsAt || 0);
-    return endsAt > nowMs.value;
-});
 const decisionAttention = computed(() => {
     if (actionWindowActive.value)
         return "action";
     if (discardWindowActive.value)
         return "discard";
-    if (passiveCollectiveWindow.value)
-        return "passive_collective";
     return "none";
 });
 const pendingActionDecision = computed(() => decisionAttention.value === "action");
@@ -1481,7 +1470,7 @@ onMounted(() => {
     }, 500);
     writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
     document.documentElement.classList.toggle("show-card-color-assist", displayPreferences.value.showCardColorAssist);
-    void resumeStoredRoomSession();
+    void bootstrapRoomEntry();
 });
 onUnmounted(() => {
     document.documentElement.classList.remove("show-card-color-assist");
@@ -2050,13 +2039,10 @@ const turnHint = computed(() => {
         })) {
             return "";
         }
-        if (passiveCollectiveWindow.value) {
-            return "";
-        }
         if (canAct.value) {
             return "全局待响阶段：你可以选择胡/开/碰/过";
         }
-        return "等待三家响应";
+        return "等待其他玩家操作";
     }
     return isMyTurn.value ? "轮到你操作" : "等待对方操作";
 });
@@ -2259,9 +2245,7 @@ function buildInviteUrl() {
     if (!activeRoomId.value) {
         return "";
     }
-    const url = new URL(window.location.origin + window.location.pathname);
-    url.searchParams.set("roomId", activeRoomId.value);
-    return url.toString();
+    return new URL(`/invite/${encodeURIComponent(activeRoomId.value)}`, window.location.origin).toString();
 }
 async function copyInviteLink() {
     await performInviteAction("copy");
@@ -2283,7 +2267,7 @@ async function performInviteAction(action) {
                 // Keep the URL in the message body instead of passing a separate
                 // link item that mobile share targets may turn into an attachment.
                 await navigator.share({
-                    text: `加入好友房 ${activeRoomId.value}，一起玩四色牌\n${inviteUrl}`,
+                    text: `邀请你一起传承四色牌文化\n好友房 ${activeRoomId.value}\n${inviteUrl}`,
                 });
                 globalError.value = "";
                 showGlobalNotice("邀请已分享，等待牌友加入");

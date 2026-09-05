@@ -18,7 +18,11 @@ export type RoomConnectionState =
 
 export interface ListeningRoute {
   discardCardId: string;
-  waits: Card[];
+  waits: ListeningWait[];
+}
+export interface ListeningWait {
+  card: Card;
+  visibleRemaining: number;
 }
 export interface ListeningHints {
   stateRevision: number;

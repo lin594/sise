@@ -25,6 +25,7 @@ const { stdout } = await execFileAsync(
     env: {
       ...process.env,
       IMAC_CORS_ALLOWED_ORIGINS: `${expectedHttpOrigin},${expectedLegacyOrigin}`,
+      IMAC_PUBLIC_WEB_ORIGIN: expectedHttpOrigin,
       IMAC_VITE_SERVER_HTTP_URL: expectedHttpOrigin,
       IMAC_VITE_SERVER_URL: "ws://imac.tajuren.cn",
     },
@@ -42,6 +43,7 @@ assert.equal(
   server.environment?.CORS_ALLOWED_ORIGINS,
   `${expectedHttpOrigin},${expectedLegacyOrigin}`,
 );
+assert.equal(server.environment?.PUBLIC_WEB_ORIGIN, expectedHttpOrigin);
 assert.equal(web.build?.args?.VITE_SERVER_HTTP_URL, expectedHttpOrigin);
 assert.equal(web.build?.args?.VITE_SERVER_URL, "ws://imac.tajuren.cn");
 

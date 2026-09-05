@@ -135,6 +135,42 @@ test("a private preselection cannot make a human responder vanish instantly", as
   assert.equal(resolved, true);
 });
 
+test("an active human choice is held until the collective privacy floor", async () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.humanForcedPassDelayMs = 40;
+  room.collectiveTimeoutMs = 200;
+  room.playerHands.set("B", [
+    mkCard("peng-1", "red", "ju", "upper"),
+    mkCard("peng-2", "red", "ju", "upper"),
+    mkCard("spare", "green", "ma", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("privacy-target", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B"];
+  room.collectiveCursor = 0;
+  room.seatBySession.set("session-B", "B");
+  let resolved = false;
+  room.resolveCollectivePhase = () => {
+    resolved = true;
+  };
+
+  room.advanceCollectivePolling();
+  room.handleAction(
+    { sessionId: "session-B", send: () => {} },
+    { action: "pass", decisionKey: room.buildDecisionTimerSnapshot("B").decisionKey },
+  );
+  assert.equal(room.pendingResponse.collectives.get("B")?.action, "pass");
+  assert.equal(resolved, false);
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.equal(resolved, false);
+  await new Promise((resolve) => setTimeout(resolve, 45));
+  assert.equal(resolved, true);
+});
+
 test("a collective responder with a meaningful choice still receives Pass", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.humanForcedPassDelayMs = 40;

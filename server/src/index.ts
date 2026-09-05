@@ -6,6 +6,7 @@ import { monitor } from "@colyseus/monitor";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { createIsolatedPracticeRoomId } from "./http/practice-room-creation.js";
 import { createGuestProfileHandlers } from "./http/guest-profile-api.js";
+import { createInvitePageHandler } from "./http/invite-page.js";
 import { readPrivateStateToken } from "./http/private-state-auth.js";
 import { createRateLimitMiddleware, parseBoundedInteger } from "./http/rate-limit.js";
 import {
@@ -103,6 +104,8 @@ async function createGameRoom(mode: "friends" | "practice") {
 app.get("/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
+
+app.get("/invite/:roomId", createInvitePageHandler(process.env.PUBLIC_WEB_ORIGIN));
 
 app.get("/guest-profile", guestProfileLimit, guestProfileHandlers.get);
 app.put("/guest-profile", guestProfileLimit, guestProfileHandlers.put);

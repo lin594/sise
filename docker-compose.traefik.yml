@@ -25,6 +25,7 @@ services:
       NODE_ENV: "production"
       PORT: "2567"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?Set CORS_ALLOWED_ORIGINS to the public web origin, for example https://sise.example.com}"
+      PUBLIC_WEB_ORIGIN: "${PUBLIC_WEB_ORIGIN:?Set PUBLIC_WEB_ORIGIN to the public web origin, for example https://sise.example.com}"
       ENABLE_MONITOR: "${ENABLE_MONITOR:-0}"
       TRUST_PROXY_HOPS: "${TRUST_PROXY_HOPS:-1}"
       HTTP_RATE_LIMIT_WINDOW_MS: "${HTTP_RATE_LIMIT_WINDOW_MS:-60000}"
