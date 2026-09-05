@@ -38,7 +38,7 @@ test("browser back closes a game layer before offering a safe room exit", async 
 
   const roomIdentity = await page.evaluate(() => ({
     roomId: window.localStorage.getItem("four_room_id"),
-    handCards: document.querySelectorAll(".hand-preview-card").length,
+    handCards: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
   }));
   expect(roomIdentity.roomId).toBeTruthy();
   expect(roomIdentity.handCards).toBeGreaterThan(0);
@@ -56,7 +56,7 @@ test("browser back closes a game layer before offering a safe room exit", async 
   await expect(page.getByTestId("cancel-exit")).toBeFocused();
   await page.getByTestId("cancel-exit").click();
   await expect(page.getByTestId("confirm-declaration")).toBeVisible();
-  await expect(page.locator(".hand-preview-card")).toHaveCount(roomIdentity.handCards);
+  await expect(page.locator("[data-testid^='hand-card-']:not(.deal-concealed)")).toHaveCount(roomIdentity.handCards);
   expect(await page.evaluate(() => window.localStorage.getItem("four_room_id"))).toBe(roomIdentity.roomId);
 
   await browserBack(page);

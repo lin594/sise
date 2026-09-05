@@ -69,7 +69,7 @@ async function expectOpeningHandGate(page: Page): Promise<void> {
       const button = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
       return {
         declaring: Boolean(button && button.getClientRects().length && getComputedStyle(button).visibility !== "hidden"),
-        count: document.querySelectorAll("[data-testid^='hand-card-']").length,
+        count: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
     if (sample.declaring) break;

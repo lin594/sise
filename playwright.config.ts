@@ -43,6 +43,7 @@ export default defineConfig({
             NODE_ENV: "test",
             MIN_PLAYERS: "1",
             ROOM_CREATE_RATE_LIMIT: "1000",
+            GUEST_PROFILE_RATE_LIMIT: "1000",
             // Browser contexts and invitation pages can take several seconds
             // to start on a loaded CI host. Match production's 60-second grace
             // so a slow test runner cannot expire a room before the first join.

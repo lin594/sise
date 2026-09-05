@@ -1521,7 +1521,7 @@ button:focus-visible {
 .declare-mask.embedded .declare-panel { --ink: #e2e8f0; --muted: #94a3b8; --line: #334155; --paper: #111e30; background: #111e30; border-color: #334155; }
 .declare-mask.embedded .declare-section { background: #142338; border-color: #334155; }
 .declare-mask.embedded .declare-footer { background: transparent; border-color: #334155; }
-.declare-mask.embedded .kong-choice { min-height: 32px; padding: 3px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+.declare-mask.embedded .kong-choice { min-height: 48px; padding: 3px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
 .declare-mask.embedded .section-heading { margin-bottom: 4px; }
 .declare-mask.embedded .declaration-status { min-height: 32px; padding: 5px 10px; }
 .declare-mask.embedded .footer-meta .untimed-message { color: #6ee7b7; }

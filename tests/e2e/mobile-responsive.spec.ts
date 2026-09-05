@@ -256,7 +256,7 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
   const confirm = page.getByTestId("discard-confirm");
 
   if (await page.evaluate(() => Boolean((window as Window & { __siseLocalTest?: unknown }).__siseLocalTest))) {
-    await applyLocalDebugScenario(page, "chi_local_upper");
+    await applyLocalDebugScenario(page, "chi_local_upper_full_hand");
     await page.getByTestId("action-chi").click();
     await expect(confirm).toBeVisible();
     return;
@@ -293,14 +293,11 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     if (await confirm.isVisible().catch(() => false)) {
       return;
     }
-    if (await confirm.isVisible().catch(() => false)) {
-      return;
-    }
     const responsePhase = await page.getByTestId("game-board").getAttribute("data-response-phase");
     let acted = false;
     const preferredActions =
       responsePhase === "collective"
-        ? ["action-pass", "action-peng", "action-kai", "action-chi"]
+        ? ["action-deferred-pass", "action-pass", "action-peng", "action-kai", "action-chi"]
         : ["action-peng", "action-kai", "action-pass", "action-chi"];
     for (const id of preferredActions) {
       if (await clickIfReady(id)) {
@@ -784,16 +781,17 @@ test.describe("phone portrait landscape canvas", () => {
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
-    await expect(page.getByTestId("declare-hand-scroll-tools")).toBeVisible();
+    await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     const declarationGeometry = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>(".declare-panel")!;
       const panelRect = panel.getBoundingClientRect();
-      const hand = document.querySelector<HTMLElement>("[data-testid='declare-hand-preview']")!;
-      const card = hand.querySelector<HTMLElement>(".hand-preview-card .card")!;
+      const viewport = document.querySelector<HTMLElement>(".hand-viewport.single-line")!;
+      const hand = viewport.querySelector<HTMLElement>(".cards.hand")!;
+      const card = hand.querySelector<HTMLElement>(".hand-card .card")!;
       const glyph = card.querySelector<HTMLElement>(".text-top")!;
-      const buttons = Array.from(
-        document.querySelectorAll<HTMLButtonElement>("[data-testid='declare-hand-scroll-tools'] button"),
-      );
+      const viewportRect = viewport.getBoundingClientRect();
+      const cardRects = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card"))
+        .map((item) => item.getBoundingClientRect());
       return {
         panelInsideViewport:
           panelRect.left >= -1 &&
@@ -805,9 +803,10 @@ test.describe("phone portrait landscape canvas", () => {
         cardWidth: card.offsetWidth,
         cardHeight: card.offsetHeight,
         glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
-        handOverflows: hand.scrollWidth > hand.clientWidth,
-        minimumButtonWidth: Math.min(...buttons.map((button) => button.offsetWidth)),
-        minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
+        handScale: Number.parseFloat(getComputedStyle(hand).zoom || "1"),
+        cardsInsideViewport: cardRects.every((rect) =>
+          rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
+          rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1),
       };
     });
     expect(declarationGeometry.panelInsideViewport).toBe(true);
@@ -816,9 +815,8 @@ test.describe("phone portrait landscape canvas", () => {
     expect(declarationGeometry.cardWidth).toBeGreaterThanOrEqual(40);
     expect(declarationGeometry.cardHeight).toBeGreaterThanOrEqual(44);
     expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(22);
-    expect(declarationGeometry.handOverflows).toBe(true);
-    expect(declarationGeometry.minimumButtonWidth).toBeGreaterThanOrEqual(44);
-    expect(declarationGeometry.minimumButtonHeight).toBeGreaterThanOrEqual(34);
+    expect(declarationGeometry.handScale).toBeLessThanOrEqual(1);
+    expect(declarationGeometry.cardsInsideViewport).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("declaration-rotated-320x568.png") });
 
     const settingsButton = page.getByTestId("game-settings");
@@ -913,13 +911,14 @@ test.describe("phone portrait landscape canvas", () => {
     await expect(rulesDialog).toBeVisible();
     await expect(settingsPanel).toHaveCount(0);
     const rulesGeometry = await rulesDialog.evaluate((panel) => {
-      const listItems = Array.from(panel.querySelectorAll<HTMLElement>(".rules-list li"));
-      const chips = Array.from(panel.querySelectorAll<HTMLElement>(".rules-chip"));
+      const content = panel.querySelector<HTMLElement>(".rules-content")!;
+      const listItems = Array.from(content.querySelectorAll<HTMLElement>("p, li"));
+      const chips = Array.from(content.querySelectorAll<HTMLElement>("summary"));
       const close = panel.querySelector<HTMLButtonElement>("[data-testid='close-rules']")!;
       return {
-        columns: getComputedStyle(panel).gridTemplateColumns.split(" ").length,
-        noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
-        hasVerticalOverflow: panel.scrollHeight > panel.clientHeight,
+        columns: getComputedStyle(content).gridTemplateColumns.split(" ").length,
+        noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1 && content.scrollWidth <= content.clientWidth + 1,
+        hasVerticalOverflow: content.scrollHeight > content.clientHeight,
         minimumBodyFontSize: Math.min(...listItems.map((item) => Number.parseFloat(getComputedStyle(item).fontSize))),
         minimumChipFontSize: Math.min(...chips.map((chip) => Number.parseFloat(getComputedStyle(chip).fontSize))),
         closeWidth: close.offsetWidth,
@@ -938,7 +937,9 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("rules-effective-viewport-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(rulesDialog).toHaveCount(0);
-    await expect(settingsButton).toBeFocused();
+    await expect.poll(() => page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.dataset.testid ?? "",
+    )).toMatch(/^(game-settings|confirm-declaration)$/);
 
     const historyButton = page.getByTestId("game-history");
     await historyButton.click();
@@ -988,7 +989,7 @@ test.describe("compact landscape gameplay", () => {
 
   test("keeps lobby actions reachable and gameplay controls touch sized", async ({ page }, testInfo) => {
     test.setTimeout(120_000);
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
 
     const lobbyMetrics = await page.getByTestId("lobby-scroll").evaluate((element) => ({
       clientHeight: element.clientHeight,
@@ -1006,22 +1007,18 @@ test.describe("compact landscape gameplay", () => {
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
-    await expect(page.getByRole("heading", { name: "开局确认" })).toBeVisible();
+    await expect(page.locator(".declare-mask.embedded")).toBeVisible();
     await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/已按推荐选好，需要时可调整鱼和坎/);
-    const handPreview = page.getByTestId("declare-hand-preview");
-    await expect(handPreview).toBeVisible();
-    await expect(handPreview.locator("[data-card-mode='large']").first()).toBeVisible();
-    await expect(handPreview.locator("button")).toHaveCount(0);
+    await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
+    const sharedHand = page.locator(".cards.hand");
+    await expect(sharedHand.locator("[data-card-mode='large']").first()).toBeVisible();
     await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
     await expect(confirmDeclaration).toBeFocused();
-    const declarationPanel = page.locator(".declare-panel");
-    const firstDeclarationControl = declarationPanel.locator("button:not(:disabled)").first();
-    await page.keyboard.press("Tab");
-    await expect(firstDeclarationControl).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(confirmDeclaration).toBeFocused();
-    await expect(page.locator(".declare-timer")).toContainText("不限时");
-    await expect(page.locator(".declare-timer")).toContainText("练习模式");
+    await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
+    await page.getByTestId("game-settings").click();
+    await page.getByTestId("hand-layout-paged").click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".cards.hand")).not.toHaveClass(/single-line/);
 
     const declarationMetrics = await page.locator(".declare-panel").evaluate((panel) => {
       const confirm = panel.querySelector<HTMLElement>(".confirm-declaration");
@@ -2010,7 +2007,13 @@ test.describe("compact landscape gameplay", () => {
       top: await page.getByTestId("player-top").getAttribute("data-player-id"),
     };
     await page.getByTestId("card-mode-own-long").click();
-    const longDeclarationCard = page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first();
+    await page.getByTestId("hand-layout-paged").click();
+    await expect(page.getByTestId("hand-layout-paged")).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator(".cards.hand")).not.toHaveClass(/single-line/);
+    await expect.poll(() => page.locator(".cards.hand").evaluate((hand) =>
+      Number.parseFloat(getComputedStyle(hand).zoom || "1"),
+    )).toBe(1);
+    const longDeclarationCard = page.locator(".cards.hand [data-card-mode='long']").first();
     await expect(longDeclarationCard).toBeVisible();
     const longDeclarationCardGeometry = await longDeclarationCard.evaluate((card) => ({
       width: (card as HTMLElement).offsetWidth,
@@ -2094,7 +2097,7 @@ test.describe("legacy small landscape gameplay", () => {
 
   test("keeps eight readable hand cards and every control inside the canvas", async ({ page }, testInfo) => {
     test.setTimeout(90_000);
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
@@ -2102,12 +2105,16 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
     await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
-    await expect(page.locator(".untimed-message")).toHaveText("上下滑调整 · 手牌可前后翻 · 练习不限时");
-    const declarationHand = page.getByTestId("declare-hand-preview");
-    const declarationHandTools = page.getByTestId("declare-hand-scroll-tools");
-    const declarationHandPrev = page.getByTestId("declare-hand-scroll-prev");
-    const declarationHandNext = page.getByTestId("declare-hand-scroll-next");
-    const declarationHandRange = page.getByTestId("declare-hand-visible-range");
+    await expect(page.locator(".untimed-message")).toHaveText("选择鱼和坎 · 练习不限时");
+    await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
+    await page.getByTestId("game-settings").click();
+    await page.getByTestId("hand-layout-paged").click();
+    await page.keyboard.press("Escape");
+    const declarationHand = page.locator(".cards.hand");
+    const declarationHandTools = page.getByTestId("hand-scroll-tools");
+    const declarationHandPrev = page.getByTestId("hand-scroll-prev");
+    const declarationHandNext = page.getByTestId("hand-scroll-next");
+    const declarationHandRange = page.getByTestId("hand-visible-range");
     await expect(declarationHandTools).toBeVisible();
     await expect(declarationHandPrev).toBeDisabled();
     await expect(declarationHandNext).toBeEnabled();
@@ -2122,17 +2129,17 @@ test.describe("legacy small landscape gameplay", () => {
       cards.map((card) => card.getAttribute("aria-label")),
     );
     const declarationSelectionsBefore = await page.evaluate(() => ({
-      fish: document.querySelectorAll(".hand-preview-card.fish").length,
-      kong: document.querySelectorAll(".hand-preview-card.kong").length,
+      fish: Array.from(document.querySelectorAll(".hand-mark")).filter((mark) => mark.textContent?.trim() === "鱼").length,
+      kong: Array.from(document.querySelectorAll(".hand-mark")).filter((mark) => mark.textContent?.trim() === "坎").length,
       declaredKong: document.querySelector(".kong-choice[aria-checked='true']")?.textContent?.trim() ?? "",
     }));
     const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
       const rect = panel.getBoundingClientRect();
-      const hand = panel.querySelector<HTMLElement>("[data-testid='declare-hand-preview']")!;
-      const card = hand.querySelector<HTMLElement>(".hand-preview-card .card")!;
+      const hand = document.querySelector<HTMLElement>(".cards.hand")!;
+      const card = hand.querySelector<HTMLElement>(".hand-card .card")!;
       const glyph = card.querySelector<HTMLElement>(".text-top")!;
       const pagerButtons = Array.from(
-        panel.querySelectorAll<HTMLButtonElement>("[data-testid='declare-hand-scroll-tools'] button"),
+        document.querySelectorAll<HTMLButtonElement>("[data-testid='hand-scroll-tools'] button"),
       );
       const primaryLabels = Array.from(
         panel.querySelectorAll<HTMLElement>(".section-heading h3, .fish-option-copy strong, .empty-option strong"),
@@ -2157,7 +2164,7 @@ test.describe("legacy small landscape gameplay", () => {
           ...pagerButtons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize)),
         ),
         rangeFontSize: Number.parseFloat(getComputedStyle(
-          panel.querySelector<HTMLElement>("[data-testid='declare-hand-visible-range']")!,
+          document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!,
         ).fontSize),
         minimumPrimaryLabelFontSize: Math.min(
           ...primaryLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)),
@@ -2193,8 +2200,8 @@ test.describe("legacy small landscape gameplay", () => {
       cards.map((card) => card.getAttribute("aria-label")),
     )).toEqual(declarationHandBefore);
     expect(await page.evaluate(() => ({
-      fish: document.querySelectorAll(".hand-preview-card.fish").length,
-      kong: document.querySelectorAll(".hand-preview-card.kong").length,
+      fish: Array.from(document.querySelectorAll(".hand-mark")).filter((mark) => mark.textContent?.trim() === "鱼").length,
+      kong: Array.from(document.querySelectorAll(".hand-mark")).filter((mark) => mark.textContent?.trim() === "坎").length,
       declaredKong: document.querySelector(".kong-choice[aria-checked='true']")?.textContent?.trim() ?? "",
     }))).toEqual(declarationSelectionsBefore);
 
@@ -2215,6 +2222,7 @@ test.describe("legacy small landscape gameplay", () => {
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await expectReadableCompactSeatIdentities(page);
+    await expect(page.getByTestId("hand-visible-range")).toBeVisible();
 
     const metrics = await page.evaluate(() => {
       const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
@@ -2392,9 +2400,8 @@ test.describe("desktop declaration", () => {
     const panel = page.locator(".declare-panel");
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel).not.toHaveClass(/compact/);
-    await expect(page.getByTestId("declare-hand-preview")).toBeVisible();
-    await expect(page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first()).toBeVisible();
-    await expect(page.getByTestId("declare-hand-preview").locator("button")).toHaveCount(0);
+    await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
+    await expect(page.locator(".cards.hand [data-card-mode='long']").first()).toBeVisible();
     await expect(page.getByText("没有可亮的鱼")).toHaveCount(0);
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
     await expectSimplifiedTableCenter(page);

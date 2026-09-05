@@ -37,7 +37,7 @@ async function expectOneNewDealSequence(page: Page, previousCount: number): Prom
       const declaration = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
       return {
         declaring: Boolean(declaration?.getClientRects().length),
-        handCount: document.querySelectorAll("[data-testid^='hand-card-']").length,
+        handCount: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
     if (sample.declaring) break;

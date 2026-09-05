@@ -82,18 +82,35 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: hu_ready_local_draw#${seq}`;
-  } else if (scenario === "eat_mode1" || scenario === "chi_local_upper") {
+  } else if (
+    scenario === "eat_mode1" ||
+    scenario === "chi_local_upper" ||
+    scenario === "chi_local_upper_full_hand"
+  ) {
     add("d1", "red", "shi");
     add("d2", "red", "xiang");
     add("d3", "yellow", "ju");
     add("d4", "yellow", "ma");
+    if (scenario === "chi_local_upper_full_hand") {
+      const filler: Array<[string, Card["color"], Card["type"]]> = [
+        ["full-01", "yellow", "pao"], ["full-02", "yellow", "zu"],
+        ["full-03", "yellow", "shi"], ["full-04", "yellow", "xiang"],
+        ["full-05", "green", "ju"], ["full-06", "green", "ma"],
+        ["full-07", "green", "pao"], ["full-08", "green", "zu"],
+        ["full-09", "green", "shi"], ["full-10", "green", "xiang"],
+        ["full-11", "white", "ju"], ["full-12", "white", "ma"],
+        ["full-13", "white", "pao"], ["full-14", "white", "zu"],
+        ["full-15", "white", "shi"], ["full-16", "white", "xiang"],
+      ];
+      for (const [id, color, type] of filler) add(id, color, type);
+    }
     context.setPendingResponse(createPendingResponse(seatId, { id: "rj", color: "red", type: "jiang" }, "upper"));
     context.state.phase = "playing";
     context.state.responsePhase = "local_upper";
     context.state.currentPlayerId = seatId;
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
-    context.state.lastAction = `DEBUG: chi_local_upper#${seq}`;
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_unique_jmp" || scenario === "chi_unique_duplicate_jmp") {
     add("unique-yellow-ju-1", "yellow", "ju");
     if (scenario === "chi_unique_duplicate_jmp") add("unique-yellow-ju-2", "yellow", "ju");
@@ -103,6 +120,24 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     const originId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
     context.setPendingResponse(
       createPendingResponse(seatId, { id: "unique-yellow-pao", color: "yellow", type: "pao" }, "upper"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "local_upper";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.state.pollOriginPlayerId = originId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_unique_jsx") {
+    add("unique-red-jiang", "red", "jiang");
+    add("unique-red-shi", "red", "shi");
+    add("post-red-ju", "red", "ju");
+    add("post-red-ma", "red", "ma");
+    add("post-yellow-shi", "yellow", "shi");
+    const seatIndex = context.playerOrder.indexOf(seatId);
+    const originId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    context.setPendingResponse(
+      createPendingResponse(seatId, { id: "unique-red-xiang", color: "red", type: "xiang" }, "upper"),
     );
     context.state.phase = "playing";
     context.state.responsePhase = "local_upper";
@@ -334,7 +369,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     };
     context.setPendingResponse(null);
     context.state.responseCard = new CardSchema();
-    context.state.phase = "declaring";
+    context.state.phase = scenario === "dealer_settled_self" ? "playing" : "declaring";
     context.state.responsePhase = "collective";
     context.state.currentPlayerId = seatId;
     context.state.currentTurnPlayerId = seatId;

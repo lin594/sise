@@ -4,7 +4,7 @@ test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true
 
 async function snapshotBoard(page: Page) {
   return page.evaluate(() => {
-    const handCards = Array.from(document.querySelectorAll("[data-testid^='hand-card-']")).map((el) =>
+    const handCards = Array.from(document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)")).map((el) =>
       (el as HTMLElement).dataset.testid ?? "",
     );
     return {
@@ -18,7 +18,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
   const deadline = Date.now() + 3400;
   while (Date.now() < deadline) {
-    const hasDeclarePanel = await page.getByRole("heading", { name: "开局确认" }).isVisible().catch(() => false);
+    const hasDeclarePanel = await page.getByTestId("confirm-declaration").count() > 0;
     if (hasDeclarePanel) {
       break;
     }

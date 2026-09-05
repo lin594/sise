@@ -21,32 +21,27 @@ test("upper response card placement is projected for each viewer", () => {
     ...base,
     responsePhase: "collective",
     viewerPlayerId: "receiver",
-    viewerHasLegalChi: true,
   })).toBe("center");
   expect(projectResponseCardPlacement({
     ...base,
     responsePhase: "local_upper",
     viewerPlayerId: "receiver",
-    viewerHasLegalChi: true,
   })).toBe("center");
   expect(projectResponseCardPlacement({
     ...base,
     responsePhase: "local_upper",
     viewerPlayerId: "observer",
-    viewerHasLegalChi: false,
   })).toBe("flow");
   expect(projectResponseCardPlacement({
     ...base,
     responsePhase: "local_upper",
     viewerPlayerId: "receiver",
-    viewerHasLegalChi: false,
-  })).toBe("flow");
+  })).toBe("center");
   expect(projectResponseCardPlacement({
     ...base,
     phase: "declaring",
     responsePhase: "local_upper",
     viewerPlayerId: "receiver",
-    viewerHasLegalChi: true,
   })).toBe("hidden");
 });
 

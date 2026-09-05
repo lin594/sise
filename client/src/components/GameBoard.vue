@@ -535,18 +535,25 @@
           :disabled="nowMs < moreTimePendingUntil" @click="requestFixedMoreTime">{{ nowMs < moreTimePendingUntil ? '加时中…' : `+${moreTimeSeconds ?? 20}秒` }}</button>
       </div>
       <slot name="declaration" />
-      <div v-if="activeHints && (canDiscard || selectedChiCandidate)" class="listening-summary" data-testid="listening-summary">
-        <template v-if="shownListeningRoutes.length">
-          <span>{{ selectedChiCandidate ? '这样吃后' : '听牌提示' }}：</span>
-          <span v-for="route in shownListeningRoutes" :key="route.discardCardId" class="listening-route">
-            打 <CardComp v-if="handCardById(route.discardCardId)" :card="handCardById(route.discardCardId)!" size="xs" mode="large" /> → 等
-            <CardComp v-for="card in route.waits" :key="card.id" :card="card" size="xs" mode="large" />
+      <div
+        v-if="selectedPreview"
+        class="selected-card-preview"
+        data-testid="selected-card-preview"
+        :aria-label="selectedPreviewAccessibleLabel"
+      >
+        <CardComp :card="selectedPreview" size="xl" :mode="ownCardMode" />
+        <template v-if="selectedDiscardListeningRoute?.waits.length">
+          <span class="selected-preview-wait-label" aria-hidden="true">等</span>
+          <span class="selected-preview-waits" aria-hidden="true">
+            <CardComp
+              v-for="card in selectedDiscardListeningRoute.waits"
+              :key="`selected-wait-${card.id}`"
+              :card="card"
+              size="xs"
+              mode="large"
+            />
           </span>
         </template>
-        <span v-else>{{ canDiscard && !selectedDiscardCardId ? '当前没有打出一张即可听牌的路线' : '当前选择暂无听牌路线' }}</span>
-      </div>
-      <div v-if="selectedPreview" class="selected-card-preview" aria-label="选中牌预览">
-        <CardComp :card="selectedPreview" size="xl" :mode="ownCardMode" /><span>已选</span>
       </div>
       <div class="self-hand-panel">
         <div class="hand-toolbar">
@@ -576,59 +583,73 @@
           </div>
         </div>
         <div
-          class="cards hand"
-          :style="handLayout !== 'paged' ? { zoom: handScale } : undefined"
-          :class="{
-            'single-line': handLayout !== 'paged',
-            'can-scroll-backward': handCanScrollBackward,
-            'can-scroll-forward': handCanScrollForward,
-          }"
-          ref="selfHandRef"
-          @scroll.passive="updateHandScrollState"
+          ref="handViewportRef"
+          class="hand-viewport"
+          :class="{ 'single-line': handLayout !== 'paged' }"
         >
-          <button
-            v-for="card in displayPrivateHand"
-            :key="`me-${card.id}`"
-            :data-testid="`hand-card-${card.id}`"
-            :data-card-id="card.id"
-            class="hand-card"
+          <div
+            class="cards hand"
+            :style="{ zoom: handLayout !== 'paged' ? handScale : 1 }"
             :class="{
-              'mode-large': props.ownCardMode === 'large',
-              'mode-long': props.ownCardMode === 'long',
-              playable: canSelectHandCard(card),
-              blocked: canDiscard && isDiscardProtectedCard(card),
-              'gold-blocked': canDiscard && card.color === 'gold',
-              'discard-selected': !chiSelectionDraftActive && selectedDiscardCardId === card.id,
-              'candidate-active': isChiCardSelectable(card.id),
-              'candidate-selected': selectedChiCardIds.includes(card.id),
+              'single-line': handLayout !== 'paged',
+              'can-scroll-backward': handCanScrollBackward,
+              'can-scroll-forward': handCanScrollForward,
             }"
-            :aria-pressed="chiSelectionDraftActive ? selectedChiCardIds.includes(card.id) : selectedDiscardCardId === card.id"
-            :aria-label="handCardAccessibleLabel(card)"
-            :disabled="!canSelectHandCard(card) || Boolean(discardingCardId)"
-            @click="selectHandCard(card.id)"
-            @dblclick.prevent="ensureHandCardSelected(card.id)"
+            ref="selfHandRef"
+            @scroll.passive="scheduleHandLayoutUpdate"
           >
-            <span v-if="state?.phase === 'declaring' && declarationMarks?.fish.includes(card.id)" class="hand-mark">鱼</span>
-            <span v-else-if="state?.phase === 'declaring' && declarationMarks?.kong.includes(card.id)" class="hand-mark">坎</span>
-            <span v-else-if="activeHints?.discards.some((route) => route.discardCardId === card.id)" class="hand-mark">听</span>
-            <span
-              v-if="!chiSelectionDraftActive && selectedDiscardCardId === card.id"
-              class="discard-selection-badge"
-              aria-hidden="true"
-            >✓</span>
-            <span
-              v-else-if="selectedChiCardIds.includes(card.id)"
-              class="candidate-selection-badge"
-              aria-hidden="true"
-            >✓</span>
-            <span
-              v-else-if="canDiscard && isDiscardProtectedCard(card)"
-              class="discard-protected-badge"
-              aria-hidden="true"
-            >留</span>
-            <CardComp :card="card"
-            :style="movingCardStyle(card.id)" :mode="props.ownCardMode" size="xl" />
-          </button>
+            <button
+              v-for="card in handLayoutCards"
+              :key="`me-${card.id}`"
+              :data-testid="`hand-card-${card.id}`"
+              :data-card-id="card.id"
+              class="hand-card"
+              :class="{
+                'mode-large': props.ownCardMode === 'large',
+                'mode-long': props.ownCardMode === 'long',
+                'deal-concealed': isDealConcealedCard(card.id),
+                playable: !isDealConcealedCard(card.id) && canSelectHandCard(card),
+                blocked: canDiscard && isDiscardProtectedCard(card),
+                'gold-blocked': canDiscard && card.color === 'gold',
+                'discard-selected': !chiSelectionDraftActive && selectedDiscardCardId === card.id,
+                'candidate-active': isChiCardSelectable(card.id),
+                'candidate-selected': selectedChiCardIds.includes(card.id),
+              }"
+              :aria-hidden="isDealConcealedCard(card.id) ? 'true' : undefined"
+              :aria-pressed="chiSelectionDraftActive ? selectedChiCardIds.includes(card.id) : selectedDiscardCardId === card.id"
+              :aria-label="isDealConcealedCard(card.id) ? undefined : handCardAccessibleLabel(card)"
+              :tabindex="isDealConcealedCard(card.id) ? -1 : undefined"
+              :disabled="isDealConcealedCard(card.id) || !canSelectHandCard(card) || Boolean(discardingCardId)"
+              @click="selectHandCard(card.id)"
+              @dblclick.prevent="ensureHandCardSelected(card.id)"
+            >
+              <span v-if="state?.phase === 'declaring' && declarationMarks?.fish.includes(card.id)" class="hand-mark">鱼</span>
+              <span v-else-if="state?.phase === 'declaring' && declarationMarks?.kong.includes(card.id)" class="hand-mark">坎</span>
+              <span
+                v-else-if="isListeningDiscard(card.id)"
+                class="hand-mark listening-mark"
+                data-testid="listening-mark"
+                :data-listening-context="listeningMarkContext"
+              >听</span>
+              <span
+                v-if="!chiSelectionDraftActive && selectedDiscardCardId === card.id"
+                class="discard-selection-badge"
+                aria-hidden="true"
+              >✓</span>
+              <span
+                v-else-if="selectedChiCardIds.includes(card.id)"
+                class="candidate-selection-badge"
+                aria-hidden="true"
+              >✓</span>
+              <span
+                v-else-if="canDiscard && isDiscardProtectedCard(card)"
+                class="discard-protected-badge"
+                aria-hidden="true"
+              >留</span>
+              <CardComp :card="card"
+              :style="movingCardStyle(card.id)" :mode="props.ownCardMode" size="xl" />
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -861,7 +882,6 @@ const selectedChiCardIds = ref<string[]>([]);
 const chiAutoSelectionBlockedKey = ref("");
 const chiValidationMessage = ref("");
 const retainedUpperResponseCardId = ref("");
-const viewerChiKnowledge = ref<{ targetCardId: string; hasLegalChi: boolean } | null>(null);
 let activeChiSelectionContextKey = "";
 const locallyAnimatedDiscardCardId = ref<string | null>(null);
 const flights = ref<CardFlight[]>([]);
@@ -876,12 +896,15 @@ const boardRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
 const deckAnchorRef = ref<HTMLElement | null>(null);
 const selfHandRef = ref<HTMLElement | null>(null);
+const handViewportRef = ref<HTMLElement | null>(null);
 const handScale = ref(1);
+const handScaleReady = ref(!shouldConcealOpeningHand());
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
 const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver: ResizeObserver | null = null;
+let handLayoutFrame: number | null = null;
 const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
 const seatRefMap = new Map<string, HTMLElement>();
@@ -1117,56 +1140,12 @@ const activeFlowTargetPlayerId = computed(() => {
   return getNextPlayer(sourcePlayerId)?.clientId ?? "";
 });
 
-const viewerHasLegalChi = computed(() => {
-  const targetCardId = responseCard.value?.id ?? "";
-  const chi = (props.actions ?? []).find(
-    (action) => action.action === "chi" && (action.enabled || action.deferred),
-  );
-  if (chi?.candidates?.length) return true;
-  if (viewerChiKnowledge.value?.targetCardId === targetCardId) {
-    return viewerChiKnowledge.value.hasLegalChi;
-  }
-  const viewerIsReceiver = Boolean(props.mySeatId) && props.state?.currentPlayerId === props.mySeatId;
-  const presentationPending = Number(props.state?.presentationUntil ?? 0) >
-    Date.now() + Number(props.state?.presentationClockOffsetMs ?? 0);
-  // During the short center→flow handoff, the server intentionally withholds
-  // actions. Keep an unknown receiver view stable in the center; the first
-  // authoritative local action list then resolves it to center or flow.
-  return viewerIsReceiver && props.state?.responsePhase === "local_upper" && presentationPending;
-});
-
-watch(
-  () => `${responseCard.value?.id ?? ""}|${props.state?.responsePhase ?? ""}|${props.state?.currentPlayerId ?? ""}|${
-    (props.actions ?? []).map((action) => `${action.action}:${action.enabled}:${action.deferred}:${action.candidates?.length ?? 0}`).join(";")
-  }`,
-  () => {
-    const targetCardId = responseCard.value?.id ?? "";
-    if (!targetCardId) return;
-    const chi = (props.actions ?? []).find(
-      (action) => action.action === "chi" && (action.enabled || action.deferred),
-    );
-    if (chi?.candidates?.length) {
-      viewerChiKnowledge.value = { targetCardId, hasLegalChi: true };
-      return;
-    }
-    const isLocalReceiver = props.state?.responsePhase === "local_upper" &&
-      props.state?.currentPlayerId === props.mySeatId;
-    const isCollectiveUpperReceiver = props.state?.responsePhase === "collective" &&
-      responseCard.value?.source === "upper" && activeFlowTargetPlayerId.value === props.mySeatId;
-    if ((isLocalReceiver || isCollectiveUpperReceiver) && (props.actions ?? []).length > 0) {
-      viewerChiKnowledge.value = { targetCardId, hasLegalChi: false };
-    }
-  },
-  { immediate: true },
-);
-
 const responseCardPlacement = computed(() => projectResponseCardPlacement({
   phase: String(props.state?.phase ?? ""),
   responsePhase: String(props.state?.responsePhase ?? ""),
   hasResponseCard: Boolean(responseCard.value),
   currentPlayerId: String(props.state?.currentPlayerId ?? ""),
   viewerPlayerId: props.mySeatId,
-  viewerHasLegalChi: viewerHasLegalChi.value,
 }));
 
 watch(
@@ -1544,6 +1523,18 @@ const displayPrivateHand = computed<Card[]>(() => {
     : props.privateHand.length;
   return props.privateHand.slice(0, limit);
 });
+const visibleHandCardIds = computed(() => new Set(displayPrivateHand.value.map((card) => card.id)));
+const handLayoutCards = computed<Card[]>(() =>
+  props.handLayout !== "paged" && handPresentationBusy.value
+    ? props.privateHand
+    : displayPrivateHand.value,
+);
+function isDealConcealedCard(cardId: string): boolean {
+  if (handPresentationBusy.value && props.handLayout !== "paged" && !handScaleReady.value) {
+    return true;
+  }
+  return handPresentationBusy.value && !visibleHandCardIds.value.has(cardId);
+}
 const handVisibleRangeLabel = computed(() => {
   const { start, end, total } = handVisibleRange.value;
   return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
@@ -1677,13 +1668,28 @@ const activeHints = computed(() => {
   const hints = props.listeningHints;
   return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
-const shownListeningRoutes = computed(() => {
+const markedListeningRoutes = computed(() => {
   if (selectedChiCandidate.value) return activeHints.value?.chi.find((item) => item.candidateId === selectedChiCandidate.value?.id)?.discards ?? [];
-  const routes = activeHints.value?.discards ?? [];
-  return selectedDiscardCardId.value ? routes.filter((route) => route.discardCardId === selectedDiscardCardId.value) : routes;
+  return canDiscard.value ? activeHints.value?.discards ?? [] : [];
 });
+const listeningMarkContext = computed(() => selectedChiCandidate.value ? "post-chi" : "discard");
+function isListeningDiscard(cardId: string): boolean {
+  return markedListeningRoutes.value.some((route) => route.discardCardId === cardId);
+}
 function handCardById(id: string): Card | undefined { return props.privateHand.find((card) => card.id === id); }
-const selectedPreview = computed(() => handCardById(selectedDiscardCardId.value ?? selectedChiCardIds.value.at(-1) ?? ''));
+const selectedPreview = computed(() => canDiscard.value
+  ? handCardById(selectedDiscardCardId.value ?? "")
+  : undefined);
+const selectedDiscardListeningRoute = computed(() => selectedPreview.value
+  ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
+  : undefined);
+const selectedPreviewAccessibleLabel = computed(() => {
+  const selected = selectedPreview.value;
+  if (!selected) return "";
+  const waits = selectedDiscardListeningRoute.value?.waits ?? [];
+  if (!waits.length) return `已选出牌预览：${getCardAccessibleText(selected)}`;
+  return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits.map(getCardAccessibleText).join("、")}`;
+});
 
 const seatCountdownSeconds = computed<number | null>(() => {
   if (
@@ -1994,8 +2000,9 @@ function clearChiSelection(event?: KeyboardEvent): void {
   selectedChiCardIds.value = [];
 }
 
-function updateHandScrollState(): void {
+function updateHandLayoutState(): void {
   const hand = selfHandRef.value;
+  const viewport = handViewportRef.value;
   if (!hand) {
     handHasOverflow.value = false;
     handCanScrollBackward.value = false;
@@ -2009,10 +2016,24 @@ function updateHandScrollState(): void {
     const style = getComputedStyle(hand);
     const gap = parseFloat(style.columnGap) || 0;
     const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-    const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
-    handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+    const available = viewport?.clientWidth ?? 0;
+    if (available > 0 && cards.length > 0) {
+      const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+      if (Math.abs(handScale.value - nextScale) > 0.001) {
+        handScale.value = nextScale;
+      }
+      handScaleReady.value = true;
+    }
     hand.scrollLeft = 0;
-  } else handScale.value = 1;
+    handHasOverflow.value = false;
+    handCanScrollBackward.value = false;
+    handCanScrollForward.value = false;
+    handVisibleRange.value = cards.length
+      ? { start: 1, end: cards.length, total: cards.length }
+      : { start: 0, end: 0, total: 0 };
+    return;
+  }
+  handScale.value = 1;
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
   handHasOverflow.value = maxScrollLeft > 2;
   handCanScrollBackward.value = hand.scrollLeft > 2;
@@ -2040,22 +2061,20 @@ function updateHandScrollState(): void {
     : { start: 0, end: 0, total: cards.length };
 }
 
+function scheduleHandLayoutUpdate(): void {
+  if (handLayoutFrame !== null) return;
+  handLayoutFrame = window.requestAnimationFrame(() => {
+    handLayoutFrame = null;
+    updateHandLayoutState();
+  });
+}
+
 function scrollHand(direction: "backward" | "forward"): void {
   const hand = selfHandRef.value;
-  if (!hand) {
+  if (!hand || props.handLayout !== "paged") {
     return;
   }
   const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
-  if (props.handLayout !== 'paged') {
-    const cards = Array.from(hand.querySelectorAll<HTMLElement>('[data-card-id]'));
-    const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
-    const style = getComputedStyle(hand);
-    const gap = parseFloat(style.columnGap) || 0;
-    const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-    const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
-    handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
-    hand.scrollLeft = 0;
-  } else handScale.value = 1;
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
   const target = Math.min(
     maxScrollLeft,
@@ -2065,23 +2084,21 @@ function scrollHand(direction: "backward" | "forward"): void {
   // immediately, then announce the new range. Native touch dragging remains
   // available on the scroller and does not need CSS snap points.
   hand.scrollTo({ left: target, behavior: "auto" });
-  updateHandScrollState();
-  window.requestAnimationFrame(updateHandScrollState);
+  scheduleHandLayoutUpdate();
 }
 
-function observeHandScroller(hand: HTMLElement | null): void {
+function observeHandViewport(viewport: HTMLElement | null): void {
   handResizeObserver?.disconnect();
   handResizeObserver = null;
-  if (!hand) {
-    updateHandScrollState();
+  if (!viewport) {
+    scheduleHandLayoutUpdate();
     return;
   }
   if (typeof ResizeObserver !== "undefined") {
-    handResizeObserver = new ResizeObserver(updateHandScrollState);
-    handResizeObserver.observe(hand);
-    hand.querySelectorAll<HTMLElement>("[data-card-id]").forEach((card) => handResizeObserver?.observe(card));
+    handResizeObserver = new ResizeObserver(scheduleHandLayoutUpdate);
+    handResizeObserver.observe(viewport);
   }
-  void nextTick(updateHandScrollState);
+  void nextTick(scheduleHandLayoutUpdate);
 }
 
 function confirmDiscard(): void {
@@ -2165,7 +2182,12 @@ function handCardAccessibleLabel(card: Card): string {
         : canDiscard.value && isDiscardProtectedCard(card)
           ? "规则保护，不能打出"
           : "当前无需选牌";
-  return `${getCardAccessibleText(card)}，${state}`;
+  const listening = isListeningDiscard(card.id)
+    ? listeningMarkContext.value === "post-chi"
+      ? "，吃后打出可听牌"
+      : "，打出后可听牌"
+    : "";
+  return `${getCardAccessibleText(card)}，${state}${listening}`;
 }
 
 function parseActionDescriptor(action: string): { actor: string; keyword: string } {
@@ -2638,6 +2660,7 @@ function triggerDealerReveal(
 }
 
 onMounted(() => {
+  scheduleHandLayoutUpdate();
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -2645,6 +2668,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
+  if (handLayoutFrame !== null) cancelAnimationFrame(handLayoutFrame);
+  handLayoutFrame = null;
   handResizeObserver?.disconnect();
   handResizeObserver = null;
   clearDealAnimationRuntime();
@@ -2766,21 +2791,30 @@ watch(
       blockChiAutoSelectionForCurrentTarget();
       selectedChiCardIds.value = [];
     }
-    void nextTick(updateHandScrollState);
+    void nextTick(scheduleHandLayoutUpdate);
   },
 );
 
 watch(
   () => displayPrivateHand.value.map((card) => card.id).join("|"),
-  () => void nextTick(() => observeHandScroller(selfHandRef.value)),
+  () => void nextTick(scheduleHandLayoutUpdate),
+);
+
+watch(
+  handPresentationBusy,
+  (busy) => {
+    if (busy && props.handLayout !== "paged") handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+  },
+  { immediate: true },
 );
 
 watch(
   () => [props.ownCardMode, props.handLayout, props.viewportTransformKey],
-  () => void nextTick(updateHandScrollState),
+  () => void nextTick(scheduleHandLayoutUpdate),
 );
 
-watch(selfHandRef, observeHandScroller, { immediate: true });
+watch(handViewportRef, observeHandViewport, { immediate: true });
 
 watch(
   () => chiSelectionContextKey.value,
@@ -2800,7 +2834,6 @@ watch(
   () => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`,
   () => {
     if (props.state?.phase !== "playing") retainedUpperResponseCardId.value = "";
-    if (props.state?.phase !== "playing") viewerChiKnowledge.value = null;
     if (props.state?.phase === "playing") {
       return;
     }
@@ -2887,7 +2920,7 @@ watch(
         : canDiscard.value
           ? board?.querySelector<HTMLElement>(".hand-card.playable")
           : board?.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)");
-      target?.focus();
+      target?.focus({ preventScroll: true });
     });
   },
   { immediate: true },
@@ -2918,6 +2951,7 @@ watch(
   grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
   gap: clamp(0.3rem, 0.9vh, 0.5rem);
   overflow: hidden;
+  overflow: clip;
 }
 
 .table {
@@ -3108,7 +3142,10 @@ watch(
 
 .self-hand-card {
   grid-column: 2;
-  overflow: hidden;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .turn-arrow {
@@ -3857,10 +3894,6 @@ watch(
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 
-.self-hand-card {
-  display: flex;
-}
-
 .self-zone {
   position: relative;
   background: #0b1220;
@@ -3953,6 +3986,24 @@ watch(
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(0.25rem, 0.7vh, 0.5rem);
+}
+
+.hand-viewport {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+}
+
+.hand-viewport.single-line {
+  align-items: center;
+  justify-content: center;
+}
+
+.hand-viewport > .hand {
+  width: 100%;
 }
 
 .hand-toolbar {
@@ -4105,6 +4156,11 @@ watch(
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.hand-card.deal-concealed {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -4841,6 +4897,10 @@ watch(
     scrollbar-width: thin;
   }
 
+  .hand-viewport:not(.single-line) {
+    min-height: 58px;
+  }
+
   .hand-card.mode-long {
     border-radius: calc(var(--effective-vh, 1vh) * 0.7);
     flex-basis: clamp(28px, calc(var(--effective-vw, 1vw) * 4.5), 32px);
@@ -4861,6 +4921,12 @@ watch(
     width: clamp(0.9rem, calc(var(--effective-vw, 1vw) * 2.2), 1.3rem);
     height: clamp(2.7rem, calc(var(--effective-vh, 1vh) * 6.6), 3.8rem);
     font-size: clamp(0.62rem, calc(var(--effective-vh, 1vh) * 1.55), 0.82rem);
+  }
+
+  .cards.hand:not(.single-line) :deep(.size-xl.mode-long) {
+    width: clamp(28px, calc(var(--effective-vw, 1vw) * 4.5), 32px);
+    height: clamp(52px, calc(var(--effective-vh, 1vh) * 14), 60px);
+    font-size: clamp(16px, calc(var(--effective-vh, 1vh) * 4.4), 20px);
   }
 
   .hand :deep(.size-xl.mode-large) {
@@ -4972,22 +5038,21 @@ watch(
 }
 
 /* One stable decision strip for every phase. */
-.self-hand-card { overflow: visible; display: flex; flex-direction: column; min-width: 0; }
 .decision-status { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 12px; flex-shrink: 0; }
 .decision-status strong { flex: 1; min-width: 0; }
 .fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
-.decision-status button { padding: 3px 8px; }
-.cards.hand.single-line { flex-wrap: nowrap; overflow: visible; justify-content: center; width: auto; min-height: 0; }
+.decision-status button { min-height: 40px; padding: 3px 8px; }
+.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; }
 .cards.hand.single-line .hand-card { flex: 0 0 auto; width: max-content; }
 .hand-mark { position: absolute; top: 0; left: 0; z-index: 2; background: #0f766e; color: white; border-radius: 3px; font-size: 11px; padding: 1px 3px; }
-.listening-summary { max-height: 56px; overflow: auto; font-size: 12px; color: #a7f3d0; flex-shrink: 0; }
-.listening-route { display: inline-flex; align-items: center; gap: 3px; margin: 2px 8px 2px 0; flex-wrap: wrap; }
-.selected-card-preview { position: absolute; right: 4px; bottom: calc(100% + 4px); z-index: 8; display: flex; align-items: center; gap: 4px; background: #0f172a; border: 1px solid #34d399; padding: 4px; border-radius: 6px; pointer-events: none; }
+.listening-mark { background: #047857; }
+.selected-card-preview { position: absolute; right: 4px; bottom: calc(100% + 4px); z-index: 8; max-width: min(70vw, 28rem); display: flex; align-items: center; gap: 6px; background: #0f172a; border: 1px solid #34d399; padding: 4px; border-radius: 6px; pointer-events: none; }
+.selected-preview-wait-label { color: #a7f3d0; font-size: 12px; font-weight: 800; }
+.selected-preview-waits { min-width: 0; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .turn-countdown, .self-turn-timer { display: none; }
 .board.board-declaring { grid-template-rows: minmax(0, 1fr) auto; }
 .board-declaring .self-info-card { display: none; }
 .declaring-hand { grid-column: 1 / -1; grid-row: 2; }
-.decision-status button { min-height: 40px; }
 .declaring-hand .self-hand-panel { flex-shrink: 0; }
 .fixed-clock.urgent { color: #fff1f2; background: #9f1239; border-radius: 5px; font-weight: 800; }
 </style>

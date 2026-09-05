@@ -10,16 +10,20 @@ async function enterDeclaration(page: Page): Promise<void> {
   await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
 }
 
-async function recordNextDeclarationScrollBehavior(page: Page): Promise<void> {
-  await page.getByTestId("declare-hand-preview").evaluate((rail) => {
+async function recordNextHandScrollBehavior(page: Page): Promise<void> {
+  await page.getByTestId("game-settings").click();
+  await page.getByTestId("hand-layout-paged").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("hand-scroll-next")).toBeEnabled();
+  await page.locator(".cards.hand").evaluate((rail) => {
     const target = rail as HTMLElement;
-    const original = target.scrollBy.bind(target);
-    target.scrollBy = ((options: ScrollToOptions) => {
+    const original = target.scrollTo.bind(target);
+    target.scrollTo = ((options: ScrollToOptions) => {
       window.sessionStorage.setItem("sise_test_hand_scroll_behavior", String(options.behavior ?? ""));
       original(options);
-    }) as typeof target.scrollBy;
+    }) as typeof target.scrollTo;
   });
-  await page.getByTestId("declare-hand-scroll-next").click();
+  await page.getByTestId("hand-scroll-next").click();
 }
 
 test("the game motion preference is immediate, persistent, and still defers to the operating system", async ({ page }, testInfo) => {
@@ -58,7 +62,7 @@ test("the game motion preference is immediate, persistent, and still defers to t
   await expect(page.getByTestId("reduced-dealer-flight")).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("reduced-motion-enabled-320x568.png") });
   await page.keyboard.press("Escape");
-  await recordNextDeclarationScrollBehavior(page);
+  await recordNextHandScrollBehavior(page);
   expect(await page.evaluate(() => sessionStorage.getItem("sise_test_hand_scroll_behavior"))).toBe("auto");
 
   await page.reload();
@@ -78,6 +82,6 @@ test("the game motion preference is immediate, persistent, and still defers to t
   expect(await page.evaluate(() =>
     JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").reduceMotion,
   )).toBe(false);
-  await recordNextDeclarationScrollBehavior(page);
+  await recordNextHandScrollBehavior(page);
   expect(await page.evaluate(() => sessionStorage.getItem("sise_test_hand_scroll_behavior"))).toBe("auto");
 });

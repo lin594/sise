@@ -6,7 +6,6 @@ export interface ResponseCardPlacementInput {
   hasResponseCard: boolean;
   currentPlayerId: string;
   viewerPlayerId: string;
-  viewerHasLegalChi: boolean;
 }
 
 export function getRoundKey(
@@ -27,7 +26,7 @@ export function projectResponseCardPlacement(input: ResponseCardPlacementInput):
     return "center";
   }
   const isReceiver = Boolean(input.viewerPlayerId) && input.currentPlayerId === input.viewerPlayerId;
-  return isReceiver && input.viewerHasLegalChi ? "center" : "flow";
+  return isReceiver ? "center" : "flow";
 }
 
 export function isQuietSelfDiscardWait(input: {

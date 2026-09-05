@@ -52,7 +52,6 @@ const selectedChiCardIds = ref([]);
 const chiAutoSelectionBlockedKey = ref("");
 const chiValidationMessage = ref("");
 const retainedUpperResponseCardId = ref("");
-const viewerChiKnowledge = ref(null);
 let activeChiSelectionContextKey = "";
 const locallyAnimatedDiscardCardId = ref(null);
 const flights = ref([]);
@@ -66,12 +65,15 @@ const boardRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
 const selfHandRef = ref(null);
+const handViewportRef = ref(null);
 const handScale = ref(1);
+const handScaleReady = ref(!shouldConcealOpeningHand());
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
 const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let handResizeObserver = null;
+let handLayoutFrame = null;
 const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
 const seatRefMap = new Map();
@@ -280,46 +282,12 @@ const activeFlowTargetPlayerId = computed(() => {
     }
     return getNextPlayer(sourcePlayerId)?.clientId ?? "";
 });
-const viewerHasLegalChi = computed(() => {
-    const targetCardId = responseCard.value?.id ?? "";
-    const chi = (props.actions ?? []).find((action) => action.action === "chi" && (action.enabled || action.deferred));
-    if (chi?.candidates?.length)
-        return true;
-    if (viewerChiKnowledge.value?.targetCardId === targetCardId) {
-        return viewerChiKnowledge.value.hasLegalChi;
-    }
-    const viewerIsReceiver = Boolean(props.mySeatId) && props.state?.currentPlayerId === props.mySeatId;
-    const presentationPending = Number(props.state?.presentationUntil ?? 0) >
-        Date.now() + Number(props.state?.presentationClockOffsetMs ?? 0);
-    // During the short center→flow handoff, the server intentionally withholds
-    // actions. Keep an unknown receiver view stable in the center; the first
-    // authoritative local action list then resolves it to center or flow.
-    return viewerIsReceiver && props.state?.responsePhase === "local_upper" && presentationPending;
-});
-watch(() => `${responseCard.value?.id ?? ""}|${props.state?.responsePhase ?? ""}|${props.state?.currentPlayerId ?? ""}|${(props.actions ?? []).map((action) => `${action.action}:${action.enabled}:${action.deferred}:${action.candidates?.length ?? 0}`).join(";")}`, () => {
-    const targetCardId = responseCard.value?.id ?? "";
-    if (!targetCardId)
-        return;
-    const chi = (props.actions ?? []).find((action) => action.action === "chi" && (action.enabled || action.deferred));
-    if (chi?.candidates?.length) {
-        viewerChiKnowledge.value = { targetCardId, hasLegalChi: true };
-        return;
-    }
-    const isLocalReceiver = props.state?.responsePhase === "local_upper" &&
-        props.state?.currentPlayerId === props.mySeatId;
-    const isCollectiveUpperReceiver = props.state?.responsePhase === "collective" &&
-        responseCard.value?.source === "upper" && activeFlowTargetPlayerId.value === props.mySeatId;
-    if ((isLocalReceiver || isCollectiveUpperReceiver) && (props.actions ?? []).length > 0) {
-        viewerChiKnowledge.value = { targetCardId, hasLegalChi: false };
-    }
-}, { immediate: true });
 const responseCardPlacement = computed(() => projectResponseCardPlacement({
     phase: String(props.state?.phase ?? ""),
     responsePhase: String(props.state?.responsePhase ?? ""),
     hasResponseCard: Boolean(responseCard.value),
     currentPlayerId: String(props.state?.currentPlayerId ?? ""),
     viewerPlayerId: props.mySeatId,
-    viewerHasLegalChi: viewerHasLegalChi.value,
 }));
 watch(() => `${responseCard.value?.id ?? ""}|${responseCardPlacement.value}|${props.state?.responsePhase ?? ""}`, () => {
     if (props.state?.responsePhase === "local_upper" && responseCardPlacement.value === "center") {
@@ -675,6 +643,16 @@ const displayPrivateHand = computed(() => {
         : props.privateHand.length;
     return props.privateHand.slice(0, limit);
 });
+const visibleHandCardIds = computed(() => new Set(displayPrivateHand.value.map((card) => card.id)));
+const handLayoutCards = computed(() => props.handLayout !== "paged" && handPresentationBusy.value
+    ? props.privateHand
+    : displayPrivateHand.value);
+function isDealConcealedCard(cardId) {
+    if (handPresentationBusy.value && props.handLayout !== "paged" && !handScaleReady.value) {
+        return true;
+    }
+    return handPresentationBusy.value && !visibleHandCardIds.value.has(cardId);
+}
 const handVisibleRangeLabel = computed(() => {
     const { start, end, total } = handVisibleRange.value;
     return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
@@ -801,14 +779,31 @@ const activeHints = computed(() => {
     const hints = props.listeningHints;
     return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
-const shownListeningRoutes = computed(() => {
+const markedListeningRoutes = computed(() => {
     if (selectedChiCandidate.value)
         return activeHints.value?.chi.find((item) => item.candidateId === selectedChiCandidate.value?.id)?.discards ?? [];
-    const routes = activeHints.value?.discards ?? [];
-    return selectedDiscardCardId.value ? routes.filter((route) => route.discardCardId === selectedDiscardCardId.value) : routes;
+    return canDiscard.value ? activeHints.value?.discards ?? [] : [];
 });
+const listeningMarkContext = computed(() => selectedChiCandidate.value ? "post-chi" : "discard");
+function isListeningDiscard(cardId) {
+    return markedListeningRoutes.value.some((route) => route.discardCardId === cardId);
+}
 function handCardById(id) { return props.privateHand.find((card) => card.id === id); }
-const selectedPreview = computed(() => handCardById(selectedDiscardCardId.value ?? selectedChiCardIds.value.at(-1) ?? ''));
+const selectedPreview = computed(() => canDiscard.value
+    ? handCardById(selectedDiscardCardId.value ?? "")
+    : undefined);
+const selectedDiscardListeningRoute = computed(() => selectedPreview.value
+    ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
+    : undefined);
+const selectedPreviewAccessibleLabel = computed(() => {
+    const selected = selectedPreview.value;
+    if (!selected)
+        return "";
+    const waits = selectedDiscardListeningRoute.value?.waits ?? [];
+    if (!waits.length)
+        return `已选出牌预览：${getCardAccessibleText(selected)}`;
+    return `已选出牌预览：${getCardAccessibleText(selected)}，打出后等待${waits.map(getCardAccessibleText).join("、")}`;
+});
 const seatCountdownSeconds = computed(() => {
     if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
         Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
@@ -1075,8 +1070,9 @@ function clearChiSelection(event) {
     blockChiAutoSelectionForCurrentTarget();
     selectedChiCardIds.value = [];
 }
-function updateHandScrollState() {
+function updateHandLayoutState() {
     const hand = selfHandRef.value;
+    const viewport = handViewportRef.value;
     if (!hand) {
         handHasOverflow.value = false;
         handCanScrollBackward.value = false;
@@ -1090,12 +1086,24 @@ function updateHandScrollState() {
         const style = getComputedStyle(hand);
         const gap = parseFloat(style.columnGap) || 0;
         const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-        const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
-        handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+        const available = viewport?.clientWidth ?? 0;
+        if (available > 0 && cards.length > 0) {
+            const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+            if (Math.abs(handScale.value - nextScale) > 0.001) {
+                handScale.value = nextScale;
+            }
+            handScaleReady.value = true;
+        }
         hand.scrollLeft = 0;
+        handHasOverflow.value = false;
+        handCanScrollBackward.value = false;
+        handCanScrollForward.value = false;
+        handVisibleRange.value = cards.length
+            ? { start: 1, end: cards.length, total: cards.length }
+            : { start: 0, end: 0, total: 0 };
+        return;
     }
-    else
-        handScale.value = 1;
+    handScale.value = 1;
     const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
     handHasOverflow.value = maxScrollLeft > 2;
     handCanScrollBackward.value = hand.scrollLeft > 2;
@@ -1121,46 +1129,40 @@ function updateHandScrollState() {
         ? { start: visibleIndexes[0] + 1, end: visibleIndexes.at(-1) + 1, total: cards.length }
         : { start: 0, end: 0, total: cards.length };
 }
+function scheduleHandLayoutUpdate() {
+    if (handLayoutFrame !== null)
+        return;
+    handLayoutFrame = window.requestAnimationFrame(() => {
+        handLayoutFrame = null;
+        updateHandLayoutState();
+    });
+}
 function scrollHand(direction) {
     const hand = selfHandRef.value;
-    if (!hand) {
+    if (!hand || props.handLayout !== "paged") {
         return;
     }
     const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
-    if (props.handLayout !== 'paged') {
-        const cards = Array.from(hand.querySelectorAll('[data-card-id]'));
-        const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
-        const style = getComputedStyle(hand);
-        const gap = parseFloat(style.columnGap) || 0;
-        const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-        const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
-        handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
-        hand.scrollLeft = 0;
-    }
-    else
-        handScale.value = 1;
     const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
     const target = Math.min(maxScrollLeft, Math.max(0, hand.scrollLeft + (direction === "forward" ? distance : -distance)));
     // The explicit controls behave like page buttons: move a predictable chunk
     // immediately, then announce the new range. Native touch dragging remains
     // available on the scroller and does not need CSS snap points.
     hand.scrollTo({ left: target, behavior: "auto" });
-    updateHandScrollState();
-    window.requestAnimationFrame(updateHandScrollState);
+    scheduleHandLayoutUpdate();
 }
-function observeHandScroller(hand) {
+function observeHandViewport(viewport) {
     handResizeObserver?.disconnect();
     handResizeObserver = null;
-    if (!hand) {
-        updateHandScrollState();
+    if (!viewport) {
+        scheduleHandLayoutUpdate();
         return;
     }
     if (typeof ResizeObserver !== "undefined") {
-        handResizeObserver = new ResizeObserver(updateHandScrollState);
-        handResizeObserver.observe(hand);
-        hand.querySelectorAll("[data-card-id]").forEach((card) => handResizeObserver?.observe(card));
+        handResizeObserver = new ResizeObserver(scheduleHandLayoutUpdate);
+        handResizeObserver.observe(viewport);
     }
-    void nextTick(updateHandScrollState);
+    void nextTick(scheduleHandLayoutUpdate);
 }
 function confirmDiscard() {
     const cardId = selectedDiscardCardId.value;
@@ -1240,7 +1242,12 @@ function handCardAccessibleLabel(card) {
                 : canDiscard.value && isDiscardProtectedCard(card)
                     ? "规则保护，不能打出"
                     : "当前无需选牌";
-    return `${getCardAccessibleText(card)}，${state}`;
+    const listening = isListeningDiscard(card.id)
+        ? listeningMarkContext.value === "post-chi"
+            ? "，吃后打出可听牌"
+            : "，打出后可听牌"
+        : "";
+    return `${getCardAccessibleText(card)}，${state}${listening}`;
 }
 function parseActionDescriptor(action) {
     const parts = String(action ?? "").trim().split(/\s+/).filter(Boolean);
@@ -1678,6 +1685,7 @@ function triggerDealerReveal(stage, label, card, dealerId = "") {
     }, 2400);
 }
 onMounted(() => {
+    scheduleHandLayoutUpdate();
     countdownTimer = setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
@@ -1685,6 +1693,9 @@ onMounted(() => {
 onUnmounted(() => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
+    if (handLayoutFrame !== null)
+        cancelAnimationFrame(handLayoutFrame);
+    handLayoutFrame = null;
     handResizeObserver?.disconnect();
     handResizeObserver = null;
     clearDealAnimationRuntime();
@@ -1798,11 +1809,16 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
         blockChiAutoSelectionForCurrentTarget();
         selectedChiCardIds.value = [];
     }
-    void nextTick(updateHandScrollState);
+    void nextTick(scheduleHandLayoutUpdate);
 });
-watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(() => observeHandScroller(selfHandRef.value)));
-watch(() => [props.ownCardMode, props.handLayout, props.viewportTransformKey], () => void nextTick(updateHandScrollState));
-watch(selfHandRef, observeHandScroller, { immediate: true });
+watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(scheduleHandLayoutUpdate));
+watch(handPresentationBusy, (busy) => {
+    if (busy && props.handLayout !== "paged")
+        handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+}, { immediate: true });
+watch(() => [props.ownCardMode, props.handLayout, props.viewportTransformKey], () => void nextTick(scheduleHandLayoutUpdate));
+watch(handViewportRef, observeHandViewport, { immediate: true });
 watch(() => chiSelectionContextKey.value, (contextKey) => {
     if (contextKey === activeChiSelectionContextKey) {
         return;
@@ -1815,8 +1831,6 @@ watch(() => chiSelectionContextKey.value, (contextKey) => {
 watch(() => `${props.state?.roomId ?? ""}|${props.state?.completedRounds ?? 0}|${props.state?.phase ?? ""}`, () => {
     if (props.state?.phase !== "playing")
         retainedUpperResponseCardId.value = "";
-    if (props.state?.phase !== "playing")
-        viewerChiKnowledge.value = null;
     if (props.state?.phase === "playing") {
         return;
     }
@@ -1881,7 +1895,7 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
             : canDiscard.value
                 ? board?.querySelector(".hand-card.playable")
                 : board?.querySelector(".action-dock .btn:not(:disabled)");
-        target?.focus();
+        target?.focus({ preventScroll: true });
     });
 }, { immediate: true });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
@@ -1976,7 +1990,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-pointer']} */ ;
 /** @type {__VLS_StyleScopedClasses['empty']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-zone']} */ ;
@@ -1991,6 +2004,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
@@ -1999,10 +2014,12 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['can-scroll-forward']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['can-scroll-backward']} */ ;
 /** @type {__VLS_StyleScopedClasses['can-scroll-forward']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['playable']} */ ;
@@ -2117,12 +2134,19 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -2156,11 +2180,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['single-line']} */ ;
@@ -2170,7 +2194,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['board-declaring']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['declaring-hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
@@ -3165,74 +3188,50 @@ if (__VLS_ctx.selfPlayer) {
         (__VLS_ctx.nowMs < __VLS_ctx.moreTimePendingUntil ? '加时中…' : `+${__VLS_ctx.moreTimeSeconds ?? 20}秒`);
     }
     var __VLS_46 = {};
-    if (__VLS_ctx.activeHints && (__VLS_ctx.canDiscard || __VLS_ctx.selectedChiCandidate)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "listening-summary" },
-            'data-testid': "listening-summary",
-        });
-        if (__VLS_ctx.shownListeningRoutes.length) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            (__VLS_ctx.selectedChiCandidate ? '这样吃后' : '听牌提示');
-            for (const [route] of __VLS_getVForSourceType((__VLS_ctx.shownListeningRoutes))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                    key: (route.discardCardId),
-                    ...{ class: "listening-route" },
-                });
-                if (__VLS_ctx.handCardById(route.discardCardId)) {
-                    /** @type {[typeof CardComp, ]} */ ;
-                    // @ts-ignore
-                    const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                        card: (__VLS_ctx.handCardById(route.discardCardId)),
-                        size: "xs",
-                        mode: "large",
-                    }));
-                    const __VLS_49 = __VLS_48({
-                        card: (__VLS_ctx.handCardById(route.discardCardId)),
-                        size: "xs",
-                        mode: "large",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
-                }
-                for (const [card] of __VLS_getVForSourceType((route.waits))) {
-                    /** @type {[typeof CardComp, ]} */ ;
-                    // @ts-ignore
-                    const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                        key: (card.id),
-                        card: (card),
-                        size: "xs",
-                        mode: "large",
-                    }));
-                    const __VLS_52 = __VLS_51({
-                        key: (card.id),
-                        card: (card),
-                        size: "xs",
-                        mode: "large",
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_51));
-                }
-            }
-        }
-        else {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-            (__VLS_ctx.canDiscard && !__VLS_ctx.selectedDiscardCardId ? '当前没有打出一张即可听牌的路线' : '当前选择暂无听牌路线');
-        }
-    }
     if (__VLS_ctx.selectedPreview) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "selected-card-preview" },
-            'aria-label': "选中牌预览",
+            'data-testid': "selected-card-preview",
+            'aria-label': (__VLS_ctx.selectedPreviewAccessibleLabel),
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
         }));
-        const __VLS_55 = __VLS_54({
+        const __VLS_49 = __VLS_48({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_54));
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        if (__VLS_ctx.selectedDiscardListeningRoute?.waits.length) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "selected-preview-wait-label" },
+                'aria-hidden': "true",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "selected-preview-waits" },
+                'aria-hidden': "true",
+            });
+            for (const [card] of __VLS_getVForSourceType((__VLS_ctx.selectedDiscardListeningRoute.waits))) {
+                /** @type {[typeof CardComp, ]} */ ;
+                // @ts-ignore
+                const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    key: (`selected-wait-${card.id}`),
+                    card: (card),
+                    size: "xs",
+                    mode: "large",
+                }));
+                const __VLS_52 = __VLS_51({
+                    key: (`selected-wait-${card.id}`),
+                    card: (card),
+                    size: "xs",
+                    mode: "large",
+                }, ...__VLS_functionalComponentArgsRest(__VLS_51));
+            }
+        }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-hand-panel" },
@@ -3291,9 +3290,15 @@ if (__VLS_ctx.selfPlayer) {
         });
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ onScroll: (__VLS_ctx.updateHandScrollState) },
+        ref: "handViewportRef",
+        ...{ class: "hand-viewport" },
+        ...{ class: ({ 'single-line': __VLS_ctx.handLayout !== 'paged' }) },
+    });
+    /** @type {typeof __VLS_ctx.handViewportRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ onScroll: (__VLS_ctx.scheduleHandLayoutUpdate) },
         ...{ class: "cards hand" },
-        ...{ style: (__VLS_ctx.handLayout !== 'paged' ? { zoom: __VLS_ctx.handScale } : undefined) },
+        ...{ style: ({ zoom: __VLS_ctx.handLayout !== 'paged' ? __VLS_ctx.handScale : 1 }) },
         ...{ class: ({
                 'single-line': __VLS_ctx.handLayout !== 'paged',
                 'can-scroll-backward': __VLS_ctx.handCanScrollBackward,
@@ -3302,7 +3307,7 @@ if (__VLS_ctx.selfPlayer) {
         ref: "selfHandRef",
     });
     /** @type {typeof __VLS_ctx.selfHandRef} */ ;
-    for (const [card] of __VLS_getVForSourceType((__VLS_ctx.displayPrivateHand))) {
+    for (const [card] of __VLS_getVForSourceType((__VLS_ctx.handLayoutCards))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
@@ -3321,16 +3326,19 @@ if (__VLS_ctx.selfPlayer) {
             ...{ class: ({
                     'mode-large': props.ownCardMode === 'large',
                     'mode-long': props.ownCardMode === 'long',
-                    playable: __VLS_ctx.canSelectHandCard(card),
+                    'deal-concealed': __VLS_ctx.isDealConcealedCard(card.id),
+                    playable: !__VLS_ctx.isDealConcealedCard(card.id) && __VLS_ctx.canSelectHandCard(card),
                     blocked: __VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card),
                     'gold-blocked': __VLS_ctx.canDiscard && card.color === 'gold',
                     'discard-selected': !__VLS_ctx.chiSelectionDraftActive && __VLS_ctx.selectedDiscardCardId === card.id,
                     'candidate-active': __VLS_ctx.isChiCardSelectable(card.id),
                     'candidate-selected': __VLS_ctx.selectedChiCardIds.includes(card.id),
                 }) },
+            'aria-hidden': (__VLS_ctx.isDealConcealedCard(card.id) ? 'true' : undefined),
             'aria-pressed': (__VLS_ctx.chiSelectionDraftActive ? __VLS_ctx.selectedChiCardIds.includes(card.id) : __VLS_ctx.selectedDiscardCardId === card.id),
-            'aria-label': (__VLS_ctx.handCardAccessibleLabel(card)),
-            disabled: (!__VLS_ctx.canSelectHandCard(card) || Boolean(__VLS_ctx.discardingCardId)),
+            'aria-label': (__VLS_ctx.isDealConcealedCard(card.id) ? undefined : __VLS_ctx.handCardAccessibleLabel(card)),
+            tabindex: (__VLS_ctx.isDealConcealedCard(card.id) ? -1 : undefined),
+            disabled: (__VLS_ctx.isDealConcealedCard(card.id) || !__VLS_ctx.canSelectHandCard(card) || Boolean(__VLS_ctx.discardingCardId)),
         });
         if (__VLS_ctx.state?.phase === 'declaring' && __VLS_ctx.declarationMarks?.fish.includes(card.id)) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
@@ -3342,9 +3350,11 @@ if (__VLS_ctx.selfPlayer) {
                 ...{ class: "hand-mark" },
             });
         }
-        else if (__VLS_ctx.activeHints?.discards.some((route) => route.discardCardId === card.id)) {
+        else if (__VLS_ctx.isListeningDiscard(card.id)) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "hand-mark" },
+                ...{ class: "hand-mark listening-mark" },
+                'data-testid': "listening-mark",
+                'data-listening-context': (__VLS_ctx.listeningMarkContext),
             });
         }
         if (!__VLS_ctx.chiSelectionDraftActive && __VLS_ctx.selectedDiscardCardId === card.id) {
@@ -3367,24 +3377,24 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_58 = __VLS_57({
+        const __VLS_55 = __VLS_54({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_54));
     }
 }
 if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_57 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -3406,7 +3416,7 @@ if (props.state?.phase === 'playing') {
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
-    const __VLS_61 = __VLS_60({
+    const __VLS_58 = __VLS_57({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
@@ -3427,35 +3437,35 @@ if (props.state?.phase === 'playing') {
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
-    let __VLS_63;
-    let __VLS_64;
-    let __VLS_65;
-    const __VLS_66 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+    let __VLS_60;
+    let __VLS_61;
+    let __VLS_62;
+    const __VLS_63 = {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
-    const __VLS_67 = {
+    const __VLS_64 = {
         onRequestMoreTime: (...[$event]) => {
             if (!(props.state?.phase === 'playing'))
                 return;
             __VLS_ctx.emit('requestMoreTime');
         }
     };
-    const __VLS_68 = {
+    const __VLS_65 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    var __VLS_62;
+    var __VLS_59;
 }
-const __VLS_69 = {}.Teleport;
+const __VLS_66 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_70 = __VLS_asFunctionalComponent(__VLS_69, new __VLS_69({
+const __VLS_67 = __VLS_asFunctionalComponent(__VLS_66, new __VLS_66({
     to: "body",
 }));
-const __VLS_71 = __VLS_70({
+const __VLS_68 = __VLS_67({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_70));
-__VLS_72.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_67));
+__VLS_69.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3479,21 +3489,21 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_73 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
         }));
-        const __VLS_74 = __VLS_73({
+        const __VLS_71 = __VLS_70({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
     }
 }
-var __VLS_72;
+var __VLS_69;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3512,16 +3522,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_76 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_73 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_77 = __VLS_76({
+        const __VLS_74 = __VLS_73({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_76));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3680,20 +3690,22 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
-/** @type {__VLS_StyleScopedClasses['listening-summary']} */ ;
-/** @type {__VLS_StyleScopedClasses['listening-route']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-preview-wait-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-preview-waits']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
@@ -3736,6 +3748,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             responseLandingRef: responseLandingRef,
             deckAnchorRef: deckAnchorRef,
             selfHandRef: selfHandRef,
+            handViewportRef: handViewportRef,
             handScale: handScale,
             handHasOverflow: handHasOverflow,
             handCanScrollBackward: handCanScrollBackward,
@@ -3764,6 +3777,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             canDiscard: canDiscard,
             effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
             displayPrivateHand: displayPrivateHand,
+            handLayoutCards: handLayoutCards,
+            isDealConcealedCard: isDealConcealedCard,
             handVisibleRangeLabel: handVisibleRangeLabel,
             isResponseCardDrawHidden: isResponseCardDrawHidden,
             chiSelectionDraftActive: chiSelectionDraftActive,
@@ -3773,10 +3788,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             requestFixedMoreTime: requestFixedMoreTime,
             fixedStatusText: fixedStatusText,
             fixedClockText: fixedClockText,
-            activeHints: activeHints,
-            shownListeningRoutes: shownListeningRoutes,
-            handCardById: handCardById,
+            listeningMarkContext: listeningMarkContext,
+            isListeningDiscard: isListeningDiscard,
             selectedPreview: selectedPreview,
+            selectedDiscardListeningRoute: selectedDiscardListeningRoute,
+            selectedPreviewAccessibleLabel: selectedPreviewAccessibleLabel,
             seatCountdownSeconds: seatCountdownSeconds,
             seatCountdownPercent: seatCountdownPercent,
             passiveCollectiveWait: passiveCollectiveWait,
@@ -3802,7 +3818,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectHandCard: selectHandCard,
             ensureHandCardSelected: ensureHandCardSelected,
             clearChiSelection: clearChiSelection,
-            updateHandScrollState: updateHandScrollState,
+            scheduleHandLayoutUpdate: scheduleHandLayoutUpdate,
             scrollHand: scrollHand,
             confirmDiscard: confirmDiscard,
             onSubmitAction: onSubmitAction,

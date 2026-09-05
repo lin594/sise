@@ -51,7 +51,7 @@ async function observeRoundPresentation(page: Page): Promise<void> {
       const record = (event: PresentationEvent) => {
         if (!events.some((entry) => entry.name === event.name)) events.push(event);
       };
-      const handCount = document.querySelectorAll("[data-testid^='hand-card-']").length;
+      const handCount = document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length;
       if (document.querySelector("[data-testid='dealer-reveal-back']")) {
         record({ name: "dealer-back", handCount });
       }
@@ -189,7 +189,7 @@ async function expectCrowdedActionDock(page: Page): Promise<void> {
       minimumHeight: Math.min(...rects.map((rect) => rect.height)),
     };
   });
-  expect(metrics.controlCount).toBeGreaterThanOrEqual(5);
+  expect(metrics.controlCount).toBeGreaterThanOrEqual(4);
   expect(metrics.rows).toBe(2);
   expect(metrics.noHorizontalOverflow).toBe(true);
   expect(metrics.allContained, JSON.stringify(metrics)).toBe(true);

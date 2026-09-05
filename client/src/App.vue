@@ -1525,7 +1525,10 @@ const settingsDecisionTimeText = computed(() =>
 );
 
 function openRules(): void {
-  rulesReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  rulesReturnFocus = activeElement && activeElement !== document.body && activeElement !== document.documentElement
+    ? activeElement
+    : null;
   showRules.value = true;
   void nextTick(() => rulesCloseButtonRef.value?.focus());
 }
@@ -1565,10 +1568,22 @@ function closeRules(restoreFocus = true): void {
     return;
   }
   void nextTick(() => {
-    const fallback = document.querySelector<HTMLElement>(
-      "[data-testid='game-settings'], [data-testid='login-submit'], .reset-btn",
-    );
-    (returnTarget?.isConnected && !returnToGameSettings ? returnTarget : fallback)?.focus();
+    const resolveTarget = () =>
+      returnTarget?.isConnected && !returnToGameSettings
+        ? returnTarget
+        : document.querySelector<HTMLElement>(
+          "[data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='login-submit'], .reset-btn",
+        );
+    const restore = () => resolveTarget()?.focus({ preventScroll: true });
+    restore();
+    window.requestAnimationFrame(restore);
+    // Closing the rules and settings layers in the same tick can briefly move
+    // focus back to the document. Retry only when nothing else has claimed it.
+    window.setTimeout(() => {
+      if (!(document.activeElement instanceof HTMLElement) || document.activeElement === document.body) {
+        restore();
+      }
+    }, 220);
   });
 }
 
@@ -1975,7 +1990,7 @@ function focusReadyGameControl(): boolean {
   if (!control) {
     return false;
   }
-  control.focus();
+  control.focus({ preventScroll: true });
   decisionControlFocusPending = false;
   return true;
 }

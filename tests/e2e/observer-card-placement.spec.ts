@@ -19,7 +19,7 @@ async function setupLocalUpperChi(page: Page): Promise<void> {
     .toMatchObject({ scenario: "chi_local_upper", ok: true });
 }
 
-test("the receiver keeps an edible upper card centered while observers see its flow lane", async ({ page }) => {
+test("the local upper receiver always keeps the card centered while observers see its flow lane", async ({ page }) => {
   await enterDebugPractice(page);
   await setupLocalUpperChi(page);
 
@@ -76,10 +76,26 @@ test("the receiver keeps an edible upper card centered while observers see its f
       previousPlayerId: original.previousPlayerId,
       pollOriginPlayerId: original.pollOriginPlayerId,
       availableActions: original.actions,
+      presentationUntil: 0,
       decisionTimer: { ...bridge.getDecisionTimer(), decisionKey: "receiver-local-upper" },
       tableTransitions: [],
     }, "explicit");
   }, fixture);
+  await expect(board).toHaveAttribute("data-response-placement", "center");
+  await expect(page.getByTestId("pending-card")).toBeVisible();
+  await expect(page.locator(`[data-face-id="${fixture.responseId}"]`)).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    bridge.applyRoomSnapshot({
+      stateRevision: state.stateRevision + 1,
+      availableActions: [],
+      presentationUntil: 0,
+      decisionTimer: { ...bridge.getDecisionTimer(), decisionKey: "receiver-local-upper-no-chi" },
+      tableTransitions: [],
+    }, "explicit");
+  });
   await expect(board).toHaveAttribute("data-response-placement", "center");
   await expect(page.getByTestId("pending-card")).toBeVisible();
   await expect(page.locator(`[data-face-id="${fixture.responseId}"]`)).toHaveCount(1);

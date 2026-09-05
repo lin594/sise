@@ -47,20 +47,40 @@ test('friend waiting room rules entry opens the shared guide', async ({ page }) 
   await page.getByTestId('close-rules').click();
   await expect(page.getByRole('button', { name: '查看规则', exact: true })).toBeFocused();
 });
-test('chi previews listening routes and stale hints disappear', async ({ page }, info) => {
+test('listening marks stay in the hand and only discard selection opens a preview', async ({ page }, info) => {
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await page.getByTestId('lobby-start').click();
   await page.getByTestId('confirm-declaration').click();
-  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jmp'));
-  await expect(page.getByTestId('listening-summary')).toContainText('这样吃后');
-  await expect(page.getByTestId('listening-summary').locator('[role="img"]')).not.toHaveCount(0);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
+  await expect(page.getByTestId('hand-card-unique-red-jiang')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('selected-card-preview')).toHaveCount(0);
+  await expect(page.getByTestId('listening-summary')).toHaveCount(0);
+  const projectedMark = page.getByTestId('hand-card-post-yellow-shi').getByTestId('listening-mark');
+  await expect(projectedMark).toHaveAttribute('data-listening-context', 'post-chi');
+  await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveAttribute('aria-label', /吃后打出可听牌/);
+
   await page.getByTestId('action-chi').click();
   await expect(page.getByTestId('discard-confirm')).toBeVisible();
-  await page.getByTestId('hand-card-unique-red-shi').click();
-  await expect(page.getByTestId('listening-summary')).toContainText('听牌提示');
-  await expect(page.locator('.selected-card-preview')).toBeVisible();
+  const discardMark = page.getByTestId('hand-card-post-yellow-shi').getByTestId('listening-mark');
+  await expect(discardMark).toHaveAttribute('data-listening-context', 'discard');
+  await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveAttribute('aria-label', /打出后可听牌/);
+  await page.getByTestId('hand-card-post-yellow-shi').click();
+  const preview = page.getByTestId('selected-card-preview');
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveAttribute('aria-label', /打出后等待/);
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+
+  const ordinaryDiscard = page.locator('.hand-card:not(.deal-concealed):not(:has([data-testid="listening-mark"]))').first();
+  await ordinaryDiscard.click();
+  await expect(preview.locator('[role="img"]')).toHaveCount(1);
+  await expect(page.getByText('当前选择暂无听牌路线', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('当前没有打出一张即可听牌的路线', { exact: true })).toHaveCount(0);
+  await page.getByTestId('hand-card-post-yellow-shi').click();
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
   await page.screenshot({ path: info.outputPath('listening.png') });
+
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
     const state = bridge.getRoomState();
@@ -69,8 +89,51 @@ test('chi previews listening routes and stale hints disappear', async ({ page },
       listeningHints: { stateRevision: state.stateRevision - 1, decisionKey: bridge.getDecisionTimer().decisionKey, discards: [], chi: [] },
     }, 'explicit');
   });
+  await expect(page.getByTestId('listening-mark')).toHaveCount(0);
   await expect(page.getByTestId('listening-summary')).toHaveCount(0);
+  await expect(preview.locator('[role="img"]')).toHaveCount(1);
   await expect(page.getByTestId('discard-confirm')).toBeEnabled();
+});
+
+test('opening deal keeps one authoritative scale and a stable hand viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await login(page);
+  await page.evaluate(() => {
+    const probe = window as any;
+    probe.__siseHandScaleSamples = [];
+    probe.__siseHandScaleProbe = window.setInterval(() => {
+      const hand = document.querySelector<HTMLElement>('.cards.hand.single-line');
+      const viewport = document.querySelector<HTMLElement>('.hand-viewport.single-line');
+      if (!hand || !viewport) return;
+      const cards = [...hand.querySelectorAll<HTMLElement>('[data-card-id]')];
+      const visibleCount = cards.filter((card) => !card.classList.contains('deal-concealed')).length;
+      if (!visibleCount) return;
+      const rect = viewport.getBoundingClientRect();
+      probe.__siseHandScaleSamples.push({
+        scale: Number.parseFloat(getComputedStyle(hand).zoom || '1'),
+        visibleCount,
+        authoritativeCount: cards.length,
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    }, 8);
+  });
+  await page.getByTestId('lobby-start').click();
+  await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20_000 });
+  const samples = await page.evaluate(() => {
+    const probe = window as any;
+    window.clearInterval(probe.__siseHandScaleProbe);
+    return probe.__siseHandScaleSamples as Array<Record<string, number>>;
+  });
+  expect(samples.length).toBeGreaterThan(2);
+  expect(samples.every((sample) => sample.authoritativeCount >= 20)).toBe(true);
+  expect(new Set(samples.map((sample) => sample.scale.toFixed(4))).size).toBe(1);
+  for (const key of ['left', 'top', 'width', 'height'] as const) {
+    const values = samples.map((sample) => sample[key]);
+    expect(Math.max(...values) - Math.min(...values), `${key} must stay stable during the deal`).toBeLessThanOrEqual(0.5);
+  }
 });
 test('21-card single row adapts to both card styles and layout preference survives refresh', async ({ page }) => {
   await page.setViewportSize({ width: 568, height: 320 });
