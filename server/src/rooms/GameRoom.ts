@@ -1,4 +1,5 @@
-﻿import { Room, Client, CloseCode } from "@colyseus/core";
+import { findListeningDiscards, type ListeningHints } from "./flow/listening-hints.js";
+import { Room, Client, CloseCode } from "@colyseus/core";
 import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
@@ -3447,6 +3448,36 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     };
   }
 
+  private listeningCache = new Map<string, { key: string; value: ListeningHints }>();
+
+  private buildListeningHints(seatId: string): ListeningHints {
+    const decision = this.buildClientDecisionView(seatId);
+    const hand = this.playerHands.get(seatId) ?? [];
+    const kongs = this.state.players.get(seatId)?.declaredKongs ?? 0;
+    const candidates = decision.availableActions.find((a) => a.action === "chi")?.candidates ?? [];
+    const canDiscard = this.state.phase === "playing" && this.awaitingDiscardOwnerId === seatId;
+    const key = JSON.stringify([decision.decisionTimer.decisionKey, this.pendingResponse?.card, hand, kongs, canDiscard, candidates]);
+    const cached = this.listeningCache.get(seatId);
+    if (cached?.key === key) return { ...cached.value, stateRevision: this.state.stateRevision };
+    const value: ListeningHints = {
+      stateRevision: this.state.stateRevision,
+      decisionKey: decision.decisionTimer.decisionKey,
+      discards: canDiscard ? findListeningDiscards(hand, kongs) : [],
+      chi: [],
+    };
+    if (this.pendingResponse && candidates.length) {
+      const response = this.pendingResponse.card;
+      const base = this.ops.getHandWithoutPending(seatId, response);
+      for (const { candidate, plan } of buildChiCandidates(base, response, this.ops.getWildcardPoolCards(seatId))) {
+        if (!candidates.some((item) => item.id === candidate.id)) continue;
+        const consumed = new Set(plan.handCards.map((card) => card.id));
+        value.chi.push({ candidateId: candidate.id, discards: findListeningDiscards(base.filter((card) => !consumed.has(card.id)), kongs) });
+      }
+    }
+    this.listeningCache.set(seatId, { key, value });
+    return value;
+  }
+
   private buildClientRoomSnapshot(seatId: string) {
     const decisionView = this.buildClientDecisionView(seatId);
     return {
@@ -3455,6 +3486,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ...card,
         isHidden: false,
       })),
+      listeningHints: this.buildListeningHints(seatId),
       availableActions: decisionView.availableActions,
       decisionTimer: decisionView.decisionTimer,
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,
@@ -3474,6 +3506,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ...card,
         isHidden: false,
       })),
+      listeningHints: this.buildListeningHints(seatId),
       availableActions: decisionView.availableActions,
       decisionTimer: decisionView.decisionTimer,
       roundResult: this.state.phase === "ended" ? this.lastRoundResult : null,

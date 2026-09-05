@@ -18,7 +18,7 @@
 
     <div v-else class="action-row" data-testid="action-row">
       <span
-        v-if="timerLabel && !canRequestMoreTime"
+        v-if="!fixedStatus && timerLabel && !canRequestMoreTime"
         class="timer-chip"
         :class="{ urgent: isUrgent }"
         data-testid="action-timer"
@@ -49,7 +49,7 @@
       >{{ actionText(item) }}</button>
 
       <button
-        v-if="needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
+        v-if="!fixedStatus && needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
         type="button"
         class="more-time-button"
         data-testid="request-more-time"
@@ -76,6 +76,7 @@ import type { ActionFeedback, ActionRequest, ActionType, AvailableAction } from 
 
 const props = withDefaults(
   defineProps<{
+    fixedStatus?: boolean;
     actions: AvailableAction[];
     canAct?: boolean;
     isCurrentTurn?: boolean;

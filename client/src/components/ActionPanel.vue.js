@@ -237,7 +237,7 @@ if (__VLS_ctx.showPanel) {
             ...{ class: "action-row" },
             'data-testid': "action-row",
         });
-        if (__VLS_ctx.timerLabel && !__VLS_ctx.canRequestMoreTime) {
+        if (!__VLS_ctx.fixedStatus && __VLS_ctx.timerLabel && !__VLS_ctx.canRequestMoreTime) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "timer-chip" },
                 ...{ class: ({ urgent: __VLS_ctx.isUrgent }) },
@@ -284,7 +284,7 @@ if (__VLS_ctx.showPanel) {
             });
             (__VLS_ctx.actionText(item));
         }
-        if (__VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
+        if (!__VLS_ctx.fixedStatus && __VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
                 ...{ onClick: (__VLS_ctx.requestMoreTime) },
                 type: "button",

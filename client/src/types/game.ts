@@ -16,7 +16,19 @@ export type RoomConnectionState =
   | "closed"
   | "failed";
 
+export interface ListeningRoute {
+  discardCardId: string;
+  waits: Card[];
+}
+export interface ListeningHints {
+  stateRevision: number;
+  decisionKey: string;
+  discards: ListeningRoute[];
+  chi: Array<{ candidateId: string; discards: ListeningRoute[] }>;
+}
+
 export interface GameDisplayPreferences {
+  handLayout: "single" | "paged";
   ownCards: CardDisplayMode;
   tableCards: CardDisplayMode;
   seatDirection: SeatDirection;

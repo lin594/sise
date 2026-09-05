@@ -1,8 +1,8 @@
-﻿<template>
+<template>
   <div
     ref="boardRef"
     class="board"
-    :class="{ 'crowded-action-dock': crowdedActionDock }"
+    :class="{ 'crowded-action-dock': crowdedActionDock, 'board-declaring': state?.phase === 'declaring' }"
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
@@ -526,13 +526,34 @@
       <p class="self-info-hint">{{ compactCenterHint }}</p>
     </section>
 
-    <section v-if="selfPlayer" class="self-hand-card">
+    <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
+      <div class="decision-status" data-testid="decision-status">
+        <strong>{{ fixedStatusText }}</strong>
+        <span class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
+        <button v-if="canRequestMoreTime && !effectiveInteractionPausedMessage" type="button" data-testid="request-more-time"
+          :aria-label="`需要更多时间，增加${moreTimeSeconds ?? 20}秒`"
+          :disabled="nowMs < moreTimePendingUntil" @click="requestFixedMoreTime">{{ nowMs < moreTimePendingUntil ? '加时中…' : `+${moreTimeSeconds ?? 20}秒` }}</button>
+      </div>
+      <slot name="declaration" />
+      <div v-if="activeHints && (canDiscard || selectedChiCandidate)" class="listening-summary" data-testid="listening-summary">
+        <template v-if="shownListeningRoutes.length">
+          <span>{{ selectedChiCandidate ? '这样吃后' : '听牌提示' }}：</span>
+          <span v-for="route in shownListeningRoutes" :key="route.discardCardId" class="listening-route">
+            打 <CardComp v-if="handCardById(route.discardCardId)" :card="handCardById(route.discardCardId)!" size="xs" mode="large" /> → 等
+            <CardComp v-for="card in route.waits" :key="card.id" :card="card" size="xs" mode="large" />
+          </span>
+        </template>
+        <span v-else>{{ canDiscard && !selectedDiscardCardId ? '当前没有打出一张即可听牌的路线' : '当前选择暂无听牌路线' }}</span>
+      </div>
+      <div v-if="selectedPreview" class="selected-card-preview" aria-label="选中牌预览">
+        <CardComp :card="selectedPreview" size="xl" :mode="ownCardMode" /><span>已选</span>
+      </div>
       <div class="self-hand-panel">
         <div class="hand-toolbar">
           <p class="discard-tip">
             手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 选牌后点“出”</span>
           </p>
-          <div v-if="handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
+          <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
               type="button"
               data-testid="hand-scroll-prev"
@@ -556,7 +577,9 @@
         </div>
         <div
           class="cards hand"
+          :style="handLayout !== 'paged' ? { zoom: handScale } : undefined"
           :class="{
+            'single-line': handLayout !== 'paged',
             'can-scroll-backward': handCanScrollBackward,
             'can-scroll-forward': handCanScrollForward,
           }"
@@ -585,6 +608,9 @@
             @click="selectHandCard(card.id)"
             @dblclick.prevent="ensureHandCardSelected(card.id)"
           >
+            <span v-if="state?.phase === 'declaring' && declarationMarks?.fish.includes(card.id)" class="hand-mark">鱼</span>
+            <span v-else-if="state?.phase === 'declaring' && declarationMarks?.kong.includes(card.id)" class="hand-mark">坎</span>
+            <span v-else-if="activeHints?.discards.some((route) => route.discardCardId === card.id)" class="hand-mark">听</span>
             <span
               v-if="!chiSelectionDraftActive && selectedDiscardCardId === card.id"
               class="discard-selection-badge"
@@ -610,6 +636,7 @@
     <ActionPanel
       v-if="props.state?.phase === 'playing'"
       class="embedded-actions action-dock"
+      fixed-status
       :actions="props.actions ?? []"
       :can-act="canAct"
       :can-discard="canDiscard"
@@ -662,6 +689,7 @@
 </template>
 
 <script setup lang="ts">
+import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
@@ -729,6 +757,11 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  handLayout?: "single" | "paged";
+  listeningHints?: ListeningHints | null;
+  acceptedStateRevision?: number;
+  declarationStatus?: string;
+  declarationMarks?: { fish: string[]; kong: string[] };
   state: any;
   players: PlayerState[];
   privateHand: Card[];
@@ -843,6 +876,7 @@ const boardRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
 const deckAnchorRef = ref<HTMLElement | null>(null);
 const selfHandRef = ref<HTMLElement | null>(null);
+const handScale = ref(1);
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
@@ -1618,6 +1652,39 @@ const latestSeatAction = computed<{ actorId: string; label: string } | null>(() 
   return { actorId: actor, label };
 });
 
+const moreTimePendingUntil = ref(0);
+function requestFixedMoreTime(): void {
+  if (nowMs.value < moreTimePendingUntil.value) return;
+  moreTimePendingUntil.value = nowMs.value + 2500;
+  emit('requestMoreTime');
+}
+watch(() => props.decisionKey, () => { moreTimePendingUntil.value = 0; });
+const fixedStatusText = computed(() => {
+  if (effectiveInteractionPausedMessage.value) return effectiveInteractionPausedMessage.value;
+  if (props.state?.phase === 'declaring') return props.declarationStatus || (selfPlayer.value?.declaredReady ? '已确认，等待其他玩家' : '开局确认 · 选择鱼和坎');
+  if (discardingCardId.value || props.actionFeedback?.status === 'pending') return '正在提交，请稍候';
+  if (canDiscard.value) return '轮到你出牌 · 选牌后点“出”';
+  return props.turnHint || '等待其他玩家操作';
+});
+const fixedClockText = computed(() => {
+  if (effectiveInteractionPausedMessage.value || !['playing', 'declaring'].includes(props.state?.phase)) return '—';
+  if (props.decisionUntimed) return '不限时';
+  const deadline = Number(props.decisionTimerEndsAt ?? 0);
+  const time = nowMs.value + Number(props.state?.presentationClockOffsetMs ?? 0);
+  return deadline > time ? `${Math.ceil((deadline - time) / 1000)}秒` : '请稍候';
+});
+const activeHints = computed(() => {
+  const hints = props.listeningHints;
+  return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
+});
+const shownListeningRoutes = computed(() => {
+  if (selectedChiCandidate.value) return activeHints.value?.chi.find((item) => item.candidateId === selectedChiCandidate.value?.id)?.discards ?? [];
+  const routes = activeHints.value?.discards ?? [];
+  return selectedDiscardCardId.value ? routes.filter((route) => route.discardCardId === selectedDiscardCardId.value) : routes;
+});
+function handCardById(id: string): Card | undefined { return props.privateHand.find((card) => card.id === id); }
+const selectedPreview = computed(() => handCardById(selectedDiscardCardId.value ?? selectedChiCardIds.value.at(-1) ?? ''));
+
 const seatCountdownSeconds = computed<number | null>(() => {
   if (
     /^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
@@ -1936,6 +2003,16 @@ function updateHandScrollState(): void {
     handVisibleRange.value = { start: 0, end: 0, total: 0 };
     return;
   }
+  if (props.handLayout !== 'paged') {
+    const cards = Array.from(hand.querySelectorAll<HTMLElement>('[data-card-id]'));
+    const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
+    const style = getComputedStyle(hand);
+    const gap = parseFloat(style.columnGap) || 0;
+    const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
+    handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+    hand.scrollLeft = 0;
+  } else handScale.value = 1;
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
   handHasOverflow.value = maxScrollLeft > 2;
   handCanScrollBackward.value = hand.scrollLeft > 2;
@@ -1969,6 +2046,16 @@ function scrollHand(direction: "backward" | "forward"): void {
     return;
   }
   const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
+  if (props.handLayout !== 'paged') {
+    const cards = Array.from(hand.querySelectorAll<HTMLElement>('[data-card-id]'));
+    const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
+    const style = getComputedStyle(hand);
+    const gap = parseFloat(style.columnGap) || 0;
+    const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    const available = hand.parentElement?.clientWidth ?? hand.clientWidth;
+    handScale.value = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+    hand.scrollLeft = 0;
+  } else handScale.value = 1;
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
   const target = Math.min(
     maxScrollLeft,
@@ -2689,7 +2776,7 @@ watch(
 );
 
 watch(
-  () => props.ownCardMode,
+  () => [props.ownCardMode, props.handLayout, props.viewportTransformKey],
   () => void nextTick(updateHandScrollState),
 );
 
@@ -4883,4 +4970,24 @@ watch(
     }
   }
 }
+
+/* One stable decision strip for every phase. */
+.self-hand-card { overflow: visible; display: flex; flex-direction: column; min-width: 0; }
+.decision-status { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 12px; flex-shrink: 0; }
+.decision-status strong { flex: 1; min-width: 0; }
+.fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
+.decision-status button { padding: 3px 8px; }
+.cards.hand.single-line { flex-wrap: nowrap; overflow: visible; justify-content: center; width: auto; min-height: 0; }
+.cards.hand.single-line .hand-card { flex: 0 0 auto; width: max-content; }
+.hand-mark { position: absolute; top: 0; left: 0; z-index: 2; background: #0f766e; color: white; border-radius: 3px; font-size: 11px; padding: 1px 3px; }
+.listening-summary { max-height: 56px; overflow: auto; font-size: 12px; color: #a7f3d0; flex-shrink: 0; }
+.listening-route { display: inline-flex; align-items: center; gap: 3px; margin: 2px 8px 2px 0; flex-wrap: wrap; }
+.selected-card-preview { position: absolute; right: 4px; bottom: calc(100% + 4px); z-index: 8; display: flex; align-items: center; gap: 4px; background: #0f172a; border: 1px solid #34d399; padding: 4px; border-radius: 6px; pointer-events: none; }
+.turn-countdown, .self-turn-timer { display: none; }
+.board.board-declaring { grid-template-rows: minmax(0, 1fr) auto; }
+.board-declaring .self-info-card { display: none; }
+.declaring-hand { grid-column: 1 / -1; grid-row: 2; }
+.decision-status button { min-height: 40px; }
+.declaring-hand .self-hand-panel { flex-shrink: 0; }
+.fixed-clock.urgent { color: #fff1f2; background: #9f1239; border-radius: 5px; font-weight: 800; }
 </style>

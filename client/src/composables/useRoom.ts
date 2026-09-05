@@ -1,4 +1,5 @@
-﻿import { computed, onUnmounted, ref, shallowRef } from "vue";
+import type { ListeningHints } from "@/types/game";
+import { computed, onUnmounted, ref, shallowRef } from "vue";
 import { Client, ErrorCode, MatchMakeError, Room } from "@colyseus/sdk";
 import type {
   ActionFeedback,
@@ -469,6 +470,8 @@ export function useRoom(playerName = "Player") {
   const activeRoomId = ref("");
   const localPlayerName = ref(playerName);
   const privateHand = ref<Card[]>([]);
+  const acceptedStateRevision = ref(-1);
+  const listeningHints = ref<ListeningHints | null>(null);
   const availableActions = ref<AvailableAction[]>([]);
   const huResult = ref<{ winnerId: string; groups: string[] } | null>(null);
   const roundResult = ref<RoundResultPayload | null>(null);
@@ -877,6 +880,7 @@ export function useRoom(playerName = "Player") {
         ok?: boolean;
         seatId?: string;
         privateHand?: unknown;
+        listeningHints?: ListeningHints;
         availableActions?: unknown;
         decisionTimer?: unknown;
         roundResult?: RoundResultPayload | null;
@@ -891,6 +895,7 @@ export function useRoom(playerName = "Player") {
       const nextHand = sortHandCards(asCardArray(payload.privateHand));
       const nextActions = normalizeAvailableActions(payload.availableActions);
       privateHand.value = nextHand;
+      listeningHints.value = payload.listeningHints ?? null;
       availableActions.value = nextActions;
       applyDecisionTimer(payload.decisionTimer);
       privateHandFingerprint = buildCardIdFingerprint(nextHand);
@@ -919,7 +924,9 @@ export function useRoom(playerName = "Player") {
     clearMissingHandSyncTimer();
     clearActionFeedback();
     state.value = null;
+    acceptedStateRevision.value = -1;
     privateHand.value = [];
+    listeningHints.value = null;
     availableActions.value = [];
     huResult.value = null;
     roundResult.value = null;
@@ -1101,6 +1108,7 @@ export function useRoom(playerName = "Player") {
       lastFingerprint = "";
       lastPhase = "";
       privateHand.value = [];
+      listeningHints.value = null;
       availableActions.value = [];
       huResult.value = null;
       roundResult.value = null;
@@ -1133,6 +1141,7 @@ export function useRoom(playerName = "Player") {
       return;
     }
 
+    acceptedStateRevision.value = incomingRevision;
     const hasPrivatePayload = Boolean(
       rawSnapshot &&
       typeof rawSnapshot === "object" &&
@@ -1155,6 +1164,7 @@ export function useRoom(playerName = "Player") {
     if (previousSnapshot) previousSnapshot.presentationClockOffsetMs = normalized.presentationClockOffsetMs;
     applyDecisionTimer(rawSnapshot?.decisionTimer);
 
+    if (source !== "schema") listeningHints.value = rawSnapshot?.listeningHints ?? null;
     const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
     const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
     const nextPrivateHandFingerprint = buildCardIdFingerprint(snapshotPrivateHand);
@@ -1645,6 +1655,7 @@ export function useRoom(playerName = "Player") {
         if (payload?.seated === false) {
           mySeatId.value = "";
           privateHand.value = [];
+          listeningHints.value = null;
           availableActions.value = [];
           privateHandFingerprint = "";
           availableActionsFingerprint = "";
@@ -1993,6 +2004,8 @@ export function useRoom(playerName = "Player") {
     state,
     players,
     privateHand,
+    acceptedStateRevision,
+    listeningHints,
     availableActions,
     huResult,
     roundResult,

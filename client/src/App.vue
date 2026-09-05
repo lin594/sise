@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <main
     class="layout"
     :class="{
@@ -149,6 +149,7 @@
       @leave-room="handleLeaveRoom"
       @dissolve-room="dissolveRoom"
       @set-scoring-mode="setScoringMode"
+      @open-rules="openRules"
       @set-lobby-ready="requestLobbyReady"
     />
 
@@ -170,6 +171,11 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
+        :hand-layout="displayPreferences.handLayout"
+        :listening-hints="listeningHints"
+        :accepted-state-revision="acceptedStateRevision"
+        :declaration-marks="declarationMarks"
+        :declaration-status="declarationStatus"
         :my-seat-id="mySeatId"
         :can-discard="canDiscard"
         :actions="availableActions"
@@ -195,7 +201,32 @@
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
         @request-more-time="requestMoreTime"
-      />
+      >
+        <template #declaration>
+          <DeclarationPanel
+            v-if="shouldShowDeclarePanel"
+            embedded
+            :hand="privateHand"
+            @marks="declarationMarks = $event"
+            @status="declarationStatus = $event"
+            :submitted="isDeclareSubmitted"
+            :hand-ready="privateHandSynchronized"
+            :seconds-left="declareSecondsLeft"
+            :progress-percent="declareProgressPercent"
+            :server-error="declareError"
+            :connection-ready="connected"
+            :compact="isCompactViewport"
+            :ultra-compact="isUltraCompactViewport"
+            :card-mode="resolvedOwnCardMode"
+            :can-request-more-time="decisionTimer.canRequestMoreTime"
+            :untimed="decisionTimer.untimed"
+            :more-time-seconds="decisionTimer.extensionSeconds"
+            :decision-key="decisionTimer.decisionKey"
+            @submit="submitDeclaration"
+            @request-more-time="requestMoreTime"
+          />
+        </template>
+      </GameBoard>
     </template>
 
     <InviteLinkFallbackDialog
@@ -211,25 +242,6 @@
       @close="closeInviteQr"
     />
 
-    <DeclarationPanel
-      v-if="shouldShowDeclarePanel"
-      :hand="privateHand"
-      :submitted="isDeclareSubmitted"
-      :hand-ready="privateHandSynchronized"
-      :seconds-left="declareSecondsLeft"
-      :progress-percent="declareProgressPercent"
-      :server-error="declareError"
-      :connection-ready="connected"
-      :compact="isCompactViewport"
-      :ultra-compact="isUltraCompactViewport"
-      :card-mode="resolvedOwnCardMode"
-      :can-request-more-time="decisionTimer.canRequestMoreTime"
-      :untimed="decisionTimer.untimed"
-      :more-time-seconds="decisionTimer.extensionSeconds"
-      :decision-key="decisionTimer.decisionKey"
-      @submit="submitDeclaration"
-      @request-more-time="requestMoreTime"
-    />
 
     <div v-if="showEndPanel" class="hu-mask">
       <div
@@ -598,57 +610,7 @@
           </button>
         </div>
 
-        <section class="rules-section">
-          <h3>快速上手</h3>
-          <div class="rules-chip-list">
-            <span class="rules-chip">4 人对局</span>
-            <span class="rules-chip">庄家 21 张</span>
-            <span class="rules-chip">闲家 20 张</span>
-            <span class="rules-chip">将 / 金条不能主动打出</span>
-          </div>
-          <ul class="rules-list">
-            <li>牌有黄、红、绿、白四色，将、士、象、车、马、炮、卒各 4 张，另有公侯伯子男 5 张金条牌。</li>
-            <li>定庄牌会决定谁是庄家，而且这张牌本身也属于庄家的手牌，所以庄家比别人多 1 张。</li>
-            <li>开局先模拟发牌，再确认鱼和坎，四家都确认后正式进入出牌循环。</li>
-          </ul>
-        </section>
-
-        <section class="rules-section">
-          <h3>轮到你时怎么做</h3>
-          <ul class="rules-list">
-            <li>新牌先放中央，优先处理胡、开、碰；抓牌者也可在这一轮选择吃。</li>
-            <li>面对上家流水牌，可以吃或抓；抓出来的新牌从牌堆飞到中央，翻开后只轮询一次。</li>
-            <li>抓出的普通牌无人取得且你不吃时，自动进入你打给下家的流水，只由下家决定吃或抓。将和金条必须保留处理。</li>
-          </ul>
-        </section>
-
-        <section class="rules-section">
-          <h3>常见牌组</h3>
-          <ul class="rules-list">
-            <li>吃牌可形成：车马炮架、将士象架、三异色卒、四异色卒、对子、单将组、单金条组。</li>
-            <li>碰是 3 张同色同字的明示组；开是在已有坎基础上接第 4 张；鱼是 4 张同牌或 4/5 张金条。</li>
-            <li>将和金条都不能主动弃牌，通常只会在抓到后被组成单张组、架子、开，或者直接拿来胡。</li>
-          </ul>
-        </section>
-
-        <section class="rules-section">
-          <h3>胡牌与结算</h3>
-          <ul class="rules-list">
-            <li>胡牌的本质是：响应当前那张牌后，你的手牌和牌组可以完全拆成有效牌组，没有零散牌。</li>
-            <li>小胡：3 + 吃分 + 碰分 + 未开坎分 + 单张将 / 金条分。</li>
-            <li>大胡：在上面基础上加上开分和鱼分后整体翻倍；只要含至少 1 个鱼或开，就算大胡。</li>
-            <li>赢家会向另外三家分别收胡牌分；闲家之间再单独结算开和坎的互付分。</li>
-          </ul>
-        </section>
-
-        <section class="rules-section">
-          <h3>界面怎么看</h3>
-          <ul class="rules-list">
-            <li>流水表示牌从谁传给谁；被吃、碰、开、胡走的待响牌，会从原来的流水里移除。</li>
-            <li>牌组区显示已经亮出的牌组，手牌区显示你还握在手里的牌。</li>
-            <li>庄家名字旁会显示“庄”和定庄牌；中央左侧是固定牌堆，右侧只突出当前待响牌。</li>
-          </ul>
-        </section>
+        <RulesGuide class="rules-content" :phase="state?.phase" />
       </div>
     </div>
   </main>
@@ -658,6 +620,7 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import ConnectionStatus from "@/components/ConnectionStatus.vue";
+import RulesGuide from "@/components/RulesGuide.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
 import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
@@ -725,6 +688,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
+        handLayout: parsed.handLayout === "paged" ? "paged" : "single",
         ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
         tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
         seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
@@ -741,6 +705,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
 
   const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
+    handLayout: "single",
     ownCards: "adaptive",
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
     seatDirection: "counterclockwise",
@@ -799,6 +764,8 @@ const {
   state,
   players,
   privateHand,
+  acceptedStateRevision,
+  listeningHints,
   availableActions,
   huResult,
   roundResult,
@@ -1419,7 +1386,7 @@ const interactionPausedMessage = computed(() => {
     }
     return "";
   }
-  if (!isPlaying.value) {
+  if (!isPlaying.value && !isDeclaring.value) {
     return "";
   }
   if (connectionState.value === "offline") {
@@ -1492,6 +1459,8 @@ const inviteActionPending = ref<"copy" | "share" | null>(null);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
 let inviteQrReturnFocus: HTMLElement | null = null;
+const declarationStatus = ref("");
+const declarationMarks = ref<{ fish: string[]; kong: string[] }>({ fish: [], kong: [] });
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
 const rulesCloseButtonRef = ref<HTMLButtonElement | null>(null);
@@ -3627,7 +3596,7 @@ watch(
 
 .layout.game-tools-active .hu-mask,
 .layout.game-tools-active .rules-mask,
-.layout.game-tools-active :deep(.declare-mask) {
+.layout.game-tools-active :deep(.declare-mask:not(.embedded)) {
   top: calc(var(--game-header-height) + 0.45rem);
 }
 
@@ -4910,4 +4879,15 @@ watch(
     display: none !important;
   }
 }
+
+/* Keep the title and return action visible while only the illustrated guide scrolls. */
+.layout .rules-panel { display: flex; flex-direction: column; overflow: hidden; background: #111e30; color: #f8fafc; }
+.layout .rules-head { position: static; flex-direction: row; align-items: center; padding: 0; background: #111e30; flex-shrink: 0; }
+.layout .rules-kicker { color: #fcd34d; }
+.layout .rules-slogan { display: none; }
+.layout .rules-decision-reminder { position: static; flex-shrink: 0; }
+.layout .rules-content { min-height: 0; overflow-y: auto; }
+.layout.compact-viewport .rules-head { padding: 0; }
+.layout.compact-viewport .rules-kicker { display: none; }
+.layout.compact-viewport .rules-decision-reminder { min-height: 0; padding: 5px 8px; }
 </style>

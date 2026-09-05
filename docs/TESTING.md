@@ -278,3 +278,14 @@ PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
 ## 中央抓牌回归
 
 `central-draw.spec.ts` 覆盖牌背飞入、停留、翻面、真实吃牌组合、普通响应碰，以及金条直接胡／单吃自动胡的结算。服务端 `central-draw.test.ts` 检查一次轮询、C 独占本地机会、流水归属、真实移牌 ID、单吃无重复计分和揭晓前计时冻结。同步后同时回归邀请链接复制、移动端布局和 stateRevision 去重。
+
+## 好友房交互回归
+
+`friend-room-usability.spec.ts` 覆盖大厅规则、图解、嵌入声明、单行布局、听牌预览和过期结果清除；服务端 `listening-hints.test.ts` 覆盖判胡一致性、保护牌、声明坎、候选模拟和私有信息隔离。
+
+```bash
+PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e/friend-room-usability.spec.ts tests/e2e/time-extension.spec.ts tests/e2e/responsive-release.spec.ts --project=chromium
+RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e/declaration-recovery.spec.ts --project=chromium
+```
+
+声明恢复用例在断网期间截图，需要留足重连宽限，避免默认 300ms 的快速托管抢先提交。测试配置允许通过环境变量覆盖该值，不改变生产默认值；默认宽限下的托管与恢复仍由 `reconnection.spec.ts` 验证。

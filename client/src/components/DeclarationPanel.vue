@@ -1,11 +1,11 @@
-﻿<template>
-  <div class="declare-mask">
+<template>
+  <div class="declare-mask" :class="{ embedded }">
     <div
       ref="panelRef"
       class="declare-panel"
       :class="{ compact, 'ultra-compact': ultraCompact }"
-      role="dialog"
-      aria-modal="true"
+      :role="embedded ? 'region' : 'dialog'"
+      :aria-modal="embedded ? undefined : true"
       aria-labelledby="declare-title"
       aria-describedby="declare-description"
       tabindex="-1"
@@ -17,7 +17,7 @@
           <h2 id="declare-title">开局确认</h2>
           <p>已按推荐选好，需要时可调整</p>
         </div>
-        <div class="declare-timer-tools">
+        <div v-if="!embedded" class="declare-timer-tools">
           <div
             class="declare-timer"
             :class="{ urgent: !untimed && secondsLeft <= 10, untimed }"
@@ -47,7 +47,7 @@
         </div>
 
         <template v-if="handReady && hand.length">
-        <section class="hand-preview" aria-labelledby="declare-hand-title">
+        <section v-if="!embedded" class="hand-preview" aria-labelledby="declare-hand-title">
           <div class="section-heading compact-heading">
             <div>
               <h3 id="declare-hand-title">手牌</h3>
@@ -215,7 +215,7 @@
             恢复推荐
           </button>
           <p v-if="untimed" class="untimed-message">
-            <span class="untimed-dot"></span>{{ ultraCompact ? "上下滑调整 · 手牌可前后翻 · 练习不限时" : "不限时，请按自己的节奏确认" }}
+            <span class="untimed-dot"></span>{{ ultraCompact ? "选择鱼和坎 · 练习不限时" : "不限时，请按自己的节奏确认" }}
           </p>
           <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
           <p v-if="displayedError" class="declare-error" role="alert">{{ displayedError }}</p>
@@ -267,6 +267,7 @@ const props = defineProps<{
   hand: Card[];
   handReady: boolean;
   submitted: boolean;
+  embedded?: boolean;
   secondsLeft: number;
   untimed?: boolean;
   progressPercent: number;
@@ -281,6 +282,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  status: [message: string];
+  marks: [value: { fish: string[]; kong: string[] }];
   submit: [payload: { declaredKongs: number; fishCardIds: string[] }];
   requestMoreTime: [];
 }>();
@@ -345,6 +348,7 @@ const recommendedFishOptionIds = computed(() => getRecommendedFishOptionIds(fish
 const selectedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions.value, selectedFishOptionIds.value));
 const recommendedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions.value, recommendedFishOptionIds.value));
 const hiddenKongAnalysis = computed(() => analyzeHiddenKongs(props.hand, selectedFishCardIds.value));
+watch([selectedFishCardIds, hiddenKongAnalysis], () => emit('marks', { fish: [...selectedFishCardIds.value], kong: [...hiddenKongAnalysis.value.cardIds] }), { immediate: true });
 const recommendedKongCount = computed(() => analyzeHiddenKongs(props.hand, recommendedFishCardIds.value).count);
 const kongChoices = computed(() => Array.from({ length: hiddenKongAnalysis.value.count + 1 }, (_, index) => index));
 const isLocked = computed(
@@ -380,6 +384,8 @@ const declarationStatusText = computed(() => {
   return "正在整理手牌";
 });
 
+watch([canSubmit, declarationStatusText], () => emit('status', canSubmit.value ? '开局确认 · 选择鱼和坎' : declarationStatusText.value), { immediate: true });
+
 function focusableControls(): HTMLElement[] {
   const panel = panelRef.value;
   if (!panel) {
@@ -393,6 +399,7 @@ function focusableControls(): HTMLElement[] {
 }
 
 function trapFocus(event: KeyboardEvent): void {
+  if (props.embedded) return;
   const panel = panelRef.value;
   if (!panel) {
     return;
@@ -1498,4 +1505,24 @@ button:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+.declare-mask.embedded { position: relative; inset: auto; z-index: auto; display: block; flex-shrink: 0; padding: 0; background: transparent; backdrop-filter: none; }
+.declare-mask.embedded .declare-panel { width: 100%; max-width: none; height: auto; max-height: none; padding: 6px; box-shadow: none; border: 1px solid #334155; border-radius: 8px; gap: 4px; }
+.embedded .declare-header { display: none; }
+.declare-mask.embedded .declare-scroll-region { max-height: min(calc(var(--effective-vh, 1vh) * 22), 100px); overflow: auto; }
+.embedded .declare-controls { display: flex; gap: 12px; }
+.embedded .declare-section { padding: 4px; flex: 1; min-width: 0; }
+.declare-mask.embedded .declare-footer { padding: 4px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.declare-mask.embedded .confirm-declaration { min-height: 48px; padding: 4px 12px; }
+.embedded .confirm-declaration small { display: none; }
+.embedded .footer-meta p { margin: 0; font-size: 11px; }
+.embedded .declare-progress { display: none; }
+
+.declare-mask.embedded .declare-panel { --ink: #e2e8f0; --muted: #94a3b8; --line: #334155; --paper: #111e30; background: #111e30; border-color: #334155; }
+.declare-mask.embedded .declare-section { background: #142338; border-color: #334155; }
+.declare-mask.embedded .declare-footer { background: transparent; border-color: #334155; }
+.declare-mask.embedded .kong-choice { min-height: 32px; padding: 3px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+.declare-mask.embedded .section-heading { margin-bottom: 4px; }
+.declare-mask.embedded .declaration-status { min-height: 32px; padding: 5px 10px; }
+.declare-mask.embedded .footer-meta .untimed-message { color: #6ee7b7; }
 </style>

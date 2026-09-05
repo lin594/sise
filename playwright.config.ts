@@ -48,7 +48,7 @@ export default defineConfig({
             // so a slow test runner cannot expire a room before the first join.
             WAITING_ROOM_IDLE_MS: "60000",
             ACTIVE_ROOM_IDLE_MS: "3000",
-            RECONNECT_GRACE_MS: "300",
+            RECONNECT_GRACE_MS: process.env.RECONNECT_GRACE_MS || "300",
             BOT_THINK_MIN_MS: "30",
             BOT_THINK_MAX_MS: "60",
             BOT_COLLECTIVE_THINK_MIN_MS: "10",

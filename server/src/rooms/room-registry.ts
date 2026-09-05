@@ -1,4 +1,5 @@
 export type PrivateStateSnapshot = {
+  listeningHints?: import("./flow/listening-hints.js").ListeningHints;
   seatId: string;
   roomId: string;
   privateHand: Array<{

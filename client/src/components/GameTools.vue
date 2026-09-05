@@ -125,7 +125,7 @@
       </section>
     </Transition>
 
-    <Transition name="popover">
+    <Transition name="popover" @after-leave="finishOpeningRules">
       <section
         v-if="settingsOpen"
         id="game-settings-panel"
@@ -161,6 +161,14 @@
           <button type="button" data-testid="settings-return-to-decision" @click="returnToDecision">
             返回出牌
           </button>
+        </div>
+        <div class="preference-group">
+          <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
+          <div class="mode-options" role="radiogroup" aria-label="手牌排列">
+            <button v-for="mode in (['single', 'paged'] as const)" :key="mode" type="button" role="radio"
+              :class="{ active: modelValue.handLayout === mode }" :aria-checked="modelValue.handLayout === mode" :data-testid="`hand-layout-${mode}`"
+              @click="emit('update:modelValue', { ...modelValue, handLayout: mode })">{{ mode === 'single' ? '单行模式' : '翻页模式' }}</button>
+          </div>
         </div>
         <div class="preference-group">
           <div class="preference-copy">
@@ -705,12 +713,19 @@ function setCardColorAssist(showCardColorAssist: boolean): void {
   emit("update:modelValue", { ...props.modelValue, showCardColorAssist });
 }
 
+let rulesOpeningPending = false;
+function finishOpeningRules(): void {
+  if (!rulesOpeningPending) return;
+  rulesOpeningPending = false;
+  emit("openRules");
+}
+
 function openRules(): void {
+  rulesOpeningPending = true;
   removeSettingsOutsideListener();
   stopObservingSettingsScroll();
   settingsOpen.value = false;
   historyOpen.value = false;
-  emit("openRules");
 }
 
 function returnToDecision(): void {

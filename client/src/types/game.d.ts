@@ -6,7 +6,21 @@ export type SeatDirection = "clockwise" | "counterclockwise";
 export type ScoringMode = "single" | "cumulative";
 export type TurnAlertMode = "sound-vibration" | "sound" | "off";
 export type RoomConnectionState = "idle" | "connecting" | "connected" | "reconnecting" | "retry_wait" | "offline" | "restored" | "closed" | "failed";
+export interface ListeningRoute {
+    discardCardId: string;
+    waits: Card[];
+}
+export interface ListeningHints {
+    stateRevision: number;
+    decisionKey: string;
+    discards: ListeningRoute[];
+    chi: Array<{
+        candidateId: string;
+        discards: ListeningRoute[];
+    }>;
+}
 export interface GameDisplayPreferences {
+    handLayout: "single" | "paged";
     ownCards: CardDisplayMode;
     tableCards: CardDisplayMode;
     seatDirection: SeatDirection;

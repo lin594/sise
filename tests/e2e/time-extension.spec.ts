@@ -17,13 +17,13 @@ test("a human can request one server-authoritative time extension per decision",
 
   const declarationConfirm = page.getByTestId("confirm-declaration");
   await expect(declarationConfirm).toBeEnabled({ timeout: 20_000 });
-  const declarationMoreTime = page.getByTestId("declare-request-more-time");
+  const declarationMoreTime = page.getByTestId("request-more-time");
   await expect(declarationMoreTime).toBeVisible();
   await expect(declarationMoreTime).toHaveAccessibleName("需要更多时间，增加20秒");
-  const declarationSecondsBefore = Number(await page.locator(".declare-timer strong").textContent());
+  const declarationSecondsBefore = parseInt((await page.getByTestId("decision-countdown").textContent()) ?? "0");
   await declarationMoreTime.click();
   await expect(declarationMoreTime).toHaveCount(0);
-  await expect.poll(async () => Number(await page.locator(".declare-timer strong").textContent())).toBeGreaterThan(
+  await expect.poll(async () => parseInt((await page.getByTestId("decision-countdown").textContent()) ?? "0")).toBeGreaterThan(
     declarationSecondsBefore + 15,
   );
 
@@ -49,7 +49,7 @@ test("a human can request one server-authoritative time extension per decision",
   );
   const geometry = await actionMoreTime.evaluate((button) => {
     const rect = button.getBoundingClientRect();
-    const dock = button.closest<HTMLElement>(".action-dock")!.getBoundingClientRect();
+    const dock = button.closest<HTMLElement>(".decision-status")!.getBoundingClientRect();
     return {
       height: rect.height,
       withinViewport: rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight,
@@ -81,10 +81,9 @@ test("single-player practice lets the human decide without a countdown", async (
 
   const declarationConfirm = page.getByTestId("confirm-declaration");
   await expect(declarationConfirm).toBeEnabled({ timeout: 20_000 });
-  await expect(page.locator(".declare-timer")).toContainText("不限时");
-  await expect(page.locator(".declare-timer")).toContainText("练习模式");
-  await expect(page.getByText("上下滑调整 · 手牌可前后翻 · 练习不限时")).toBeVisible();
-  await expect(page.getByTestId("declare-request-more-time")).toHaveCount(0);
+  await expect(page.getByTestId("decision-countdown")).toContainText("不限时");
+  await expect(page.getByText("选择鱼和坎 · 练习不限时")).toBeVisible();
+  await expect(page.getByTestId("request-more-time")).toHaveCount(0);
 
   await declarationConfirm.click();
   await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });

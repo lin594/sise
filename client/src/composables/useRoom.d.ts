@@ -1,3 +1,4 @@
+import type { ListeningHints } from "@/types/game";
 import type { ActionFeedback, ActionRequest, ActionSendResult, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
 type ConnectOptions = {
     nameOverride?: string;
@@ -507,6 +508,60 @@ export declare function useRoom(playerName?: string): {
         source?: "upper" | "draw" | undefined;
         isResponseCard?: boolean | undefined;
     }[]>;
+    acceptedStateRevision: import("vue").Ref<number, number>;
+    listeningHints: import("vue").Ref<{
+        stateRevision: number;
+        decisionKey: string;
+        discards: {
+            discardCardId: string;
+            waits: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+        chi: {
+            candidateId: string;
+            discards: {
+                discardCardId: string;
+                waits: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
+        }[];
+    } | null, ListeningHints | {
+        stateRevision: number;
+        decisionKey: string;
+        discards: {
+            discardCardId: string;
+            waits: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            }[];
+        }[];
+        chi: {
+            candidateId: string;
+            discards: {
+                discardCardId: string;
+                waits: {
+                    id: string;
+                    color: string;
+                    type: string;
+                    source?: "upper" | "draw" | undefined;
+                    isResponseCard?: boolean | undefined;
+                }[];
+            }[];
+        }[];
+    } | null>;
     availableActions: import("vue").Ref<{
         action: ActionType;
         enabled: boolean;
