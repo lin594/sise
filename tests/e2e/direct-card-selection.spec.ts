@@ -44,10 +44,13 @@ test("a player composes chi directly from the real hand without a candidate dial
   await shi.scrollIntoViewIfNeeded();
   await shi.click();
   await expect(shi).toHaveAttribute("aria-pressed", "true");
-  await expect(chi).toBeDisabled();
+  await expect(chi).toBeEnabled();
+  await chi.click();
+  await expect(page.getByTestId("action-feedback")).toContainText("这不是一个合法的吃牌组合");
 
-  await page.keyboard.press("Escape");
+  await shi.click();
   await expect(shi).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("action-feedback")).toHaveCount(0);
   await expect(chi).toBeEnabled();
 
   await shi.click();
@@ -78,7 +81,9 @@ test("the only visible chi composition is selected without submitting it", async
   await page.keyboard.press("Escape");
   await expect(ju).toHaveAttribute("aria-pressed", "false");
   await expect(ma).toHaveAttribute("aria-pressed", "false");
-  await expect(chi).toBeDisabled();
+  await expect(chi).toBeEnabled();
+  await chi.click();
+  await expect(page.getByTestId("action-feedback")).toContainText("请先选择要吃的手牌");
   await page.waitForTimeout(250);
   await expect(ju).toHaveAttribute("aria-pressed", "false");
   await expect(ma).toHaveAttribute("aria-pressed", "false");
@@ -153,7 +158,9 @@ test("a player can freely choose a three-color or four-color zu chi from the han
   const red = page.getByTestId("hand-card-zu-red");
   const green = page.getByTestId("hand-card-zu-green");
   const white = page.getByTestId("hand-card-zu-white");
-  await expect(chi).toBeDisabled();
+  await expect(chi).toBeEnabled();
+  await chi.click();
+  await expect(page.getByTestId("action-feedback")).toContainText("请先选择要吃的手牌");
 
   await red.click();
   await green.click();

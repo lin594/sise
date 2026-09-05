@@ -62,6 +62,8 @@ test("untouched hidden kong count follows recommendations while a manual value i
 });
 
 test("declaration start labels explain both the action and selected result", () => {
-  expect(getDeclarationStartLabel(0, 0)).toBe("无需声明，开始游戏");
-  expect(getDeclarationStartLabel(2, 1)).toBe("开始游戏 · 亮鱼 2 组 · 暗坎 1 个");
+  expect(getDeclarationStartLabel(0, 0)).toBe("开始游戏");
+  expect(getDeclarationStartLabel(2, 0)).toBe("开始游戏 · 鱼 2");
+  expect(getDeclarationStartLabel(0, 1)).toBe("开始游戏 · 坎 1");
+  expect(getDeclarationStartLabel(2, 1)).toBe("开始游戏 · 鱼 2 · 坎 1");
 });

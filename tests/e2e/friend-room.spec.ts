@@ -9,6 +9,122 @@ async function openFriendInvitation(page: Page) {
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 }
 
+async function observeDealFlights(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const trackingWindow = window as Window & {
+      __siseDealFlightCount?: number;
+      __siseDealFlightObserver?: MutationObserver;
+    };
+    trackingWindow.__siseDealFlightCount = 0;
+    trackingWindow.__siseDealFlightObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue;
+          if (node.matches(".fx-card.deal")) trackingWindow.__siseDealFlightCount! += 1;
+          trackingWindow.__siseDealFlightCount! += node.querySelectorAll(".fx-card.deal").length;
+        }
+      }
+    });
+    trackingWindow.__siseDealFlightObserver.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
+async function expectOneNewDealSequence(page: Page, previousCount: number): Promise<number> {
+  const samples: number[] = [];
+  const deadline = Date.now() + 8_000;
+  while (Date.now() < deadline) {
+    const sample = await page.evaluate(() => {
+      const declaration = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
+      return {
+        declaring: Boolean(declaration?.getClientRects().length),
+        handCount: document.querySelectorAll("[data-testid^='hand-card-']").length,
+      };
+    });
+    if (sample.declaring) break;
+    samples.push(sample.handCount);
+    await page.waitForTimeout(40);
+  }
+  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
+  expect(fullHandCount).toBeGreaterThan(0);
+  expect(
+    samples.every((count) => count < fullHandCount),
+    `A full ${fullHandCount}-card hand appeared before declaration: ${samples.join(",")}`,
+  ).toBe(true);
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+  )).toBeGreaterThan(previousCount);
+  const currentCount = await page.evaluate(() =>
+    (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+  );
+  expect(currentCount - previousCount).toBeLessThanOrEqual(81);
+  return currentCount;
+}
+
+test("both friend-room clients receive one concealed deal sequence in the first and second rounds", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const hostContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+
+  try {
+    await host.goto("/?e2eDebug=1");
+    await host.getByTestId("nickname-input").fill("续局房主");
+    await host.getByTestId("login-submit").click();
+    await host.getByTestId("mode-friends").click();
+    await host.getByTestId("lobby-start").click();
+    await expect(host.getByTestId("seat-grid")).toBeVisible();
+
+    await guest.goto(host.url());
+    await guest.getByTestId("nickname-input").fill("续局牌友");
+    await guest.getByTestId("login-submit").click();
+    await guest.getByTestId("claim-seat-1").click();
+    await expect(guest.getByTestId("seat-1")).toContainText("你");
+    await guest.getByTestId("lobby-ready").click();
+
+    await host.getByTestId("fill-bots").click();
+    await expect(host.getByTestId("lobby-start")).toBeEnabled();
+    await Promise.all([observeDealFlights(host), observeDealFlights(guest)]);
+    await host.getByTestId("lobby-start").click();
+
+    const [hostFirstCount, guestFirstCount] = await Promise.all([
+      expectOneNewDealSequence(host, 0),
+      expectOneNewDealSequence(guest, 0),
+    ]);
+    await host.getByTestId("confirm-declaration").click();
+    await guest.getByTestId("confirm-declaration").click();
+    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+
+    await host.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: { setupScenario: (scenario: string) => void };
+      }).__siseLocalTest;
+      if (!bridge) throw new Error("Local test bridge is unavailable");
+      bridge.setupScenario("settlement_hu");
+    });
+    await expect(host.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
+    await expect(guest.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
+    await host.getByTestId("next-round-trigger").click();
+    await host.getByTestId("confirm-next-round").click();
+
+    const [hostSecondCount, guestSecondCount] = await Promise.all([
+      expectOneNewDealSequence(host, hostFirstCount),
+      expectOneNewDealSequence(guest, guestFirstCount),
+    ]);
+    await host.waitForTimeout(350);
+    expect(await host.evaluate(() =>
+      (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+    )).toBe(hostSecondCount);
+    expect(await guest.evaluate(() =>
+      (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+    )).toBe(guestSecondCount);
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+});
+
 test("host invites a friend, configures bots, and starts a shared game", async ({ browser }, testInfo) => {
   test.setTimeout(120_000);
   const hostContext = await browser.newContext();
@@ -464,9 +580,6 @@ test("a later friend can choose a collective response before their polling turn"
 
     await host.getByTestId("action-pass").click();
     const receipt = host.getByTestId("action-feedback");
-    await expect(receipt).toHaveAttribute("data-status", "received");
-    await expect(receipt).toContainText(/操作已收到/);
-    await host.waitForTimeout(1_800);
     await expect(receipt).toHaveCount(0);
     await expect(host.getByTestId("action-pass")).toHaveCount(0);
     await expect(host.getByTestId("action-waiting")).toHaveCount(0);

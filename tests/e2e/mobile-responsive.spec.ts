@@ -301,7 +301,7 @@ async function reachDiscardConfirmation(page: Page): Promise<void> {
     const preferredActions =
       responsePhase === "collective"
         ? ["action-pass", "action-peng", "action-kai", "action-chi"]
-        : ["action-peng", "action-kai", "action-chi", "action-pass"];
+        : ["action-peng", "action-kai", "action-pass", "action-chi"];
     for (const id of preferredActions) {
       if (await clickIfReady(id)) {
         acted = true;
@@ -993,14 +993,13 @@ test.describe("compact landscape gameplay", () => {
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
-    await expect(page.getByRole("heading", { name: "声明亮鱼与暗坎" })).toBeVisible();
-    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/系统已经按规则选好推荐方案/);
+    await expect(page.getByRole("heading", { name: "开局确认" })).toBeVisible();
+    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/已按推荐选好，需要时可调整鱼和坎/);
     const handPreview = page.getByTestId("declare-hand-preview");
     await expect(handPreview).toBeVisible();
     await expect(handPreview.locator("[data-card-mode='large']").first()).toBeVisible();
     await expect(handPreview.locator("button")).toHaveCount(0);
-    await expect(page.getByTestId("kong-count-0")).toBeVisible();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^(?:无需声明，开始游戏|开始游戏 · 亮鱼 \d+ 组 · 暗坎 \d+ 个)$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
     await expect(confirmDeclaration).toBeFocused();
     const declarationPanel = page.locator(".declare-panel");
     const firstDeclarationControl = declarationPanel.locator("button:not(:disabled)").first();
@@ -1014,7 +1013,7 @@ test.describe("compact landscape gameplay", () => {
     const declarationMetrics = await page.locator(".declare-panel").evaluate((panel) => {
       const confirm = panel.querySelector<HTMLElement>(".confirm-declaration");
       const quantityButtons = Array.from(panel.querySelectorAll<HTMLElement>(".kong-choice"));
-      if (!confirm || quantityButtons.length === 0) {
+      if (!confirm) {
         throw new Error("Declaration panel is missing primary controls");
       }
       const panelRect = panel.getBoundingClientRect();
@@ -1027,8 +1026,10 @@ test.describe("compact landscape gameplay", () => {
           top: Math.round(confirmRect.top),
           bottom: Math.round(confirmRect.bottom),
         },
-        minimumQuantityWidth: Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().width)),
-        minimumQuantityHeight: Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().height)),
+        minimumQuantityWidth: quantityButtons.length
+          ? Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().width)) : null,
+        minimumQuantityHeight: quantityButtons.length
+          ? Math.min(...quantityButtons.map((button) => button.getBoundingClientRect().height)) : null,
       };
     });
     expect(declarationMetrics.panel.width).toBeGreaterThan(0);
@@ -1039,15 +1040,17 @@ test.describe("compact landscape gameplay", () => {
     expect(declarationMetrics.confirm.height).toBeGreaterThanOrEqual(48);
     expect(declarationMetrics.confirm.top).toBeGreaterThanOrEqual(0);
     expect(declarationMetrics.confirm.bottom).toBeLessThanOrEqual(375);
-    expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(48);
-    expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
+    if (declarationMetrics.minimumQuantityWidth !== null) {
+      expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(48);
+      expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
+    }
 
     const selectedFishOptions = page.locator(".fish-option.selected");
     while (await selectedFishOptions.count()) {
       await selectedFishOptions.first().click();
     }
-    await page.getByTestId("kong-count-0").click();
-    await expect(confirmDeclaration.locator("span")).toHaveText("无需声明，开始游戏");
+    if (await page.getByTestId("kong-count-0").count()) await page.getByTestId("kong-count-0").click();
+    await expect(confirmDeclaration.locator("span")).toHaveText("开始游戏");
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
@@ -1067,7 +1070,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByText("暂无牌组")).toHaveCount(0);
     await expect(page.locator(".self-groups-card")).toHaveClass(/empty/);
     await expect(page.getByText(/牌组 0 组/)).toHaveCount(0);
-    await expect(page.getByText(/暗坎 0(?:\D|$)/)).toHaveCount(0);
+    await expect(page.getByText(/坎 0(?:\D|$)/)).toHaveCount(0);
     await expect(page.locator(".self-head")).not.toContainText(/手牌 \d+ 张/);
     const seatAccessibleLabels = await page.locator(".player-card[role='group'], .self-info-card[role='group']")
       .evaluateAll((seats) => seats.map((seat) => seat.getAttribute("aria-label") ?? ""));
@@ -1246,6 +1249,16 @@ test.describe("compact landscape gameplay", () => {
     expect((await readVisibleHandRange(handVisibleRange)).start).toBe(1);
     await expect(page.locator(".hand .card[role='img']").first()).toHaveAttribute("aria-label", /^(黄|红|绿|白|金条).+/);
     const handColorSeals = page.locator(".hand .card .color-seal");
+    await expect(handColorSeals.first()).toBeHidden();
+    await page.getByTestId("game-settings").click();
+    const colorAssist = page.getByTestId("card-color-assist");
+    await expect(colorAssist).toHaveAttribute("aria-checked", "false");
+    await colorAssist.click();
+    await expect(colorAssist).toHaveAttribute("aria-checked", "true");
+    await expect.poll(() => page.evaluate(() => JSON.parse(
+      localStorage.getItem("sise_game_display_preferences_v2") ?? "{}",
+    ).showCardColorAssist)).toBe(true);
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(handColorSeals.first()).toBeVisible();
     const handColorSealTexts = await handColorSeals.allTextContents();
     expect(handColorSealTexts).toHaveLength(handMetrics.cardCount);
@@ -1395,7 +1408,8 @@ test.describe("compact landscape gameplay", () => {
       (button as HTMLButtonElement).click();
       (button as HTMLButtonElement).click();
     });
-    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("sise_test_discard_feedback_seen"))).toBe("1");
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("sise_test_discard_feedback_seen"))).toBe("0");
+    await expect(actionFeedback).toHaveCount(0);
     await expect(page.getByTestId(selectedCardTestId!)).toHaveCount(0);
     await expect(page.locator("[data-testid^='hand-card-']")).toHaveCount(handCountBeforeDiscard - 1);
     await page.evaluate((testId) => {
@@ -1529,7 +1543,7 @@ test.describe("compact landscape gameplay", () => {
 
     await applyLocalDebugScenario(page, "dealer_pick_intro");
     const ceremony = page.getByTestId("dealer-ceremony");
-    await expect(page.getByRole("dialog", { name: "声明亮鱼与暗坎" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "开局确认" })).toHaveCount(0);
     await expect(ceremony).toBeVisible();
     await expect(ceremony).toHaveAccessibleName("正在翻定庄牌");
     await expect(page.getByTestId("dealer-reveal-back")).toHaveAttribute("data-card-back", "red-four-color");
@@ -2060,7 +2074,7 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^(?:无需声明，开始游戏|开始游戏 · 亮鱼 \d+ 组 · 暗坎 \d+ 个)$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
     await expect(page.locator(".untimed-message")).toHaveText("上下滑调整 · 手牌可前后翻 · 练习不限时");
     const declarationHand = page.getByTestId("declare-hand-preview");
     const declarationHandTools = page.getByTestId("declare-hand-scroll-tools");
@@ -2354,7 +2368,7 @@ test.describe("desktop declaration", () => {
     await expect(page.getByTestId("declare-hand-preview")).toBeVisible();
     await expect(page.getByTestId("declare-hand-preview").locator("[data-card-mode='long']").first()).toBeVisible();
     await expect(page.getByTestId("declare-hand-preview").locator("button")).toHaveCount(0);
-    await expect(page.getByTestId("kong-count-0")).toBeVisible();
+    await expect(page.getByText("没有可亮的鱼")).toHaveCount(0);
     await expect(page.getByTestId("confirm-declaration")).toBeVisible();
     await expectSimplifiedTableCenter(page);
     await expectDedicatedGameHeader(page);
@@ -2400,6 +2414,7 @@ test.describe("display preference compatibility", () => {
       tableCards: "long",
       seatDirection: "counterclockwise",
       spokenTurnGuidance: false,
+      showCardColorAssist: false,
       reduceMotion: false,
     });
   });

@@ -18,7 +18,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
   const deadline = Date.now() + 3400;
   while (Date.now() < deadline) {
-    const hasDeclarePanel = await page.getByText(/声明(?:鱼和|亮鱼与)暗坎/).isVisible().catch(() => false);
+    const hasDeclarePanel = await page.getByRole("heading", { name: "开局确认" }).isVisible().catch(() => false);
     if (hasDeclarePanel) {
       break;
     }
