@@ -457,7 +457,8 @@ test("a later friend can choose a collective response before their polling turn"
     const guidance = host.getByTestId("action-guidance");
     await expect(guidance).toContainText(/该你操作了|现在可以先选/);
     await expect(host.getByTestId("action-peng")).toBeEnabled();
-    await expect(guest.getByTestId("action-guidance")).toHaveCount(0);
+    await expect(guest.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(guest.getByTestId("action-peng")).toBeEnabled();
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 

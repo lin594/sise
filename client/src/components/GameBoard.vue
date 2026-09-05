@@ -3235,6 +3235,7 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  align-items: center;
   min-width: 0;
 }
 
@@ -3251,11 +3252,6 @@ watch(
 
 .mini-card-strip.stacked:not(.mode-long) .mini-card + .mini-card {
   margin-left: -0.28rem;
-}
-
-.mini-card-strip.mode-long .mini-card:nth-child(even),
-.mini-card-strip.stacked .mini-card:nth-child(even) {
-  transform: translateY(2px);
 }
 
 .mini-card {

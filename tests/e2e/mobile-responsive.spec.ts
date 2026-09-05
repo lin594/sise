@@ -1714,7 +1714,8 @@ test.describe("compact landscape gameplay", () => {
     expect(compactGeometry[0].fontSize).toBeGreaterThanOrEqual(11);
     expect(compactGeometry[1].left).toBeLessThan(compactGeometry[0].right);
     expect(compactGeometry[1].left).toBeGreaterThan(compactGeometry[0].left);
-    expect(compactGeometry[1].top).toBeGreaterThan(compactGeometry[0].top);
+    expect(Math.max(...compactGeometry.map((card) => card.top)) - Math.min(...compactGeometry.map((card) => card.top)))
+      .toBeLessThanOrEqual(0.5);
     await page.screenshot({ path: testInfo.outputPath("long-exposed-cards-667x375.png") });
 
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -1743,11 +1744,39 @@ test.describe("compact landscape gameplay", () => {
     await expect(opponentCards).toHaveCount(3);
     const largeGeometry = await opponentCards.evaluateAll((items) => items.map((item) => {
       const rect = item.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, width: rect.width };
+      return { left: rect.left, right: rect.right, top: rect.top, height: rect.height, width: rect.width };
     }));
     expect(largeGeometry[1].left).toBeLessThan(largeGeometry[0].right);
     expect(largeGeometry[0].right - largeGeometry[1].left).toBeLessThan(largeGeometry[0].width * 0.45);
+    expect(Math.max(...largeGeometry.map((card) => card.top)) - Math.min(...largeGeometry.map((card) => card.top)))
+      .toBeLessThanOrEqual(0.5);
+    const everyOpponentGroup = page.locator(".player-card .mini-card-strip.stacked");
+    await expect(everyOpponentGroup).toHaveCount(3);
+    const opponentAlignment = await everyOpponentGroup.evaluateAll((groups) => groups.map((group) => {
+      const cards = Array.from(group.querySelectorAll<HTMLElement>(".mini-card"));
+      const centers = cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.top + rect.height / 2;
+      });
+      return {
+        count: cards.length,
+        spread: Math.max(...centers) - Math.min(...centers),
+        overlaps: cards.slice(1).every((card, index) =>
+          card.getBoundingClientRect().left < cards[index]!.getBoundingClientRect().right),
+      };
+    }));
+    expect(opponentAlignment.every((group) => group.count === 3 && group.spread <= 0.5 && group.overlaps)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("large-folded-opponent-group-667x375.png") });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", "true");
+    const portraitAlignment = await page.locator(".mini-card-strip").evaluateAll((groups) => groups
+      .map((group) => Array.from(group.querySelectorAll<HTMLElement>(".mini-card")))
+      .filter((cards) => cards.length > 1)
+      .map((cards) => cards.map((card) => getComputedStyle(card).transform)));
+    expect(portraitAlignment.length).toBeGreaterThanOrEqual(4);
+    expect(portraitAlignment.flat().every((transform) => transform === "none")).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("flat-groups-portrait-lock-320x568.png") });
   });
 
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {

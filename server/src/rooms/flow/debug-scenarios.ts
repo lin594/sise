@@ -168,6 +168,10 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
   } else if (scenario === "early_collective_choice") {
+    for (const id of context.playerOrder) {
+      const tablePlayer = context.state.players.get(id);
+      if (tablePlayer) tablePlayer.declaredKongs = 0;
+    }
     const otherHumanId = context.playerOrder.find((id) => {
       if (id === seatId) {
         return false;
@@ -289,16 +293,19 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     );
     self.exposedGroupSizes.push(3);
     self.exposedGroupKinds.push("chi");
-    const oppositeId = context.getNextPlayerId(context.getNextPlayerId(seatId));
-    const opposite = context.state.players.get(oppositeId);
-    if (opposite) {
-      opposite.exposedArea.push(
-        context.toSchemaCard({ id: `readable-opposite-ju-${seq}`, color: "green", type: "ju" }, false, "upper"),
-        context.toSchemaCard({ id: `readable-opposite-ma-${seq}`, color: "green", type: "ma" }, false, "upper"),
-        context.toSchemaCard({ id: `readable-opposite-pao-${seq}`, color: "green", type: "pao" }, false, "upper"),
+    const opponentColors: Card["color"][] = ["green", "yellow", "white"];
+    let opponentIndex = 0;
+    for (const opponentId of context.playerOrder.filter((id) => id !== seatId)) {
+      const opponent = context.state.players.get(opponentId);
+      const color = opponentColors[opponentIndex++]!;
+      if (!opponent) continue;
+      opponent.exposedArea.push(
+        context.toSchemaCard({ id: `readable-${opponentId}-ju-${seq}`, color, type: "ju" }, false, "upper"),
+        context.toSchemaCard({ id: `readable-${opponentId}-ma-${seq}`, color, type: "ma" }, false, "upper"),
+        context.toSchemaCard({ id: `readable-${opponentId}-pao-${seq}`, color, type: "pao" }, false, "upper"),
       );
-      opposite.exposedGroupSizes.push(3);
-      opposite.exposedGroupKinds.push("chi");
+      opponent.exposedGroupSizes.push(3);
+      opponent.exposedGroupKinds.push("chi");
     }
     const waitingSeatId = context.getNextPlayerId(seatId);
     context.setPendingResponse(
