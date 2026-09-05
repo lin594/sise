@@ -243,6 +243,40 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = ownerId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: early_collective_choice#${seq}`;
+  } else if (scenario === "crowded_collective_actions") {
+    context.setHumanForcedPassDelayMs(15_000);
+    context.state.publicDiscardPile.clear();
+    for (const id of context.playerOrder) {
+      const tablePlayer = context.state.players.get(id);
+      if (tablePlayer) tablePlayer.declaredKongs = 0;
+      if (id !== seatId) {
+        context.playerHands.set(id, [
+          { id: `crowded-bystander-${id}-${seq}`, color: "white", type: "shi" },
+        ]);
+      }
+    }
+    add("crowded-xiang-1", "red", "xiang");
+    add("crowded-xiang-2", "red", "xiang");
+    add("crowded-xiang-3", "red", "xiang");
+    add("crowded-spare", "yellow", "ma");
+    const seatIndex = context.playerOrder.indexOf(seatId);
+    const ownerId = context.playerOrder[(seatIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
+    if (!ownerId) return false;
+    const response: Card = {
+      id: `crowded-response-${seq}`,
+      color: "red",
+      type: "xiang",
+      source: "upper",
+    };
+    context.setPendingResponse(createPendingResponse(ownerId, response, "upper"));
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.state.currentTurnPlayerId = ownerId;
+    context.state.previousPlayerId = ownerId;
+    context.state.pollOriginPlayerId = ownerId;
+    context.setResponseCard(response, "upper");
+    context.state.lastAction = `DEBUG: crowded_collective_actions#${seq}`;
   } else if (scenario === "upper_peng_xiang") {
     context.state.publicDiscardPile.clear();
     for (const id of context.playerOrder) {
@@ -468,6 +502,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "collective_no_actions" ||
     scenario === "collective_passive_wait" ||
     scenario === "early_collective_choice" ||
+    scenario === "crowded_collective_actions" ||
     scenario === "chi_collective_zu4" ||
     scenario === "hu_fail_case"
   ) {
