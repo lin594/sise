@@ -40,3 +40,19 @@ export function isQuietSelfDiscardWait(input: {
     Boolean(input.viewerPlayerId) &&
     input.originPlayerId === input.viewerPlayerId;
 }
+
+export function getDisplayedTurnPlayerId(input: {
+  responsePhase?: string;
+  pendingReceiverId?: string;
+  currentTurnPlayerId?: string;
+  currentPlayerId?: string;
+  playerIds: string[];
+}): string {
+  if (input.responsePhase === "collective") {
+    const receiverId = String(input.pendingReceiverId || "");
+    // 全局响应的指向是公开的下一接牌者；私有响应游标不参与，也禁止无效值回退成本人。
+    return input.playerIds.includes(receiverId) ? receiverId : "";
+  }
+  const currentId = String(input.currentTurnPlayerId || input.currentPlayerId || "");
+  return input.playerIds.includes(currentId) ? currentId : "";
+}

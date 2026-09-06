@@ -482,6 +482,16 @@
         </div>
       </Transition>
 
+      <Transition name="quick-phrase">
+        <div
+          v-if="tableNoticeText"
+          class="table-notice-toast"
+          data-testid="table-notice-toast"
+          :role="props.actionFeedback?.status === 'rejected' ? 'alert' : 'status'"
+          aria-live="polite"
+        >{{ tableNoticeText }}</div>
+      </Transition>
+
       <div
         v-if="dealerReveal"
         :key="`dealer-${dealerReveal.id}`"
@@ -532,9 +542,12 @@
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
-          <div class="seat-identity">
-            <h3>{{ selfPlayer.name }}</h3>
-            <span class="seat-identity-meta">
+          <div ref="selfIdentityRef" class="seat-identity">
+            <h3 :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
+              {{ useSelfNameFallback ? "你" : selfPlayer.name }}
+              <span ref="selfNameMeasureRef" class="self-name-measure" aria-hidden="true">{{ selfPlayer.name }}</span>
+            </h3>
+            <span ref="selfIdentityMetaRef" class="seat-identity-meta">
             <span class="self-seat-badge" aria-hidden="true">你</span>
             <PlayerStatusIcon v-bind="statusIconProps(selfPlayer)" />
             <span class="hand-count-badge" :aria-label="`剩余手牌 ${playerHandCount(selfPlayer)} 张`">{{ playerHandCount(selfPlayer) }}张</span>
@@ -558,30 +571,30 @@
         <span :style="{ width: `${seatCountdownPercent}%` }"></span>
       </div>
       <p class="self-info-hint">{{ compactCenterHint }}</p>
+      <span
+        v-if="currentListeningWaits.length"
+        class="current-listening-waits"
+        role="status"
+        :aria-label="currentListeningAccessibleLabel"
+        data-testid="current-listening-waits"
+      >
+        <span class="current-listening-label" aria-hidden="true">听</span>
+        <span
+          v-for="wait in currentListeningWaits"
+          :key="`current-wait-${wait.card.id}`"
+          class="current-listening-card"
+          :class="{ exhausted: wait.visibleRemaining === 0 }"
+          :data-visible-remaining="wait.visibleRemaining"
+        >
+          <CardComp :card="wait.card" size="xs" mode="large" />
+          <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
+        </span>
+      </span>
     </section>
 
     <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div class="decision-status" data-testid="decision-status">
         <strong>{{ fixedStatusText }}</strong>
-        <span
-          v-if="currentListeningWaits.length"
-          class="current-listening-waits"
-          role="status"
-          :aria-label="currentListeningAccessibleLabel"
-          data-testid="current-listening-waits"
-        >
-          <span class="current-listening-label" aria-hidden="true">听</span>
-          <span
-            v-for="wait in currentListeningWaits"
-            :key="`current-wait-${wait.card.id}`"
-            class="current-listening-card"
-            :class="{ exhausted: wait.visibleRemaining === 0 }"
-            :data-visible-remaining="wait.visibleRemaining"
-          >
-            <CardComp :card="wait.card" size="xs" mode="large" />
-            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
-          </span>
-        </span>
         <span v-if="showDecisionClock" class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
       </div>
       <slot name="declaration" />
@@ -782,6 +795,7 @@ import type {
 } from "@/types/game";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 import {
+  getDisplayedTurnPlayerId,
   getRoundKey,
   isQuietSelfDiscardWait,
   projectResponseCardPlacement,
@@ -965,7 +979,39 @@ let handResizeObserver: ResizeObserver | null = null;
 let handLayoutFrame: number | null = null;
 const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
+const selfIdentityRef = ref<HTMLElement | null>(null);
+const selfIdentityMetaRef = ref<HTMLElement | null>(null);
+const selfNameMeasureRef = ref<HTMLElement | null>(null);
+const useSelfNameFallback = ref(false);
+let selfNameResizeObserver: ResizeObserver | null = null;
 const seatRefMap = new Map<string, HTMLElement>();
+
+function updateSelfNameFit(): void {
+  const identity = selfIdentityRef.value;
+  const measure = selfNameMeasureRef.value;
+  if (!identity || !measure) {
+    useSelfNameFallback.value = false;
+    return;
+  }
+  const nameElement = measure.parentElement;
+  const style = getComputedStyle(identity);
+  const gap = Number.parseFloat(style.columnGap || style.gap || "0") || 0;
+  const siblings = Array.from(identity.children).filter((child) => child !== nameElement) as HTMLElement[];
+  const available = identity.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth, 0) - gap * siblings.length;
+  useSelfNameFallback.value = measure.scrollWidth > Math.max(24, available);
+}
+
+function observeSelfNameFit(): void {
+  selfNameResizeObserver?.disconnect();
+  selfNameResizeObserver = null;
+  if (typeof ResizeObserver !== "undefined" && selfIdentityRef.value) {
+    selfNameResizeObserver = new ResizeObserver(updateSelfNameFit);
+    selfNameResizeObserver.observe(selfIdentityRef.value);
+    if (selfIdentityMetaRef.value) selfNameResizeObserver.observe(selfIdentityMetaRef.value);
+    if (selfNameMeasureRef.value) selfNameResizeObserver.observe(selfNameMeasureRef.value);
+  }
+  void nextTick(updateSelfNameFit);
+}
 
 let dealerRevealSeq = 0;
 let flightSeq = 0;
@@ -983,6 +1029,7 @@ let drawHideTimer: ReturnType<typeof setTimeout> | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let discardPendingTimer: ReturnType<typeof setTimeout> | null = null;
 let localDiscardAckTimer: ReturnType<typeof setTimeout> | null = null;
+let chiValidationTimer: ReturnType<typeof setTimeout> | null = null;
 const OP_COUNTDOWN_MS = 30000;
 
 function splitExposedGroups(cards: Card[], sizes: number[], prefix: string): ExposedGroup[] {
@@ -1529,16 +1576,13 @@ function isActiveDiscardCard(playerId: string, card: Card, index: number): boole
 }
 
 const displayTurnPlayerId = computed(() => {
-  if (props.state?.responsePhase === "collective") {
-    return (
-      props.state?.pendingReceiverId ||
-      props.state?.currentTurnPlayerId ||
-      props.state?.currentPlayerId ||
-      props.state?.pollOriginPlayerId ||
-      ""
-    );
-  }
-  return props.state?.currentTurnPlayerId || props.state?.currentPlayerId || "";
+  return getDisplayedTurnPlayerId({
+    responsePhase: props.state?.responsePhase,
+    pendingReceiverId: props.state?.pendingReceiverId,
+    currentTurnPlayerId: props.state?.currentTurnPlayerId,
+    currentPlayerId: props.state?.currentPlayerId,
+    playerIds: props.players.map((player) => player.clientId),
+  });
 });
 
 const currentPlayer = computed(() => {
@@ -1637,14 +1681,14 @@ const selectedChiCandidate = computed<ActionCandidate | null>(() => {
     return candidateIds.length === selected.length && candidateIds.every((id, index) => id === selected[index]);
   }) ?? null;
 });
-const effectiveActionFeedback = computed<ActionFeedback | null>(() => chiValidationMessage.value
-  ? {
-      status: "rejected",
-      message: chiValidationMessage.value,
-      decisionKey: props.decisionKey ?? "",
-      visible: true,
-    }
-  : props.actionFeedback ?? null);
+const effectiveActionFeedback = computed<ActionFeedback | null>(() => props.actionFeedback ?? null);
+const tableNoticeText = computed(() => {
+  if (chiValidationMessage.value) return chiValidationMessage.value;
+  if (props.actionFeedback?.status === "rejected" && props.actionFeedback.visible !== false) {
+    return props.actionFeedback.message;
+  }
+  return effectiveInteractionPausedMessage.value;
+});
 const extendableChiCandidates = computed(() => {
   const selected = new Set(selectedChiCardIds.value);
   return activeChiCandidates.value.filter((candidate) =>
@@ -1712,8 +1756,11 @@ const latestSeatAction = computed<{ actorId: string; label: string } | null>(() 
 });
 
 const fixedStatusText = computed(() => {
-  if (effectiveInteractionPausedMessage.value) return effectiveInteractionPausedMessage.value;
-  if (props.state?.phase === 'declaring') return props.declarationStatus || (selfPlayer.value?.declaredReady ? '已确认，等待其他玩家' : '开局确认 · 选择鱼和坎');
+  if (props.state?.phase === 'declaring') {
+    if (props.declarationStatus) return props.declarationStatus;
+    if (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done") return "正在等待其他玩家声明";
+    return selfPlayer.value?.declarationStep === "fish" ? "开局确认 · 声明鱼" : "开局确认 · 声明坎";
+  }
   if (discardingCardId.value || props.actionFeedback?.status === 'pending') return '正在提交，请稍候';
   if (canDiscard.value) return '轮到你出牌 · 选牌后点“出”';
   return props.turnHint || '等待其他玩家操作';
@@ -1723,7 +1770,7 @@ const fixedClockText = computed(() => {
   if (props.decisionUntimed) return '不限时';
   const deadline = Number(props.decisionTimerEndsAt ?? 0);
   const time = nowMs.value + Number(props.state?.presentationClockOffsetMs ?? 0);
-  return deadline > time ? `${Math.ceil((deadline - time) / 1000)}秒` : '请稍候';
+  return deadline > time ? `${Math.ceil((deadline - time) / 1000)}秒` : '—';
 });
 const activeHints = computed(() => {
   const hints = props.listeningHints;
@@ -1864,7 +1911,7 @@ const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>
   if (position === "right") {
     return "right";
   }
-  return "down";
+  return position === "self" ? "down" : null;
 });
 
 const dealerInfoCard = computed<Card | null>(() => {
@@ -2144,9 +2191,7 @@ function scrollHand(direction: "backward" | "forward"): void {
     maxScrollLeft,
     Math.max(0, hand.scrollLeft + (direction === "forward" ? distance : -distance)),
   );
-  // The explicit controls behave like page buttons: move a predictable chunk
-  // immediately, then announce the new range. Native touch dragging remains
-  // available on the scroller and does not need CSS snap points.
+  // 翻页按钮每次移动一段可预期距离并播报新区间；触屏拖动仍由原生滚动处理。
   hand.scrollTo({ left: target, behavior: "auto" });
   scheduleHandLayoutUpdate();
 }
@@ -2209,9 +2254,9 @@ function confirmDiscard(): void {
 function onSubmitAction(request: ActionRequest): void {
   if (typeof request !== "string" && request.action === "chi" && activeChiCandidates.value.length > 0) {
     if (!selectedChiCandidate.value) {
-      chiValidationMessage.value = selectedChiCardIds.value.length === 0
+      showChiValidationMessage(selectedChiCardIds.value.length === 0
         ? "请先选择要吃的手牌"
-        : "这不是一个合法的吃牌组合";
+        : "这不是一个合法的吃牌组合");
       return;
     }
     request = { ...request, candidateId: selectedChiCandidate.value.id };
@@ -2226,6 +2271,15 @@ function onSubmitAction(request: ActionRequest): void {
     selectedChiCardIds.value = [];
   }
   emit("submitAction", request);
+}
+
+function showChiValidationMessage(message: string): void {
+  if (chiValidationTimer) clearTimeout(chiValidationTimer);
+  chiValidationMessage.value = message;
+  chiValidationTimer = setTimeout(() => {
+    chiValidationMessage.value = "";
+    chiValidationTimer = null;
+  }, 2500);
 }
 
 function cardLabel(card: Card): string {
@@ -2282,7 +2336,7 @@ function setSeatRef(playerId: string, el: HTMLElement | null): void {
   }
 }
 
-function resolvePlayerPosition(playerId: string): "top" | "left" | "right" | "self" {
+function resolvePlayerPosition(playerId: string): "top" | "left" | "right" | "self" | null {
   if (selfPlayer.value?.clientId === playerId) {
     return "self";
   }
@@ -2295,7 +2349,7 @@ function resolvePlayerPosition(playerId: string): "top" | "left" | "right" | "se
   if (rightPlayer.value?.clientId === playerId) {
     return "right";
   }
-  return "self";
+  return null;
 }
 
 function pointFromElement(el: HTMLElement | null): { x: number; y: number } | null {
@@ -2725,6 +2779,7 @@ function triggerDealerReveal(
 
 onMounted(() => {
   scheduleHandLayoutUpdate();
+  observeSelfNameFit();
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -2736,6 +2791,8 @@ onUnmounted(() => {
   handLayoutFrame = null;
   handResizeObserver?.disconnect();
   handResizeObserver = null;
+  selfNameResizeObserver?.disconnect();
+  selfNameResizeObserver = null;
   clearDealAnimationRuntime();
   clearDealerIntroTimer();
   if (dealerTimer) {
@@ -2758,6 +2815,10 @@ onUnmounted(() => {
     clearTimeout(localDiscardAckTimer);
     localDiscardAckTimer = null;
   }
+  if (chiValidationTimer) {
+    clearTimeout(chiValidationTimer);
+    chiValidationTimer = null;
+  }
   flashActorId.value = "";
   drawHiddenCardId.value = "";
   if (countdownTimer) {
@@ -2765,6 +2826,12 @@ onUnmounted(() => {
     countdownTimer = null;
   }
 });
+
+watch(
+  () => `${selfPlayer.value?.name ?? ""}|${selfPlayer.value?.declaredKongs ?? 0}|${selfPlayer.value?.visibleGroupScore ?? 0}|${selfPlayer.value?.handCount ?? 0}`,
+  () => void nextTick(updateSelfNameFit),
+);
+watch(selfIdentityRef, observeSelfNameFit);
 
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
 // Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
@@ -3146,16 +3213,6 @@ watch(
 .flow-card.flow-empty {
   background: rgba(11, 18, 32, 0.48);
   border-color: rgba(51, 65, 85, 0.7);
-}
-
-.flow-top-left,
-.flow-bottom-left {
-  border-left-color: rgba(56, 189, 248, 0.68);
-}
-
-.flow-top-right,
-.flow-bottom-right {
-  border-right-color: rgba(251, 191, 36, 0.68);
 }
 
 .flow-card p,
@@ -4045,6 +4102,16 @@ watch(
 
 .self-info-card .seat-identity h3 {
   width: 100%;
+  position: relative;
+}
+
+.self-name-measure {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: max-content;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .self-head h3,
@@ -5133,7 +5200,7 @@ watch(
   }
 }
 
-/* One stable decision strip for every phase. */
+/* 各阶段共用固定高度的决策条，避免手牌随操作按钮出现或消失而上下跳动。 */
 .decision-status { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 12px; flex-shrink: 0; }
 .decision-status strong { flex: 1; min-width: 0; }
 .fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
@@ -5162,6 +5229,7 @@ watch(
 .quick-phrase-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
 .quick-phrase-enter-from,
 .quick-phrase-leave-to { opacity: 0; transform: translate(-50%, calc(-50% - clamp(2.7rem, 9vh, 4.5rem))) scale(0.96); }
+.table-notice-toast { position: absolute; z-index: 13; left: 50%; bottom: clamp(0.55rem, 2vh, 1rem); transform: translateX(-50%); width: max-content; max-width: min(26rem, calc(100% - 1rem)); padding: 0.42rem 0.72rem; border: 1px solid rgba(203, 213, 225, 0.9); border-radius: 0.72rem; background: rgba(248, 250, 252, 0.98); color: #0f172a; box-shadow: 0 8px 22px rgba(2, 6, 23, 0.46); font-size: max(0.8125rem, 13px); font-weight: 800; line-height: 1.3; text-align: center; pointer-events: none; }
 .kan-count-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.28rem; border: 1px solid rgba(167, 139, 250, 0.58); border-radius: 0.45rem; display: inline-grid; place-items: center; color: #ddd6fe; background: rgba(76, 29, 149, 0.26); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
 .current-listening-waits { min-width: 0; max-width: min(42vw, 24rem); display: flex; align-items: center; gap: 0.22rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .current-listening-waits::-webkit-scrollbar { display: none; }
@@ -5178,19 +5246,22 @@ watch(
 .board {
   height: auto;
   align-self: stretch;
+  column-gap: 0;
   grid-template-rows: minmax(0, 1fr) clamp(3rem, 8vh, 3.5rem) clamp(7rem, 21vh, 10rem);
 }
 .table { grid-row: 1; }
 .self-info-card {
   grid-column: 1;
   grid-row: 2;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding-block: 0.2rem;
   border-radius: 0.55rem 0 0 0.55rem;
   overflow: hidden;
 }
 .self-info-card .self-head { width: 100%; }
+.self-info-card > .current-listening-waits { max-width: min(9rem, 44%); justify-self: end; }
 .self-info-card .self-info-hint,
 .self-info-card .seat-tags { display: none; }
 .self-info-card .seat-identity { display: flex; flex-wrap: nowrap; }
@@ -5243,7 +5314,7 @@ watch(
     grid-template-columns: clamp(13.5rem, calc(var(--effective-vw, 1vw) * 34), 14rem) minmax(0, 1fr) clamp(10rem, calc(var(--effective-vw, 1vw) * 29), 12rem);
     grid-template-rows: minmax(0, 1fr) 3rem clamp(5.8rem, calc(var(--effective-vh, 1vh) * 23), 7.2rem);
   }
-  .self-info-card .seat-identity > h3 { display: none; }
+  .self-info-card .seat-identity > h3 { display: block; flex: 1 1 auto; width: auto; }
   .self-info-card .seat-identity-meta { width: auto; justify-content: flex-start; }
   .seat-identity-meta { gap: 0.12rem; }
   .hand-count-badge,

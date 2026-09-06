@@ -17,7 +17,6 @@
           <path d="M18 14v5l3-2.5L18 14Z" />
         </svg>
         <span>记录</span>
-        <span v-if="historyItems.length" class="history-count" aria-hidden="true">{{ historyCountText }}</span>
       </button>
       <button
         class="tool-button interaction"
@@ -559,7 +558,6 @@ const historyItems = computed(() =>
       };
     }),
 );
-const historyCountText = computed(() => (historyItems.value.length > 99 ? "99+" : String(historyItems.value.length)));
 const historyButtonLabel = computed(() =>
   historyItems.value.length
     ? `最近操作，共${historyItems.value.length}条`
@@ -1010,20 +1008,6 @@ onBeforeUnmount(() => {
 
 .tool-button.auto-play:disabled {
   opacity: 0.72;
-}
-
-.history-count {
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.28rem;
-  border-radius: 999px;
-  background: #fbbf24;
-  color: #422006;
-  display: inline-grid;
-  place-items: center;
-  font-size: max(0.8125rem, 13px);
-  font-weight: 900;
-  line-height: 1;
 }
 
 .tool-button svg {

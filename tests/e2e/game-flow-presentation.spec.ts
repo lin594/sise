@@ -1,9 +1,26 @@
 import { expect, test } from "@playwright/test";
 import {
+  getDisplayedTurnPlayerId,
   getRoundKey,
   isQuietSelfDiscardWait,
   projectResponseCardPlacement,
 } from "../../client/src/utils/gameFlowPresentation";
+
+test("collective turn marker follows only the public pending receiver", () => {
+  const base = { responsePhase: "collective", playerIds: ["self", "next", "other"] };
+  expect(getDisplayedTurnPlayerId({
+    ...base,
+    pendingReceiverId: "next",
+    currentTurnPlayerId: "self",
+    currentPlayerId: "self",
+  })).toBe("next");
+  expect(getDisplayedTurnPlayerId({
+    ...base,
+    pendingReceiverId: "stale-seat",
+    currentTurnPlayerId: "self",
+    currentPlayerId: "self",
+  })).toBe("");
+});
 
 test("first and later rounds use one stable presentation key", () => {
   expect(getRoundKey("friends", 0, "declaring")).toBe("friends:1");

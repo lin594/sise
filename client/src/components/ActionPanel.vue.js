@@ -56,7 +56,7 @@ const submissionLocked = computed(() => Boolean(props.decisionKey) && rawActionF
     (rawActionFeedback.value.status === "pending" || rawActionFeedback.value.status === "received"));
 const needsDecision = computed(() => props.canAct || props.canDiscard);
 const panelLocked = computed(() => !needsDecision.value);
-const showPanel = computed(() => Boolean(props.pausedHint || actionFeedback.value || needsDecision.value));
+const showPanel = computed(() => Boolean(needsDecision.value || (!props.fixedStatus && (props.pausedHint || actionFeedback.value))));
 const isEarlyCollectiveChoice = computed(() => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn);
 const secondsLeft = computed(() => typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
@@ -190,7 +190,7 @@ if (__VLS_ctx.showPanel) {
         'data-urgent': (__VLS_ctx.isUrgent ? 'true' : 'false'),
     });
     (__VLS_ctx.panelAnnouncement);
-    if (__VLS_ctx.pausedHint) {
+    if (__VLS_ctx.pausedHint && !__VLS_ctx.fixedStatus) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "compact-status" },
             'data-testid': "action-paused",
@@ -220,7 +220,7 @@ if (__VLS_ctx.showPanel) {
                 ...{ onClick: (...[$event]) => {
                         if (!(__VLS_ctx.showPanel))
                             return;
-                        if (!!(__VLS_ctx.pausedHint))
+                        if (!!(__VLS_ctx.pausedHint && !__VLS_ctx.fixedStatus))
                             return;
                         if (!(__VLS_ctx.canDiscard))
                             return;
@@ -239,7 +239,7 @@ if (__VLS_ctx.showPanel) {
                 ...{ onClick: (...[$event]) => {
                         if (!(__VLS_ctx.showPanel))
                             return;
-                        if (!!(__VLS_ctx.pausedHint))
+                        if (!!(__VLS_ctx.pausedHint && !__VLS_ctx.fixedStatus))
                             return;
                         __VLS_ctx.onClick(item);
                     } },
@@ -253,7 +253,7 @@ if (__VLS_ctx.showPanel) {
             });
             (__VLS_ctx.actionText(item));
         }
-        if (__VLS_ctx.actionFeedback) {
+        if (__VLS_ctx.actionFeedback && !__VLS_ctx.fixedStatus) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "feedback-chip" },
                 ...{ class: (`feedback-${__VLS_ctx.actionFeedback.status}`) },

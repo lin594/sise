@@ -11,7 +11,7 @@
       {{ panelAnnouncement }}
     </span>
 
-    <div v-if="pausedHint" class="compact-status" data-testid="action-paused">
+    <div v-if="pausedHint && !fixedStatus" class="compact-status" data-testid="action-paused">
       <span aria-hidden="true">↻</span>
       <strong>{{ pausedHint }}</strong>
     </div>
@@ -49,7 +49,7 @@
       >{{ actionText(item) }}</button>
 
       <span
-        v-if="actionFeedback"
+        v-if="actionFeedback && !fixedStatus"
         class="feedback-chip"
         :class="`feedback-${actionFeedback.status}`"
         data-testid="action-feedback"
@@ -157,7 +157,7 @@ const submissionLocked = computed(
 );
 const needsDecision = computed(() => props.canAct || props.canDiscard);
 const panelLocked = computed(() => !needsDecision.value);
-const showPanel = computed(() => Boolean(props.pausedHint || actionFeedback.value || needsDecision.value));
+const showPanel = computed(() => Boolean(needsDecision.value || (!props.fixedStatus && (props.pausedHint || actionFeedback.value))));
 const isEarlyCollectiveChoice = computed(
   () => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn,
 );
