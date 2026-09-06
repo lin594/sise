@@ -80,8 +80,9 @@ test("the visible waiting-room exit also releases browser history protection", a
   await expectCleanRoomNavigationState(page);
 });
 
-test("browser back asks before abandoning a saved-room recovery", async ({ page }, testInfo) => {
+test("browser back asks before abandoning a recoverable saved-room connection", async ({ page }, testInfo) => {
   const roomId = "missing-room-for-back-guard";
+  await page.route("**/matchmake/joinById/**", (route) => route.abort("connectionfailed"));
   await page.addInitScript((storedRoomId) => {
     window.localStorage.setItem("sise_entry_name", "回归玩家");
     window.localStorage.setItem("four_room_id", storedRoomId);
@@ -89,6 +90,7 @@ test("browser back asks before abandoning a saved-room recovery", async ({ page 
   }, roomId);
   await page.goto("/");
   await expect(page.getByTestId("resume-session-screen")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", /retry_wait|reconnecting/);
   await expect.poll(() => page.evaluate(() => Boolean(window.history.state?.__siseRoomGuard))).toBe(true);
 
   await browserBack(page);
@@ -100,6 +102,23 @@ test("browser back asks before abandoning a saved-room recovery", async ({ page 
 
   await browserBack(page);
   await page.getByTestId("confirm-resume-abandon").click();
-  await expect(page.getByTestId("nickname-input")).toBeVisible();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expectCleanRoomNavigationState(page);
+});
+
+test("browser back directly leaves a terminal saved-room recovery", async ({ page }) => {
+  const roomId = "missing-terminal-room-for-back";
+  await page.addInitScript((storedRoomId) => {
+    window.localStorage.setItem("sise_entry_name", "终止恢复测试");
+    window.localStorage.setItem("four_room_id", storedRoomId);
+    window.localStorage.setItem(`four_player_token:${storedRoomId}`, "expired-player-token");
+  }, roomId);
+  await page.goto("/");
+  await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "closed", { timeout: 20_000 });
+  await expect.poll(() => page.evaluate(() => Boolean(window.history.state?.__siseRoomGuard))).toBe(true);
+
+  await browserBack(page);
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByTestId("resume-abandon-mask")).toHaveCount(0);
   await expectCleanRoomNavigationState(page);
 });

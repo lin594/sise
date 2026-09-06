@@ -47,7 +47,7 @@ const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
   4103: "原座位已经不存在，无法继续恢复。系统已停止自动恢复。",
   4104: "你已被移出房间。系统已停止自动恢复。",
   4105: "牌局已经开始，未入座的访问已结束。系统已停止自动恢复。",
-  4106: "这是单人练习房，已有玩家在练习。请返回首页重新开始。",
+  4106: "这是单人练习房，已有玩家在练习。请返回玩法选择重新开始。",
   4110: "房主已解散本桌，大家已返回模式选择。",
 };
 
@@ -60,12 +60,12 @@ function terminalJoinFailureMessage(error: unknown): string | null {
     return TERMINAL_ROOM_CLOSE_MESSAGES[code];
   }
   if (code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED) {
-    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回玩法选择重新开始。";
   }
 
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (/room[^\n]*(?:not found|expired|disposed)|invalid room/i.test(message)) {
-    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+    return "原牌局已经结束或被回收。系统已停止自动恢复，请返回玩法选择重新开始。";
   }
   return null;
 }
@@ -1540,7 +1540,7 @@ export function useRoom(playerName = "Player") {
           error instanceof MatchMakeError
             ? error.code
             : Number((error as { code?: unknown } | null)?.code);
-        if (TERMINAL_ROOM_CLOSE_MESSAGES[closeCode]) {
+        if (terminalJoinFailureMessage(error)) {
           throw error;
         }
         if (reconnecting || matchmaking) {
@@ -2006,9 +2006,9 @@ export function useRoom(playerName = "Player") {
     }, source);
   }
 
-  async function leaveRoom(): Promise<void> {
+  async function leaveRoom(targetRoomId = ""): Promise<void> {
     const departingRoom = room.value;
-    const departingRoomId = activeRoomId.value.trim() || pendingConnectionRoomId;
+    const departingRoomId = targetRoomId.trim() || activeRoomId.value.trim() || pendingConnectionRoomId;
     suppressReconnect = true;
     activeConnectionSeq += 1;
     connectInFlight = false;

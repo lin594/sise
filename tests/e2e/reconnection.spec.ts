@@ -292,19 +292,57 @@ test.describe("牌局断线恢复", () => {
     await expect(page.getByTestId("resume-session-screen")).toContainText("系统已停止自动恢复");
     await expect(page.getByTestId("retry-connection")).toHaveCount(0);
     await expect(page.locator("header.top").getByText("首页", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("cancel-session-resume")).toHaveText("清除旧牌局并返回玩法选择");
+    await expect(page.getByTestId("cancel-session-resume")).toBeFocused();
     const requestCountAfterClosure = matchmakingRequests;
     expect(requestCountAfterClosure).toBeGreaterThan(0);
     await page.waitForTimeout(1_500);
     expect(matchmakingRequests).toBe(requestCountAfterClosure);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-resume-screen.png") });
     await page.getByTestId("cancel-session-resume").click();
-    await expect(page.getByTestId("nickname-input")).toBeVisible();
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
     expect(
       await page.evaluate(() => ({
+        guarded: Boolean(window.history.state?.__siseRoomGuard),
+        queryRoomId: new URL(window.location.href).searchParams.get("roomId"),
         roomId: localStorage.getItem("four_room_id"),
         token: localStorage.getItem("four_player_token:missing-room-for-resume"),
       })),
-    ).toEqual({ roomId: null, token: null });
+    ).toEqual({ guarded: false, queryRoomId: null, roomId: null, token: null });
+  });
+
+  test("失效的好友邀请提供直接出口并清除失败连接身份", async ({ page }, testInfo) => {
+    const roomId = "missing-friend-room";
+    await page.goto(`/?roomId=${roomId}`);
+    await page.getByTestId("nickname-input").fill("过期邀请测试");
+    await page.getByTestId("login-submit").click();
+
+    const terminalScreen = page.getByTestId("resume-session-screen");
+    await expect(terminalScreen).toBeVisible({ timeout: 15_000 });
+    await expect(terminalScreen).toContainText("邀请已失效");
+    await expect(terminalScreen).toContainText("这个好友房已经关闭");
+    await expect(terminalScreen).toContainText("系统已停止自动恢复");
+    await expect(page.getByTestId("login-submit")).toHaveCount(0);
+    await expect(page.getByTestId("retry-connection")).toHaveCount(0);
+
+    const returnButton = page.getByTestId("cancel-session-resume");
+    await expect(returnButton).toHaveText("返回玩法选择");
+    await expect(returnButton).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath("expired-friend-invite-exit.png") });
+    await returnButton.click();
+
+    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
+    await expect(page.locator(".front-lobby-identity")).toContainText("过期邀请测试");
+    expect(
+      await page.evaluate((failedRoomId) => ({
+        guarded: Boolean(window.history.state?.__siseRoomGuard),
+        queryRoomId: new URL(window.location.href).searchParams.get("roomId"),
+        storedRoom: localStorage.getItem("four_room_id"),
+        failedToken: localStorage.getItem(`four_player_token:${failedRoomId}`),
+      }), roomId),
+    ).toEqual({ guarded: false, queryRoomId: null, storedRoom: null, failedToken: null });
   });
 
   test("新窗口接管原座位后旧窗口停止抢回", async ({ context, page }) => {
@@ -348,6 +386,8 @@ test.describe("牌局断线恢复", () => {
     await expect(page.getByTestId("connection-status")).toContainText("已停止自动恢复");
     await expect(page.getByTestId("connection-status")).toContainText("其他窗口恢复");
     await expect(page.getByTestId("action-guidance")).toContainText("其他窗口恢复");
+    await expect(page.getByTestId("terminal-return-to-modes")).toBeVisible();
+    await expect(page.getByTestId("terminal-return-to-modes")).toBeFocused();
 
     await page.waitForTimeout(2_000);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "closed");

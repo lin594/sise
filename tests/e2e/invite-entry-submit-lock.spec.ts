@@ -33,7 +33,7 @@ test("an impatient invitee starts only one clearly labelled join", async ({ page
   await expect(progress.getByText("加入好友房", { exact: true })).toBeVisible();
   await expect(progress.getByRole("heading", { name: "正在进入朋友的牌桌" })).toBeVisible();
   await expect(progress).toContainText("正在连接房间，请稍候");
-  await expect(progress.getByTestId("cancel-session-resume")).toHaveText("取消加入，返回首页");
+  await expect(progress.getByTestId("cancel-session-resume")).toHaveText("取消加入，返回玩法选择");
   await expect(progress).not.toContainText("恢复牌局");
   await expect(progress).not.toContainText("找回原来的座位和手牌");
   const progressGeometry = await progress.evaluate((panel) => {
@@ -61,19 +61,51 @@ test("an impatient invitee starts only one clearly labelled join", async ({ page
   await expect(page.locator(".global-error")).toHaveCount(0);
 });
 
-test("a failed invite join returns to the same nickname step", async ({ page }) => {
+test("an expired invite leaves the retry loop for mode selection", async ({ page }) => {
   const missingRoomId = "missing-friend-room-for-entry-retry";
   await page.goto(`/?roomId=${missingRoomId}`);
-  const nickname = page.getByTestId("nickname-input");
-  await nickname.fill("重试牌友");
+  await page.getByTestId("nickname-input").fill("重试牌友");
   await page.getByTestId("login-submit").click();
 
-  await expect(page.getByRole("heading", { name: "输入昵称，加入好友房" })).toBeVisible();
-  await expect(nickname).toHaveValue("重试牌友");
-  await expect(page.getByTestId("login-submit")).toBeEnabled();
-  await expect(page.getByTestId("login-submit")).toHaveText("加入好友房");
-  await expect(page.getByRole("alert")).toContainText("房间不存在或已关闭");
-  expect(new URL(page.url()).searchParams.get("roomId")).toBe(missingRoomId);
+  await expect(page.getByRole("heading", { name: "这个好友房已经关闭" })).toBeVisible();
+  await expect(page.getByTestId("login-submit")).toHaveCount(0);
+  const returnButton = page.getByRole("button", { name: "返回玩法选择" });
+  await expect(returnButton).toBeFocused();
+  await returnButton.click();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.locator(".front-lobby-identity")).toContainText("重试牌友");
+  expect(new URL(page.url()).searchParams.get("roomId")).toBeNull();
+  expect(await page.evaluate((roomId) => localStorage.getItem(`four_player_token:${roomId}`), missingRoomId)).toBeNull();
+});
+
+test("a temporary invite network failure stays retryable and then joins", async ({ page, request }) => {
+  const createResponse = await request.post(`${BACKEND_URL}/rooms`, {
+    data: { mode: "friends" },
+  });
+  const created = (await createResponse.json()) as { roomId?: string };
+  expect(created.roomId).toBeTruthy();
+
+  let joinAttempts = 0;
+  await page.route("**/matchmake/joinById/**", async (route) => {
+    joinAttempts += 1;
+    if (joinAttempts <= 2) {
+      await route.abort("connectionfailed");
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await route.continue();
+  });
+
+  await page.goto(`/?roomId=${encodeURIComponent(created.roomId!)}`);
+  await page.getByTestId("nickname-input").fill("网络恢复牌友");
+  await page.getByTestId("login-submit").click();
+
+  const progress = page.getByTestId("resume-session-screen");
+  await expect(progress.getByRole("heading", { name: "正在重新连接好友房" })).toBeVisible();
+  await expect(progress.getByTestId("retry-session-entry")).toBeVisible();
+  await expect(progress.getByTestId("cancel-session-resume")).toHaveText("放弃加入，返回玩法选择");
+  await expect(page.getByTestId("seat-grid")).toBeVisible({ timeout: 15_000 });
+  expect(joinAttempts).toBeGreaterThanOrEqual(3);
 });
 
 test("cancelling an in-flight invite clears its temporary room credential", async ({ page, request }) => {
@@ -93,8 +125,8 @@ test("cancelling an in-flight invite clears its temporary room credential", asyn
   await expect(page.getByTestId("resume-session-screen")).toBeVisible();
   await page.getByTestId("cancel-session-resume").click();
 
-  await expect(page.getByRole("heading", { name: "先取一个昵称" })).toBeVisible();
-  await expect(page.getByTestId("login-submit")).toHaveText("下一步：选择玩法");
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
   expect(new URL(page.url()).searchParams.get("roomId")).toBeNull();
   await expect.poll(() => page.evaluate((roomId) => ({
     currentRoomId: localStorage.getItem("four_room_id"),
@@ -102,5 +134,5 @@ test("cancelling an in-flight invite clears its temporary room credential", asyn
   }), created.roomId!)).toEqual({ currentRoomId: null, pendingToken: null });
 
   await page.waitForTimeout(900);
-  await expect(page.getByRole("heading", { name: "先取一个昵称" })).toBeVisible();
+  await expect(page.getByText("游戏模式选择")).toBeVisible();
 });

@@ -98,10 +98,10 @@ test("an occupied practice room rejects a new identity but still restores its ow
       timeout: 10_000,
     });
     await expect(
-      visitor.getByTestId("resume-session-screen").getByText("这是单人练习房，已有玩家在练习。请返回首页重新开始。"),
+      visitor.getByTestId("resume-session-screen").getByText("这是单人练习房，已有玩家在练习。请返回玩法选择重新开始。"),
     ).toBeVisible();
-    await expect(visitor.getByText("这是单人练习房，已有玩家在练习。请返回首页重新开始。")).toHaveCount(1);
-    await expect(visitor.getByRole("button", { name: "返回首页" })).toBeVisible();
+    await expect(visitor.getByText("这是单人练习房，已有玩家在练习。请返回玩法选择重新开始。")).toHaveCount(1);
+    await expect(visitor.getByRole("button", { name: "返回玩法选择" })).toBeVisible();
 
     await owner.reload();
     await expect(owner.getByTestId("seat-grid")).toBeVisible({ timeout: 10_000 });

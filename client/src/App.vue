@@ -44,7 +44,9 @@
         :attempt="reconnectAttempt"
         :message="joinError"
         :show-connected="!showGameTools"
+        :show-leave="connectionState === 'closed'"
         @retry="retryConnection"
+        @leave="returnToModeSelectionFromRoom"
       />
       <button
         v-if="!showGameTools && canOfferPwaInstall"
@@ -176,9 +178,24 @@
           <h2>{{ syncScreenCopy.title }}</h2>
           <p class="entry-desc">{{ syncScreenCopy.description }}</p>
         </div>
-        <button class="resume-cancel" type="button" data-testid="cancel-session-resume" @click="abandonSessionResume">
-          {{ syncScreenCopy.cancelLabel }}
-        </button>
+        <div class="sync-actions">
+          <button
+            v-if="syncCanRetry"
+            class="resume-retry"
+            type="button"
+            data-testid="retry-session-entry"
+            @click="retryConnection"
+          >立即重试</button>
+          <button
+            ref="syncExitButtonRef"
+            class="resume-cancel"
+            type="button"
+            data-testid="cancel-session-resume"
+            @click="returnToModeSelectionFromRoom"
+          >
+            {{ syncScreenCopy.cancelLabel }}
+          </button>
+        </div>
       </div>
     </section>
 
@@ -1043,16 +1060,18 @@ async function bootstrapRoomEntry(): Promise<void> {
   }
 }
 
-async function abandonSessionResume(): Promise<void> {
-  const returnToModeLobby = startingRoomMode.value !== null;
+async function returnToModeSelectionFromRoom(): Promise<void> {
+  const departingRoomId = entryInviteRoomId.value || activeRoomId.value;
   restoringStoredSession.value = false;
   joiningFriendInvite.value = false;
   startingRoomMode.value = null;
   entryInviteRoomId.value = "";
   enteringLobby.value = false;
   globalError.value = "";
-  await leaveRoom();
-  enteredFrontLobby.value = returnToModeLobby;
+  await leaveRoom(departingRoomId);
+  enteredFrontLobby.value = true;
+  await nextTick();
+  document.querySelector<HTMLButtonElement>("[data-testid='mode-practice_bots']")?.focus();
 }
 
 const isWaiting = computed(() => state.value?.phase === "waiting");
@@ -1077,13 +1096,41 @@ const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.va
 const showSyncingScreen = computed(
   () => !state.value && (hasLobbySession.value || isConnectingWithoutState.value),
 );
+const syncCanRetry = computed(
+  () => connectionState.value === "retry_wait" || connectionState.value === "failed",
+);
 const syncScreenCopy = computed(() => {
+  if (connectionState.value === "closed" && entryInviteRoomId.value) {
+    const practiceRoomRejected = joinError.value.includes("单人练习房");
+    return {
+      kicker: practiceRoomRejected ? "链接不可用" : "邀请已失效",
+      title: practiceRoomRejected ? "这个练习房不能加入" : "这个好友房已经关闭",
+      description: joinError.value || "房间已经结束或被回收，请返回玩法选择重新开始。",
+      cancelLabel: "返回玩法选择",
+    };
+  }
   if (joiningFriendInvite.value) {
     return {
       kicker: "加入好友房",
       title: "正在进入朋友的牌桌",
       description: "正在连接房间，请稍候。请不要重复点击。",
-      cancelLabel: "取消加入，返回首页",
+      cancelLabel: "取消加入，返回玩法选择",
+    };
+  }
+  if (entryInviteRoomId.value) {
+    if (connectionState.value === "offline") {
+      return {
+        kicker: "等待网络",
+        title: "联网后继续加入好友房",
+        description: "邀请和昵称仍然保留；网络恢复后系统会自动继续。",
+        cancelLabel: "放弃加入，返回玩法选择",
+      };
+    }
+    return {
+      kicker: "暂时未连上",
+      title: "正在重新连接好友房",
+      description: joinError.value || "系统会继续重试，你也可以立即重试或返回玩法选择。",
+      cancelLabel: "放弃加入，返回玩法选择",
     };
   }
   if (startingRoomMode.value === "quick_match") {
@@ -1115,7 +1162,7 @@ const syncScreenCopy = computed(() => {
       kicker: "原牌局已关闭",
       title: "无法回到原来的牌桌",
       description: joinError.value || "原牌局已经结束，系统不会继续重试。",
-      cancelLabel: "返回首页",
+      cancelLabel: "清除旧牌局并返回玩法选择",
     };
   }
   if (connectionState.value === "offline") {
@@ -1123,14 +1170,14 @@ const syncScreenCopy = computed(() => {
       kicker: "等待网络",
       title: "联网后会自动继续",
       description: "你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。",
-      cancelLabel: "放弃恢复，返回首页",
+      cancelLabel: "放弃恢复，返回玩法选择",
     };
   }
   return {
     kicker: "恢复牌局",
     title: "正在回到原来的牌桌",
     description: "正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。",
-    cancelLabel: "放弃恢复，返回首页",
+    cancelLabel: "放弃恢复，返回玩法选择",
   };
 });
 const syncCancelDialogCopy = computed(() => {
@@ -1145,16 +1192,16 @@ const syncCancelDialogCopy = computed(() => {
   if (joiningFriendInvite.value) {
     return {
       title: "取消加入好友房？",
-      description: "房间仍在连接中。确认取消后会停止本次加入并返回首页。",
+      description: "房间仍在连接中。确认取消后会停止本次加入并返回玩法选择。",
       keepLabel: "继续加入",
-      confirmLabel: "取消并返回首页",
+      confirmLabel: "取消并返回玩法选择",
     };
   }
   return {
     title: "放弃恢复原牌局？",
-    description: "系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回首页。",
+    description: "系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回玩法选择。",
     keepLabel: "继续恢复",
-    confirmLabel: "放弃并返回首页",
+    confirmLabel: "放弃并返回玩法选择",
   };
 });
 const showModeLobby = computed(() => {
@@ -1531,6 +1578,7 @@ const settlementTransitionPending = ref<SettlementTransition | null>(null);
 let settlementTransitionReceiptTimer: number | null = null;
 const quickRematchPending = ref(false);
 const confirmingResumeAbandon = ref(false);
+const syncExitButtonRef = ref<HTMLButtonElement | null>(null);
 const resumeAbandonDialogRef = ref<HTMLElement | null>(null);
 const resumeAbandonCancelRef = ref<HTMLButtonElement | null>(null);
 const ROOM_HISTORY_GUARD_KEY = "__siseRoomGuard";
@@ -1859,7 +1907,7 @@ function cancelResumeAbandon(): void {
 
 async function confirmResumeAbandon(): Promise<void> {
   confirmingResumeAbandon.value = false;
-  await abandonSessionResume();
+  await returnToModeSelectionFromRoom();
 }
 
 function trapResumeAbandonFocus(event: KeyboardEvent): void {
@@ -2013,6 +2061,10 @@ async function requestRoomExitFromBrowserBack(): Promise<void> {
     return;
   }
   if (showSyncingScreen.value || roomNavigationProtected.value) {
+    if (connectionState.value === "closed") {
+      await returnToModeSelectionFromRoom();
+      return;
+    }
     await requestResumeAbandon();
   }
 }
@@ -2507,6 +2559,17 @@ watch(joinError, (message) => {
       clearLobbyReadyPending();
     }
   }
+});
+
+watch(connectionState, (nextState) => {
+  if (nextState !== "closed") {
+    return;
+  }
+  void nextTick(() => {
+    const terminalAction = syncExitButtonRef.value
+      ?? document.querySelector<HTMLButtonElement>("[data-testid='terminal-return-to-modes']");
+    terminalAction?.focus({ preventScroll: true });
+  });
 });
 
 watch(connected, (isConnected) => {
@@ -3134,14 +3197,25 @@ async function enterLobby() {
       nameOverride: nickname,
       roomId: invitedRoomId,
       exposeRoomIdInUrl: true,
+      preserveState: true,
     });
+    if (!joiningFriendInvite.value || entryInviteRoomId.value !== invitedRoomId) {
+      return;
+    }
     if (!ok) {
       if (connectionState.value === "closed") {
+        return;
+      }
+      if (connectionState.value === "retry_wait" || connectionState.value === "offline") {
+        retryConnection();
         return;
       }
       throw new Error(joinError.value || "加入好友房失败");
     }
   } catch (error) {
+    if (!joiningFriendInvite.value || entryInviteRoomId.value !== invitedRoomId) {
+      return;
+    }
     globalError.value = error instanceof Error ? error.message : "加入好友房失败";
     enteredFrontLobby.value = false;
   } finally {
@@ -3739,7 +3813,6 @@ watch(
 .resume-cancel {
   width: fit-content;
   min-height: 2.65rem;
-  margin-top: 0.35rem;
   padding: 0.55rem 0.85rem;
   border: 1px solid #475569;
   border-radius: 0.7rem;
@@ -3749,7 +3822,27 @@ watch(
   font-weight: 750;
 }
 
-.resume-cancel:focus-visible {
+.sync-actions {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.resume-retry {
+  width: fit-content;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #38bdf8;
+  border-radius: 0.7rem;
+  background: #075985;
+  color: #f0f9ff;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.resume-cancel:focus-visible,
+.resume-retry:focus-visible {
   outline: 3px solid rgba(56, 189, 248, 0.42);
   outline-offset: 2px;
 }

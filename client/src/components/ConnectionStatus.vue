@@ -4,17 +4,24 @@
     class="connection-status"
     :class="tone"
     :data-state="state"
-    role="status"
-    aria-live="polite"
     data-testid="connection-status"
   >
     <span class="status-dot" aria-hidden="true"></span>
-    <span class="status-copy">
+    <span class="status-copy" role="status" aria-live="polite" aria-atomic="true">
       <strong>{{ title }}</strong>
       <small v-if="detail">{{ detail }}</small>
     </span>
     <button v-if="canRetry" type="button" data-testid="retry-connection" @click="emit('retry')">
       立即重试
+    </button>
+    <button
+      v-if="showLeave"
+      class="leave-status"
+      type="button"
+      data-testid="terminal-return-to-modes"
+      @click="emit('leave')"
+    >
+      {{ leaveLabel }}
     </button>
   </div>
 </template>
@@ -29,16 +36,21 @@ const props = withDefaults(
     attempt?: number;
     showConnected?: boolean;
     message?: string;
+    showLeave?: boolean;
+    leaveLabel?: string;
   }>(),
   {
     attempt: 0,
     showConnected: false,
     message: "",
+    showLeave: false,
+    leaveLabel: "返回玩法选择",
   },
 );
 
 const emit = defineEmits<{
   retry: [];
+  leave: [];
 }>();
 
 const visible = computed(() => props.state !== "idle" && (props.state !== "connected" || props.showConnected));
@@ -69,7 +81,7 @@ const title = computed(() => {
   }
 });
 const detail = computed(() => {
-  if (props.state === "closed") return props.message || "请返回首页重新开始";
+  if (props.state === "closed") return props.message || "请返回玩法选择重新开始";
   if (props.state === "restored") return "离线期间系统可能代你操作，可查看记录";
   if (props.state === "offline") return "联网后自动恢复";
   if (props.state === "retry_wait") return "系统会继续重试";
@@ -152,6 +164,17 @@ button {
   color: #f0f9ff;
   font-size: max(0.875rem, 14px);
   font-weight: 800;
+}
+
+button.leave-status {
+  border-color: rgba(253, 230, 138, 0.78);
+  background: #92400e;
+  color: #fff7ed;
+}
+
+button:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 2px;
 }
 
 @media (max-height: 420px) {
