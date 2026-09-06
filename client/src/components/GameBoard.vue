@@ -1719,9 +1719,9 @@ function chiCandidateFaceSignature(candidate: ActionCandidate): string {
   return `${faces.length}|${faces.join("|")}`;
 }
 
-function uniqueVisibleChiCandidate(): ActionCandidate | null {
+function uniqueVisibleChiCandidate(candidates = activeChiCandidates.value): ActionCandidate | null {
   const byVisibleComposition = new Map<string, ActionCandidate[]>();
-  for (const candidate of activeChiCandidates.value) {
+  for (const candidate of candidates) {
     const signature = chiCandidateFaceSignature(candidate);
     const entries = byVisibleComposition.get(signature) ?? [];
     entries.push(candidate);
@@ -1732,6 +1732,22 @@ function uniqueVisibleChiCandidate(): ActionCandidate | null {
   }
   return [...(byVisibleComposition.values().next().value ?? [])]
     .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
+}
+
+function defaultVisibleChiCandidate(): ActionCandidate | null {
+  const candidates = activeChiCandidates.value;
+  const targetCard = responseCard.value ?? props.state?.targetCard ?? null;
+  const canEatJiangDirectly = candidates.some((candidate) => candidate.kind === "single");
+  if (targetCard?.type === "jiang" && canEatJiangDirectly) {
+    // “直接吃将”不勾手牌，容易被误认为系统漏选；并存时优先展示完整的将士象草稿。
+    const jsxCandidate = uniqueVisibleChiCandidate(
+      candidates.filter((candidate) => candidate.kind === "jsx"),
+    );
+    if (jsxCandidate) {
+      return jsxCandidate;
+    }
+  }
+  return uniqueVisibleChiCandidate(candidates);
 }
 
 function blockChiAutoSelectionForCurrentTarget(): void {
@@ -2996,7 +3012,7 @@ watch(
 );
 
 watch(
-  () => activeChiCandidates.value.map((candidate) => candidate.id).join("|"),
+  () => `${chiSelectionContextKey.value}|${activeChiCandidates.value.map((candidate) => candidate.id).join("|")}`,
   () => {
     if (!chiSelectionAvailable.value) {
       return;
@@ -3013,7 +3029,7 @@ watch(
     if (selected.length > 0 || chiAutoSelectionBlockedKey.value === chiSelectionContextKey.value) {
       return;
     }
-    const defaultCandidate = uniqueVisibleChiCandidate();
+    const defaultCandidate = defaultVisibleChiCandidate();
     if (defaultCandidate) {
       selectedChiCardIds.value = [...defaultCandidate.cardIds];
     }

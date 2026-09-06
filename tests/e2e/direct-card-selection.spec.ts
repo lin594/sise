@@ -7,10 +7,16 @@ async function enterPractice(page: Page): Promise<void> {
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const declaration = page.getByTestId("confirm-declaration");
+    // 无鱼或无坎时服务端会跳过相应阶段；有候选时逐阶段确认即可。
+    if (await declaration.isVisible().catch(() => false) && await declaration.isEnabled()) {
+      await declaration.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
 }
 
 async function setupChiScenario(page: Page, scenario = "chi_local_upper"): Promise<void> {
@@ -41,16 +47,23 @@ test("a player composes chi directly from the real hand without a candidate dial
   await expect(chi).toHaveText("吃");
   await expect(chi).toBeEnabled(); // red jiang may be eaten as a single card
 
+  // 将士象与直接吃将并存时先展示完整组合；取消后仍可自由重新选择。
+  await expect(shi).toHaveAttribute("aria-pressed", "true");
+  await expect(xiang).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(shi).toHaveAttribute("aria-pressed", "false");
+  await expect(xiang).toHaveAttribute("aria-pressed", "false");
+
   await shi.scrollIntoViewIfNeeded();
   await shi.click();
   await expect(shi).toHaveAttribute("aria-pressed", "true");
   await expect(chi).toBeEnabled();
   await chi.click();
-  await expect(page.getByTestId("action-feedback")).toContainText("这不是一个合法的吃牌组合");
+  await expect(page.getByTestId("table-notice-toast")).toContainText("这不是一个合法的吃牌组合");
 
   await shi.click();
   await expect(shi).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByTestId("action-feedback")).toHaveCount(0);
+  await expect(page.getByTestId("table-notice-toast")).toHaveCount(0);
   await expect(chi).toBeEnabled();
 
   await shi.click();
@@ -83,7 +96,7 @@ test("the only visible chi composition is selected without submitting it", async
   await expect(ma).toHaveAttribute("aria-pressed", "false");
   await expect(chi).toBeEnabled();
   await chi.click();
-  await expect(page.getByTestId("action-feedback")).toContainText("请先选择要吃的手牌");
+  await expect(page.getByTestId("table-notice-toast")).toContainText("请先选择要吃的手牌");
   await page.waitForTimeout(250);
   await expect(ju).toHaveAttribute("aria-pressed", "false");
   await expect(ma).toHaveAttribute("aria-pressed", "false");
@@ -160,7 +173,7 @@ test("a player can freely choose a three-color or four-color zu chi from the han
   const white = page.getByTestId("hand-card-zu-white");
   await expect(chi).toBeEnabled();
   await chi.click();
-  await expect(page.getByTestId("action-feedback")).toContainText("请先选择要吃的手牌");
+  await expect(page.getByTestId("table-notice-toast")).toContainText("请先选择要吃的手牌");
 
   await red.click();
   await green.click();
