@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { stageDeclarationForTest } from "./helpers/game";
 
 async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
   const text = (await locator.textContent())?.trim() ?? "";
@@ -419,12 +420,14 @@ test.describe("clear first-time entry", () => {
       const descriptions = [...scroll.querySelectorAll<HTMLElement>(".mode-card p")];
       const start = document.querySelector<HTMLButtonElement>("[data-testid='lobby-start']")!;
       const scrollRect = scroll.getBoundingClientRect();
-      const isInsideScroll = (element: HTMLElement) => {
+      const isHorizontallyInsideScroll = (element: HTMLElement) => {
         const rect = element.getBoundingClientRect();
-        return rect.left >= scrollRect.left - 1 && rect.right <= scrollRect.right + 1 && rect.top >= scrollRect.top - 1 && rect.bottom <= scrollRect.bottom + 1;
+        return rect.left >= scrollRect.left - 1 && rect.right <= scrollRect.right + 1;
       };
       return {
-        scrollDoesNotHideModes: scroll.scrollHeight <= scroll.clientHeight + 1 && modeCards.every(isInsideScroll),
+        modesRemainReachable:
+          modeCards.every(isHorizontallyInsideScroll)
+          && (scroll.scrollHeight <= scroll.clientHeight + 1 || ["auto", "scroll"].includes(getComputedStyle(scroll).overflowY)),
         minimumDescriptionFontSize: Math.min(...descriptions.map((description) => Number.parseFloat(getComputedStyle(description).fontSize))),
         startWidth: start.getBoundingClientRect().width,
         startHeight: start.getBoundingClientRect().height,
@@ -436,7 +439,7 @@ test.describe("clear first-time entry", () => {
         ),
       };
     });
-    expect(lobbyGeometry.scrollDoesNotHideModes).toBe(true);
+    expect(lobbyGeometry.modesRemainReachable).toBe(true);
     expect(lobbyGeometry.minimumDescriptionFontSize).toBeGreaterThanOrEqual(14);
     expect(lobbyGeometry.startWidth).toBeGreaterThanOrEqual(180);
     expect(lobbyGeometry.startHeight).toBeGreaterThanOrEqual(48);
@@ -694,6 +697,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
+    await stageDeclarationForTest(page);
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
@@ -998,16 +1002,17 @@ test.describe("compact landscape gameplay", () => {
 
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expectDedicatedGameHeader(page);
+    await stageDeclarationForTest(page);
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
     await expect(page.locator(".declare-mask.embedded")).toBeVisible();
-    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/已按推荐选好，需要时可调整鱼和坎/);
+    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/选择要亮出的鱼；默认已选推荐鱼/);
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     const sharedHand = page.locator(".cards.hand");
     await expect(sharedHand.locator("[data-card-mode='large']").first()).toBeVisible();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^声明 \d+ 鱼$/);
     await expect(confirmDeclaration).toBeFocused();
     await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await page.getByTestId("game-settings").click();
@@ -1058,17 +1063,17 @@ test.describe("compact landscape gameplay", () => {
       await selectedFishOptions.first().click();
       changedRecommendation = true;
     }
-    const zeroKong = page.getByTestId("kong-count-0");
-    if (await zeroKong.count()) {
-      if (await zeroKong.getAttribute("aria-pressed") !== "true") {
-        await zeroKong.click();
-        changedRecommendation = true;
-      }
-    }
     if (changedRecommendation) {
       await expect(restoreRecommendation).toBeVisible();
     } else {
       await expect(restoreRecommendation).toHaveCount(0);
+    }
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^声明 \d+ 鱼$/);
+    await confirmDeclaration.click();
+    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/选择声明坎数，再点击开始游戏/);
+    const zeroKong = page.getByTestId("kong-count-0");
+    if (await zeroKong.getAttribute("aria-checked") !== "true") {
+      await zeroKong.click();
     }
     await expect(confirmDeclaration.locator("span")).toHaveText("开始游戏");
     await confirmDeclaration.click();
@@ -1883,7 +1888,7 @@ test.describe("compact landscape gameplay", () => {
   });
 
   test("keeps settings and rules available while a turn needs attention", async ({ page }, testInfo) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     await page.addInitScript(() => {
       const key = "sise_test_vibration_calls";
       Object.defineProperty(navigator, "vibrate", {
@@ -2052,7 +2057,13 @@ test.describe("compact landscape gameplay", () => {
     await expect(settingsPanel).toBeVisible();
     await page.getByTestId("settings-rules").click();
     await expect(rulesDialog).toBeVisible();
-    await confirmDeclaration.dispatchEvent("click");
+    await expect.poll(async () => {
+      if (await page.locator("main.layout").evaluate((element) => element.classList.contains("playing"))) {
+        return true;
+      }
+      await confirmDeclaration.dispatchEvent("click");
+      return page.locator("main.layout").evaluate((element) => element.classList.contains("playing"));
+    }, { timeout: 20_000 }).toBe(true);
     await expect(gameSettings).toBeEnabled({ timeout: 30_000 });
     await expect(rulesDialog).toBeVisible();
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");

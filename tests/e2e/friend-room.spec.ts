@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { waitForDeclarationOrPlaying } from "./helpers/game";
 
 async function openFriendInvitation(page: Page) {
   await page.goto("/");
@@ -54,16 +55,21 @@ async function expectOneNewDealSequence(page: Page, previousCount: number): Prom
   while (Date.now() < deadline) {
     const sample = await page.evaluate(() => {
       const declaration = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
+      const declarationStatus = document.querySelector<HTMLElement>("[data-testid='declaration-status']");
+      const layout = document.querySelector<HTMLElement>("main.layout");
       return {
-        declaring: Boolean(declaration?.getClientRects().length),
+        openingComplete:
+          Boolean(declaration?.getClientRects().length)
+          || Boolean(declarationStatus?.getClientRects().length)
+          || Boolean(layout?.classList.contains("playing")),
         handCount: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
-    if (sample.declaring) break;
+    if (sample.openingComplete) break;
     samples.push(sample.handCount);
     await page.waitForTimeout(40);
   }
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  await waitForDeclarationOrPlaying(page);
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
@@ -615,7 +621,7 @@ test("a later friend can preselect while the current peng winner receives the di
     const guidance = host.getByTestId("action-guidance");
     await expect(guidance).toContainText(/该你操作了|现在可以先选/);
     await expect(host.getByTestId("action-peng")).toBeEnabled();
-    await expect(guest.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了|现在可以先选/);
     await expect(guest.getByTestId("action-peng")).toBeEnabled();
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });

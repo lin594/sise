@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
@@ -7,7 +8,10 @@ async function enterDeclaration(page: Page, path = "/?e2eDebug=1"): Promise<void
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+  if (path.includes("e2eDebug=1")) {
+    await stageDeclarationForTest(page);
+  }
 }
 
 async function setupChiScenario(page: Page): Promise<void> {
@@ -86,8 +90,7 @@ test("optional spoken guidance explains each new decision once and persists", as
   )).toBe(true);
   await page.keyboard.press("Escape");
 
-  await page.getByTestId("confirm-declaration").click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
   await page.evaluate(() => sessionStorage.removeItem("sise_test_spoken_messages"));
   await setupChiScenario(page);
   await expect.poll(() => spokenMessages(page)).toEqual(["轮到你了。可选择吃或抓。"]);

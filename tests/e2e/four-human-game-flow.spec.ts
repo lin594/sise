@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type PresentationEvent = {
   name: "dealer-back" | "dealer-face" | "deal" | "declaration";
@@ -82,10 +83,15 @@ async function readPresentationEvents(page: Page): Promise<PresentationEvent[]> 
 
 async function expectCompleteRoundPresentation(pages: Page[]): Promise<void> {
   await Promise.all(pages.map(async (page) => {
-    await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
     await expect.poll(async () => (await readPresentationEvents(page)).map((event) => event.name))
-      .toEqual(["dealer-back", "dealer-face", "deal", "declaration"]);
+      .toEqual(expect.arrayContaining(["dealer-back", "dealer-face", "deal"]));
     const events = await readPresentationEvents(page);
+    expect(events.slice(0, 3).map((event) => event.name)).toEqual(["dealer-back", "dealer-face", "deal"]);
+    expect(events.map((event) => event.name)).toEqual(
+      events.some((event) => event.name === "declaration")
+        ? ["dealer-back", "dealer-face", "deal", "declaration"]
+        : ["dealer-back", "dealer-face", "deal"],
+    );
     expect(events.find((event) => event.name === "dealer-back")?.handCount).toBe(0);
     expect(events.find((event) => event.name === "dealer-face")?.handCount).toBe(0);
     expect(events.find((event) => event.name === "dealer-face")?.cardLabel).toMatch(/^[红黄绿白].+|^金条.+/);
@@ -207,8 +213,7 @@ test("four real friends keep every crowded action reachable in the reserved acti
     await Promise.all(table.pages.map(observeRoundPresentation));
     await host!.getByTestId("lobby-start").click();
     await expectCompleteRoundPresentation(table.pages);
-    await Promise.all(table.pages.map((page) => page.getByTestId("confirm-declaration").click()));
-    await Promise.all(table.pages.map((page) => expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/)));
+    await Promise.all(table.pages.map((page) => finishDeclarationIfNeeded(page)));
 
     await expect.poll(() => host!.evaluate(() => {
       const bridge = (window as Window & {

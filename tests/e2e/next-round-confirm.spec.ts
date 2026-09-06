@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded, waitForDeclarationOrPlaying } from "./helpers/game";
 
 test("a friend-room host confirms before pulling other players out of settlement", async ({ browser }, testInfo) => {
   test.setTimeout(240_000);
@@ -24,11 +25,10 @@ test("a friend-room host confirms before pulling other players out of settlement
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
 
-    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await host.getByTestId("confirm-declaration").click();
-    await guest.getByTestId("confirm-declaration").click();
-    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await Promise.all([
+      finishDeclarationIfNeeded(host),
+      finishDeclarationIfNeeded(guest),
+    ]);
 
     const usedDebugScenario = await host.evaluate(() => {
       const bridge = (window as Window & {
@@ -84,15 +84,12 @@ test("a friend-room host confirms before pulling other players out of settlement
 
     await nextRoundTrigger.click();
     await host.getByTestId("confirm-next-round").click();
-    if (usedDebugScenario) {
-      await expect(host.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
-      await expect(guest.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
-    } else {
-      await expect(host.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
-      await expect(guest.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
-      await expect(host.locator("main.layout")).toHaveClass(/\b(declaring|playing)\b/);
-      await expect(guest.locator("main.layout")).toHaveClass(/\b(declaring|playing)\b/);
-    }
+    await expect(host.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
+    await expect(guest.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
+    await Promise.all([
+      waitForDeclarationOrPlaying(host),
+      waitForDeclarationOrPlaying(guest),
+    ]);
   } finally {
     await guestContext.close();
     await hostContext.close();

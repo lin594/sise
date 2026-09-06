@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type HeldSocketMessages = {
   count: () => number;
@@ -11,9 +12,7 @@ async function reachPracticeSettlement(page: Page): Promise<void> {
   await page.getByTestId("login-submit").click();
   await page.getByTestId("mode-practice_bots").click();
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-  await page.getByTestId("confirm-declaration").click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
   await page.evaluate(() => {
     const bridge = (window as Window & {
       __siseLocalTest?: { setupScenario: (scenario: string) => void };
@@ -99,7 +98,8 @@ test("practice next round locks settlement actions and recovers after no receipt
   await expect.poll(() => heldMessageCount(page)).toBe(2);
 
   await releaseSocketMessages(page);
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
+  await expect(page.locator("main.layout")).toHaveClass(/\b(declaring|playing)\b/);
 });
 
 test("practice settlement returns personally to the complete mode picker", async ({ page }) => {

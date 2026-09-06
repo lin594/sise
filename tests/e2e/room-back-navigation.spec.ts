@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { stageDeclarationForTest } from "./helpers/game";
 
 async function enterModeLobby(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?e2eDebug=1");
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await expect(page.getByText("游戏模式选择")).toBeVisible();
@@ -34,7 +35,7 @@ test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true
 test("browser back closes a game layer before offering a safe room exit", async ({ page }) => {
   await enterModeLobby(page);
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  await stageDeclarationForTest(page);
 
   const roomIdentity = await page.evaluate(() => ({
     roomId: window.localStorage.getItem("four_room_id"),
