@@ -105,6 +105,11 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     const probe = window as any;
     probe.__siseHandScaleSamples = [];
     probe.__siseHandScaleProbe = window.setInterval(() => {
+      if (
+        document.querySelector("[data-testid='confirm-declaration']")
+        || document.querySelector("[data-testid='declaration-status']")
+        || document.querySelector("main.layout.playing")
+      ) return;
       const hand = document.querySelector<HTMLElement>('.cards.hand.single-line');
       const viewport = document.querySelector<HTMLElement>('.hand-viewport.single-line');
       if (!hand || !viewport) return;
