@@ -7,6 +7,17 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "/site.webmanifest",
+      "id": "/"
+    }
+  ],
   "background_color": "#020617",
   "theme_color": "#0b1220",
   "icons": [

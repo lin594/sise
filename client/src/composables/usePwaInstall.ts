@@ -11,6 +11,10 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 type StandaloneNavigator = Navigator & { standalone?: boolean };
+type RelatedWebApp = { platform?: string; url?: string; id?: string };
+type InstalledRelatedAppsNavigator = Navigator & {
+  getInstalledRelatedApps?: () => Promise<RelatedWebApp[]>;
+};
 
 export type PwaInstallGuide = {
   kind: "wechat" | "ios" | "mac-safari" | "android" | "browser";
@@ -24,6 +28,7 @@ export type PwaInstallRequestResult =
   | { kind: "guide"; guide: PwaInstallGuide };
 
 type BrowserFamily = PwaInstallGuide["kind"] | "unsupported";
+const INSTALLED_APP_DETECTION_TIMEOUT_MS = 1_200;
 
 function detectBrowserFamily(): BrowserFamily {
   const userAgent = navigator.userAgent;
@@ -89,6 +94,10 @@ export function usePwaInstall() {
   const deferredPrompt = shallowRef<BeforeInstallPromptEvent | null>(null);
   const installed = ref(false);
   const standalone = ref(false);
+  const installDetectionPending = ref(
+    typeof navigator !== "undefined"
+    && typeof (navigator as InstalledRelatedAppsNavigator).getInstalledRelatedApps === "function",
+  );
   const browserFamily = ref<BrowserFamily>("unsupported");
   let displayModeQuery: MediaQueryList | null = null;
 
@@ -108,9 +117,34 @@ export function usePwaInstall() {
     deferredPrompt.value = null;
   }
 
+  async function detectInstalledPwa(): Promise<void> {
+    const getInstalledRelatedApps = (navigator as InstalledRelatedAppsNavigator).getInstalledRelatedApps;
+    if (!getInstalledRelatedApps || standalone.value) {
+      installDetectionPending.value = false;
+      return;
+    }
+    installDetectionPending.value = true;
+    let timeoutId: number | null = null;
+    try {
+      const relatedApps = await Promise.race([
+        getInstalledRelatedApps.call(navigator),
+        new Promise<RelatedWebApp[]>((resolve) => {
+          timeoutId = window.setTimeout(() => resolve([]), INSTALLED_APP_DETECTION_TIMEOUT_MS);
+        }),
+      ]);
+      installed.value = relatedApps.some((app) => app.platform === "webapp");
+    } catch {
+      // Installation detection is optional progressive enhancement.
+    } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      installDetectionPending.value = false;
+    }
+  }
+
   const canOfferInstall = computed(() =>
     !installed.value
     && !standalone.value
+    && !installDetectionPending.value
     && (Boolean(deferredPrompt.value) || browserFamily.value !== "unsupported"),
   );
 
@@ -134,6 +168,7 @@ export function usePwaInstall() {
     browserFamily.value = detectBrowserFamily();
     displayModeQuery = window.matchMedia("(display-mode: standalone)");
     updateStandaloneState();
+    void detectInstalledPwa();
     if (displayModeQuery.addEventListener) {
       displayModeQuery.addEventListener("change", updateStandaloneState);
     } else {

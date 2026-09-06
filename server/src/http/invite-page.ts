@@ -35,6 +35,8 @@ export function buildInvitePage(roomId: string, publicWebOrigin: string): string
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="theme-color" content="#0b1220" />
+    <link rel="manifest" href="${escapeHtml(publicWebOrigin)}/site.webmanifest" />
     <link rel="image_src" href="${escapeHtml(imageUrl)}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="四色牌" />

@@ -36,6 +36,17 @@ test("publishes a recognizable browser and home-screen identity", async ({ page 
     start_url: "/",
     scope: "/",
     display: "standalone",
+    handle_links: "preferred",
+    launch_handler: {
+      client_mode: ["navigate-existing", "auto"],
+    },
+    related_applications: [
+      {
+        platform: "webapp",
+        url: "/site.webmanifest",
+        id: "/",
+      },
+    ],
     background_color: "#020617",
     theme_color: "#0b1220",
   });
@@ -151,6 +162,29 @@ test("does not offer installation inside an installed standalone app", async ({ 
   });
   await page.goto("/");
   await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
+});
+
+test("does not offer installation when Chromium reports the related PWA is already installed", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "getInstalledRelatedApps", {
+      configurable: true,
+      value: async () => [{ platform: "webapp", url: "/site.webmanifest", id: "/" }],
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
+});
+
+test("restores the install entry when installed-app detection does not answer", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "getInstalledRelatedApps", {
+      configurable: true,
+      value: () => new Promise(() => undefined),
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
+  await expect(page.getByTestId("pwa-install-entry")).toBeVisible({ timeout: 2_500 });
 });
 
 test("keeps installation discoverable in game settings without occupying the table header", async ({ page }) => {

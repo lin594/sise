@@ -11,6 +11,8 @@ test("invite page provides a room-specific cultural share card and safe entry li
   assert.match(html, /property="og:image:width" content="800"/);
   assert.match(html, /property="og:image:height" content="800"/);
   assert.match(html, /rel="image_src" href="https:\/\/cards\.example\.com\/share-thumbnail-v2\.png"/);
+  assert.match(html, /rel="manifest" href="https:\/\/cards\.example\.com\/site\.webmanifest"/);
+  assert.match(html, /name="theme-color" content="#0b1220"/);
   assert.match(html, /url=https:\/\/cards\.example\.com\/\?roomId=room_42/);
   assert.doesNotMatch(html, /playerToken|hostKey/);
 });
