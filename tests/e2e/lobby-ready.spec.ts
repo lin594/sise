@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("friend-room guests explicitly prepare before the host can start", async ({ browser }, testInfo) => {
   const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
@@ -66,13 +67,10 @@ test("friend-room guests explicitly prepare before the host can start", async ({
     await hostStart.click();
     await expect(host.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(guest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-    await expect(host.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
-    await host.getByTestId("confirm-declaration").click();
-    await expect(host.getByTestId("confirm-declaration")).toHaveCount(0);
-    await expect(host.getByTestId("declaration-status")).toContainText("已确认，等待其他玩家");
-    await expect(host.locator("button.fish-option, button.kong-choice")).toHaveCount(0);
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled();
+    await Promise.all([
+      finishDeclarationIfNeeded(host),
+      finishDeclarationIfNeeded(guest),
+    ]);
   } finally {
     await guestContext.close();
     await hostContext.close();

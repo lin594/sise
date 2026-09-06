@@ -1,12 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 } });
 
 async function finishRoundThroughDebugHu(page: Page): Promise<void> {
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await page.evaluate(() => {
     const bridge = (window as Window & {

@@ -58,8 +58,8 @@ test("an invalid meld is explained and immediately becomes retryable", async ({ 
     bridge.submitAction({ action: "chi", candidateId: "expired-candidate" });
   });
 
-  const feedback = page.getByTestId("action-feedback");
-  await expect(feedback).toHaveAttribute("data-status", "rejected");
+  const feedback = page.getByTestId("table-notice-toast");
+  await expect(feedback).toHaveAttribute("role", "alert");
   await expect(feedback).toContainText("这组牌已经不能使用，请重新选择");
   await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect(page.getByTestId("game-board")).toHaveAttribute("data-response-phase", "local_upper");

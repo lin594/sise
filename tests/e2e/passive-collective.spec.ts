@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a passive human response keeps the privacy window without exposing a countdown or controls", async ({ browser }) => {
   test.setTimeout(90_000);
@@ -24,11 +25,10 @@ test("a passive human response keeps the privacy window without exposing a count
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
 
-    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await host.getByTestId("confirm-declaration").click();
-    await guest.getByTestId("confirm-declaration").click();
-    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await Promise.all([
+      finishDeclarationIfNeeded(host),
+      finishDeclarationIfNeeded(guest),
+    ]);
 
     const hostSeatId = await host.getByTestId("player-self").getAttribute("data-player-id");
     expect(hostSeatId).toBeTruthy();
@@ -57,9 +57,10 @@ test("a passive human response keeps the privacy window without exposing a count
       currentTurnPlayerId: hostSeatId,
       activeResponderId: hostSeatId,
       responsePhase: "collective",
-      decisionTimer: { totalMs: 5_000 },
     });
     const [hostClock, guestClock] = await Promise.all([readClock(host), readClock(guest)]);
+    expect(Number(guestClock.decisionTimer.totalMs)).toBeGreaterThanOrEqual(4_900);
+    expect(Number(guestClock.decisionTimer.totalMs)).toBeLessThanOrEqual(5_000);
     expect(Number(guestClock.decisionTimer.endsAt) - guestClock.now).toBeGreaterThan(0);
     expect(Math.abs(Number(hostClock.decisionTimer.endsAt) - Number(guestClock.decisionTimer.endsAt))).toBeLessThan(150);
 

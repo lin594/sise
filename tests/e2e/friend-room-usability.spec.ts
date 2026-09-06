@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { finishDeclarationIfNeeded, stageDeclarationForTest, waitForDeclarationOrPlaying } from './helpers/game';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
   await page.getByTestId('random-nickname').click();
@@ -16,13 +17,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await page.setViewportSize(viewport);
     await login(page);
     await page.getByTestId('lobby-start').click();
-    await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20000 });
+    await stageDeclarationForTest(page);
     await expect(page.locator('.declare-mask')).toHaveClass(/embedded/);
     await expect(page.locator('.hand-preview')).toHaveCount(0);
     await expect(page.getByTestId('decision-countdown')).toHaveText('不限时');
     await assertHandFits(page);
     await page.screenshot({ path: info.outputPath('declaration.png') });
-    await page.getByTestId('confirm-declaration').click();
+    await finishDeclarationIfNeeded(page);
     await expect(page.locator('.declare-mask')).toHaveCount(0);
     await page.getByTestId('game-settings').click();
     await page.getByTestId('hand-layout-paged').click();
@@ -51,7 +52,7 @@ test('listening marks stay in the hand and only discard selection opens a previe
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await page.getByTestId('confirm-declaration').click();
+  await finishDeclarationIfNeeded(page);
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
   await expect(page.getByTestId('hand-card-unique-red-jiang')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
@@ -104,6 +105,11 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     const probe = window as any;
     probe.__siseHandScaleSamples = [];
     probe.__siseHandScaleProbe = window.setInterval(() => {
+      if (
+        document.querySelector("[data-testid='confirm-declaration']")
+        || document.querySelector("[data-testid='declaration-status']")
+        || document.querySelector("main.layout.playing")
+      ) return;
       const hand = document.querySelector<HTMLElement>('.cards.hand.single-line');
       const viewport = document.querySelector<HTMLElement>('.hand-viewport.single-line');
       if (!hand || !viewport) return;
@@ -123,7 +129,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     }, 8);
   });
   await page.getByTestId('lobby-start').click();
-  await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20_000 });
+  await waitForDeclarationOrPlaying(page);
   const samples = await page.evaluate(() => {
     const probe = window as any;
     window.clearInterval(probe.__siseHandScaleProbe);
@@ -142,7 +148,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20_000 });
+  await stageDeclarationForTest(page);
 
   const allSamples: Array<{ count: number; scales: number[]; viewportRects: Array<{ left: number; top: number; width: number; height: number }>; cardsFit: boolean }> = [];
   for (const count of [20, 18, 17, 16, 15, 14, 13, 12]) {
@@ -208,7 +214,7 @@ test('21-card single row adapts to both card styles and layout preference surviv
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await expect(page.getByTestId('confirm-declaration')).toBeEnabled();
+  await stageDeclarationForTest(page);
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
     const state = bridge.getRoomState();

@@ -25,10 +25,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -53,10 +53,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -69,23 +69,39 @@ jobs:
         run: npm --prefix server test
 
   browser-tests:
-    name: Browser tests (${{ matrix.project }})
+    name: Browser tests (${{ matrix.label }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         include:
-          - project: chromium
+          - label: chromium-1-of-4
+            project: chromium
             browser: chromium
-          - project: webkit-responsive
+            shard: 1/4
+          - label: chromium-2-of-4
+            project: chromium
+            browser: chromium
+            shard: 2/4
+          - label: chromium-3-of-4
+            project: chromium
+            browser: chromium
+            shard: 3/4
+          - label: chromium-4-of-4
+            project: chromium
+            browser: chromium
+            shard: 4/4
+          - label: webkit-responsive
+            project: webkit-responsive
             browser: webkit
+            shard: 1/1
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -107,13 +123,13 @@ jobs:
         run: npm run build
 
       - name: Run browser regression suite
-        run: npx playwright test --project="${{ matrix.project }}"
+        run: npx playwright test --project="${{ matrix.project }}" --shard="${{ matrix.shard }}"
 
       - name: Upload Playwright failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: playwright-${{ matrix.project }}-${{ github.run_attempt }}
+          name: playwright-${{ matrix.label }}-${{ github.run_attempt }}
           path: output/playwright/
           if-no-files-found: ignore
           retention-days: 7
@@ -124,10 +140,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -155,10 +171,10 @@ jobs:
       TRAEFIK_SERVER_RULE: Host(`sise-api.example.com`)
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 

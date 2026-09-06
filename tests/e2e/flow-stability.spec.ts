@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -7,10 +8,7 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await expect.poll(() => page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;

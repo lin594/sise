@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded, waitForDeclarationOrPlaying } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -10,6 +11,11 @@ async function snapshotBoard(page: Page) {
     return {
       handCards,
       bodyExcerpt: document.body.innerText.slice(0, 1200),
+      openingReady: Boolean(
+        document.querySelector("[data-testid='confirm-declaration']")
+        || document.querySelector("[data-testid='declaration-status']")
+        || document.querySelector("main.layout.playing"),
+      ),
     };
   });
 }
@@ -18,18 +24,15 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
   const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
   const deadline = Date.now() + 3400;
   while (Date.now() < deadline) {
-    const hasDeclarePanel = await page.getByTestId("confirm-declaration").count() > 0;
-    if (hasDeclarePanel) {
-      break;
-    }
     const board = await snapshotBoard(page);
+    if (board.openingReady) break;
     samples.push({
       handCount: board.handCards.length,
       bodyExcerpt: board.bodyExcerpt,
     });
     await page.waitForTimeout(80);
   }
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await waitForDeclarationOrPlaying(page);
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
@@ -106,10 +109,7 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
 });
 
 async function finishRoundThroughDebugHu(page: Page): Promise<void> {
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await page.evaluate(() => {
     const bridge = (window as Window & {

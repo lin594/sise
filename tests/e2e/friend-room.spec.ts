@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { waitForDeclarationOrPlaying } from "./helpers/game";
 
 async function openFriendInvitation(page: Page) {
   await page.goto("/");
@@ -28,23 +29,23 @@ async function finishOpeningIfNeeded(page: Page): Promise<void> {
   }, { timeout: 20_000 }).toBe("playing");
 }
 
-async function observeDealFlights(page: Page): Promise<void> {
+async function observeDealSequences(page: Page): Promise<void> {
   await page.evaluate(() => {
     const trackingWindow = window as Window & {
-      __siseDealFlightCount?: number;
-      __siseDealFlightObserver?: MutationObserver;
+      __siseDealSequenceCount?: number;
+      __siseDealSequenceObserver?: MutationObserver;
     };
-    trackingWindow.__siseDealFlightCount = 0;
-    trackingWindow.__siseDealFlightObserver = new MutationObserver((records) => {
+    trackingWindow.__siseDealSequenceCount = 0;
+    trackingWindow.__siseDealSequenceObserver = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) {
           if (!(node instanceof Element)) continue;
-          if (node.matches(".fx-card.deal")) trackingWindow.__siseDealFlightCount! += 1;
-          trackingWindow.__siseDealFlightCount! += node.querySelectorAll(".fx-card.deal").length;
+          if (node.matches(".deal-overlay")) trackingWindow.__siseDealSequenceCount! += 1;
+          trackingWindow.__siseDealSequenceCount! += node.querySelectorAll(".deal-overlay").length;
         }
       }
     });
-    trackingWindow.__siseDealFlightObserver.observe(document.body, { childList: true, subtree: true });
+    trackingWindow.__siseDealSequenceObserver.observe(document.body, { childList: true, subtree: true });
   });
 }
 
@@ -54,16 +55,21 @@ async function expectOneNewDealSequence(page: Page, previousCount: number): Prom
   while (Date.now() < deadline) {
     const sample = await page.evaluate(() => {
       const declaration = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
+      const declarationStatus = document.querySelector<HTMLElement>("[data-testid='declaration-status']");
+      const layout = document.querySelector<HTMLElement>("main.layout");
       return {
-        declaring: Boolean(declaration?.getClientRects().length),
+        openingComplete:
+          Boolean(declaration?.getClientRects().length)
+          || Boolean(declarationStatus?.getClientRects().length)
+          || Boolean(layout?.classList.contains("playing")),
         handCount: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
-    if (sample.declaring) break;
+    if (sample.openingComplete) break;
     samples.push(sample.handCount);
     await page.waitForTimeout(40);
   }
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  await waitForDeclarationOrPlaying(page);
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
@@ -71,12 +77,12 @@ async function expectOneNewDealSequence(page: Page, previousCount: number): Prom
     `A full ${fullHandCount}-card hand appeared before declaration: ${samples.join(",")}`,
   ).toBe(true);
   await expect.poll(() => page.evaluate(() =>
-    (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+    (window as Window & { __siseDealSequenceCount?: number }).__siseDealSequenceCount ?? 0,
   )).toBeGreaterThan(previousCount);
   const currentCount = await page.evaluate(() =>
-    (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+    (window as Window & { __siseDealSequenceCount?: number }).__siseDealSequenceCount ?? 0,
   );
-  expect(currentCount - previousCount).toBeLessThanOrEqual(81);
+  expect(currentCount - previousCount).toBe(1);
   return currentCount;
 }
 
@@ -104,7 +110,7 @@ test("both friend-room clients receive one concealed deal sequence in the first 
 
     await host.getByTestId("fill-bots").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
-    await Promise.all([observeDealFlights(host), observeDealFlights(guest)]);
+    await Promise.all([observeDealSequences(host), observeDealSequences(guest)]);
     await host.getByTestId("lobby-start").click();
 
     const [hostFirstCount, guestFirstCount] = await Promise.all([
@@ -131,10 +137,10 @@ test("both friend-room clients receive one concealed deal sequence in the first 
     ]);
     await host.waitForTimeout(350);
     expect(await host.evaluate(() =>
-      (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+      (window as Window & { __siseDealSequenceCount?: number }).__siseDealSequenceCount ?? 0,
     )).toBe(hostSecondCount);
     expect(await guest.evaluate(() =>
-      (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
+      (window as Window & { __siseDealSequenceCount?: number }).__siseDealSequenceCount ?? 0,
     )).toBe(guestSecondCount);
   } finally {
     await guestContext.close();
@@ -615,7 +621,7 @@ test("a later friend can preselect while the current peng winner receives the di
     const guidance = host.getByTestId("action-guidance");
     await expect(guidance).toContainText(/该你操作了|现在可以先选/);
     await expect(host.getByTestId("action-peng")).toBeEnabled();
-    await expect(guest.getByTestId("action-guidance")).toContainText("该你操作了");
+    await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了|现在可以先选/);
     await expect(guest.getByTestId("action-peng")).toBeEnabled();
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });

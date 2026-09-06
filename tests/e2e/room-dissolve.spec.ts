@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a host can dissolve a waiting friend table for everyone", async ({ browser }) => {
   const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
@@ -62,10 +63,7 @@ test("the host can dissolve after the whole table returns from settlement", asyn
   await expect(page.getByTestId("lobby-start")).toBeEnabled();
   await page.getByTestId("lobby-start").click();
 
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await page.evaluate(() => {
     const bridge = (window as Window & {

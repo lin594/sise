@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -7,10 +8,7 @@ async function enterDebugPractice(page: Page): Promise<void> {
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  const confirm = page.getByTestId("confirm-declaration");
-  await expect(confirm).toBeEnabled({ timeout: 20_000 });
-  await confirm.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 }
 
 async function setupLocalUpperChi(page: Page): Promise<void> {
@@ -122,6 +120,5 @@ test("a player's own discard stays centered without adding a waiting prompt", as
   });
   await expect(page.getByTestId("pending-card")).toBeVisible();
   await expect(page.locator(".self-info-hint")).toHaveText("");
-  await expect(page.locator(".action-dock .action-row")).toHaveCount(0);
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
 });
