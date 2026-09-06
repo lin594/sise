@@ -24,6 +24,7 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
+import { quickPhrases } from "@/generated/quickPhrases";
 import {
   readStoredValue,
   removeStoredValue,
@@ -40,6 +41,7 @@ const ACTION_REJECTED_VISIBLE_MS = 3600;
 const CONNECTION_PROBE_INTERVAL_MS = 4000;
 const CONNECTION_PROBE_TIMEOUT_MS = 7000;
 const QUICK_PHRASE_MUTE_KEY = "sise_quick_phrase_muted";
+const QUICK_PHRASES_BY_ID = new Map(quickPhrases.map((phrase) => [phrase.id, phrase]));
 
 const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
   4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
@@ -477,9 +479,100 @@ export function useRoom(playerName = "Player") {
   const privateHand = ref<Card[]>([]);
   const acceptedStateRevision = ref(-1);
   const listeningHints = ref<ListeningHints | null>(null);
-  const quickPhrase = ref<{ seatId: string; text: string; sequence: number } | null>(null);
+  const quickPhrase = ref<{ seatId: string; phraseId: string; text: string; sequence: number } | null>(null);
   const quickPhraseMuted = ref(readStoredValue(QUICK_PHRASE_MUTE_KEY) === "1");
   let quickPhraseTimer: number | null = null;
+  let pendingLocalQuickPhrase: { seatId: string; phraseId: string; sentAt: number } | null = null;
+  let quickPhraseAudio: HTMLAudioElement | null = null;
+  let quickPhraseAudioPrimed = false;
+  let quickPhraseAudioGeneration = 0;
+
+  function getQuickPhraseAudio(): HTMLAudioElement {
+    if (!quickPhraseAudio) {
+      quickPhraseAudio = new Audio();
+      quickPhraseAudio.preload = "auto";
+    }
+    return quickPhraseAudio;
+  }
+
+  function primeQuickPhraseAudio(): void {
+    const firstPhrase = quickPhrases[0];
+    if (quickPhraseAudioPrimed || quickPhraseMuted.value || !firstPhrase) return;
+    const audio = getQuickPhraseAudio();
+    const generation = ++quickPhraseAudioGeneration;
+    try {
+      audio.muted = true;
+      audio.src = firstPhrase.url;
+      const playResult = audio.play();
+      quickPhraseAudioPrimed = true;
+      void playResult.then(() => {
+        if (generation !== quickPhraseAudioGeneration) return;
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      }).catch(() => {
+        quickPhraseAudioPrimed = false;
+      });
+    } catch {
+      quickPhraseAudioPrimed = false;
+    }
+  }
+
+  function playQuickPhrase(phraseId: string): void {
+    if (quickPhraseMuted.value) return;
+    const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
+    if (!phrase) return;
+    const audio = getQuickPhraseAudio();
+    quickPhraseAudioGeneration += 1;
+    audio.pause();
+    audio.src = phrase.url;
+    audio.currentTime = 0;
+    audio.muted = false;
+    audio.volume = 1;
+    try {
+      void audio.play().catch(() => {
+        // Embedded browsers may still block remote autoplay before the player
+        // has touched the page. The visible table message remains available.
+      });
+    } catch {
+      // Keep the visible message when media playback is unavailable.
+    }
+  }
+
+  function stopQuickPhraseAudio(): void {
+    if (!quickPhraseAudio) return;
+    quickPhraseAudioGeneration += 1;
+    quickPhraseAudio.pause();
+    quickPhraseAudio.currentTime = 0;
+  }
+
+  function presentQuickPhrase(
+    seatId: string,
+    phraseId: string,
+    sequence: number,
+    options: { play?: boolean; durationMs?: number } = {},
+  ): void {
+    const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
+    if (!phrase) return;
+    quickPhrase.value = { seatId, phraseId, text: phrase.label, sequence };
+    if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
+    const requestedDuration = options.durationMs;
+    const durationMs = Number.isFinite(requestedDuration)
+      ? Math.max(1_000, Math.min(10_000, Number(requestedDuration)))
+      : phrase.durationMs;
+    quickPhraseTimer = window.setTimeout(() => {
+      quickPhraseTimer = null;
+      quickPhrase.value = null;
+    }, durationMs);
+    if (options.play !== false) playQuickPhrase(phraseId);
+  }
+
+  function clearQuickPhrase(): void {
+    if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
+    quickPhraseTimer = null;
+    quickPhrase.value = null;
+    pendingLocalQuickPhrase = null;
+  }
   const availableActions = ref<AvailableAction[]>([]);
   const huResult = ref<{ winnerId: string; groups: string[] } | null>(null);
   const roundResult = ref<RoundResultPayload | null>(null);
@@ -1011,6 +1104,7 @@ export function useRoom(playerName = "Player") {
     acceptedStateRevision.value = -1;
     privateHand.value = [];
     listeningHints.value = null;
+    clearQuickPhrase();
     availableActions.value = [];
     huResult.value = null;
     roundResult.value = null;
@@ -1676,23 +1770,22 @@ export function useRoom(playerName = "Player") {
           visible: false,
         });
       });
-      joined.onMessage("quick_phrase", (payload: { seatId?: unknown; text?: unknown; sequence?: unknown }) => {
+      joined.onMessage("quick_phrase", (payload: { seatId?: unknown; phraseId?: unknown; durationMs?: unknown; sequence?: unknown }) => {
         if (!isCurrentJoinedRoom()) return;
         const seatId = String(payload?.seatId ?? "");
-        const text = String(payload?.text ?? "");
-        if (!seatId || !text) return;
-        quickPhrase.value = { seatId, text, sequence: Number(payload?.sequence ?? Date.now()) };
-        if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
-        quickPhraseTimer = window.setTimeout(() => {
-          quickPhraseTimer = null;
-          quickPhrase.value = null;
-        }, 3_000);
-        if (!quickPhraseMuted.value && "speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = "zh-CN";
-          window.speechSynthesis.speak(utterance);
-        }
+        const phraseId = String(payload?.phraseId ?? "");
+        if (!seatId || !QUICK_PHRASES_BY_ID.has(phraseId)) return;
+        const isLocalEcho = Boolean(
+          pendingLocalQuickPhrase &&
+          pendingLocalQuickPhrase.seatId === seatId &&
+          pendingLocalQuickPhrase.phraseId === phraseId &&
+          Date.now() - pendingLocalQuickPhrase.sentAt < 5_000,
+        );
+        if (isLocalEcho) pendingLocalQuickPhrase = null;
+        presentQuickPhrase(seatId, phraseId, Number(payload?.sequence ?? Date.now()), {
+          play: !isLocalEcho,
+          durationMs: Number(payload?.durationMs),
+        });
       });
       joined.onMessage("action_rejected", (payload: { reason?: string; decisionKey?: string; message?: string }) => {
         if (!isCurrentJoinedRoom()) {
@@ -2088,19 +2181,34 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("remove_seat", { seatIndex });
   }
 
-  function sendQuickPhrase(text: string): boolean {
-    return safeRoomSend("quick_phrase", { text });
+  function sendQuickPhrase(phraseId: string): boolean {
+    const phrase = QUICK_PHRASES_BY_ID.get(String(phraseId ?? ""));
+    const seatId = mySeatId.value;
+    const now = Date.now();
+    if (!phrase || !seatId || quickPhrase.value) {
+      return false;
+    }
+    if (!safeRoomSend("quick_phrase", { phraseId: phrase.id })) {
+      return false;
+    }
+    pendingLocalQuickPhrase = { seatId, phraseId: phrase.id, sentAt: now };
+    // Run inside the button gesture so iOS and embedded browsers allow audio.
+    // The server echo confirms delivery and refreshes the visible timer.
+    presentQuickPhrase(seatId, phrase.id, -now);
+    return true;
   }
 
   function setQuickPhraseMuted(muted: boolean): void {
     quickPhraseMuted.value = muted;
     writeStoredValue(QUICK_PHRASE_MUTE_KEY, muted ? "1" : "0");
-    if (muted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (muted) stopQuickPhraseAudio();
   }
 
   window.addEventListener("offline", handleBrowserOffline);
   window.addEventListener("online", handleBrowserOnline);
   document.addEventListener("visibilitychange", handleVisibilityChange);
+  document.addEventListener("pointerdown", primeQuickPhraseAudio, { capture: true, passive: true });
+  document.addEventListener("keydown", primeQuickPhraseAudio, { capture: true });
 
   onUnmounted(() => {
     clearMissingHandSyncTimer();
@@ -2108,10 +2216,13 @@ export function useRoom(playerName = "Player") {
     clearConnectionProbeTimers();
     clearRestoredNoticeTimer();
     clearActionFeedback();
-    if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
+    clearQuickPhrase();
+    stopQuickPhraseAudio();
     window.removeEventListener("offline", handleBrowserOffline);
     window.removeEventListener("online", handleBrowserOnline);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
+    document.removeEventListener("pointerdown", primeQuickPhraseAudio, { capture: true });
+    document.removeEventListener("keydown", primeQuickPhraseAudio, { capture: true });
     suppressReconnect = true;
     room.value?.leave();
   });

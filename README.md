@@ -31,9 +31,16 @@ npm run e2e
 docker compose up --build
 ```
 
+## 互动音效
+
+`assets/audio/quick-phrases/` 是快捷互动的唯一原始素材目录。加入或删除 `.m4a`、`.mp3`、`.aac`、`.wav`、`.ogg` 文件后运行 `npm run build`，系统会按文件名生成互动按钮，并同步生成前后端白名单与网页资源；不需要再改代码。音频文件名去掉扩展名后就是玩家看到的文案。
+
+现有 M4A 使用 AAC 编码，可直接用于 iOS 与现代 Android 浏览器，无需强制转成 MP3。构建脚本会读取音频时长，用它控制全桌串行发送，避免上一条尚未播放完成时再次发送。
+
 ## 目录
 
 ```text
+assets/       原始静态素材（含快捷互动音频）
 client/       Vue 3 前端
 server/       Colyseus 服务端与规则引擎
 tests/e2e/    Playwright 浏览器回归

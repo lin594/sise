@@ -7,6 +7,7 @@ import {
 import { Room, Client, CloseCode } from "@colyseus/core";
 import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
+import { quickPhrases } from "../generated/quickPhrases.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi } from "./flow/actions/chi.js";
@@ -161,12 +162,7 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
   "DECK_EMPTY",
   "DRAW_GAME",
 ]);
-const QUICK_PHRASES = new Set([
-  "我等到花儿都谢了",
-  "好牌！",
-  "承让承让",
-  "别急，慢慢来",
-]);
+const QUICK_PHRASES_BY_ID = new Map(quickPhrases.map((phrase) => [phrase.id, phrase]));
 
 export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
@@ -203,8 +199,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private pendingProfileTokenBySession = new Map<string, string>(); // device profile pending friend-room seat claim
   private profileTokenBySeat = new Map<string, string>(); // private, cross-room profile token for human settlement stats
   private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly quickPhraseSentAt = new Map<string, number>();
   private quickPhraseSequence = 0;
+  private quickPhraseBusyUntil = 0;
   private readonly takeoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private roomIdleExpiresAt = 0;
@@ -412,13 +408,21 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.handleSetAutoPlay(client, payload);
     });
 
-    this.onMessage("quick_phrase", (client, payload: { text?: unknown } | undefined) => {
+    this.onMessage("quick_phrase", (client, payload: { phraseId?: unknown } | undefined) => {
       const seatId = this.seatBySession.get(client.sessionId);
-      const text = String(payload?.text ?? "").trim();
+      const phraseId = String(payload?.phraseId ?? "").trim();
+      const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
       const now = Date.now();
-      if (!seatId || !QUICK_PHRASES.has(text) || now - (this.quickPhraseSentAt.get(seatId) ?? 0) < 5_000) return;
-      this.quickPhraseSentAt.set(seatId, now);
-      this.broadcast("quick_phrase", { seatId, text, sequence: ++this.quickPhraseSequence, sentAt: now });
+      if (!seatId || !phrase || now < this.quickPhraseBusyUntil) return;
+      this.quickPhraseBusyUntil = now + phrase.durationMs;
+      this.broadcast("quick_phrase", {
+        seatId,
+        phraseId: phrase.id,
+        text: phrase.label,
+        durationMs: phrase.durationMs,
+        sequence: ++this.quickPhraseSequence,
+        sentAt: now,
+      });
     });
 
     this.onMessage("action", (client, payload: ActionRequest) => {

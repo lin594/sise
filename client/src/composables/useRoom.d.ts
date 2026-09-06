@@ -600,14 +600,17 @@ export declare function useRoom(playerName?: string): {
     } | null>;
     quickPhrase: import("vue").Ref<{
         seatId: string;
+        phraseId: string;
         text: string;
         sequence: number;
     } | null, {
         seatId: string;
+        phraseId: string;
         text: string;
         sequence: number;
     } | {
         seatId: string;
+        phraseId: string;
         text: string;
         sequence: number;
     } | null>;
@@ -929,7 +932,7 @@ export declare function useRoom(playerName?: string): {
     fillBots: () => void;
     updateBot: (seatIndex: number, strength: number) => void;
     removeSeat: (seatIndex: number) => void;
-    sendQuickPhrase: (text: string) => boolean;
+    sendQuickPhrase: (phraseId: string) => boolean;
     setQuickPhraseMuted: (muted: boolean) => void;
 };
 export {};

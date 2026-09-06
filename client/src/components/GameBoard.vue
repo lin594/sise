@@ -47,7 +47,6 @@
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
-        <div v-if="quickPhrase?.seatId === topPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(topPlayer.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
@@ -141,7 +140,6 @@
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
-        <div v-if="quickPhrase?.seatId === leftPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(leftPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
@@ -287,7 +285,6 @@
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
-        <div v-if="quickPhrase?.seatId === rightPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(rightPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
@@ -427,6 +424,20 @@
         <div v-if="showDealAnimation" class="deal-overlay">发牌中...</div>
       </Transition>
 
+      <Transition name="quick-phrase">
+        <div
+          v-if="quickPhrase"
+          class="quick-phrase-toast"
+          data-testid="quick-phrase-toast"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <strong>{{ quickPhraseSpeakerName }}</strong>
+          <span>{{ quickPhrase.text }}</span>
+        </div>
+      </Transition>
+
       <div
         v-if="dealerReveal"
         :key="`dealer-${dealerReveal.id}`"
@@ -474,7 +485,6 @@
       :class="{ active: isMyTurn, dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
-      <div v-if="quickPhrase?.seatId === selfPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
@@ -806,7 +816,7 @@ const props = defineProps<{
   reduceMotion?: boolean;
   viewportTransformed?: boolean;
   viewportTransformKey?: string;
-  quickPhrase?: { seatId: string; text: string; sequence: number } | null;
+  quickPhrase?: { seatId: string; phraseId: string; text: string; sequence: number } | null;
 }>();
 
 const emit = defineEmits<{
@@ -874,6 +884,11 @@ const flowBottomLeftPlayer = computed<PlayerState | null>(() =>
 const flowBottomRightPlayer = computed<PlayerState | null>(() =>
   props.seatDirection === "clockwise" ? selfPlayer.value : rightPlayer.value,
 );
+const quickPhraseSpeakerName = computed(() => {
+  const speaker = props.players.find((player) => player.clientId === props.quickPhrase?.seatId);
+  if (!speaker) return "牌友";
+  return speaker.clientId === props.mySeatId ? "你" : speaker.name;
+});
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
 const selectedChiCardIds = ref<string[]>([]);
@@ -5050,7 +5065,13 @@ watch(
 .seat-identity-meta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap; }
 .group-score-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.3rem; border: 1px solid #475569; border-radius: 0.45rem; display: inline-grid; place-items: center; color: #94a3b8; background: rgba(15, 23, 42, 0.78); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
 .group-score-badge.positive { color: #fde68a; border-color: rgba(245, 158, 11, 0.62); background: rgba(120, 53, 15, 0.34); }
-.quick-phrase-bubble { position: absolute; z-index: 8; left: 50%; bottom: calc(100% + 0.3rem); transform: translateX(-50%); width: max-content; max-width: min(12rem, 70vw); padding: 0.35rem 0.55rem; border-radius: 0.7rem 0.7rem 0.7rem 0.15rem; background: rgba(248, 250, 252, 0.96); color: #0f172a; box-shadow: 0 5px 16px rgba(2, 6, 23, 0.35); font-size: max(0.75rem, 12px); font-weight: 750; pointer-events: none; }
+.quick-phrase-toast { position: absolute; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, calc(-50% - clamp(3.2rem, 10vh, 5rem))); width: max-content; max-width: min(18rem, calc(100% - 1rem)); padding: 0.38rem 0.62rem; border: 1px solid rgba(125, 211, 252, 0.78); border-radius: 0.78rem; background: rgba(248, 250, 252, 0.98); color: #0f172a; box-shadow: 0 8px 22px rgba(2, 6, 23, 0.48); display: flex; align-items: baseline; gap: 0.42rem; font-size: max(0.8125rem, 13px); font-weight: 800; line-height: 1.25; pointer-events: none; }
+.quick-phrase-toast strong { flex: 0 0 auto; color: #0369a1; }
+.quick-phrase-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-phrase-enter-active,
+.quick-phrase-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
+.quick-phrase-enter-from,
+.quick-phrase-leave-to { opacity: 0; transform: translate(-50%, calc(-50% - clamp(2.7rem, 9vh, 4.5rem))) scale(0.96); }
 .kan-count-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.28rem; border: 1px solid rgba(167, 139, 250, 0.58); border-radius: 0.45rem; display: inline-grid; place-items: center; color: #ddd6fe; background: rgba(76, 29, 149, 0.26); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
 .current-listening-waits { min-width: 0; max-width: min(42vw, 24rem); display: flex; align-items: center; gap: 0.22rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .current-listening-waits::-webkit-scrollbar { display: none; }

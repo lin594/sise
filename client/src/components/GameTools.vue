@@ -22,10 +22,11 @@
       <button
         class="tool-button interaction"
         type="button"
-        aria-label="快捷互动"
-        title="快捷互动"
+        :aria-label="quickPhrases.length === 0 ? '快捷互动，暂无音效' : props.quickPhraseBusy ? '快捷互动，上一条语音播放中' : '快捷互动'"
+        :title="quickPhrases.length === 0 ? '暂无互动音效' : props.quickPhraseBusy ? '上一条语音播放中' : '快捷互动'"
         data-testid="game-interaction"
         :aria-expanded="phraseOpen"
+        :disabled="props.quickPhraseBusy || quickPhrases.length === 0"
         @click="togglePhrases"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z" /><path d="M8 9h8M8 12h5" /></svg>
@@ -95,7 +96,9 @@
 
     <Transition name="popover">
       <section v-if="phraseOpen" class="phrase-panel" data-testid="quick-phrase-panel" aria-label="快捷互动">
-        <button v-for="phrase in quickPhrases" :key="phrase" type="button" @click="sendPhrase(phrase)">{{ phrase }}</button>
+        <p v-if="props.quickPhraseBusy" class="phrase-busy" role="status">上一条语音播放中…</p>
+        <p v-else-if="quickPhrases.length === 0" class="phrase-busy" role="status">暂无互动音效</p>
+        <button v-for="phrase in quickPhrases" :key="phrase.id" type="button" :disabled="props.quickPhraseBusy" @click="sendPhrase(phrase.id)">{{ phrase.label }}</button>
         <button class="phrase-mute" type="button" :aria-pressed="props.quickPhraseMuted" @click="emit('setQuickPhraseMuted', !props.quickPhraseMuted)">
           {{ props.quickPhraseMuted ? "开启语音" : "关闭语音" }}
         </button>
@@ -453,6 +456,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { quickPhrases } from "@/generated/quickPhrases";
 import type {
   CardDisplayMode,
   GameDisplayPreferences,
@@ -477,6 +481,7 @@ const props = withDefaults(
     screenWakeLockSupported?: boolean;
     installAppAvailable?: boolean;
     quickPhraseMuted?: boolean;
+    quickPhraseBusy?: boolean;
   }>(),
   {
     decisionActive: false,
@@ -491,6 +496,7 @@ const props = withDefaults(
     screenWakeLockSupported: false,
     installAppAvailable: false,
     quickPhraseMuted: false,
+    quickPhraseBusy: false,
   },
 );
 
@@ -501,7 +507,7 @@ const emit = defineEmits<{
   returnToDecision: [];
   exit: [];
   setAutoPlay: [enabled: boolean];
-  quickPhrase: [text: string];
+  quickPhrase: [phraseId: string];
   setQuickPhraseMuted: [muted: boolean];
 }>();
 
@@ -510,7 +516,6 @@ const historyButtonRef = ref<HTMLButtonElement | null>(null);
 const historyPanelRef = ref<HTMLElement | null>(null);
 const historyOpen = ref(false);
 const phraseOpen = ref(false);
-const quickPhrases = ["我等到花儿都谢了", "好牌！", "承让承让", "别急，慢慢来"] as const;
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
@@ -636,9 +641,9 @@ function togglePhrases(): void {
   phraseOpen.value = opening;
 }
 
-function sendPhrase(phrase: string): void {
+function sendPhrase(phraseId: string): void {
   phraseOpen.value = false;
-  emit("quickPhrase", phrase);
+  emit("quickPhrase", phraseId);
 }
 
 function closeHistory(restoreFocus = true): void {
@@ -1055,6 +1060,14 @@ onBeforeUnmount(() => {
   padding: 0.45rem;
   display: grid;
   gap: 0.35rem;
+}
+
+.phrase-busy {
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+  color: #bae6fd;
+  font-size: max(0.8125rem, 13px);
+  text-align: center;
 }
 
 .phrase-panel button {

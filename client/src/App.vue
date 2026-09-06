@@ -78,6 +78,7 @@
         :screen-wake-lock-supported="screenWakeLockSupported"
         :install-app-available="canOfferPwaInstall"
         :quick-phrase-muted="quickPhraseMuted"
+        :quick-phrase-busy="Boolean(quickPhrase)"
         @open-rules="openRules"
         @install-app="requestPwaInstall"
         @return-to-decision="returnToDecision"

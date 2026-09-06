@@ -6,10 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "concurrently -n server,client -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
-    "build": "npm --prefix server run build && npm --prefix client run build",
-    "build:server": "npm --prefix server run build",
-    "build:client": "npm --prefix client run build",
+    "sync:quick-phrases": "node scripts/sync-quick-phrases.mjs",
+    "dev": "npm run sync:quick-phrases && concurrently -n server,client -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm run sync:quick-phrases && npm --prefix server run build && npm --prefix client run build",
+    "build:server": "npm run sync:quick-phrases && npm --prefix server run build",
+    "build:client": "npm run sync:quick-phrases && npm --prefix client run build",
     "e2e": "npm run build && playwright test",
     "e2e:responsive": "npm run build && playwright test tests/e2e/responsive-release.spec.ts",
     "e2e:headed": "npm run build && playwright test --headed",

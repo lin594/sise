@@ -47,6 +47,12 @@ const flowTopLeftPlayer = computed(() => props.seatDirection === "clockwise" ? t
 const flowTopRightPlayer = computed(() => props.seatDirection === "clockwise" ? rightPlayer.value : topPlayer.value);
 const flowBottomLeftPlayer = computed(() => props.seatDirection === "clockwise" ? leftPlayer.value : selfPlayer.value);
 const flowBottomRightPlayer = computed(() => props.seatDirection === "clockwise" ? selfPlayer.value : rightPlayer.value);
+const quickPhraseSpeakerName = computed(() => {
+    const speaker = props.players.find((player) => player.clientId === props.quickPhrase?.seatId);
+    if (!speaker)
+        return "牌友";
+    return speaker.clientId === props.mySeatId ? "你" : speaker.name;
+});
 const discardingCardId = ref(null);
 const selectedDiscardCardId = ref(null);
 const selectedChiCardIds = ref([]);
@@ -2184,6 +2190,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -2320,13 +2328,6 @@ if (__VLS_ctx.topPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.topPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.topPlayer.clientId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "quick-phrase-bubble" },
-            role: "status",
-        });
-        (__VLS_ctx.quickPhrase.text);
-    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow" },
@@ -2509,13 +2510,6 @@ if (__VLS_ctx.leftPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.leftPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.leftPlayer.clientId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "quick-phrase-bubble" },
-            role: "status",
-        });
-        (__VLS_ctx.quickPhrase.text);
-    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow turn-arrow-side" },
@@ -2790,13 +2784,6 @@ if (__VLS_ctx.rightPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.rightPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.rightPlayer.clientId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "quick-phrase-bubble" },
-            role: "status",
-        });
-        (__VLS_ctx.quickPhrase.text);
-    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow turn-arrow-side" },
@@ -3073,6 +3060,30 @@ if (__VLS_ctx.showDealAnimation) {
     });
 }
 var __VLS_48;
+const __VLS_49 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_50 = __VLS_asFunctionalComponent(__VLS_49, new __VLS_49({
+    name: "quick-phrase",
+}));
+const __VLS_51 = __VLS_50({
+    name: "quick-phrase",
+}, ...__VLS_functionalComponentArgsRest(__VLS_50));
+__VLS_52.slots.default;
+if (__VLS_ctx.quickPhrase) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "quick-phrase-toast" },
+        'data-testid': "quick-phrase-toast",
+        role: "status",
+        'aria-live': "polite",
+        'aria-atomic': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.quickPhraseSpeakerName);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+    (__VLS_ctx.quickPhrase.text);
+}
+var __VLS_52;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -3112,16 +3123,16 @@ if (__VLS_ctx.dealerReveal) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_49 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_53 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
         }));
-        const __VLS_50 = __VLS_49({
+        const __VLS_54 = __VLS_53({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_49));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_53));
     }
     if (__VLS_ctx.dealerCeremonyCard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
@@ -3147,13 +3158,6 @@ if (__VLS_ctx.selfPlayer) {
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
-    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.selfPlayer.clientId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "quick-phrase-bubble" },
-            role: "status",
-        });
-        (__VLS_ctx.quickPhrase.text);
-    }
     if (__VLS_ctx.isMyTurn) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow self-turn-arrow" },
@@ -3178,12 +3182,12 @@ if (__VLS_ctx.selfPlayer) {
     });
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_52 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_56 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
     }));
-    const __VLS_53 = __VLS_52({
+    const __VLS_57 = __VLS_56({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_56));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'aria-label': (`剩余手牌 ${__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer)} 张`),
@@ -3216,16 +3220,16 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_59 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_56 = __VLS_55({
+            const __VLS_60 = __VLS_59({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_59));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3286,16 +3290,16 @@ if (__VLS_ctx.selfPlayer) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_62 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (wait.card),
                 size: "xs",
                 mode: "large",
             }));
-            const __VLS_59 = __VLS_58({
+            const __VLS_63 = __VLS_62({
                 card: (wait.card),
                 size: "xs",
                 mode: "large",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_62));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "wait-count-badge" },
                 'aria-hidden': "true",
@@ -3311,7 +3315,7 @@ if (__VLS_ctx.selfPlayer) {
         });
         (__VLS_ctx.fixedClockText);
     }
-    var __VLS_61 = {};
+    var __VLS_65 = {};
     if (__VLS_ctx.selectedPreview) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "selected-card-preview" },
@@ -3320,16 +3324,16 @@ if (__VLS_ctx.selfPlayer) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_67 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
         }));
-        const __VLS_64 = __VLS_63({
+        const __VLS_68 = __VLS_67({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_67));
         if (__VLS_ctx.selectedDiscardListeningRoute?.waits.length) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "selected-preview-wait-label" },
@@ -3350,16 +3354,16 @@ if (__VLS_ctx.selfPlayer) {
                 });
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
                 }));
-                const __VLS_67 = __VLS_66({
+                const __VLS_71 = __VLS_70({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_66));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_70));
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "wait-count-badge" },
                     'data-testid': "listening-wait-count",
@@ -3513,24 +3517,24 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_73 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_70 = __VLS_69({
+        const __VLS_74 = __VLS_73({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
     }
 }
 if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_72 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_76 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onSubmit': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -3549,7 +3553,7 @@ if (props.state?.phase === 'playing') {
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
-    const __VLS_73 = __VLS_72({
+    const __VLS_77 = __VLS_76({
         ...{ 'onConfirmDiscard': {} },
         ...{ 'onSubmit': {} },
         ...{ class: "embedded-actions action-dock" },
@@ -3567,28 +3571,28 @@ if (props.state?.phase === 'playing') {
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_72));
-    let __VLS_75;
-    let __VLS_76;
-    let __VLS_77;
-    const __VLS_78 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_76));
+    let __VLS_79;
+    let __VLS_80;
+    let __VLS_81;
+    const __VLS_82 = {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
-    const __VLS_79 = {
+    const __VLS_83 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    var __VLS_74;
+    var __VLS_78;
 }
-const __VLS_80 = {}.Teleport;
+const __VLS_84 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
+const __VLS_85 = __VLS_asFunctionalComponent(__VLS_84, new __VLS_84({
     to: "body",
 }));
-const __VLS_82 = __VLS_81({
+const __VLS_86 = __VLS_85({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_81));
-__VLS_83.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_85));
+__VLS_87.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3612,21 +3616,21 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_84 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_88 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
         }));
-        const __VLS_85 = __VLS_84({
+        const __VLS_89 = __VLS_88({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_84));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_88));
     }
 }
-var __VLS_83;
+var __VLS_87;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3645,16 +3649,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_87 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_91 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_88 = __VLS_87({
+        const __VLS_92 = __VLS_91({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_87));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_91));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3665,7 +3669,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
@@ -3693,7 +3696,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
@@ -3745,7 +3747,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
@@ -3783,6 +3784,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['deal-overlay']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
@@ -3792,7 +3794,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
@@ -3849,7 +3850,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 // @ts-ignore
-var __VLS_62 = __VLS_61;
+var __VLS_66 = __VLS_65;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -3866,6 +3867,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             flowTopRightPlayer: flowTopRightPlayer,
             flowBottomLeftPlayer: flowBottomLeftPlayer,
             flowBottomRightPlayer: flowBottomRightPlayer,
+            quickPhraseSpeakerName: quickPhraseSpeakerName,
             discardingCardId: discardingCardId,
             selectedDiscardCardId: selectedDiscardCardId,
             selectedChiCardIds: selectedChiCardIds,

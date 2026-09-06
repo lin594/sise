@@ -2959,6 +2959,7 @@ if (__VLS_ctx.showGameTools) {
         screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
         installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
         quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
+        quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
     }));
     const __VLS_9 = __VLS_8({
         ...{ 'onOpenRules': {} },
@@ -2982,6 +2983,7 @@ if (__VLS_ctx.showGameTools) {
         screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
         installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
         quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
+        quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
     }, ...__VLS_functionalComponentArgsRest(__VLS_8));
     let __VLS_11;
     let __VLS_12;
