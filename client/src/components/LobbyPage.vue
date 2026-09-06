@@ -32,7 +32,13 @@
           </span>
           <span class="guest-profile-summary-view" aria-hidden="true">查看</span>
         </button>
-        <button v-if="roomId" class="ghost head-action" type="button" @click="requestRules">查看规则</button>
+        <button
+          v-if="roomId"
+          class="ghost head-action"
+          type="button"
+          data-testid="lobby-rules"
+          @click="requestRules"
+        >查看规则</button>
         <button
           v-if="(roomMode === 'friends' || roomMode === 'match') && roomId"
           ref="leaveButtonRef"
