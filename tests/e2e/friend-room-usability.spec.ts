@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { finishDeclarationIfNeeded, stageDeclarationForTest } from './helpers/game';
+import { finishDeclarationIfNeeded, stageDeclarationForTest, waitForDeclarationOrPlaying } from './helpers/game';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
   await page.getByTestId('random-nickname').click();
@@ -124,7 +124,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     }, 8);
   });
   await page.getByTestId('lobby-start').click();
-  await stageDeclarationForTest(page);
+  await waitForDeclarationOrPlaying(page);
   const samples = await page.evaluate(() => {
     const probe = window as any;
     window.clearInterval(probe.__siseHandScaleProbe);
