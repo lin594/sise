@@ -47,22 +47,21 @@
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
+        <div v-if="quickPhrase?.seatId === topPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(topPlayer.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
-            <span
-              v-if="topPlayer.isConfiguredBot"
-              class="bot-seat-badge"
-              data-testid="bot-identity"
-              aria-label="机器人"
-              title="机器人"
-            >电脑</span>
+            <span class="seat-identity-meta">
+            <PlayerStatusIcon v-bind="statusIconProps(topPlayer)" />
             <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
               :data-player-id="topPlayer.clientId"
             >{{ playerHandCount(topPlayer) }}张</span>
+            <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${topPlayer.declaredKongs} 个`">{{ topPlayer.declaredKongs }}坎</span>
+            <span class="group-score-badge" :class="{ positive: topPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${topPlayer.visibleGroupScore} 分`">牌面{{ topPlayer.visibleGroupScore }}分</span>
+            </span>
             <span v-if="showDealerSeatMarker(topPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -78,12 +77,8 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(topPlayer) }">{{ statusText(topPlayer) }}</span>
           </div>
         </header>
-        <p v-if="seatMetaText(topGroupBlocks.length, topPlayer.declaredKongs)" class="seat-meta">
-          {{ seatMetaText(topGroupBlocks.length, topPlayer.declaredKongs) }}
-        </p>
         <div v-if="topGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in topGroupBlocks"
@@ -146,22 +141,21 @@
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
+        <div v-if="quickPhrase?.seatId === leftPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(leftPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
-            <span
-              v-if="leftPlayer.isConfiguredBot"
-              class="bot-seat-badge"
-              data-testid="bot-identity"
-              aria-label="机器人"
-              title="机器人"
-            >电脑</span>
+            <span class="seat-identity-meta">
+            <PlayerStatusIcon v-bind="statusIconProps(leftPlayer)" />
             <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
               :data-player-id="leftPlayer.clientId"
             >{{ playerHandCount(leftPlayer) }}张</span>
+            <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${leftPlayer.declaredKongs} 个`">{{ leftPlayer.declaredKongs }}坎</span>
+            <span class="group-score-badge" :class="{ positive: leftPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${leftPlayer.visibleGroupScore} 分`">牌面{{ leftPlayer.visibleGroupScore }}分</span>
+            </span>
             <span v-if="showDealerSeatMarker(leftPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -177,12 +171,8 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(leftPlayer) }">{{ statusText(leftPlayer) }}</span>
           </div>
         </header>
-        <p v-if="seatMetaText(leftGroupBlocks.length, leftPlayer.declaredKongs)" class="seat-meta">
-          {{ seatMetaText(leftGroupBlocks.length, leftPlayer.declaredKongs) }}
-        </p>
         <div v-if="leftGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in leftGroupBlocks"
@@ -297,22 +287,21 @@
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
+        <div v-if="quickPhrase?.seatId === rightPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
         <div v-if="isCurrentTurn(rightPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
-            <span
-              v-if="rightPlayer.isConfiguredBot"
-              class="bot-seat-badge"
-              data-testid="bot-identity"
-              aria-label="机器人"
-              title="机器人"
-            >电脑</span>
+            <span class="seat-identity-meta">
+            <PlayerStatusIcon v-bind="statusIconProps(rightPlayer)" />
             <span
               class="hand-count-badge"
               data-testid="opponent-hand-count"
               :data-player-id="rightPlayer.clientId"
             >{{ playerHandCount(rightPlayer) }}张</span>
+            <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${rightPlayer.declaredKongs} 个`">{{ rightPlayer.declaredKongs }}坎</span>
+            <span class="group-score-badge" :class="{ positive: rightPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${rightPlayer.visibleGroupScore} 分`">牌面{{ rightPlayer.visibleGroupScore }}分</span>
+            </span>
             <span v-if="showDealerSeatMarker(rightPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -328,12 +317,8 @@
             >
               剩余 {{ seatCountdownSeconds }}s
             </span>
-            <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(rightPlayer) }">{{ statusText(rightPlayer) }}</span>
           </div>
         </header>
-        <p v-if="seatMetaText(rightGroupBlocks.length, rightPlayer.declaredKongs)" class="seat-meta">
-          {{ seatMetaText(rightGroupBlocks.length, rightPlayer.declaredKongs) }}
-        </p>
         <div v-if="rightGroupBlocks.length" class="group-block-list compact">
           <div
             v-for="group in rightGroupBlocks"
@@ -389,7 +374,6 @@
         ref="selfOpenRef"
       >
         <template v-if="selfGroupBlocks.length">
-          <p>牌组（{{ selfGroupBlocks.length }}组）</p>
           <div class="group-block-list">
             <div
               v-for="group in selfGroupBlocks"
@@ -490,19 +474,19 @@
       :class="{ active: isMyTurn, dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
+      <div v-if="quickPhrase?.seatId === selfPlayer.clientId" class="quick-phrase-bubble" role="status">{{ quickPhrase.text }}</div>
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
           <div class="seat-identity">
             <h3>{{ selfPlayer.name }}</h3>
+            <span class="seat-identity-meta">
             <span class="self-seat-badge" aria-hidden="true">你</span>
-            <span
-              v-if="selfPlayer.isConfiguredBot"
-              class="bot-seat-badge"
-              data-testid="bot-identity"
-              aria-label="机器人"
-              title="机器人"
-            >电脑</span>
+            <PlayerStatusIcon v-bind="statusIconProps(selfPlayer)" />
+            <span class="hand-count-badge" :aria-label="`剩余手牌 ${playerHandCount(selfPlayer)} 张`">{{ playerHandCount(selfPlayer) }}张</span>
+            <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${selfPlayer.declaredKongs} 个`">{{ selfPlayer.declaredKongs }}坎</span>
+            <span class="group-score-badge" :class="{ positive: selfPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${selfPlayer.visibleGroupScore} 分`">牌面{{ selfPlayer.visibleGroupScore }}分</span>
+            </span>
             <span v-if="showDealerSeatMarker(selfPlayer.clientId)" class="dealer-seat-lockup" data-testid="self-dealer-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -510,14 +494,10 @@
               </span>
             </span>
           </div>
-          <p v-if="seatMetaText(selfGroupBlocks.length, selfPlayer.declaredKongs)" data-testid="self-seat-meta">
-            {{ seatMetaText(selfGroupBlocks.length, selfPlayer.declaredKongs) }}
-          </p>
         </div>
         <div class="seat-tags">
           <span v-if="isMyTurn" class="tag turn">当前回合</span>
           <span v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-countdown">剩余 {{ seatCountdownSeconds }}s</span>
-          <span class="tag status" :class="{ 'temporary-control': isTemporaryBotControl(selfPlayer) }">{{ statusText(selfPlayer) }}</span>
         </div>
       </header>
       <div v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-timer-bar self-turn-timer">
@@ -529,10 +509,26 @@
     <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div class="decision-status" data-testid="decision-status">
         <strong>{{ fixedStatusText }}</strong>
+        <span
+          v-if="currentListeningWaits.length"
+          class="current-listening-waits"
+          role="status"
+          :aria-label="currentListeningAccessibleLabel"
+          data-testid="current-listening-waits"
+        >
+          <span class="current-listening-label" aria-hidden="true">听</span>
+          <span
+            v-for="wait in currentListeningWaits"
+            :key="`current-wait-${wait.card.id}`"
+            class="current-listening-card"
+            :class="{ exhausted: wait.visibleRemaining === 0 }"
+            :data-visible-remaining="wait.visibleRemaining"
+          >
+            <CardComp :card="wait.card" size="xs" mode="large" />
+            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
+          </span>
+        </span>
         <span v-if="showDecisionClock" class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
-        <button v-if="canRequestMoreTime && !effectiveInteractionPausedMessage" type="button" data-testid="request-more-time"
-          :aria-label="`需要更多时间，增加${moreTimeSeconds ?? 20}秒`"
-          :disabled="nowMs < moreTimePendingUntil" @click="requestFixedMoreTime">{{ nowMs < moreTimePendingUntil ? '加时中…' : `+${moreTimeSeconds ?? 20}秒` }}</button>
       </div>
       <slot name="declaration" />
       <div
@@ -674,13 +670,10 @@
       :paused-hint="effectiveInteractionPausedMessage"
       :seconds-left="seatCountdownSeconds"
       :untimed="Boolean(props.decisionUntimed)"
-      :can-request-more-time="Boolean(props.canRequestMoreTime)"
-      :more-time-seconds="props.moreTimeSeconds ?? 20"
       :decision-key="props.decisionKey ?? ''"
       :action-feedback="effectiveActionFeedback"
       :selected-chi-candidate-id="selectedChiCandidate?.id ?? null"
       @confirm-discard="confirmDiscard"
-      @request-more-time="emit('requestMoreTime')"
       @submit="onSubmitAction"
     />
 
@@ -720,6 +713,7 @@ import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
+import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import type {
   ActionFeedback,
   ActionCandidate,
@@ -800,9 +794,7 @@ const props = defineProps<{
   responsePhase?: string;
   turnHint?: string;
   interactionPausedMessage?: string;
-  canRequestMoreTime?: boolean;
   decisionUntimed?: boolean;
-  moreTimeSeconds?: number;
   decisionTimerTotalMs?: number;
   decisionTimerEndsAt?: number;
   decisionKey?: string;
@@ -814,12 +806,12 @@ const props = defineProps<{
   reduceMotion?: boolean;
   viewportTransformed?: boolean;
   viewportTransformKey?: string;
+  quickPhrase?: { seatId: string; text: string; sequence: number } | null;
 }>();
 
 const emit = defineEmits<{
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
-  requestMoreTime: [];
 }>();
 
 const nowMs = ref(Date.now());
@@ -1470,6 +1462,7 @@ function isActiveDiscardCard(playerId: string, card: Card, index: number): boole
 const displayTurnPlayerId = computed(() => {
   if (props.state?.responsePhase === "collective") {
     return (
+      props.state?.pendingReceiverId ||
       props.state?.currentTurnPlayerId ||
       props.state?.currentPlayerId ||
       props.state?.pollOriginPlayerId ||
@@ -1649,13 +1642,6 @@ const latestSeatAction = computed<{ actorId: string; label: string } | null>(() 
   return { actorId: actor, label };
 });
 
-const moreTimePendingUntil = ref(0);
-function requestFixedMoreTime(): void {
-  if (nowMs.value < moreTimePendingUntil.value) return;
-  moreTimePendingUntil.value = nowMs.value + 2500;
-  emit('requestMoreTime');
-}
-watch(() => props.decisionKey, () => { moreTimePendingUntil.value = 0; });
 const fixedStatusText = computed(() => {
   if (effectiveInteractionPausedMessage.value) return effectiveInteractionPausedMessage.value;
   if (props.state?.phase === 'declaring') return props.declarationStatus || (selfPlayer.value?.declaredReady ? '已确认，等待其他玩家' : '开局确认 · 选择鱼和坎');
@@ -1674,6 +1660,10 @@ const activeHints = computed(() => {
   const hints = props.listeningHints;
   return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
+const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
+const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
+  .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
+  .join("；")}`);
 const markedListeningRoutes = computed(() => {
   if (selectedChiCandidate.value) return activeHints.value?.chi.find((item) => item.candidateId === selectedChiCandidate.value?.id)?.discards ?? [];
   return canDiscard.value ? activeHints.value?.discards ?? [] : [];
@@ -1791,9 +1781,6 @@ const crowdedActionDock = computed(() =>
 );
 
 const centerPointerDirection = computed<"up" | "down" | "left" | "right" | null>(() => {
-  if (String(props.state?.responsePhase ?? "") === "collective") {
-    return null;
-  }
   const currentId = String(displayTurnPlayerId.value || "");
   if (!currentId) {
     return null;
@@ -1845,8 +1832,8 @@ function showDealerSeatMarker(playerId: string): boolean {
 }
 
 function isCollectiveResponder(playerId: string): boolean {
-  void playerId;
-  return false;
+  return String(props.state?.responsePhase ?? "") === "collective" &&
+    String(props.state?.pendingReceiverId ?? "") === playerId;
 }
 
 function seatActionText(playerId: string): string {
@@ -1877,23 +1864,21 @@ function statusText(player: PlayerState): string {
   return player.connected ? "真人在线" : "真人离线";
 }
 
-function seatMetaText(groupCount: number, declaredKongs: number): string {
-  const parts: string[] = [];
-  if (groupCount > 0) {
-    parts.push(`牌组 ${groupCount} 组`);
-  }
-  if (declaredKongs > 0) {
-    parts.push(`坎 ${declaredKongs}`);
-  }
-  return parts.join(" · ");
+function statusIconProps(player: PlayerState) {
+  return {
+    isConfiguredBot: player.isConfiguredBot,
+    isAutoPlay: player.isAutoPlay,
+    isBot: player.isBot,
+    connected: player.connected,
+  };
 }
 
-function playerAccessibleSummary(player: PlayerState, groupCount: number): string {
+function playerAccessibleSummary(player: PlayerState, _groupCount: number): string {
   const parts = [
     player.clientId === props.mySeatId ? `${player.name}，你的位置` : player.name,
     `剩余手牌 ${playerHandCount(player)} 张`,
-    `公开牌组 ${groupCount} 组`,
-    `坎 ${Number(player.declaredKongs ?? 0)} 组`,
+    `已声明暗坎 ${player.declaredKongs} 个`,
+    `当前明示牌组基础分 ${player.visibleGroupScore} 分`,
     statusText(player),
   ];
   if (isDealer(player.clientId)) {
@@ -5048,7 +5033,7 @@ watch(
 .decision-status strong { flex: 1; min-width: 0; }
 .fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
 .decision-status button { min-height: 40px; padding: 3px 8px; }
-.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; transform: scale(var(--hand-scale, 1)); transform-origin: center center; }
+.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; transform: scale(calc(var(--hand-scale, 1) * 0.96)); transform-origin: center center; }
 .cards.hand.single-line .hand-card { flex: 0 0 auto; width: max-content; }
 .hand-mark { position: absolute; top: 0; left: 0; z-index: 2; background: #0f766e; color: white; border-radius: 3px; font-size: 11px; padding: 1px 3px; }
 .listening-mark { background: #047857; }
@@ -5059,10 +5044,114 @@ watch(
 .selected-preview-wait.exhausted :deep(.card) { filter: grayscale(1); opacity: 0.48; }
 .wait-count-badge { position: absolute; right: -2px; top: -4px; z-index: 2; min-width: 22px; padding: 0 3px; border-radius: 999px; background: #065f46; color: #ecfdf5; box-shadow: 0 0 0 1px #0f172a; font-size: 9px; line-height: 14px; font-weight: 800; text-align: center; white-space: nowrap; }
 .selected-preview-wait.exhausted .wait-count-badge { background: #475569; color: #e2e8f0; }
+.seat-identity { flex-wrap: wrap; }
+.seat-identity > strong,
+.seat-identity > h3 { flex: 1 1 4.5rem; }
+.seat-identity-meta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap; }
+.group-score-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.3rem; border: 1px solid #475569; border-radius: 0.45rem; display: inline-grid; place-items: center; color: #94a3b8; background: rgba(15, 23, 42, 0.78); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
+.group-score-badge.positive { color: #fde68a; border-color: rgba(245, 158, 11, 0.62); background: rgba(120, 53, 15, 0.34); }
+.quick-phrase-bubble { position: absolute; z-index: 8; left: 50%; bottom: calc(100% + 0.3rem); transform: translateX(-50%); width: max-content; max-width: min(12rem, 70vw); padding: 0.35rem 0.55rem; border-radius: 0.7rem 0.7rem 0.7rem 0.15rem; background: rgba(248, 250, 252, 0.96); color: #0f172a; box-shadow: 0 5px 16px rgba(2, 6, 23, 0.35); font-size: max(0.75rem, 12px); font-weight: 750; pointer-events: none; }
+.kan-count-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.28rem; border: 1px solid rgba(167, 139, 250, 0.58); border-radius: 0.45rem; display: inline-grid; place-items: center; color: #ddd6fe; background: rgba(76, 29, 149, 0.26); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
+.current-listening-waits { min-width: 0; max-width: min(42vw, 24rem); display: flex; align-items: center; gap: 0.22rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.current-listening-waits::-webkit-scrollbar { display: none; }
+.current-listening-label { flex: 0 0 auto; color: #a7f3d0; font-weight: 900; }
+.current-listening-card { position: relative; flex: 0 0 auto; display: inline-flex; }
+.current-listening-card :deep(.card) { width: 1.35rem; height: 2.2rem; font-size: 0.78rem; }
+.current-listening-card.exhausted :deep(.card) { filter: grayscale(1); opacity: 0.48; }
+.current-listening-card.exhausted .wait-count-badge { background: #475569; color: #e2e8f0; }
+.player-left .seat-identity,
+.player-right .seat-identity { flex-wrap: wrap; align-content: flex-start; }
+.player-left .seat-identity > strong,
+.player-right .seat-identity > strong { flex: 1 1 4.5rem; width: auto; }
 .turn-countdown, .self-turn-timer { display: none; }
-.board.board-declaring { grid-template-rows: minmax(0, 1fr) auto; }
-.board-declaring .self-info-card { display: none; }
-.declaring-hand { grid-column: 1 / -1; grid-row: 2; }
+.board {
+  height: auto;
+  align-self: stretch;
+  grid-template-rows: minmax(0, 1fr) clamp(3rem, 8vh, 3.5rem) clamp(7rem, 21vh, 10rem);
+}
+.table { grid-row: 1; }
+.self-info-card {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  padding-block: 0.2rem;
+  border-radius: 0.55rem 0 0 0.55rem;
+  overflow: hidden;
+}
+.self-info-card .self-head { width: 100%; }
+.self-info-card .self-info-hint,
+.self-info-card .seat-tags { display: none; }
+.self-info-card .seat-identity { display: flex; flex-wrap: nowrap; }
+.self-info-card .seat-identity > h3 { flex: 1 1 auto; width: auto; }
+.self-hand-card { display: contents; }
+.self-hand-card > .decision-status {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0.2rem 0.45rem;
+  background: rgba(11, 18, 32, 0.88);
+  border-block: 1px solid #1e293b;
+}
+.self-hand-card > .self-hand-panel {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(0.2rem, 0.65vh, 0.42rem);
+  border: 1px solid #1e293b;
+  border-radius: 0.65rem;
+  background: rgba(11, 18, 32, 0.92);
+  overflow: hidden;
+}
+.self-hand-card > :deep(.declare-mask) {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.selected-card-preview { right: clamp(0.3rem, 2vw, 1rem); bottom: calc(clamp(7rem, 21vh, 10rem) + clamp(3rem, 8vh, 3.5rem) + 0.25rem); }
+.action-dock {
+  grid-column: 3;
+  grid-row: 2;
+  min-height: 0;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0 0.55rem 0.55rem 0;
+}
+.embedded-actions :deep(.action-row) { flex-wrap: nowrap; }
+.embedded-actions :deep(.btn) { flex: 1 1 0; min-width: 2.65rem; }
+.board.board-declaring { grid-template-rows: minmax(0, 1fr) clamp(3rem, 8vh, 3.5rem) clamp(7rem, 21vh, 10rem); }
+.board-declaring .self-info-card { display: flex; }
 .declaring-hand .self-hand-panel { flex-shrink: 0; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board,
+  .board.board-declaring,
+  .board.crowded-action-dock {
+    grid-template-columns: clamp(13.5rem, calc(var(--effective-vw, 1vw) * 34), 14rem) minmax(0, 1fr) clamp(10rem, calc(var(--effective-vw, 1vw) * 29), 12rem);
+    grid-template-rows: minmax(0, 1fr) 3rem clamp(5.8rem, calc(var(--effective-vh, 1vh) * 23), 7.2rem);
+  }
+  .self-info-card .seat-identity > h3 { display: none; }
+  .self-info-card .seat-identity-meta { width: auto; justify-content: flex-start; }
+  .seat-identity-meta { gap: 0.12rem; }
+  .hand-count-badge,
+  .kan-count-badge,
+  .group-score-badge {
+    min-height: 1.3rem;
+    padding: 0.08rem 0.22rem;
+    border-radius: 0.35rem;
+    font-size: max(0.75rem, 13px);
+  }
+  :deep(.player-status-icon) {
+    width: 1.3rem;
+    height: 1.3rem;
+    flex-basis: 1.3rem;
+    border-radius: 0.35rem;
+  }
+  :deep(.player-status-icon svg) { width: 0.9rem; height: 0.9rem; }
+  .table { grid-template-columns: minmax(0, 28%) minmax(0, 1fr) minmax(0, 28%); }
+  .selected-card-preview { bottom: calc(clamp(5.8rem, calc(var(--effective-vh, 1vh) * 23), 7.2rem) + 3.25rem); }
+}
 .fixed-clock.urgent { color: #fff1f2; background: #9f1239; border-radius: 5px; font-weight: 800; }
 </style>

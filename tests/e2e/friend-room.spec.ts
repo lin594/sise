@@ -306,11 +306,11 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     const guestSeatOnHost = host.locator(
       `[data-testid^='player-'][data-player-id='${guestIdentity.seatId}']`,
     );
-    await expect(host.locator(".player-card .tag.status").filter({ hasText: /^机器人$/ })).toHaveCount(2);
-    await expect(host.locator(".player-card .bot-seat-badge")).toHaveCount(2);
+    const configuredBotIcons = host.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']");
+    await expect(configuredBotIcons).toHaveCount(2);
     const botNames = await host.locator(".player-card .seat-identity strong").evaluateAll((elements) =>
       elements
-        .filter((element) => element.parentElement?.querySelector(".bot-seat-badge"))
+        .filter((element) => element.parentElement?.querySelector("[data-testid='player-status-icon'][data-status-kind='computer']"))
         .map((element) => element.textContent?.trim() ?? ""),
     );
     expect(new Set(botNames).size).toBe(2);
@@ -318,8 +318,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
 
     await guest.close();
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);
-    await expect(guestSeatOnHost.locator(".tag.status.temporary-control")).toBeVisible();
-    await expect(guestSeatOnHost.locator(".tag.status.temporary-control")).toHaveText("托管中");
+    await expect(guestSeatOnHost.locator("[data-testid='player-status-icon'][data-status-kind='takeover']")).toBeVisible();
     await expect(guestSeatOnHost).not.toContainText("[BOT]");
     await host.screenshot({ path: testInfo.outputPath("friend-temporary-bot-control.png") });
 
@@ -330,7 +329,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）");
     await expect(restoredGuest.getByTestId("player-self").locator(".self-seat-badge")).toHaveText("你");
     await host.setViewportSize({ width: 1280, height: 720 });
-    await expect(guestSeatOnHost).toContainText("真人在线");
+    await expect(guestSeatOnHost).toHaveAccessibleName(/真人在线/);
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);
     await restoredGuest.screenshot({ path: testInfo.outputPath("friend-seat-restored.png") });
   } finally {

@@ -243,6 +243,7 @@ export function applyCollectivePollState(
   state.previousPlayerId = previousPlayerId;
   state.loopStage = "global_poll";
   state.activeResponderId = "";
+  state.pendingReceiverId = "";
   state.pollOriginPlayerId = pollOriginPlayerId;
   state.responseEndsAt = 0;
   state.lastAction = lastAction;
@@ -267,6 +268,7 @@ export function applyPlayingStartAfterDeclaring(
   state.previousPlayerId = previousPlayerId;
   state.loopStage = "transition";
   state.activeResponderId = "";
+  state.pendingReceiverId = "";
   state.pollOriginPlayerId = "";
   state.responseEndsAt = 0;
   state.lastAction = `DEALER ${dealerId}`;

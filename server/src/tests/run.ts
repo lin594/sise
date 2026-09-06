@@ -7,6 +7,7 @@ import {
   buildDeclarationSelection,
   buildDefaultDeclarationPayload,
   buildRoundResultPlayers,
+  calculateVisibleGroupScore,
   canReturnLobby,
   chooseBotDisplayName,
   dealInitialHands,
@@ -330,6 +331,24 @@ t("bot-strategy: hu still outranks mandatory special-card chi", () => {
     ],
   });
   assert.equal(decision.action, "hu");
+});
+
+t("bot-strategy: every strength grabs a duplicate instead of breaking a completed ju-ma-pao group", () => {
+  const hand = [c("red-ju", "red", "ju"), c("red-ma", "red", "ma"), c("red-pao", "red", "pao")];
+  for (const strength of [0, 25, 50, 75, 100]) {
+    const decision = chooseBotAction({
+      hand,
+      pendingCard: c("incoming-red-ju", "red", "ju", "upper"),
+      visibleCards: [],
+      strength,
+      random: () => 0.999999,
+      actions: [
+        { action: "chi", enabled: true, candidates: [{ id: "break-group", action: "chi", kind: "frame", cardIds: ["red-ma", "red-pao"], source: "hand", title: "吃" }] },
+        { action: "pass", enabled: true },
+      ],
+    });
+    assert.equal(decision.action, "pass");
+  }
 });
 
 t("bot-strategy: seeded discard decisions are reproducible", () => {
@@ -1073,10 +1092,24 @@ t("round_result: winner response triplet from two hand cards scores as peng not 
   assert.ok(winner);
   assert.ok(loser);
   assert.equal(winner!.winningGroups.some((group) => group.key === "Peng"), true);
+  assert.equal(winner!.winningGroups.find((group) => group.key === "Peng")?.cards[0]?.id, "wx3");
   assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Peng") && item.label === "白象碰" && item.unit === 1), true);
   assert.equal(winner!.scoreBreakdown.some((item) => item.key.startsWith("HuWin:Triplet")), false);
   assert.equal(winner!.totalScore, 12);
   assert.equal(loser!.totalScore, -4);
+});
+
+t("public state: visible group base score is derived by the server", () => {
+  const state = new GameState();
+  const player = new PlayerState();
+  player.clientId = "A";
+  state.players.set("A", player);
+  const ops = createRoomStateOps(state, new Map([["A", []]]), () => null);
+  [c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju")]
+    .forEach((card) => player.exposedArea.push(ops.toSchemaCard(card, false, "upper")));
+  player.exposedGroupSizes.push(3);
+  player.exposedGroupKinds.push("peng");
+  assert.equal(calculateVisibleGroupScore(player), 1);
 });
 
 function mkRoom(seats: string[]) {
@@ -1606,13 +1639,16 @@ t("room: human collective peng with candidateId is accepted", () => {
     .find((item: any) => item.action === "peng")
     ?.candidates?.[0]?.id;
   assert.ok(candidateId);
+  let resolved = false;
+  room.resolveCollectivePhase = () => { resolved = true; };
 
   room.handleAction(client, { action: "peng", candidateId });
 
   assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "peng", candidateId });
+  assert.equal(resolved, true);
 });
 
-t("room: later human may preselect without advancing or cancelling the current responder", () => {
+t("room: later human interrupt resolves immediately when nobody can outrank it", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.playerHands.set("B", [c("b1", "yellow", "ma")]);
   room.playerHands.set("C", [c("c1", "red", "ju"), c("c2", "red", "ju")]);
@@ -1631,16 +1667,14 @@ t("room: later human may preselect without advancing or cancelling the current r
   room.seatBySession.set("sessC", "C");
   let timerClearCount = 0;
   let advanceCount = 0;
-  let broadcastCount = 0;
+  let resolved = false;
   room.clearCollectiveTimer = () => {
     timerClearCount += 1;
   };
   room.advanceCollectivePolling = () => {
     advanceCount += 1;
   };
-  room.broadcastAvailableActions = () => {
-    broadcastCount += 1;
-  };
+  room.resolveCollectivePhase = () => { resolved = true; };
 
   const earlyActions = room.getAvailableActions("C");
   const candidateId = earlyActions
@@ -1653,11 +1687,11 @@ t("room: later human may preselect without advancing or cancelling the current r
   room.handleAction({ sessionId: "sessC", send: () => {} }, { action: "peng", candidateId });
 
   assert.deepEqual(room.pendingResponse.collectives.get("C"), { action: "peng", candidateId });
-  assert.equal(room.collectiveResponderId, "B");
+  assert.equal(room.collectiveResponderId, null);
   assert.equal(room.collectiveCursor, 0);
-  assert.equal(timerClearCount, 0);
+  assert.equal(timerClearCount, 1);
   assert.equal(advanceCount, 0);
-  assert.equal(broadcastCount, 1);
+  assert.equal(resolved, true);
   assert.equal(room.getAvailableActions("C").some((item: any) => item.enabled || item.deferred), false);
 });
 

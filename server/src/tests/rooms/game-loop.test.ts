@@ -67,7 +67,7 @@ test("entering discard after a collective meld restores the winner as the displa
   }
 });
 
-test("online human forced pass keeps the fairness window without exposing a Pass control", async () => {
+test("all human forced passes share one fairness window without exposing Pass controls", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.humanForcedPassDelayMs = 40;
   room.pendingResponse = {
@@ -76,8 +76,10 @@ test("online human forced pass keeps the fairness window without exposing a Pass
     collectives: new Map(),
   };
   room.state.responsePhase = "collective";
-  room.collectiveQueue = ["B"];
+  room.collectiveQueue = ["B", "C", "D", "A"];
   room.collectiveCursor = 0;
+  room.collectiveGlobalPrivacyEndsAt = Date.now() + 40;
+  for (const seat of ["B", "C", "D"]) room.state.players.get(seat).connected = true;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
   room.resolveCollectivePhase = () => {
@@ -105,7 +107,7 @@ test("online human forced pass keeps the fairness window without exposing a Pass
   assert.equal(resolved, false);
   await new Promise((resolve) => setTimeout(resolve, 45));
   assert.equal(resolved, true);
-  assert.equal(room.collectiveCursor, 1);
+  assert.equal(room.collectiveCursor, 4);
   assert.equal(room.state.lastAction, "B PASS");
 });
 
@@ -139,7 +141,7 @@ test("response privacy protects a human draw but never delays their own discard"
   assert.equal(resolved, true);
 });
 
-test("a private preselection cannot make a human responder vanish instantly", async () => {
+test("a private non-pass preselection may resolve immediately when nobody can outrank it", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.humanForcedPassDelayMs = 35;
   room.pendingResponse = {
@@ -156,11 +158,7 @@ test("a private preselection cannot make a human responder vanish instantly", as
   };
 
   room.advanceCollectivePolling();
-  assert.equal(room.collectiveResponderId, "B");
-  assert.equal(room.collectiveCursor, 0);
-  assert.equal(resolved, false);
-  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(room.collectiveResponderId, null);
   assert.equal(room.collectiveCursor, 1);
   assert.equal(resolved, true);
 });
@@ -182,6 +180,8 @@ test("an active human choice is held until the collective privacy floor", async 
   room.state.responsePhase = "collective";
   room.collectiveQueue = ["B"];
   room.collectiveCursor = 0;
+  room.collectiveGlobalPrivacyEndsAt = Date.now() + 40;
+  room.state.players.get("B").connected = true;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
   room.resolveCollectivePhase = () => {
@@ -199,6 +199,48 @@ test("an active human choice is held until the collective privacy floor", async 
   assert.equal(resolved, false);
   await new Promise((resolve) => setTimeout(resolve, 45));
   assert.equal(resolved, true);
+});
+
+test("a non-pass interrupt is not held by the privacy floor when nobody can outrank it", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands = new Map([["B", [
+    mkCard("peng-1", "red", "ju", "upper"),
+    mkCard("peng-2", "red", "ju", "upper"),
+  ]]]);
+  room.pendingResponse = { ownerId: "A", card: mkCard("target", "red", "ju", "upper"), collectives: new Map() };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.collectiveGlobalPrivacyEndsAt = Date.now() + 3_000;
+  room.seatBySession.set("session-B", "B");
+  let resolved = false;
+  room.resolveCollectivePhase = () => { resolved = true; };
+  const candidateId = room.getAvailableActions("B").find((item: any) => item.action === "peng")?.candidates?.[0]?.id;
+  room.handleAction({ sessionId: "session-B", send: () => {} }, { action: "peng", candidateId });
+  assert.equal(resolved, true);
+});
+
+test("a submitted peng waits only for an earlier or higher-priority capable responder", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands = new Map([
+    ["B", [mkCard("b1", "red", "ju", "upper"), mkCard("b2", "red", "ju", "upper")]],
+    ["C", [mkCard("c1", "red", "ju", "upper"), mkCard("c2", "red", "ju", "upper")]],
+  ]);
+  room.pendingResponse = { ownerId: "A", card: mkCard("target", "red", "ju", "upper"), collectives: new Map() };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.collectiveGlobalPrivacyEndsAt = Date.now() + 3_000;
+  room.seatBySession.set("session-B", "B");
+  let resolved = false;
+  room.resolveCollectivePhase = () => { resolved = true; };
+  const candidateId = room.getAvailableActions("B").find((item: any) => item.action === "peng")?.candidates?.[0]?.id;
+  room.handleAction({ sessionId: "session-B", send: () => {} }, { action: "peng", candidateId });
+  assert.equal(resolved, false);
+  assert.equal(room.collectiveResponderId, "C");
+  room.clearCollectiveTimer();
 });
 
 test("a collective responder with a meaningful choice still receives Pass", () => {

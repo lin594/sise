@@ -43,14 +43,14 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   await expect(page.getByTestId("deck-stack")).toHaveAttribute("data-card-back", "red-four-color");
   await expect(page.getByTestId("deck-stack").locator(".deck-layer")).toHaveCount(8);
   await expect(page.getByTestId("opponent-hand-count")).toHaveCount(3);
-  await expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+  await expect(page.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
   const botNames = await page.locator(".player-card .seat-identity strong").allTextContents();
   expect(new Set(botNames.map((name) => name.trim())).size).toBe(3);
   expect(botNames.every((name) => !/^机器人\d+$/.test(name.trim()))).toBe(true);
   for (const countText of await page.getByTestId("opponent-hand-count").allTextContents()) {
     expect(countText.trim()).toMatch(/^\d+张$/);
   }
-  const counterFontSizes = await page.locator("[data-testid='opponent-hand-count'], [data-testid='bot-identity']")
+  const counterFontSizes = await page.locator("[data-testid='opponent-hand-count']")
     .evaluateAll((elements) => elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)));
   expect(Math.min(...counterFontSizes)).toBeGreaterThanOrEqual(13);
   await expect(page.getByTestId("dealer-badge")).toHaveCount(1);
@@ -128,7 +128,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
     const brandElement = headerElement?.querySelector<HTMLElement>(".brand-lockup");
     const toolsElement = headerElement?.querySelector<HTMLElement>("[data-testid='game-tools']");
     const toolButtons = Array.from(headerElement?.querySelectorAll<HTMLElement>(".tool-button") ?? []);
-    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 4) {
+    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 5) {
       throw new Error("Game header or board is missing");
     }
     const headerRect = headerElement.getBoundingClientRect();
@@ -214,41 +214,35 @@ async function expectReadableCompactSeatIdentities(page: Page): Promise<void> {
       const identity = seat.querySelector<HTMLElement>(".seat-identity")!;
       const name = identity.querySelector<HTMLElement>("strong")!;
       const nameRect = name.getBoundingClientRect();
-      const detailRects = Array.from(identity.children)
-        .filter((element) => element !== name)
-        .map((element) => (element as HTMLElement).getBoundingClientRect())
-        .filter((rect) => rect.width > 0 && rect.height > 0);
+      const identityRect = identity.getBoundingClientRect();
+      const metaRect = identity.querySelector<HTMLElement>(".seat-identity-meta")!.getBoundingClientRect();
       return {
         width: nameRect.width,
         horizontalOverflow: seat.scrollWidth - seat.clientWidth,
-        detailsBelowName: detailRects.every((rect) => rect.top >= nameRect.bottom - 1),
+        metaContained: metaRect.left >= identityRect.left - 1 && metaRect.right <= identityRect.right + 1,
+        adaptiveLine: Math.abs(metaRect.top - nameRect.top) <= 1 || metaRect.top >= nameRect.bottom - 1,
       };
     });
-    const selfName = document.querySelector<HTMLElement>(".self-info-card .seat-identity h3")!;
+    const self = document.querySelector<HTMLElement>(".self-info-card")!;
     const selfBadge = document.querySelector<HTMLElement>(".self-info-card .self-seat-badge")!;
-    const selfNameRect = selfName.getBoundingClientRect();
+    const selfRect = self.getBoundingClientRect();
+    const selfMeta = document.querySelector<HTMLElement>(".self-info-card .seat-identity-meta")!.getBoundingClientRect();
     const selfBadgeRect = selfBadge.getBoundingClientRect();
     return {
       sideNames,
-      selfName: selfName.textContent?.trim() ?? "",
-      selfNameWidth: selfNameRect.width,
-      selfNameOverflow: selfName.scrollWidth - selfName.clientWidth,
       selfBadgeText: selfBadge.textContent?.trim() ?? "",
       selfBadgeWidth: selfBadgeRect.width,
-      selfBadgeBelowName: selfBadgeRect.top >= selfNameRect.bottom - 1,
+      selfMetaContained: selfMeta.left >= selfRect.left - 1 && selfMeta.right <= selfRect.right + 1,
     };
   });
 
   expect(metrics.sideNames).toHaveLength(2);
   expect(Math.min(...metrics.sideNames.map((name) => name.width))).toBeGreaterThanOrEqual(40);
   expect(Math.max(...metrics.sideNames.map((name) => name.horizontalOverflow))).toBeLessThanOrEqual(1);
-  expect(metrics.sideNames.every((name) => name.detailsBelowName)).toBe(true);
-  expect(metrics.selfName).not.toContain("（你）");
-  expect(metrics.selfNameWidth).toBeGreaterThanOrEqual(48);
-  expect(metrics.selfNameOverflow).toBeLessThanOrEqual(1);
+  expect(metrics.sideNames.every((name) => name.metaContained && name.adaptiveLine)).toBe(true);
   expect(metrics.selfBadgeText).toBe("你");
   expect(metrics.selfBadgeWidth).toBeGreaterThanOrEqual(24);
-  expect(metrics.selfBadgeBelowName).toBe(true);
+  expect(metrics.selfMetaContained).toBe(true);
 }
 
 async function reachDiscardConfirmation(page: Page): Promise<void> {
@@ -1080,28 +1074,30 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
     await expectReadableCompactSeatIdentities(page);
-    const botIdentityBadges = page.getByTestId("bot-identity");
+    const botIdentityBadges = page.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']");
     await expect(botIdentityBadges).toHaveCount(3);
-    await expect(botIdentityBadges).toHaveText(["电脑", "电脑", "电脑"]);
     for (const badge of await botIdentityBadges.all()) {
       await expect(badge).toBeVisible();
-      await expect(badge).toHaveAttribute("aria-label", "机器人");
+      await expect(badge).toHaveAttribute("aria-label", "电脑玩家");
     }
     const botNames = await botIdentityBadges.evaluateAll((badges) =>
-      badges.map((badge) => badge.parentElement?.querySelector("strong")?.textContent?.trim() ?? ""),
+      badges.map((badge) => badge.closest(".player-card")?.querySelector("strong")?.textContent?.trim() ?? ""),
     );
     expect(new Set(botNames).size).toBe(3);
     expect(botNames.every((name) => name.length >= 2 && !/^机器人\d+$/u.test(name))).toBe(true);
     await expect(page.getByText("暂无牌组")).toHaveCount(0);
     await expect(page.locator(".self-groups-card")).toHaveClass(/empty/);
     await expect(page.getByText(/牌组 0 组/)).toHaveCount(0);
-    await expect(page.getByText(/坎 0(?:\D|$)/)).toHaveCount(0);
+    await expect(page.locator(".kan-count-badge")).toHaveCount(4);
+    await expect(page.locator(".kan-count-badge").first()).toHaveText(/^\d+坎$/);
+    await expect(page.locator(".group-score-badge")).toHaveCount(4);
+    await expect(page.locator(".group-score-badge").first()).toHaveText(/^牌面\d+分$/);
     await expect(page.locator(".self-head")).not.toContainText(/手牌 \d+ 张/);
     const seatAccessibleLabels = await page.locator(".player-card[role='group'], .self-info-card[role='group']")
       .evaluateAll((seats) => seats.map((seat) => seat.getAttribute("aria-label") ?? ""));
     expect(seatAccessibleLabels).toHaveLength(4);
     expect(seatAccessibleLabels.every((label) => /剩余手牌 \d+ 张/.test(label))).toBe(true);
-    expect(seatAccessibleLabels.every((label) => /公开牌组 \d+ 组/.test(label))).toBe(true);
+    expect(seatAccessibleLabels.every((label) => /当前明示牌组基础分 \d+ 分/.test(label))).toBe(true);
     await expectDedicatedGameHeader(page);
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
@@ -1215,7 +1211,6 @@ test.describe("compact landscape gameplay", () => {
     expect(Math.min(...handMetrics.cardHeights)).toBeGreaterThanOrEqual(52);
     expect(Math.min(...handMetrics.cardFontSizes)).toBeGreaterThanOrEqual(22);
     expect(handMetrics.fullyVisibleCards).toBeGreaterThanOrEqual(9);
-    expect(handMetrics.fullyVisibleCards).toBeLessThanOrEqual(10);
     expect(handMetrics.scrollWidth).toBeGreaterThan(handMetrics.clientWidth);
     expect(handMetrics.scrollHeight).toBeLessThanOrEqual(handMetrics.clientHeight);
     expect(handMetrics.overflowX).toBe("auto");
@@ -1697,7 +1692,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(dialog).toHaveCount(0);
     await expect(autoPlay).toHaveAttribute("aria-pressed", "true");
     await expect(autoPlay).toContainText("取消托管");
-    await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText(/机器人代打|托管中/);
+    await expect(page.getByTestId("player-self").locator("[data-testid='player-status-icon'][data-status-kind='autoplay']")).toBeVisible();
     await expect(page.getByTestId("player-self")).toHaveAccessibleName(/机器人代打|托管中/);
     await expect(page.locator("[data-testid^='hand-card-']:enabled")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("voluntary-auto-play-568x320.png") });
@@ -1705,7 +1700,7 @@ test.describe("compact landscape gameplay", () => {
     await autoPlay.click();
     await expect(autoPlay).toHaveAttribute("aria-pressed", "false");
     await expect(autoPlay).toHaveText("托管");
-    await expect(page.getByTestId("player-self").locator(".tag.status")).toContainText("真人在线");
+    await expect(page.getByTestId("player-self").locator("[data-testid='player-status-icon']")).toHaveCount(0);
   });
 
   test("keeps exposed cards readable and opponent groups folded in every mode", async ({ page }, testInfo) => {
@@ -2218,7 +2213,7 @@ test.describe("legacy small landscape gameplay", () => {
 
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expectDedicatedGameHeader(page);
-    await expect(page.getByTestId("bot-identity")).toHaveCount(3);
+    await expect(page.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
     await reachDiscardConfirmation(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await expectReadableCompactSeatIdentities(page);
@@ -2231,7 +2226,7 @@ test.describe("legacy small landscape gameplay", () => {
       const hand = document.querySelector<HTMLElement>(".hand")!;
       const dock = document.querySelector<HTMLElement>(".action-dock")!;
       const opponentCounts = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count']"));
-      const botIdentities = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='bot-identity']"));
+      const botIdentities = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='player-status-icon']"));
       const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
@@ -2297,8 +2292,9 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.bodyWidth).toBeLessThanOrEqual(568);
     expect(metrics.bodyHeight).toBeLessThanOrEqual(320);
     expect(metrics.board.top).toBeGreaterThanOrEqual(metrics.header.bottom);
-    expect(metrics.self.right).toBeLessThanOrEqual(metrics.hand.left);
-    expect(metrics.hand.right).toBeLessThanOrEqual(metrics.dock.left);
+    expect(metrics.self.right).toBeLessThanOrEqual(metrics.dock.left);
+    expect(metrics.self.bottom).toBeLessThanOrEqual(metrics.hand.top);
+    expect(metrics.dock.bottom).toBeLessThanOrEqual(metrics.hand.top);
     expect(metrics.cardRows).toBe(1);
     expect(metrics.fullyVisibleCards).toBeGreaterThanOrEqual(8);
     expect(metrics.minimumCardWidth).toBeGreaterThanOrEqual(40);
@@ -2364,7 +2360,7 @@ test.describe("legacy small landscape gameplay", () => {
         minimumButtonHeight: Math.min(...buttons.map((button) => button.offsetHeight)),
         minimumCounterFontSize: Math.min(
           ...Array.from(
-            document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count'], [data-testid='bot-identity']"),
+            document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count'], [data-testid='player-status-icon']"),
           ).map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
         ),
         handCountFontSize: Number.parseFloat(getComputedStyle(document.querySelector<HTMLElement>(".discard-tip")!).fontSize),

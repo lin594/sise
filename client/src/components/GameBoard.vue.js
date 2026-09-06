@@ -1,6 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
+import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 import { getRoundKey, isQuietSelfDiscardWait, projectResponseCardPlacement, } from "@/utils/gameFlowPresentation";
 const props = defineProps();
@@ -591,7 +592,8 @@ function isActiveDiscardCard(playerId, card, index) {
 }
 const displayTurnPlayerId = computed(() => {
     if (props.state?.responsePhase === "collective") {
-        return (props.state?.currentTurnPlayerId ||
+        return (props.state?.pendingReceiverId ||
+            props.state?.currentTurnPlayerId ||
             props.state?.currentPlayerId ||
             props.state?.pollOriginPlayerId ||
             "");
@@ -747,14 +749,6 @@ const latestSeatAction = computed(() => {
     }
     return { actorId: actor, label };
 });
-const moreTimePendingUntil = ref(0);
-function requestFixedMoreTime() {
-    if (nowMs.value < moreTimePendingUntil.value)
-        return;
-    moreTimePendingUntil.value = nowMs.value + 2500;
-    emit('requestMoreTime');
-}
-watch(() => props.decisionKey, () => { moreTimePendingUntil.value = 0; });
 const fixedStatusText = computed(() => {
     if (effectiveInteractionPausedMessage.value)
         return effectiveInteractionPausedMessage.value;
@@ -779,6 +773,10 @@ const activeHints = computed(() => {
     const hints = props.listeningHints;
     return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
+const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
+const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
+    .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
+    .join("；")}`);
 const markedListeningRoutes = computed(() => {
     if (selectedChiCandidate.value)
         return activeHints.value?.chi.find((item) => item.candidateId === selectedChiCandidate.value?.id)?.discards ?? [];
@@ -876,9 +874,6 @@ const compactCenterHint = computed(() => {
 });
 const crowdedActionDock = computed(() => canAct.value && (props.actions ?? []).filter((action) => action.enabled || Boolean(action.deferred)).length >= 4);
 const centerPointerDirection = computed(() => {
-    if (String(props.state?.responsePhase ?? "") === "collective") {
-        return null;
-    }
     const currentId = String(displayTurnPlayerId.value || "");
     if (!currentId) {
         return null;
@@ -922,8 +917,8 @@ function showDealerSeatMarker(playerId) {
     return dealerSeatMarkerReady.value && isDealer(playerId) && Boolean(dealerInfoCard.value);
 }
 function isCollectiveResponder(playerId) {
-    void playerId;
-    return false;
+    return String(props.state?.responsePhase ?? "") === "collective" &&
+        String(props.state?.pendingReceiverId ?? "") === playerId;
 }
 function seatActionText(playerId) {
     return latestSeatAction.value?.actorId === playerId ? latestSeatAction.value.label : "";
@@ -949,22 +944,20 @@ function statusText(player) {
     }
     return player.connected ? "真人在线" : "真人离线";
 }
-function seatMetaText(groupCount, declaredKongs) {
-    const parts = [];
-    if (groupCount > 0) {
-        parts.push(`牌组 ${groupCount} 组`);
-    }
-    if (declaredKongs > 0) {
-        parts.push(`坎 ${declaredKongs}`);
-    }
-    return parts.join(" · ");
+function statusIconProps(player) {
+    return {
+        isConfiguredBot: player.isConfiguredBot,
+        isAutoPlay: player.isAutoPlay,
+        isBot: player.isBot,
+        connected: player.connected,
+    };
 }
-function playerAccessibleSummary(player, groupCount) {
+function playerAccessibleSummary(player, _groupCount) {
     const parts = [
         player.clientId === props.mySeatId ? `${player.name}，你的位置` : player.name,
         `剩余手牌 ${playerHandCount(player)} 张`,
-        `公开牌组 ${groupCount} 组`,
-        `坎 ${Number(player.declaredKongs ?? 0)} 组`,
+        `已声明暗坎 ${player.declaredKongs} 个`,
+        `当前明示牌组基础分 ${player.visibleGroupScore} 分`,
         statusText(player),
     ];
     if (isDealer(player.clientId)) {
@@ -2187,13 +2180,74 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
 /** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
+/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['board-declaring']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['declaring-hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board-declaring']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
@@ -2266,6 +2320,13 @@ if (__VLS_ctx.topPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.topPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.topPlayer.clientId) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "quick-phrase-bubble" },
+            role: "status",
+        });
+        (__VLS_ctx.quickPhrase.text);
+    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow" },
@@ -2280,20 +2341,34 @@ if (__VLS_ctx.topPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.topPlayer.name);
-    if (__VLS_ctx.topPlayer.isConfiguredBot) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "bot-seat-badge" },
-            'data-testid': "bot-identity",
-            'aria-label': "机器人",
-            title: "机器人",
-        });
-    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "seat-identity-meta" },
+    });
+    /** @type {[typeof PlayerStatusIcon, ]} */ ;
+    // @ts-ignore
+    const __VLS_3 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.topPlayer)),
+    }));
+    const __VLS_4 = __VLS_3({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.topPlayer)),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_3));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
         'data-player-id': (__VLS_ctx.topPlayer.clientId),
     });
     (__VLS_ctx.playerHandCount(__VLS_ctx.topPlayer));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "kan-count-badge" },
+        'aria-label': (`开局声明暗坎 ${__VLS_ctx.topPlayer.declaredKongs} 个`),
+    });
+    (__VLS_ctx.topPlayer.declaredKongs);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "group-score-badge" },
+        ...{ class: ({ positive: __VLS_ctx.topPlayer.visibleGroupScore > 0 }) },
+        'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.topPlayer.visibleGroupScore} 分`),
+    });
+    (__VLS_ctx.topPlayer.visibleGroupScore);
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -2309,16 +2384,16 @@ if (__VLS_ctx.topPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_3 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_4 = __VLS_3({
+            const __VLS_7 = __VLS_6({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_6));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2334,17 +2409,6 @@ if (__VLS_ctx.topPlayer) {
             ...{ class: "turn-countdown" },
         });
         (__VLS_ctx.seatCountdownSeconds);
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "tag status" },
-        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.topPlayer) }) },
-    });
-    (__VLS_ctx.statusText(__VLS_ctx.topPlayer));
-    if (__VLS_ctx.seatMetaText(__VLS_ctx.topGroupBlocks.length, __VLS_ctx.topPlayer.declaredKongs)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "seat-meta" },
-        });
-        (__VLS_ctx.seatMetaText(__VLS_ctx.topGroupBlocks.length, __VLS_ctx.topPlayer.declaredKongs));
     }
     if (__VLS_ctx.topGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2369,7 +2433,7 @@ if (__VLS_ctx.topPlayer) {
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`top-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2378,7 +2442,7 @@ if (__VLS_ctx.topPlayer) {
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
                 }));
-                const __VLS_7 = __VLS_6({
+                const __VLS_10 = __VLS_9({
                     key: (`top-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2386,7 +2450,7 @@ if (__VLS_ctx.topPlayer) {
                     size: "xs",
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_6));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_9));
             }
         }
     }
@@ -2409,7 +2473,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-top-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2419,7 +2483,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_10 = __VLS_9({
+        const __VLS_13 = __VLS_12({
             key: (`flow-top-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2428,7 +2492,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     }
 }
 if (__VLS_ctx.leftPlayer) {
@@ -2445,6 +2509,13 @@ if (__VLS_ctx.leftPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.leftPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.leftPlayer.clientId) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "quick-phrase-bubble" },
+            role: "status",
+        });
+        (__VLS_ctx.quickPhrase.text);
+    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow turn-arrow-side" },
@@ -2459,20 +2530,34 @@ if (__VLS_ctx.leftPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.leftPlayer.name);
-    if (__VLS_ctx.leftPlayer.isConfiguredBot) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "bot-seat-badge" },
-            'data-testid': "bot-identity",
-            'aria-label': "机器人",
-            title: "机器人",
-        });
-    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "seat-identity-meta" },
+    });
+    /** @type {[typeof PlayerStatusIcon, ]} */ ;
+    // @ts-ignore
+    const __VLS_15 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.leftPlayer)),
+    }));
+    const __VLS_16 = __VLS_15({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.leftPlayer)),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_15));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
         'data-player-id': (__VLS_ctx.leftPlayer.clientId),
     });
     (__VLS_ctx.playerHandCount(__VLS_ctx.leftPlayer));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "kan-count-badge" },
+        'aria-label': (`开局声明暗坎 ${__VLS_ctx.leftPlayer.declaredKongs} 个`),
+    });
+    (__VLS_ctx.leftPlayer.declaredKongs);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "group-score-badge" },
+        ...{ class: ({ positive: __VLS_ctx.leftPlayer.visibleGroupScore > 0 }) },
+        'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.leftPlayer.visibleGroupScore} 分`),
+    });
+    (__VLS_ctx.leftPlayer.visibleGroupScore);
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -2488,16 +2573,16 @@ if (__VLS_ctx.leftPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_13 = __VLS_12({
+            const __VLS_19 = __VLS_18({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2513,17 +2598,6 @@ if (__VLS_ctx.leftPlayer) {
             ...{ class: "turn-countdown" },
         });
         (__VLS_ctx.seatCountdownSeconds);
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "tag status" },
-        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.leftPlayer) }) },
-    });
-    (__VLS_ctx.statusText(__VLS_ctx.leftPlayer));
-    if (__VLS_ctx.seatMetaText(__VLS_ctx.leftGroupBlocks.length, __VLS_ctx.leftPlayer.declaredKongs)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "seat-meta" },
-        });
-        (__VLS_ctx.seatMetaText(__VLS_ctx.leftGroupBlocks.length, __VLS_ctx.leftPlayer.declaredKongs));
     }
     if (__VLS_ctx.leftGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2548,7 +2622,7 @@ if (__VLS_ctx.leftPlayer) {
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`left-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2557,7 +2631,7 @@ if (__VLS_ctx.leftPlayer) {
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
                 }));
-                const __VLS_16 = __VLS_15({
+                const __VLS_22 = __VLS_21({
                     key: (`left-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2565,7 +2639,7 @@ if (__VLS_ctx.leftPlayer) {
                     size: "xs",
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_15));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_21));
             }
         }
     }
@@ -2654,20 +2728,20 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
     (__VLS_ctx.showCollectiveCountdown ? `全局响应 · ${__VLS_ctx.seatCountdownSeconds}s` : "待响");
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
-    const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+    const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
         key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
         mode: (props.tableCardMode),
         size: "lg",
         ...{ class: "response-card-face" },
     }));
-    const __VLS_19 = __VLS_18({
+    const __VLS_25 = __VLS_24({
         key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
         mode: (props.tableCardMode),
         size: "lg",
         ...{ class: "response-card-face" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
 }
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2716,6 +2790,13 @@ if (__VLS_ctx.rightPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.rightPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.rightPlayer.clientId) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "quick-phrase-bubble" },
+            role: "status",
+        });
+        (__VLS_ctx.quickPhrase.text);
+    }
     if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow turn-arrow-side" },
@@ -2730,20 +2811,34 @@ if (__VLS_ctx.rightPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.rightPlayer.name);
-    if (__VLS_ctx.rightPlayer.isConfiguredBot) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "bot-seat-badge" },
-            'data-testid': "bot-identity",
-            'aria-label': "机器人",
-            title: "机器人",
-        });
-    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "seat-identity-meta" },
+    });
+    /** @type {[typeof PlayerStatusIcon, ]} */ ;
+    // @ts-ignore
+    const __VLS_27 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.rightPlayer)),
+    }));
+    const __VLS_28 = __VLS_27({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.rightPlayer)),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
         'data-player-id': (__VLS_ctx.rightPlayer.clientId),
     });
     (__VLS_ctx.playerHandCount(__VLS_ctx.rightPlayer));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "kan-count-badge" },
+        'aria-label': (`开局声明暗坎 ${__VLS_ctx.rightPlayer.declaredKongs} 个`),
+    });
+    (__VLS_ctx.rightPlayer.declaredKongs);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "group-score-badge" },
+        ...{ class: ({ positive: __VLS_ctx.rightPlayer.visibleGroupScore > 0 }) },
+        'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.rightPlayer.visibleGroupScore} 分`),
+    });
+    (__VLS_ctx.rightPlayer.visibleGroupScore);
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -2759,16 +2854,16 @@ if (__VLS_ctx.rightPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_22 = __VLS_21({
+            const __VLS_31 = __VLS_30({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_30));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2784,17 +2879,6 @@ if (__VLS_ctx.rightPlayer) {
             ...{ class: "turn-countdown" },
         });
         (__VLS_ctx.seatCountdownSeconds);
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "tag status" },
-        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.rightPlayer) }) },
-    });
-    (__VLS_ctx.statusText(__VLS_ctx.rightPlayer));
-    if (__VLS_ctx.seatMetaText(__VLS_ctx.rightGroupBlocks.length, __VLS_ctx.rightPlayer.declaredKongs)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            ...{ class: "seat-meta" },
-        });
-        (__VLS_ctx.seatMetaText(__VLS_ctx.rightGroupBlocks.length, __VLS_ctx.rightPlayer.declaredKongs));
     }
     if (__VLS_ctx.rightGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2819,7 +2903,7 @@ if (__VLS_ctx.rightPlayer) {
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`right-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2828,7 +2912,7 @@ if (__VLS_ctx.rightPlayer) {
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
                 }));
-                const __VLS_25 = __VLS_24({
+                const __VLS_34 = __VLS_33({
                     key: (`right-group-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2836,7 +2920,7 @@ if (__VLS_ctx.rightPlayer) {
                     size: "xs",
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_33));
             }
         }
     }
@@ -2859,7 +2943,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_36 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2869,7 +2953,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_28 = __VLS_27({
+        const __VLS_37 = __VLS_36({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2878,7 +2962,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_36));
     }
 }
 if (__VLS_ctx.selfPlayer) {
@@ -2889,8 +2973,6 @@ if (__VLS_ctx.selfPlayer) {
     });
     /** @type {typeof __VLS_ctx.selfOpenRef} */ ;
     if (__VLS_ctx.selfGroupBlocks.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
-        (__VLS_ctx.selfGroupBlocks.length);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list" },
         });
@@ -2913,7 +2995,7 @@ if (__VLS_ctx.selfPlayer) {
             for (const [card] of __VLS_getVForSourceType((group.cards))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_39 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`self-exp-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2922,7 +3004,7 @@ if (__VLS_ctx.selfPlayer) {
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
                 }));
-                const __VLS_31 = __VLS_30({
+                const __VLS_40 = __VLS_39({
                     key: (`self-exp-card-${card.id}`),
                     card: (card),
                     ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2930,7 +3012,7 @@ if (__VLS_ctx.selfPlayer) {
                     size: "xs",
                     ...{ class: "mini-card" },
                     title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_39));
             }
         }
     }
@@ -2953,7 +3035,7 @@ if (__VLS_ctx.flowBottomRightPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2963,7 +3045,7 @@ if (__VLS_ctx.flowBottomRightPlayer) {
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_34 = __VLS_33({
+        const __VLS_43 = __VLS_42({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
@@ -2972,25 +3054,25 @@ if (__VLS_ctx.flowBottomRightPlayer) {
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_42));
     }
 }
-const __VLS_36 = {}.Transition;
+const __VLS_45 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({
+const __VLS_46 = __VLS_asFunctionalComponent(__VLS_45, new __VLS_45({
     name: "deal-fade",
 }));
-const __VLS_38 = __VLS_37({
+const __VLS_47 = __VLS_46({
     name: "deal-fade",
-}, ...__VLS_functionalComponentArgsRest(__VLS_37));
-__VLS_39.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_46));
+__VLS_48.slots.default;
 if (__VLS_ctx.showDealAnimation) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "deal-overlay" },
     });
 }
-var __VLS_39;
+var __VLS_48;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -3030,16 +3112,16 @@ if (__VLS_ctx.dealerReveal) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_40 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_49 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
         }));
-        const __VLS_41 = __VLS_40({
+        const __VLS_50 = __VLS_49({
             card: (__VLS_ctx.dealerCeremonyCard),
             mode: (props.tableCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_49));
     }
     if (__VLS_ctx.dealerCeremonyCard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
@@ -3065,6 +3147,13 @@ if (__VLS_ctx.selfPlayer) {
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
+    if (__VLS_ctx.quickPhrase?.seatId === __VLS_ctx.selfPlayer.clientId) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "quick-phrase-bubble" },
+            role: "status",
+        });
+        (__VLS_ctx.quickPhrase.text);
+    }
     if (__VLS_ctx.isMyTurn) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-arrow self-turn-arrow" },
@@ -3081,17 +3170,36 @@ if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
     (__VLS_ctx.selfPlayer.name);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "seat-identity-meta" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "self-seat-badge" },
         'aria-hidden': "true",
     });
-    if (__VLS_ctx.selfPlayer.isConfiguredBot) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "bot-seat-badge" },
-            'data-testid': "bot-identity",
-            'aria-label': "机器人",
-            title: "机器人",
-        });
-    }
+    /** @type {[typeof PlayerStatusIcon, ]} */ ;
+    // @ts-ignore
+    const __VLS_52 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
+    }));
+    const __VLS_53 = __VLS_52({
+        ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "hand-count-badge" },
+        'aria-label': (`剩余手牌 ${__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer)} 张`),
+    });
+    (__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer));
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "kan-count-badge" },
+        'aria-label': (`开局声明暗坎 ${__VLS_ctx.selfPlayer.declaredKongs} 个`),
+    });
+    (__VLS_ctx.selfPlayer.declaredKongs);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "group-score-badge" },
+        ...{ class: ({ positive: __VLS_ctx.selfPlayer.visibleGroupScore > 0 }) },
+        'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.selfPlayer.visibleGroupScore} 分`),
+    });
+    (__VLS_ctx.selfPlayer.visibleGroupScore);
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -3108,23 +3216,17 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_43 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_55 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
             }));
-            const __VLS_44 = __VLS_43({
+            const __VLS_56 = __VLS_55({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (props.tableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_43));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_55));
         }
-    }
-    if (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-            'data-testid': "self-seat-meta",
-        });
-        (__VLS_ctx.seatMetaText(__VLS_ctx.selfGroupBlocks.length, __VLS_ctx.selfPlayer.declaredKongs));
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
@@ -3140,11 +3242,6 @@ if (__VLS_ctx.selfPlayer) {
         });
         (__VLS_ctx.seatCountdownSeconds);
     }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "tag status" },
-        ...{ class: ({ 'temporary-control': __VLS_ctx.isTemporaryBotControl(__VLS_ctx.selfPlayer) }) },
-    });
-    (__VLS_ctx.statusText(__VLS_ctx.selfPlayer));
     if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "turn-timer-bar self-turn-timer" },
@@ -3169,6 +3266,43 @@ if (__VLS_ctx.selfPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.fixedStatusText);
+    if (__VLS_ctx.currentListeningWaits.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "current-listening-waits" },
+            role: "status",
+            'aria-label': (__VLS_ctx.currentListeningAccessibleLabel),
+            'data-testid': "current-listening-waits",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "current-listening-label" },
+            'aria-hidden': "true",
+        });
+        for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.currentListeningWaits))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                key: (`current-wait-${wait.card.id}`),
+                ...{ class: "current-listening-card" },
+                ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
+                'data-visible-remaining': (wait.visibleRemaining),
+            });
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_58 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (wait.card),
+                size: "xs",
+                mode: "large",
+            }));
+            const __VLS_59 = __VLS_58({
+                card: (wait.card),
+                size: "xs",
+                mode: "large",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_58));
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "wait-count-badge" },
+                'aria-hidden': "true",
+            });
+            (wait.visibleRemaining);
+        }
+    }
     if (__VLS_ctx.showDecisionClock) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "fixed-clock" },
@@ -3177,17 +3311,7 @@ if (__VLS_ctx.selfPlayer) {
         });
         (__VLS_ctx.fixedClockText);
     }
-    if (__VLS_ctx.canRequestMoreTime && !__VLS_ctx.effectiveInteractionPausedMessage) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.requestFixedMoreTime) },
-            type: "button",
-            'data-testid': "request-more-time",
-            'aria-label': (`需要更多时间，增加${__VLS_ctx.moreTimeSeconds ?? 20}秒`),
-            disabled: (__VLS_ctx.nowMs < __VLS_ctx.moreTimePendingUntil),
-        });
-        (__VLS_ctx.nowMs < __VLS_ctx.moreTimePendingUntil ? '加时中…' : `+${__VLS_ctx.moreTimeSeconds ?? 20}秒`);
-    }
-    var __VLS_46 = {};
+    var __VLS_61 = {};
     if (__VLS_ctx.selectedPreview) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "selected-card-preview" },
@@ -3196,16 +3320,16 @@ if (__VLS_ctx.selfPlayer) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
         }));
-        const __VLS_49 = __VLS_48({
+        const __VLS_64 = __VLS_63({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_48));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_63));
         if (__VLS_ctx.selectedDiscardListeningRoute?.waits.length) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "selected-preview-wait-label" },
@@ -3226,16 +3350,16 @@ if (__VLS_ctx.selfPlayer) {
                 });
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
                 }));
-                const __VLS_52 = __VLS_51({
+                const __VLS_67 = __VLS_66({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_51));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_66));
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "wait-count-badge" },
                     'data-testid': "listening-wait-count",
@@ -3389,26 +3513,25 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_54 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_69 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_55 = __VLS_54({
+        const __VLS_70 = __VLS_69({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_54));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_69));
     }
 }
 if (props.state?.phase === 'playing') {
     /** @type {[typeof ActionPanel, ]} */ ;
     // @ts-ignore
-    const __VLS_57 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+    const __VLS_72 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
         ...{ 'onConfirmDiscard': {} },
-        ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
         ...{ class: "embedded-actions action-dock" },
         fixedStatus: true,
@@ -3422,15 +3545,12 @@ if (props.state?.phase === 'playing') {
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         untimed: (Boolean(props.decisionUntimed)),
-        canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
-        moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
     }));
-    const __VLS_58 = __VLS_57({
+    const __VLS_73 = __VLS_72({
         ...{ 'onConfirmDiscard': {} },
-        ...{ 'onRequestMoreTime': {} },
         ...{ 'onSubmit': {} },
         ...{ class: "embedded-actions action-dock" },
         fixedStatus: true,
@@ -3444,40 +3564,31 @@ if (props.state?.phase === 'playing') {
         pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
         secondsLeft: (__VLS_ctx.seatCountdownSeconds),
         untimed: (Boolean(props.decisionUntimed)),
-        canRequestMoreTime: (Boolean(props.canRequestMoreTime)),
-        moreTimeSeconds: (props.moreTimeSeconds ?? 20),
         decisionKey: (props.decisionKey ?? ''),
         actionFeedback: (__VLS_ctx.effectiveActionFeedback),
         selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_57));
-    let __VLS_60;
-    let __VLS_61;
-    let __VLS_62;
-    const __VLS_63 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_72));
+    let __VLS_75;
+    let __VLS_76;
+    let __VLS_77;
+    const __VLS_78 = {
         onConfirmDiscard: (__VLS_ctx.confirmDiscard)
     };
-    const __VLS_64 = {
-        onRequestMoreTime: (...[$event]) => {
-            if (!(props.state?.phase === 'playing'))
-                return;
-            __VLS_ctx.emit('requestMoreTime');
-        }
-    };
-    const __VLS_65 = {
+    const __VLS_79 = {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
-    var __VLS_59;
+    var __VLS_74;
 }
-const __VLS_66 = {}.Teleport;
+const __VLS_80 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_67 = __VLS_asFunctionalComponent(__VLS_66, new __VLS_66({
+const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
     to: "body",
 }));
-const __VLS_68 = __VLS_67({
+const __VLS_82 = __VLS_81({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_67));
-__VLS_69.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_81));
+__VLS_83.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3501,21 +3612,21 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_70 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_84 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
         }));
-        const __VLS_71 = __VLS_70({
+        const __VLS_85 = __VLS_84({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_84));
     }
 }
-var __VLS_69;
+var __VLS_83;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3534,16 +3645,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_73 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_87 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_74 = __VLS_73({
+        const __VLS_88 = __VLS_87({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_87));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3554,11 +3665,14 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -3566,9 +3680,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['status']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
@@ -3582,12 +3693,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -3595,9 +3709,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['status']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
@@ -3634,12 +3745,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -3647,9 +3761,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['status']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
@@ -3681,12 +3792,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-bubble']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-seat-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['bot-seat-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -3694,13 +3809,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['status']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait-label']} */ ;
@@ -3732,16 +3849,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 // @ts-ignore
-var __VLS_47 = __VLS_46;
+var __VLS_62 = __VLS_61;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             ActionPanel: ActionPanel,
             CardComp: CardComp,
+            PlayerStatusIcon: PlayerStatusIcon,
             getCardAccessibleText: getCardAccessibleText,
-            emit: emit,
-            nowMs: nowMs,
             selfPlayer: selfPlayer,
             topPlayer: topPlayer,
             rightPlayer: rightPlayer,
@@ -3798,10 +3914,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             chiSelectionDraftActive: chiSelectionDraftActive,
             selectedChiCandidate: selectedChiCandidate,
             effectiveActionFeedback: effectiveActionFeedback,
-            moreTimePendingUntil: moreTimePendingUntil,
-            requestFixedMoreTime: requestFixedMoreTime,
             fixedStatusText: fixedStatusText,
             fixedClockText: fixedClockText,
+            currentListeningWaits: currentListeningWaits,
+            currentListeningAccessibleLabel: currentListeningAccessibleLabel,
             listeningMarkContext: listeningMarkContext,
             isListeningDiscard: isListeningDiscard,
             selectedPreview: selectedPreview,
@@ -3822,10 +3938,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             seatActionText: seatActionText,
             hasSeatAction: hasSeatAction,
             isCurrentTurn: isCurrentTurn,
-            statusText: statusText,
-            seatMetaText: seatMetaText,
+            statusIconProps: statusIconProps,
             playerAccessibleSummary: playerAccessibleSummary,
-            isTemporaryBotControl: isTemporaryBotControl,
             playerHandCount: playerHandCount,
             isChiCardSelectable: isChiCardSelectable,
             canSelectHandCard: canSelectHandCard,

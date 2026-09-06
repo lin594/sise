@@ -17,6 +17,7 @@ export interface ListeningWait {
 export interface ListeningHints {
     stateRevision: number;
     decisionKey: string;
+    currentWaits: ListeningWait[];
     discards: ListeningRoute[];
     chi: Array<{
         candidateId: string;
@@ -47,6 +48,7 @@ export interface PlayerState {
     seatIndex: number;
     name: string;
     handCount?: number;
+    visibleGroupScore: number;
     declaredKongs: number;
     declaredReady: boolean;
     lobbyReady: boolean;
@@ -81,6 +83,7 @@ export interface RoomStateSnapshot {
     previousPlayerId: string;
     pollOriginPlayerId?: string;
     activeResponderId?: string;
+    pendingReceiverId?: string;
     responsePhase: string;
     responseEndsAt: number;
     tablePresentationVersion?: number;

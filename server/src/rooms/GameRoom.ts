@@ -1,5 +1,6 @@
 import {
   buildVisibleRemainingByFace,
+  findCurrentListeningWaits,
   findListeningDiscards,
   type ListeningHints,
 } from "./flow/listening-hints.js";
@@ -19,6 +20,7 @@ import {
   buildDefaultDeclarationPayload,
   buildDeclarationSelection,
   buildRoundResultPlayers as buildRoundResultPlayersFlow,
+  calculateVisibleGroupScore,
   canReturnLobby,
   canStartNextRound,
   dealInitialHands as dealInitialHandsFlow,
@@ -51,6 +53,7 @@ import {
   normalizeName as normalizeNameUtil,
   normalizeToken as normalizeTokenUtil,
   planLocalPhaseAfterNoResponse,
+  pickCollectiveWinner,
   pickRandomDealerId as pickRandomDealerIdUtil,
   resolveDealerFromAnchorAndCard,
   shouldEndDrawAfterUpperPass,
@@ -158,6 +161,12 @@ const COMPACT_STATE_ACTIONS = new Set<string>([
   "DECK_EMPTY",
   "DRAW_GAME",
 ]);
+const QUICK_PHRASES = new Set([
+  "我等到花儿都谢了",
+  "好牌！",
+  "承让承让",
+  "别急，慢慢来",
+]);
 
 export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
@@ -194,6 +203,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private pendingProfileTokenBySession = new Map<string, string>(); // device profile pending friend-room seat claim
   private profileTokenBySeat = new Map<string, string>(); // private, cross-room profile token for human settlement stats
   private readonly seatDisconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly quickPhraseSentAt = new Map<string, number>();
+  private quickPhraseSequence = 0;
   private readonly takeoverTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private roomIdleTimer: ReturnType<typeof setTimeout> | null = null;
   private roomIdleExpiresAt = 0;
@@ -278,6 +289,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private collectivePrivacyDelaySeatId: string | null = null;
   private collectivePrivacyFloorSeatId: string | null = null;
   private collectivePrivacyFloorEndsAt = 0;
+  private collectiveGlobalPrivacyEndsAt = 0;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
@@ -398,6 +410,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     this.onMessage("set_auto_play", (client, payload: { enabled?: unknown } | undefined) => {
       this.handleSetAutoPlay(client, payload);
+    });
+
+    this.onMessage("quick_phrase", (client, payload: { text?: unknown } | undefined) => {
+      const seatId = this.seatBySession.get(client.sessionId);
+      const text = String(payload?.text ?? "").trim();
+      const now = Date.now();
+      if (!seatId || !QUICK_PHRASES.has(text) || now - (this.quickPhraseSentAt.get(seatId) ?? 0) < 5_000) return;
+      this.quickPhraseSentAt.set(seatId, now);
+      this.broadcast("quick_phrase", { seatId, text, sequence: ++this.quickPhraseSequence, sentAt: now });
     });
 
     this.onMessage("action", (client, payload: ActionRequest) => {
@@ -2279,6 +2300,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
           applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
+          this.state.pendingReceiverId = ownerIdArg;
         },
         getPreviousPlayerId: (ownerIdArg) => this.getPreviousPlayerId(ownerIdArg),
         syncAllPrivateHands: () => this.syncAllPrivateHands(),
@@ -2339,6 +2361,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         setResponseCard: (card, source) => this.ops.setResponseCard(card, source),
         applyCollectivePollState: (ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction) => {
           applyCollectivePollState(this.state, ownerIdArg, previousPlayerId, pollOriginPlayerId, lastAction);
+          this.state.pendingReceiverId = this.getNextPlayerId(ownerIdArg);
         },
         syncAllPrivateHands: () => this.syncAllPrivateHands(),
         startCollectivePolling: () => this.startCollectivePolling(),
@@ -2498,13 +2521,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (decision === "collective_accept") {
       this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
-      const privacyFloorRemainingMs =
-        isCurrentResponder && this.collectivePrivacyFloorSeatId === seatId
-          ? Math.max(0, this.collectivePrivacyFloorEndsAt - Date.now())
-          : 0;
       const waitsForResponsePrivacyDelay =
+        action === "pass" &&
         isCurrentResponder &&
-        (this.collectivePrivacyDelaySeatId === seatId || privacyFloorRemainingMs > 0);
+        this.responsePrivacyMinimumForSeat(seatId) > 0 &&
+        this.collectiveGlobalPrivacyEndsAt > Date.now() &&
+        ![...pending.collectives.values()].some((choice) => choice.action !== "pass");
       if (isCurrentResponder && !waitsForResponsePrivacyDelay) {
         this.clearCollectiveTimer();
       }
@@ -2521,10 +2543,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
       );
       if (waitsForResponsePrivacyDelay) {
-        if (privacyFloorRemainingMs > 0 && this.collectivePrivacyDelaySeatId !== seatId) {
-          this.scheduleCollectiveTimeout(privacyFloorRemainingMs, true, true);
-        }
+        this.scheduleCollectiveTimeout(
+          Math.max(1, this.collectiveGlobalPrivacyEndsAt - Date.now()),
+          true,
+          true,
+        );
         this.broadcastAvailableActions();
+        return;
+      }
+      if (action !== "pass" && this.tryResolveCollectiveInterrupt()) {
         return;
       }
       if (isCurrentResponder) {
@@ -2659,6 +2686,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：触发胜者动作，或转入无响应本地阶段。
    */
   private resolveCollectivePhase(): void {
+    const pending = this.pendingResponse;
+    const hasInterrupt = Boolean(
+      pending && [...pending.collectives.values()].some((choice) => choice.action !== "pass"),
+    );
+    const privacyRemainingMs = Math.max(0, this.collectiveGlobalPrivacyEndsAt - Date.now());
+    if (pending && !hasInterrupt && privacyRemainingMs > 0) {
+      if (this.collectiveTimer) {
+        clearTimeout(this.collectiveTimer);
+      }
+      this.collectiveTimer = setTimeout(() => {
+        this.collectiveTimer = null;
+        this.collectiveGlobalPrivacyEndsAt = 0;
+        this.resolveCollectivePhase();
+      }, privacyRemainingMs);
+      this.state.responseEndsAt = this.collectiveGlobalPrivacyEndsAt;
+      this.broadcastAvailableActions();
+      return;
+    }
+    this.collectiveGlobalPrivacyEndsAt = 0;
     this.traceStep("resolve_collective:begin");
     resolveCollectivePhaseFlow({
       pending: this.pendingResponse,
@@ -2685,13 +2731,55 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * response also observes the same minimum through the separate privacy floor.
    */
   private responsePrivacyDelayForSeat(seatId: string): number {
-    const privacyMinimumMs = this.responsePrivacyMinimumForSeat(seatId);
-    if (privacyMinimumMs <= 0) {
+    if (this.responsePrivacyMinimumForSeat(seatId) <= 0) {
       return 0;
     }
-    return this.pendingResponse?.collectives.has(seatId) || !this.hasCollectiveActionBeyondPass(seatId)
-      ? privacyMinimumMs
-      : 0;
+    if ([...(this.pendingResponse?.collectives.values() ?? [])].some((choice) => choice.action !== "pass")) {
+      return 0;
+    }
+    const remainingMs = Math.max(0, this.collectiveGlobalPrivacyEndsAt - Date.now());
+    if (remainingMs <= 0) return 0;
+    const choice = this.pendingResponse?.collectives.get(seatId);
+    return choice?.action === "pass" || !this.hasCollectiveActionBeyondPass(seatId) ? remainingMs : 0;
+  }
+
+  /** Resolve a submitted interrupt as soon as no unsubmitted seat can outrank it. */
+  private tryResolveCollectiveInterrupt(): boolean {
+    const pending = this.pendingResponse;
+    if (!pending || this.state.responsePhase !== "collective") return false;
+    const order = this.getCollectiveOrder(pending);
+    const winner = pickCollectiveWinner(order, pending.collectives);
+    if (!winner) return false;
+
+    const rank = (action: ActionType): number => action === "hu" ? 2 : action === "kai" || action === "peng" ? 1 : 0;
+    const winnerRank = rank(winner.choice.action);
+    const winnerIndex = order.indexOf(winner.id);
+    const blockers = order.filter((seatId, index) => {
+      if (pending.collectives.has(seatId)) return false;
+      const enabled = this.getAvailableActions(seatId, true).filter((item) => item.enabled).map((item) => item.action);
+      const canHu = enabled.includes("hu");
+      const canPeer = enabled.includes("kai") || enabled.includes("peng");
+      return canHu && (winnerRank < 2 || index < winnerIndex)
+        || winnerRank === 1 && canPeer && index < winnerIndex;
+    });
+
+    for (const seatId of order) {
+      if (!pending.collectives.has(seatId) && !blockers.includes(seatId)) {
+        pending.collectives.set(seatId, { action: "pass" });
+      }
+    }
+    this.clearCollectiveTimer();
+    if (blockers.length > 0) {
+      this.collectiveQueue = blockers;
+      this.collectiveCursor = 0;
+      this.collectiveResponderId = null;
+      this.advanceCollectivePolling();
+      return true;
+    }
+    this.collectiveResponderId = null;
+    this.state.activeResponderId = "";
+    this.resolveCollectivePhase();
+    return true;
   }
 
   private responsePrivacyMinimumForSeat(seatId: string): number {
@@ -2742,6 +2830,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!pending) {
       return;
     }
+    this.collectiveGlobalPrivacyEndsAt = 0;
     const sourceOwnerId = String(this.state.pollOriginPlayerId || pending.ownerId || "");
     if (
       pending.card.source === "upper" &&
@@ -3425,6 +3514,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       previousPlayerId: this.state.previousPlayerId,
       pollOriginPlayerId: this.state.pollOriginPlayerId,
       activeResponderId: this.state.activeResponderId,
+      pendingReceiverId: this.state.pendingReceiverId,
       responsePhase: this.state.responsePhase,
       responseEndsAt: this.state.responseEndsAt,
       lastAction: this.state.lastAction,
@@ -3456,6 +3546,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           seatIndex: player.seatIndex,
           name: player.name,
           handCount: player.handCount,
+          visibleGroupScore: player.visibleGroupScore,
           declaredKongs: player.declaredKongs,
           declaredReady: player.declaredReady,
           lobbyReady: player.lobbyReady,
@@ -3520,6 +3611,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const value: ListeningHints = {
       stateRevision: this.state.stateRevision,
       decisionKey: decision.decisionTimer.decisionKey,
+      currentWaits:
+        this.state.phase === "playing" && this.awaitingDiscardOwnerId !== seatId
+          ? findCurrentListeningWaits(hand, kongs, visibleRemainingByFace)
+          : [],
       discards: canDiscard ? findListeningDiscards(hand, kongs, visibleRemainingByFace) : [],
       chi: [],
     };
@@ -3600,6 +3695,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private updatePublicHandCounts(): void {
     for (const [seatId, player] of this.state.players.entries()) {
       player.handCount = this.playerHands.get(seatId)?.length ?? 0;
+      player.visibleGroupScore = calculateVisibleGroupScore(player);
     }
   }
 
@@ -3938,6 +4034,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.collectiveCursor = 0;
     this.collectiveResponderId = null;
     this.state.activeResponderId = "";
+    this.state.pendingReceiverId = "";
+    this.collectiveGlobalPrivacyEndsAt = 0;
   }
 
   /**
@@ -3955,6 +4053,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         from: kind === "draw" ? { zone: "deck" } : { zone: "hand", playerId: pending.ownerId }, to: { zone: "center" } }]);
     }
     if (this.waitForPresentation()) return;
+    if (this.state.roomMode !== "practice" && this.collectiveGlobalPrivacyEndsAt <= Date.now()) {
+      this.collectiveGlobalPrivacyEndsAt = Date.now() + this.humanForcedPassDelayMs;
+    }
     this.traceStep("start_collective_polling");
     startCollectiveFlow({
       pending: this.pendingResponse,
@@ -4240,6 +4341,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         chooseBotDiscard({
           hand: this.playerHands.get(seatId) ?? [],
           visibleCards: this.buildBotVisibleCards(),
+          declaredKongs: this.state.players.get(seatId)?.declaredKongs ?? 0,
           strength: this.state.players.get(seatId)?.botStrength ?? 50,
         })?.id ?? null,
       setCollectiveChoice: (seatId, choice) => {

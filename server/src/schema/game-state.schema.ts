@@ -13,6 +13,7 @@ export class PlayerState extends Schema {
   @type("number") seatIndex: number = -1;
   @type("string") name: string = "";
   @type("number") handCount: number = 0;
+  @type("number") visibleGroupScore: number = 0;
   @type("number") declaredKongs: number = 0;
   @type("boolean") declaredReady: boolean = false;
   @type("boolean") lobbyReady: boolean = false;
@@ -61,6 +62,8 @@ export class GameState extends Schema {
   @type("string") loopStage: "global_poll" | "local_poll" | "transition" | "discard" | "" = "";
   // Current responder in global interrupt polling.
   @type("string") activeResponderId: string = "";
+  // Player who receives the pending card if nobody interrupts the collective window.
+  @type("string") pendingReceiverId: string = "";
   // Polling origin seat (who produced targetCard).
   @type("string") pollOriginPlayerId: string = "";
   // Remaining response time for current poll (ms epoch).

@@ -18,7 +18,7 @@
 
     <div v-else class="action-row" data-testid="action-row">
       <span
-        v-if="!fixedStatus && timerLabel && !canRequestMoreTime"
+        v-if="!fixedStatus && timerLabel"
         class="timer-chip"
         :class="{ urgent: isUrgent }"
         data-testid="action-timer"
@@ -48,16 +48,6 @@
         @click="onClick(item)"
       >{{ actionText(item) }}</button>
 
-      <button
-        v-if="!fixedStatus && needsDecision && !isEarlyCollectiveChoice && canRequestMoreTime"
-        type="button"
-        class="more-time-button"
-        data-testid="request-more-time"
-        :disabled="moreTimeRequested"
-        :aria-label="`需要更多时间，增加${moreTimeSeconds}秒`"
-        @click.stop="requestMoreTime"
-      >{{ moreTimeRequested ? "…" : `+${moreTimeSeconds}` }}</button>
-
       <span
         v-if="actionFeedback"
         class="feedback-chip"
@@ -71,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import type { ActionFeedback, ActionRequest, ActionType, AvailableAction } from "@/types/game";
 
 const props = withDefaults(
@@ -88,8 +78,6 @@ const props = withDefaults(
     discardPending?: boolean;
     secondsLeft?: number | null;
     untimed?: boolean;
-    canRequestMoreTime?: boolean;
-    moreTimeSeconds?: number;
     decisionKey?: string;
     actionFeedback?: ActionFeedback | null;
   }>(),
@@ -104,8 +92,6 @@ const props = withDefaults(
     discardPending: false,
     secondsLeft: null,
     untimed: false,
-    canRequestMoreTime: false,
-    moreTimeSeconds: 20,
     decisionKey: "",
     actionFeedback: null,
   },
@@ -114,7 +100,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   submit: [request: ActionRequest];
   confirmDiscard: [];
-  requestMoreTime: [];
 }>();
 
 type PanelAction = {
@@ -127,8 +112,6 @@ type PanelAction = {
 };
 
 const busy = ref(false);
-const moreTimeRequested = ref(false);
-let moreTimeRetryTimer: number | null = null;
 
 const normalized = computed<PanelAction[]>(() => {
   const map = new Map(props.actions.map((entry) => [entry.action, entry]));
@@ -211,33 +194,6 @@ const panelAnnouncement = computed(() => {
   return needsDecision.value ? `该你操作了。${timing}` : "";
 });
 
-function clearMoreTimeRetryTimer(): void {
-  if (moreTimeRetryTimer !== null) {
-    window.clearTimeout(moreTimeRetryTimer);
-    moreTimeRetryTimer = null;
-  }
-}
-
-watch(
-  () => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`,
-  () => {
-    if (props.canRequestMoreTime) {
-      clearMoreTimeRetryTimer();
-      moreTimeRequested.value = false;
-    }
-  },
-);
-
-function requestMoreTime(): void {
-  if (!props.canRequestMoreTime || moreTimeRequested.value) return;
-  moreTimeRequested.value = true;
-  emit("requestMoreTime");
-  clearMoreTimeRetryTimer();
-  moreTimeRetryTimer = window.setTimeout(() => {
-    moreTimeRetryTimer = null;
-    if (props.canRequestMoreTime) moreTimeRequested.value = false;
-  }, 2500);
-}
 
 function isClickable(item: PanelAction): boolean {
   return item.enabled || Boolean(item.deferred);
@@ -276,7 +232,6 @@ function onClick(item: PanelAction): void {
   }, 220);
 }
 
-onBeforeUnmount(clearMoreTimeRetryTimer);
 </script>
 
 <style scoped>

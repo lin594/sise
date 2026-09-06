@@ -16,6 +16,7 @@ const ACTION_RECEIPT_WAIT_MS = 2500;
 const ACTION_REJECTED_VISIBLE_MS = 3600;
 const CONNECTION_PROBE_INTERVAL_MS = 4000;
 const CONNECTION_PROBE_TIMEOUT_MS = 7000;
+const QUICK_PHRASE_MUTE_KEY = "sise_quick_phrase_muted";
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
     4101: "房间已经坐满，无法恢复原座位。系统已停止自动恢复。",
@@ -23,7 +24,7 @@ const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4103: "原座位已经不存在，无法继续恢复。系统已停止自动恢复。",
     4104: "你已被移出房间。系统已停止自动恢复。",
     4105: "牌局已经开始，未入座的访问已结束。系统已停止自动恢复。",
-    4106: "这是单人练习房，已有玩家在练习。请返回首页重新开始。",
+    4106: "这是单人练习房，已有玩家在练习。请返回玩法选择重新开始。",
     4110: "房主已解散本桌，大家已返回模式选择。",
 };
 function terminalJoinFailureMessage(error) {
@@ -34,11 +35,11 @@ function terminalJoinFailureMessage(error) {
         return TERMINAL_ROOM_CLOSE_MESSAGES[code];
     }
     if (code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED) {
-        return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+        return "原牌局已经结束或被回收。系统已停止自动恢复，请返回玩法选择重新开始。";
     }
     const message = error instanceof Error ? error.message : String(error ?? "");
     if (/room[^\n]*(?:not found|expired|disposed)|invalid room/i.test(message)) {
-        return "原牌局已经结束或被回收。系统已停止自动恢复，请返回首页重新开始。";
+        return "原牌局已经结束或被回收。系统已停止自动恢复，请返回玩法选择重新开始。";
     }
     return null;
 }
@@ -186,6 +187,7 @@ function normalizePlayer(raw) {
         seatIndex: Number(raw?.seatIndex ?? -1),
         name: String(raw?.name ?? ""),
         handCount: Number(raw?.handCount ?? 0),
+        visibleGroupScore: Math.max(0, Number(raw?.visibleGroupScore ?? 0)),
         declaredKongs: Number(raw?.declaredKongs ?? 0),
         declaredReady: Boolean(raw?.declaredReady),
         lobbyReady: Boolean(raw?.lobbyReady),
@@ -251,6 +253,7 @@ function normalizeSnapshot(next) {
         previousPlayerId: String(rawState?.previousPlayerId ?? ""),
         pollOriginPlayerId: String(rawState?.pollOriginPlayerId ?? ""),
         activeResponderId: String(rawState?.activeResponderId ?? ""),
+        pendingReceiverId: String(rawState?.pendingReceiverId ?? ""),
         responsePhase: normalizeResponsePhase(String(rawState?.responsePhase ?? "")),
         responseEndsAt: Number(rawState?.responseEndsAt ?? 0),
         lastAction: String(rawState?.lastAction ?? ""),
@@ -413,6 +416,9 @@ export function useRoom(playerName = "Player") {
     const privateHand = ref([]);
     const acceptedStateRevision = ref(-1);
     const listeningHints = ref(null);
+    const quickPhrase = ref(null);
+    const quickPhraseMuted = ref(readStoredValue(QUICK_PHRASE_MUTE_KEY) === "1");
+    let quickPhraseTimer = null;
     const availableActions = ref([]);
     const huResult = ref(null);
     const roundResult = ref(null);
@@ -1365,7 +1371,7 @@ export function useRoom(playerName = "Player") {
                 const closeCode = error instanceof MatchMakeError
                     ? error.code
                     : Number(error?.code);
-                if (TERMINAL_ROOM_CLOSE_MESSAGES[closeCode]) {
+                if (terminalJoinFailureMessage(error)) {
                     throw error;
                 }
                 if (reconnecting || matchmaking) {
@@ -1488,6 +1494,27 @@ export function useRoom(playerName = "Player") {
                     decisionKey,
                     visible: false,
                 });
+            });
+            joined.onMessage("quick_phrase", (payload) => {
+                if (!isCurrentJoinedRoom())
+                    return;
+                const seatId = String(payload?.seatId ?? "");
+                const text = String(payload?.text ?? "");
+                if (!seatId || !text)
+                    return;
+                quickPhrase.value = { seatId, text, sequence: Number(payload?.sequence ?? Date.now()) };
+                if (quickPhraseTimer !== null)
+                    window.clearTimeout(quickPhraseTimer);
+                quickPhraseTimer = window.setTimeout(() => {
+                    quickPhraseTimer = null;
+                    quickPhrase.value = null;
+                }, 3_000);
+                if (!quickPhraseMuted.value && "speechSynthesis" in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = "zh-CN";
+                    window.speechSynthesis.speak(utterance);
+                }
             });
             joined.onMessage("action_rejected", (payload) => {
                 if (!isCurrentJoinedRoom()) {
@@ -1807,9 +1834,9 @@ export function useRoom(playerName = "Player") {
             players: patch.players ?? state.value.players,
         }, source);
     }
-    async function leaveRoom() {
+    async function leaveRoom(targetRoomId = "") {
         const departingRoom = room.value;
-        const departingRoomId = activeRoomId.value.trim() || pendingConnectionRoomId;
+        const departingRoomId = targetRoomId.trim() || activeRoomId.value.trim() || pendingConnectionRoomId;
         suppressReconnect = true;
         activeConnectionSeq += 1;
         connectInFlight = false;
@@ -1859,6 +1886,15 @@ export function useRoom(playerName = "Player") {
         joinError.value = "";
         safeRoomSend("remove_seat", { seatIndex });
     }
+    function sendQuickPhrase(text) {
+        return safeRoomSend("quick_phrase", { text });
+    }
+    function setQuickPhraseMuted(muted) {
+        quickPhraseMuted.value = muted;
+        writeStoredValue(QUICK_PHRASE_MUTE_KEY, muted ? "1" : "0");
+        if (muted && "speechSynthesis" in window)
+            window.speechSynthesis.cancel();
+    }
     window.addEventListener("offline", handleBrowserOffline);
     window.addEventListener("online", handleBrowserOnline);
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1868,6 +1904,8 @@ export function useRoom(playerName = "Player") {
         clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         clearActionFeedback();
+        if (quickPhraseTimer !== null)
+            window.clearTimeout(quickPhraseTimer);
         window.removeEventListener("offline", handleBrowserOffline);
         window.removeEventListener("online", handleBrowserOnline);
         document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -1890,6 +1928,8 @@ export function useRoom(playerName = "Player") {
         privateHand,
         acceptedStateRevision,
         listeningHints,
+        quickPhrase,
+        quickPhraseMuted,
         availableActions,
         huResult,
         roundResult,
@@ -1923,5 +1963,7 @@ export function useRoom(playerName = "Player") {
         fillBots,
         updateBot,
         removeSeat,
+        sendQuickPhrase,
+        setQuickPhraseMuted,
     };
 }

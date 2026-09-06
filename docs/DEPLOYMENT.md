@@ -168,7 +168,7 @@ npm run smoke:imac-gateway
 - `MATCH_FULL_START_MS`：快速桌四名真人到齐后的短展示时间，默认 900ms。
 - `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人执行吃牌、抓牌和出牌等可见动作的思考延时，默认 450–850ms。
 - `BOT_COLLECTIVE_THINK_MIN_MS` / `BOT_COLLECTIVE_THINK_MAX_MS`：机器人处理胡、开、碰或过等集体待响的短延时，默认 80–180ms，避免多名机器人依次等待。
-- `HUMAN_FORCED_PASS_DELAY_MS`：好友房和快速桌中在线真人全局响应的公开释放下限，生产环境不低于 3000ms；无动作自动过、提前吃/过和私下预选都不能缩短该窗口，避免用响应时长推断暗牌。单人练习、机器人和托管座位不受影响。
+- `HUMAN_FORCED_PASS_DELAY_MS`：好友房和快速桌每轮全局响应共享的隐私窗口下限，生产环境不低于 3000ms；无人打断时不得提前结束。明确胡、开、碰可立即推进，只保留仍可能压过该动作的响应者。单人练习不受影响。
 - `LOBBY_SEAT_HOLD_MS`：等待大厅断线座位保留时间。
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
 - `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。

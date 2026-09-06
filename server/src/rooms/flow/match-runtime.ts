@@ -122,6 +122,7 @@ export function resetToFreshLobbyFlow(ctx: FreshLobbyContext): void {
   ctx.state.currentTurnPlayerId = "";
   ctx.state.loopStage = "";
   ctx.state.activeResponderId = "";
+  ctx.state.pendingReceiverId = "";
   ctx.state.pollOriginPlayerId = "";
   ctx.state.responseEndsAt = 0;
   ctx.state.responseCard = new CardSchema();
@@ -665,6 +666,7 @@ export function resetToLobby(context: LobbyResetContext): void {
   context.state.currentTurnPlayerId = "";
   context.state.loopStage = "";
   context.state.activeResponderId = "";
+  context.state.pendingReceiverId = "";
   context.state.pollOriginPlayerId = "";
   context.state.responseEndsAt = 0;
   context.state.publicDiscardPile.clear();
@@ -708,6 +710,7 @@ export function endRoundFlow<RoundResultPlayer>(
   context.clearBotTimer();
   context.state.loopStage = "";
   context.state.activeResponderId = "";
+  context.state.pendingReceiverId = "";
   context.state.pollOriginPlayerId = "";
   context.state.responseEndsAt = 0;
 
@@ -1191,6 +1194,28 @@ function buildFishGroupDetails(fishArea: Card[]): SettlementGroupDetail[] {
   return details;
 }
 
+export function calculateVisibleGroupScore(player: Pick<
+  PlayerState,
+  "exposedArea" | "exposedGroupSizes" | "exposedGroupKinds" | "generalArea" | "fishArea"
+>): number {
+  const toCard = (card: CardSchema): Card => ({
+    id: card.id,
+    color: card.color as Card["color"],
+    type: card.type as Card["type"],
+    source: card.source === "draw" ? "draw" : "upper",
+  });
+  const details = [
+    ...buildExposedVisibleGroupDetails(
+      Array.from(player.exposedArea, toCard),
+      Array.from(player.exposedGroupSizes),
+      Array.from(player.exposedGroupKinds),
+    ),
+    ...buildGeneralGroupDetails(Array.from(player.generalArea, toCard)),
+    ...buildFishGroupDetails(Array.from(player.fishArea, toCard)),
+  ];
+  return details.reduce((sum, detail) => sum + Math.max(0, detail.unit), 0);
+}
+
 function buildResolvedHandGroupDetails(
   groups: Array<{
     key: string;
@@ -1248,17 +1273,21 @@ function normalizeWinningResponseGroups(
     return groups;
   }
   return groups.map((group) => {
+    const responseIndex = group.cards.findIndex((card) => card.id === winnerResponseCard.id);
+    const cards = responseIndex > 0
+      ? [group.cards[responseIndex]!, ...group.cards.slice(0, responseIndex), ...group.cards.slice(responseIndex + 1)]
+      : group.cards;
     if (
       group.key === "Triplet" &&
       group.cards.length === 3 &&
-      group.cards.some((card) => card.id === winnerResponseCard.id) &&
+      responseIndex >= 0 &&
       isSameFaceGroup(group.cards) &&
       group.cards[0]?.color !== "gold" &&
       group.cards[0]?.type !== "jiang"
     ) {
-      return { ...group, key: "Peng" };
+      return { ...group, key: "Peng", cards };
     }
-    return group;
+    return cards === group.cards ? group : { ...group, cards };
   });
 }
 

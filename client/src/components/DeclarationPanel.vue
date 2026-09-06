@@ -26,18 +26,6 @@
             <strong>{{ untimed ? "不限时" : secondsLeft }}</strong>
             <span>{{ untimed ? "练习模式" : "秒" }}</span>
           </div>
-          <button
-            v-if="canRequestMoreTime && !submitted"
-            type="button"
-            class="declare-more-time"
-            data-testid="declare-request-more-time"
-            :disabled="moreTimeRequested || !connectionReady"
-            :aria-label="`需要更多时间，增加${moreTimeSeconds}秒`"
-            @click="requestMoreTime"
-          >
-            <span class="more-time-prefix">需要更多时间</span>
-            <strong>{{ moreTimeRequested ? "加时中…" : `+${moreTimeSeconds}秒` }}</strong>
-          </button>
         </div>
       </header>
 
@@ -276,8 +264,6 @@ const props = defineProps<{
   compact: boolean;
   ultraCompact: boolean;
   cardMode: RenderedCardMode;
-  canRequestMoreTime: boolean;
-  moreTimeSeconds: number;
   decisionKey: string;
 }>();
 
@@ -285,7 +271,6 @@ const emit = defineEmits<{
   status: [message: string];
   marks: [value: { fish: string[]; kong: string[] }];
   submit: [payload: { declaredKongs: number; fishCardIds: string[] }];
-  requestMoreTime: [];
 }>();
 
 const initialized = ref(false);
@@ -294,7 +279,6 @@ const declaredKongs = ref(0);
 const kongSelectionTouched = ref(false);
 const submitPending = ref(false);
 const localSubmitError = ref("");
-const moreTimeRequested = ref(false);
 const panelRef = ref<HTMLElement | null>(null);
 const confirmButtonRef = ref<HTMLButtonElement | null>(null);
 const handRailRef = ref<HTMLElement | null>(null);
@@ -303,7 +287,6 @@ const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
 const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let primaryFocusPlaced = false;
-let moreTimeRetryTimer: number | null = null;
 let submitRetryTimer: number | null = null;
 let handResizeObserver: ResizeObserver | null = null;
 
@@ -314,33 +297,11 @@ const handVisibleRangeLabel = computed(() => {
   return `当前显示第 ${start} 到 ${end} 张，共 ${total} 张`;
 });
 
-function clearMoreTimeRetryTimer(): void {
-  if (moreTimeRetryTimer !== null) {
-    window.clearTimeout(moreTimeRetryTimer);
-    moreTimeRetryTimer = null;
-  }
-}
-
 function clearSubmitRetryTimer(): void {
   if (submitRetryTimer !== null) {
     window.clearTimeout(submitRetryTimer);
     submitRetryTimer = null;
   }
-}
-
-function requestMoreTime(): void {
-  if (!props.canRequestMoreTime || moreTimeRequested.value || props.submitted) {
-    return;
-  }
-  moreTimeRequested.value = true;
-  emit("requestMoreTime");
-  clearMoreTimeRetryTimer();
-  moreTimeRetryTimer = window.setTimeout(() => {
-    moreTimeRetryTimer = null;
-    if (props.canRequestMoreTime) {
-      moreTimeRequested.value = false;
-    }
-  }, 2500);
 }
 
 const fishOptions = computed(() => buildFishOptions(props.hand));
@@ -612,17 +573,6 @@ watch(
 );
 
 watch(
-  () => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`,
-  () => {
-    const available = props.canRequestMoreTime;
-    if (available) {
-      clearMoreTimeRetryTimer();
-      moreTimeRequested.value = false;
-    }
-  },
-);
-
-watch(
   () => [props.handReady, props.submitted, initialized.value, submitPending.value] as const,
   () => {
     void nextTick(placeInitialFocus);
@@ -638,7 +588,6 @@ watch(
 watch(handRailRef, observeHandScroller, { immediate: true });
 
 onBeforeUnmount(() => {
-  clearMoreTimeRetryTimer();
   clearSubmitRetryTimer();
   handResizeObserver?.disconnect();
   handResizeObserver = null;

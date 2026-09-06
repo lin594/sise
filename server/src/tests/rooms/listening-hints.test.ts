@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FourColorGameRoom } from '../../rooms/GameRoom.js';
 import { GameState, PlayerState } from '../../schema/game-state.schema.js';
 import { buildChiCandidates } from '../../rooms/flow/action-candidates.js';
-import { buildVisibleRemainingByFace, findListeningDiscards } from '../../rooms/flow/listening-hints.js';
+import { buildVisibleRemainingByFace, findCurrentListeningWaits, findListeningDiscards } from '../../rooms/flow/listening-hints.js';
 import type { Card } from '../../rules/types.js';
 
 test('private hints cache, chi projection and revision invalidation use only the requesting hand', () => {
@@ -41,6 +41,10 @@ test('private hints cache, chi projection and revision invalidation use only the
   actions = [{ action: 'chi', enabled: true, candidates: candidates.map((c) => c.candidate) }];
   const preview = room.buildListeningHints('A');
   assert.deepEqual(preview.discards, []);
+  assert.deepEqual(
+    preview.currentWaits,
+    findCurrentListeningWaits(hand, 0, buildVisibleRemainingByFace(room.buildListeningKnownCards('A'))),
+  );
   assert.equal(preview.chi.length, candidates.length);
   for (const item of preview.chi) {
     const plan = candidates.find((c) => c.candidate.id === item.candidateId)!.plan;

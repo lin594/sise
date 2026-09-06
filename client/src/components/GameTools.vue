@@ -20,6 +20,18 @@
         <span v-if="historyItems.length" class="history-count" aria-hidden="true">{{ historyCountText }}</span>
       </button>
       <button
+        class="tool-button interaction"
+        type="button"
+        aria-label="快捷互动"
+        title="快捷互动"
+        data-testid="game-interaction"
+        :aria-expanded="phraseOpen"
+        @click="togglePhrases"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z" /><path d="M8 9h8M8 12h5" /></svg>
+        <span>互动</span>
+      </button>
+      <button
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
@@ -73,12 +85,21 @@
 
     <Transition name="popover">
       <div
-        v-if="historyOpen || settingsOpen"
+        v-if="historyOpen || settingsOpen || phraseOpen"
         class="tools-popover-backdrop"
         data-testid="tools-popover-backdrop"
         aria-hidden="true"
         @click="closeOpenPopover"
       ></div>
+    </Transition>
+
+    <Transition name="popover">
+      <section v-if="phraseOpen" class="phrase-panel" data-testid="quick-phrase-panel" aria-label="快捷互动">
+        <button v-for="phrase in quickPhrases" :key="phrase" type="button" @click="sendPhrase(phrase)">{{ phrase }}</button>
+        <button class="phrase-mute" type="button" :aria-pressed="props.quickPhraseMuted" @click="emit('setQuickPhraseMuted', !props.quickPhraseMuted)">
+          {{ props.quickPhraseMuted ? "开启语音" : "关闭语音" }}
+        </button>
+      </section>
     </Transition>
 
     <Transition name="popover">
@@ -455,6 +476,7 @@ const props = withDefaults(
     spokenTurnGuidanceSupported?: boolean;
     screenWakeLockSupported?: boolean;
     installAppAvailable?: boolean;
+    quickPhraseMuted?: boolean;
   }>(),
   {
     decisionActive: false,
@@ -468,6 +490,7 @@ const props = withDefaults(
     spokenTurnGuidanceSupported: false,
     screenWakeLockSupported: false,
     installAppAvailable: false,
+    quickPhraseMuted: false,
   },
 );
 
@@ -478,12 +501,16 @@ const emit = defineEmits<{
   returnToDecision: [];
   exit: [];
   setAutoPlay: [enabled: boolean];
+  quickPhrase: [text: string];
+  setQuickPhraseMuted: [muted: boolean];
 }>();
 
 const gameToolsRef = ref<HTMLElement | null>(null);
 const historyButtonRef = ref<HTMLButtonElement | null>(null);
 const historyPanelRef = ref<HTMLElement | null>(null);
 const historyOpen = ref(false);
+const phraseOpen = ref(false);
+const quickPhrases = ["我等到花儿都谢了", "好牌！", "承让承让", "别急，慢慢来"] as const;
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
@@ -569,6 +596,7 @@ async function toggleSettings(): Promise<void> {
     return;
   }
   closeHistory(false);
+  phraseOpen.value = false;
   settingsOpen.value = true;
   await nextTick();
   observeSettingsScroll();
@@ -582,6 +610,7 @@ async function toggleHistory(): Promise<void> {
     return;
   }
   closeSettings(false);
+  phraseOpen.value = false;
   historyOpen.value = true;
   await nextTick();
   historyPanelRef.value?.focus();
@@ -589,11 +618,27 @@ async function toggleHistory(): Promise<void> {
 }
 
 function closeOpenPopover(): void {
+  if (phraseOpen.value) {
+    phraseOpen.value = false;
+    return;
+  }
   if (historyOpen.value) {
     closeHistory();
     return;
   }
   closeSettings();
+}
+
+function togglePhrases(): void {
+  const opening = !phraseOpen.value;
+  closeHistory(false);
+  closeSettings(false);
+  phraseOpen.value = opening;
+}
+
+function sendPhrase(phrase: string): void {
+  phraseOpen.value = false;
+  emit("quickPhrase", phrase);
 }
 
 function closeHistory(restoreFocus = true): void {
@@ -630,6 +675,7 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
   if (historyOpen.value) {
     closeHistory();
   }
+  phraseOpen.value = false;
 }
 
 function removeSettingsOutsideListener(): void {
@@ -887,6 +933,10 @@ function handleNavigationBack(): boolean {
     closeHistory();
     return true;
   }
+  if (phraseOpen.value) {
+    phraseOpen.value = false;
+    return true;
+  }
   return false;
 }
 
@@ -983,7 +1033,8 @@ onBeforeUnmount(() => {
 }
 
 .settings-panel,
-.history-panel {
+.history-panel,
+.phrase-panel {
   position: absolute;
   top: calc(100% + 0.42rem);
   right: 0;
@@ -998,6 +1049,27 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 36px rgba(2, 6, 23, 0.48);
   backdrop-filter: blur(14px);
   z-index: 1;
+}
+
+.phrase-panel {
+  padding: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.phrase-panel button {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: rgba(30, 41, 59, 0.9);
+  color: #f8fafc;
+  text-align: left;
+  padding: 0.35rem 0.65rem;
+}
+
+.phrase-panel .phrase-mute {
+  color: #bae6fd;
+  text-align: center;
 }
 
 .tools-popover-backdrop {
@@ -1516,9 +1588,10 @@ onBeforeUnmount(() => {
   }
 
   .tool-button {
-    min-width: clamp(3.6rem, calc(var(--effective-vw, 1vw) * 9), 4.4rem);
+    min-width: max(2.75rem, 44px);
     height: max(2.25rem, 36px);
-    padding-inline: 0.42rem;
+    padding-inline: 0.28rem;
+    gap: 0.2rem;
   }
 
   .history-list li {

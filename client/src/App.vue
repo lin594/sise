@@ -77,10 +77,13 @@
         :spoken-turn-guidance-supported="spokenTurnGuidanceSupported"
         :screen-wake-lock-supported="screenWakeLockSupported"
         :install-app-available="canOfferPwaInstall"
+        :quick-phrase-muted="quickPhraseMuted"
         @open-rules="openRules"
         @install-app="requestPwaInstall"
         @return-to-decision="returnToDecision"
         @set-auto-play="setAutoPlay"
+        @quick-phrase="sendQuickPhrase"
+        @set-quick-phrase-muted="setQuickPhraseMuted"
         @exit="handleLeaveRoom"
       />
       <div
@@ -217,9 +220,7 @@
         :response-phase="state?.responsePhase || ''"
         :turn-hint="turnHint"
         :interaction-paused-message="interactionPausedMessage"
-        :can-request-more-time="decisionTimer.canRequestMoreTime"
         :decision-untimed="decisionTimer.untimed"
-        :more-time-seconds="decisionTimer.extensionSeconds"
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
         :decision-key="decisionTimer.decisionKey"
@@ -231,9 +232,9 @@
         :reduce-motion="displayPreferences.reduceMotion"
         :viewport-transformed="isRotatedPhonePortrait"
         :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
+        :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
-        @request-more-time="requestMoreTime"
       >
         <template #declaration>
           <DeclarationPanel
@@ -251,12 +252,9 @@
             :compact="isCompactViewport"
             :ultra-compact="isUltraCompactViewport"
             :card-mode="resolvedOwnCardMode"
-            :can-request-more-time="decisionTimer.canRequestMoreTime"
             :untimed="decisionTimer.untimed"
-            :more-time-seconds="decisionTimer.extensionSeconds"
             :decision-key="decisionTimer.decisionKey"
             @submit="submitDeclaration"
-            @request-more-time="requestMoreTime"
           />
         </template>
       </GameBoard>
@@ -336,10 +334,10 @@
                 <summary class="settlement-head" data-testid="settlement-player-summary">
                   <span class="settlement-person">
                     <strong class="settlement-name">
-                      {{ p.name }}<span v-if="p.isConfiguredBot" class="settlement-bot-badge" data-testid="settlement-bot-identity">机器人</span><span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
+                      {{ p.name }}<PlayerStatusIcon v-if="p.isConfiguredBot" :is-configured-bot="true" /><span v-if="p.clientId === mySeatId">（你）</span><span v-if="isSettlementWinner(p)"> · 赢家</span>
                     </strong>
                     <small class="settlement-meta">
-                      手牌 {{ p.hand.length }} 张 · 牌组 {{ settlementGroupBlocks(p).length }} 组 · 流水 {{ p.discardCount }} 张
+                      手牌 {{ p.hand.length }} 张 · 流水 {{ p.discardCount }} 张
                     </small>
                   </span>
                   <span class="settlement-result">
@@ -658,6 +656,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
+import PlayerStatusIcon from "@/components/PlayerStatusIcon.vue";
 import ConnectionStatus from "@/components/ConnectionStatus.vue";
 import RulesGuide from "@/components/RulesGuide.vue";
 import DeclarationPanel from "@/components/DeclarationPanel.vue";
@@ -847,6 +846,8 @@ const {
   privateHand,
   acceptedStateRevision,
   listeningHints,
+  quickPhrase,
+  quickPhraseMuted,
   availableActions,
   huResult,
   roundResult,
@@ -862,7 +863,6 @@ const {
   sendAction,
   sendDiscardCard,
   declareSetup,
-  requestMoreTime,
   startGame,
   nextRound,
   returnLobby,
@@ -877,6 +877,8 @@ const {
   fillBots,
   updateBot,
   removeSeat,
+  sendQuickPhrase,
+  setQuickPhraseMuted,
 } = useRoom("玩家");
 
 const guestProfileSummary = computed(() => {
@@ -1625,11 +1627,16 @@ const settingsDecisionTimeText = computed(() =>
     : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
 );
 
-function openRules(): void {
+function openRules(trigger?: Event | HTMLElement): void {
+  const explicitTarget = trigger instanceof HTMLElement
+    ? trigger
+    : trigger?.currentTarget instanceof HTMLElement
+      ? trigger.currentTarget
+      : null;
   const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  rulesReturnFocus = activeElement && activeElement !== document.body && activeElement !== document.documentElement
+  rulesReturnFocus = explicitTarget ?? (activeElement && activeElement !== document.body && activeElement !== document.documentElement
     ? activeElement
-    : null;
+    : null);
   showRules.value = true;
   void nextTick(() => rulesCloseButtonRef.value?.focus());
 }
@@ -3682,6 +3689,7 @@ watch(
     rgba(7, 15, 28, 0.98);
   border-color: rgba(148, 163, 184, 0.32);
   box-shadow: 0 5px 18px rgba(2, 6, 23, 0.3);
+  min-width: 0;
 }
 
 .top-brand {
@@ -4964,7 +4972,7 @@ watch(
 
 .layout.compact-viewport .settlement-list {
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .layout.compact-viewport .settlement-name {
@@ -4974,11 +4982,11 @@ watch(
 }
 
 .layout.compact-viewport .settlement-item {
-  padding: 0.14rem 0.45rem;
+  padding: 0.08rem 0.4rem;
 }
 
 .layout.compact-viewport .settlement-head {
-  min-height: 2.5rem;
+  min-height: 2.25rem;
   gap: 0.45rem;
 }
 
@@ -5040,6 +5048,18 @@ watch(
 .layout.ultra-compact-viewport .top-slogan,
 .layout.ultra-compact-viewport .meta > span:not(:first-child) {
   display: none;
+}
+
+.layout.ultra-compact-viewport :deep(.game-tools .tool-button > span:not(.history-count)) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .layout.ultra-compact-viewport .rules-slogan {

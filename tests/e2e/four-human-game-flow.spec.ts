@@ -190,7 +190,7 @@ async function expectCrowdedActionDock(page: Page): Promise<void> {
     };
   });
   expect(metrics.controlCount).toBeGreaterThanOrEqual(4);
-  expect(metrics.rows).toBe(2);
+  expect(metrics.rows).toBe(1);
   expect(metrics.noHorizontalOverflow).toBe(true);
   expect(metrics.allContained, JSON.stringify(metrics)).toBe(true);
   expect(metrics.allReachable).toBe(true);
@@ -198,7 +198,7 @@ async function expectCrowdedActionDock(page: Page): Promise<void> {
   expect(metrics.minimumHeight).toBeGreaterThanOrEqual(40);
 }
 
-test("four real friends keep every crowded action reachable after wrapping", async ({ browser }) => {
+test("four real friends keep every crowded action reachable in the reserved action strip", async ({ browser }) => {
   test.setTimeout(120_000);
   const table = await createFourPages(browser);
   const [host] = table.pages;
@@ -251,7 +251,7 @@ test("four real quick-match players share one complete dealer-card presentation"
     expect(roomIds[0]).toBeTruthy();
     expect(new Set(roomIds).size).toBe(1);
     await expectCompleteRoundPresentation(table.pages);
-    await Promise.all(table.pages.map((page) => expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(0)));
+    await Promise.all(table.pages.map((page) => expect(page.locator(".player-card [data-testid='player-status-icon']")).toHaveCount(0)));
   } finally {
     await closeFourPages(table);
   }

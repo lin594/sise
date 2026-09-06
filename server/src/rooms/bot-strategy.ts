@@ -2,6 +2,7 @@ import { isDiscardRestricted } from "../rules/deck.js";
 import { analyzeCardGrouping } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
 import type { AvailableActionEntry } from "./flow/playing-flow.js";
+import { buildVisibleRemainingByFace, findListeningDiscards } from "./flow/listening-hints.js";
 
 export type RandomSource = () => number;
 
@@ -22,6 +23,7 @@ export interface BotDecisionInput {
 export interface BotDiscardInput {
   hand: Card[];
   visibleCards: Card[];
+  declaredKongs?: number;
   strength: number;
   random?: RandomSource;
 }
@@ -125,16 +127,34 @@ export function chooseBotAction(input: BotDecisionInput): BotDecision {
   if (!choices.length) {
     return { action: "pass" };
   }
-  const eligibleChoices = isDiscardRestricted(input.pendingCard)
+  let eligibleChoices = isDiscardRestricted(input.pendingCard)
     ? choices.filter((item) => item.choice.action === "chi")
     : choices;
+  // Quality floor shared by configured bots and autoplay: when taking the
+  // offered card can preserve an already complete same-colour group, do not
+  // dismantle that group merely to eat and leave the duplicate behind.
+  if (!isDiscardRestricted(input.pendingCard) && eligibleChoices.some((item) => item.choice.action === "pass")) {
+    eligibleChoices = eligibleChoices.filter((item) => {
+      if (item.choice.action !== "chi" || !item.choice.candidateId) return true;
+      const entry = input.actions.find((action) => action.action === "chi");
+      const candidate = entry?.candidates?.find((candidateItem) => candidateItem.id === item.choice.candidateId);
+      if (!candidate?.cardIds.length) return true;
+      const consumed = input.hand.filter((card) => candidate.cardIds.includes(card.id));
+      const duplicate = input.hand.find((card) =>
+        !candidate.cardIds.includes(card.id)
+        && card.color === input.pendingCard.color
+        && card.type === input.pendingCard.type,
+      );
+      return !duplicate || analyzeCardGrouping([...consumed, duplicate]).leftoverCount > 0;
+    });
+  }
   return sampleSoftmax(eligibleChoices.length ? eligibleChoices : choices, input.strength, input.random ?? Math.random);
 }
 
 export function chooseBotDiscard(input: BotDiscardInput): Card | null {
   const s = normalizedStrength(input.strength);
   const defenseWeight = 0.8 * s * s;
-  const choices: Array<ScoredChoice<Card>> = input.hand
+  let choices: Array<ScoredChoice<Card>> = input.hand
     .filter((card) => !isDiscardRestricted(card))
     .map((card) => ({
       choice: card,
@@ -144,6 +164,18 @@ export function chooseBotDiscard(input: BotDiscardInput): Card | null {
     }));
   if (!choices.length) {
     return null;
+  }
+  const visibleRemaining = buildVisibleRemainingByFace([...input.visibleCards, ...input.hand]);
+  const listeningIds = new Set(
+    findListeningDiscards(input.hand, input.declaredKongs ?? 0, visibleRemaining).map((route) => route.discardCardId),
+  );
+  if (listeningIds.size > 0) {
+    choices = choices.filter((item) => listeningIds.has(item.choice.id));
+  } else {
+    const bestShape = Math.max(...choices.map((item) => shapeUtility(input.hand.filter((card) => card.id !== item.choice.id))));
+    choices = choices.filter((item) =>
+      shapeUtility(input.hand.filter((card) => card.id !== item.choice.id)) === bestShape,
+    );
   }
   return sampleSoftmax(choices, input.strength, input.random ?? Math.random);
 }

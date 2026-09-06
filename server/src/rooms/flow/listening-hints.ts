@@ -7,6 +7,7 @@ export interface ListeningRoute { discardCardId: string; waits: ListeningWait[] 
 export interface ListeningHints {
   stateRevision: number;
   decisionKey: string;
+  currentWaits: ListeningWait[];
   discards: ListeningRoute[];
   chi: Array<{ candidateId: string; discards: ListeningRoute[] }>;
 }
@@ -62,4 +63,17 @@ export function findListeningDiscards(
     }
   }
   return routes;
+}
+
+export function findCurrentListeningWaits(
+  hand: Card[],
+  minimumHiddenTriplets = 0,
+  visibleRemainingByFace: ReadonlyMap<string, number> = faceTotals,
+): ListeningWait[] {
+  return faces
+    .filter((response) => validateHu(hand, response, { minimumHiddenTriplets }))
+    .map((card) => ({
+      card,
+      visibleRemaining: Math.max(0, visibleRemainingByFace.get(`${card.color}:${card.type}`) ?? 0),
+    }));
 }

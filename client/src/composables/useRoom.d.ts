@@ -36,6 +36,7 @@ export declare function useRoom(playerName?: string): {
         previousPlayerId: string;
         pollOriginPlayerId?: string | undefined;
         activeResponderId?: string | undefined;
+        pendingReceiverId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         tablePresentationVersion?: number | undefined;
@@ -109,6 +110,7 @@ export declare function useRoom(playerName?: string): {
             seatIndex: number;
             name: string;
             handCount?: number | undefined;
+            visibleGroupScore: number;
             declaredKongs: number;
             declaredReady: boolean;
             lobbyReady: boolean;
@@ -273,6 +275,7 @@ export declare function useRoom(playerName?: string): {
         previousPlayerId: string;
         pollOriginPlayerId?: string | undefined;
         activeResponderId?: string | undefined;
+        pendingReceiverId?: string | undefined;
         responsePhase: string;
         responseEndsAt: number;
         tablePresentationVersion?: number | undefined;
@@ -346,6 +349,7 @@ export declare function useRoom(playerName?: string): {
             seatIndex: number;
             name: string;
             handCount?: number | undefined;
+            visibleGroupScore: number;
             declaredKongs: number;
             declaredReady: boolean;
             lobbyReady: boolean;
@@ -512,6 +516,16 @@ export declare function useRoom(playerName?: string): {
     listeningHints: import("vue").Ref<{
         stateRevision: number;
         decisionKey: string;
+        currentWaits: {
+            card: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            };
+            visibleRemaining: number;
+        }[];
         discards: {
             discardCardId: string;
             waits: {
@@ -544,6 +558,16 @@ export declare function useRoom(playerName?: string): {
     } | null, ListeningHints | {
         stateRevision: number;
         decisionKey: string;
+        currentWaits: {
+            card: {
+                id: string;
+                color: string;
+                type: string;
+                source?: "upper" | "draw" | undefined;
+                isResponseCard?: boolean | undefined;
+            };
+            visibleRemaining: number;
+        }[];
         discards: {
             discardCardId: string;
             waits: {
@@ -574,6 +598,20 @@ export declare function useRoom(playerName?: string): {
             }[];
         }[];
     } | null>;
+    quickPhrase: import("vue").Ref<{
+        seatId: string;
+        text: string;
+        sequence: number;
+    } | null, {
+        seatId: string;
+        text: string;
+        sequence: number;
+    } | {
+        seatId: string;
+        text: string;
+        sequence: number;
+    } | null>;
+    quickPhraseMuted: import("vue").Ref<boolean, boolean>;
     availableActions: import("vue").Ref<{
         action: ActionType;
         enabled: boolean;
@@ -885,11 +923,13 @@ export declare function useRoom(playerName?: string): {
     setLobbyReady: (ready: boolean) => boolean;
     setAutoPlay: (enabled: boolean) => void;
     debugApplyRoomSnapshot: (patch: Partial<RoomStateSnapshot> & Record<string, unknown>, source?: "schema" | "explicit") => void;
-    leaveRoom: () => Promise<void>;
+    leaveRoom: (targetRoomId?: string) => Promise<void>;
     claimSeat: (seatIndex: number) => boolean;
     addBot: (seatIndex: number, strength?: number) => void;
     fillBots: () => void;
     updateBot: (seatIndex: number, strength: number) => void;
     removeSeat: (seatIndex: number) => void;
+    sendQuickPhrase: (text: string) => boolean;
+    setQuickPhraseMuted: (muted: boolean) => void;
 };
 export {};

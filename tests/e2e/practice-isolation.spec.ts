@@ -53,8 +53,8 @@ test("two simultaneous single-player sessions never see each other", async ({ br
     expect(firstRoomId).toBeTruthy();
     expect(secondRoomId).toBeTruthy();
     expect(firstRoomId).not.toBe(secondRoomId);
-    await expect(first.locator(".player-card .bot-seat-badge")).toHaveCount(3);
-    await expect(second.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+    await expect(first.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
+    await expect(second.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
     await expect(first.getByText("练习乙", { exact: true })).toHaveCount(0);
     await expect(second.getByText("练习甲", { exact: true })).toHaveCount(0);
   } finally {

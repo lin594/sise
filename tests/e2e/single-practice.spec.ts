@@ -172,8 +172,11 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   await expect(settlementPanel).toHaveAttribute("aria-busy", "false");
   await expect(page.getByTestId("round-overview")).toContainText("你本局");
   await expect(settlementItems.first().locator(".settlement-name")).toContainText("（你）");
-  await expect(page.getByTestId("settlement-bot-identity")).toHaveCount(3);
-  await expect(page.getByTestId("settlement-bot-identity")).toHaveText(["机器人", "机器人", "机器人"]);
+  const settlementBotIcons = settlementItems.locator("[data-testid='player-status-icon'][data-status-kind='computer']");
+  await expect(settlementBotIcons).toHaveCount(3);
+  for (const icon of await settlementBotIcons.all()) {
+    await expect(icon).toHaveAttribute("aria-label", "电脑玩家");
+  }
   expect(await settlementItems.evaluateAll((items) => items.every((item) => !item.hasAttribute("open")))).toBe(true);
   await expect(page.getByText(/最后动作/)).toHaveCount(0);
   await expect(page.getByTestId("game-tools")).toBeVisible();

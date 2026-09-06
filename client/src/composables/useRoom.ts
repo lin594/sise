@@ -39,6 +39,7 @@ const ACTION_RECEIPT_WAIT_MS = 2500;
 const ACTION_REJECTED_VISIBLE_MS = 3600;
 const CONNECTION_PROBE_INTERVAL_MS = 4000;
 const CONNECTION_PROBE_TIMEOUT_MS = 7000;
+const QUICK_PHRASE_MUTE_KEY = "sise_quick_phrase_muted";
 
 const TERMINAL_ROOM_CLOSE_MESSAGES: Readonly<Record<number, string>> = {
   4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
@@ -234,6 +235,7 @@ function normalizePlayer(raw: any): PlayerState {
     seatIndex: Number(raw?.seatIndex ?? -1),
     name: String(raw?.name ?? ""),
     handCount: Number(raw?.handCount ?? 0),
+    visibleGroupScore: Math.max(0, Number(raw?.visibleGroupScore ?? 0)),
     declaredKongs: Number(raw?.declaredKongs ?? 0),
     declaredReady: Boolean(raw?.declaredReady),
     lobbyReady: Boolean(raw?.lobbyReady),
@@ -302,6 +304,7 @@ function normalizeSnapshot(next: unknown): RoomStateSnapshot {
     previousPlayerId: String(rawState?.previousPlayerId ?? ""),
     pollOriginPlayerId: String(rawState?.pollOriginPlayerId ?? ""),
     activeResponderId: String(rawState?.activeResponderId ?? ""),
+    pendingReceiverId: String(rawState?.pendingReceiverId ?? ""),
     responsePhase: normalizeResponsePhase(String(rawState?.responsePhase ?? "")),
     responseEndsAt: Number(rawState?.responseEndsAt ?? 0),
     lastAction: String(rawState?.lastAction ?? ""),
@@ -474,6 +477,9 @@ export function useRoom(playerName = "Player") {
   const privateHand = ref<Card[]>([]);
   const acceptedStateRevision = ref(-1);
   const listeningHints = ref<ListeningHints | null>(null);
+  const quickPhrase = ref<{ seatId: string; text: string; sequence: number } | null>(null);
+  const quickPhraseMuted = ref(readStoredValue(QUICK_PHRASE_MUTE_KEY) === "1");
+  let quickPhraseTimer: number | null = null;
   const availableActions = ref<AvailableAction[]>([]);
   const huResult = ref<{ winnerId: string; groups: string[] } | null>(null);
   const roundResult = ref<RoundResultPayload | null>(null);
@@ -1670,6 +1676,24 @@ export function useRoom(playerName = "Player") {
           visible: false,
         });
       });
+      joined.onMessage("quick_phrase", (payload: { seatId?: unknown; text?: unknown; sequence?: unknown }) => {
+        if (!isCurrentJoinedRoom()) return;
+        const seatId = String(payload?.seatId ?? "");
+        const text = String(payload?.text ?? "");
+        if (!seatId || !text) return;
+        quickPhrase.value = { seatId, text, sequence: Number(payload?.sequence ?? Date.now()) };
+        if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
+        quickPhraseTimer = window.setTimeout(() => {
+          quickPhraseTimer = null;
+          quickPhrase.value = null;
+        }, 3_000);
+        if (!quickPhraseMuted.value && "speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "zh-CN";
+          window.speechSynthesis.speak(utterance);
+        }
+      });
       joined.onMessage("action_rejected", (payload: { reason?: string; decisionKey?: string; message?: string }) => {
         if (!isCurrentJoinedRoom()) {
           return;
@@ -2064,6 +2088,16 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("remove_seat", { seatIndex });
   }
 
+  function sendQuickPhrase(text: string): boolean {
+    return safeRoomSend("quick_phrase", { text });
+  }
+
+  function setQuickPhraseMuted(muted: boolean): void {
+    quickPhraseMuted.value = muted;
+    writeStoredValue(QUICK_PHRASE_MUTE_KEY, muted ? "1" : "0");
+    if (muted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
   window.addEventListener("offline", handleBrowserOffline);
   window.addEventListener("online", handleBrowserOnline);
   document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -2074,6 +2108,7 @@ export function useRoom(playerName = "Player") {
     clearConnectionProbeTimers();
     clearRestoredNoticeTimer();
     clearActionFeedback();
+    if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
     window.removeEventListener("offline", handleBrowserOffline);
     window.removeEventListener("online", handleBrowserOnline);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -2098,6 +2133,8 @@ export function useRoom(playerName = "Player") {
     privateHand,
     acceptedStateRevision,
     listeningHints,
+    quickPhrase,
+    quickPhraseMuted,
     availableActions,
     huResult,
     roundResult,
@@ -2131,5 +2168,7 @@ export function useRoom(playerName = "Player") {
     fillBots,
     updateBot,
     removeSeat,
+    sendQuickPhrase,
+    setQuickPhraseMuted,
   };
 }

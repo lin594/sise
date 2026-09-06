@@ -95,7 +95,7 @@ test("quick match groups humans, fixes their seats, and can start with computers
     await first.getByTestId("lobby-start").click();
     await expect(first.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(second.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-    await expect(first.locator(".player-card .bot-seat-badge")).toHaveCount(2);
+    await expect(first.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(2);
   } finally {
     await secondContext.close();
     await firstContext.close();
@@ -135,7 +135,7 @@ test("quick match keeps its countdown through refresh and auto-starts on a rotat
     expect(page.url()).not.toContain("roomId=");
 
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator(".player-card .bot-seat-badge")).toHaveCount(3);
+    await expect(page.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
   } finally {
     await context.close();
   }

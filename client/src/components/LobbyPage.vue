@@ -32,7 +32,7 @@
           </span>
           <span class="guest-profile-summary-view" aria-hidden="true">查看</span>
         </button>
-        <button v-if="roomId" class="ghost head-action" type="button" @click="$emit('open-rules')">查看规则</button>
+        <button v-if="roomId" class="ghost head-action" type="button" @click="requestRules">查看规则</button>
         <button
           v-if="(roomMode === 'friends' || roomMode === 'match') && roomId"
           ref="leaveButtonRef"
@@ -499,7 +499,7 @@ const currentScoringOption = computed(
   () => scoringOptions.find((option) => option.mode === props.scoringMode) ?? scoringOptions[0]!,
 );
 const emit = defineEmits<{
-  "open-rules": [];
+  "open-rules": [trigger: HTMLElement];
   start: [];
   "select-mode": [modeId: string];
   "copy-invite": [];
@@ -515,6 +515,13 @@ const emit = defineEmits<{
   "set-scoring-mode": [mode: ScoringMode];
   "set-lobby-ready": [ready: boolean];
 }>();
+
+function requestRules(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) {
+    emit("open-rules", event.currentTarget);
+  }
+}
+
 const departureIntent = ref<"leave" | "dissolve" | null>(null);
 const fillRequested = ref(false);
 const leaveButtonRef = ref<HTMLButtonElement | null>(null);

@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 const props = withDefaults(defineProps(), {
     canAct: false,
     isCurrentTurn: false,
@@ -10,15 +10,11 @@ const props = withDefaults(defineProps(), {
     discardPending: false,
     secondsLeft: null,
     untimed: false,
-    canRequestMoreTime: false,
-    moreTimeSeconds: 20,
     decisionKey: "",
     actionFeedback: null,
 });
 const emit = defineEmits();
 const busy = ref(false);
-const moreTimeRequested = ref(false);
-let moreTimeRetryTimer = null;
 const normalized = computed(() => {
     const map = new Map(props.actions.map((entry) => [entry.action, entry]));
     const pass = map.get("pass");
@@ -94,30 +90,6 @@ const panelAnnouncement = computed(() => {
     }
     return needsDecision.value ? `该你操作了。${timing}` : "";
 });
-function clearMoreTimeRetryTimer() {
-    if (moreTimeRetryTimer !== null) {
-        window.clearTimeout(moreTimeRetryTimer);
-        moreTimeRetryTimer = null;
-    }
-}
-watch(() => `${props.decisionKey}|${props.canRequestMoreTime ? "available" : "used"}`, () => {
-    if (props.canRequestMoreTime) {
-        clearMoreTimeRetryTimer();
-        moreTimeRequested.value = false;
-    }
-});
-function requestMoreTime() {
-    if (!props.canRequestMoreTime || moreTimeRequested.value)
-        return;
-    moreTimeRequested.value = true;
-    emit("requestMoreTime");
-    clearMoreTimeRetryTimer();
-    moreTimeRetryTimer = window.setTimeout(() => {
-        moreTimeRetryTimer = null;
-        if (props.canRequestMoreTime)
-            moreTimeRequested.value = false;
-    }, 2500);
-}
 function isClickable(item) {
     return item.enabled || Boolean(item.deferred);
 }
@@ -155,7 +127,6 @@ function onClick(item) {
         busy.value = false;
     }, 220);
 }
-onBeforeUnmount(clearMoreTimeRetryTimer);
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_withDefaultsArg = (function (t) { return t; })({
     canAct: false,
@@ -168,8 +139,6 @@ const __VLS_withDefaultsArg = (function (t) { return t; })({
     discardPending: false,
     secondsLeft: null,
     untimed: false,
-    canRequestMoreTime: false,
-    moreTimeSeconds: 20,
     decisionKey: "",
     actionFeedback: null,
 });
@@ -237,7 +206,7 @@ if (__VLS_ctx.showPanel) {
             ...{ class: "action-row" },
             'data-testid': "action-row",
         });
-        if (!__VLS_ctx.fixedStatus && __VLS_ctx.timerLabel && !__VLS_ctx.canRequestMoreTime) {
+        if (!__VLS_ctx.fixedStatus && __VLS_ctx.timerLabel) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "timer-chip" },
                 ...{ class: ({ urgent: __VLS_ctx.isUrgent }) },
@@ -284,17 +253,6 @@ if (__VLS_ctx.showPanel) {
             });
             (__VLS_ctx.actionText(item));
         }
-        if (!__VLS_ctx.fixedStatus && __VLS_ctx.needsDecision && !__VLS_ctx.isEarlyCollectiveChoice && __VLS_ctx.canRequestMoreTime) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-                ...{ onClick: (__VLS_ctx.requestMoreTime) },
-                type: "button",
-                ...{ class: "more-time-button" },
-                'data-testid': "request-more-time",
-                disabled: (__VLS_ctx.moreTimeRequested),
-                'aria-label': (`需要更多时间，增加${__VLS_ctx.moreTimeSeconds}秒`),
-            });
-            (__VLS_ctx.moreTimeRequested ? "…" : `+${__VLS_ctx.moreTimeSeconds}`);
-        }
         if (__VLS_ctx.actionFeedback) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "feedback-chip" },
@@ -314,26 +272,21 @@ if (__VLS_ctx.showPanel) {
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary-action']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['more-time-button']} */ ;
 /** @type {__VLS_StyleScopedClasses['feedback-chip']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             emit: emit,
-            moreTimeRequested: moreTimeRequested,
             normalized: normalized,
             actionFeedback: actionFeedback,
             submissionLocked: submissionLocked,
-            needsDecision: needsDecision,
             panelLocked: panelLocked,
             showPanel: showPanel,
-            isEarlyCollectiveChoice: isEarlyCollectiveChoice,
             isUrgent: isUrgent,
             timerLabel: timerLabel,
             timerAccessibleLabel: timerAccessibleLabel,
             panelAnnouncement: panelAnnouncement,
-            requestMoreTime: requestMoreTime,
             isActionEnabled: isActionEnabled,
             actionText: actionText,
             actionAccessibleLabel: actionAccessibleLabel,
