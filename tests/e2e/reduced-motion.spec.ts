@@ -1,13 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
-async function enterDeclaration(page: Page): Promise<void> {
+async function enterGame(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 }
 
 async function recordNextHandScrollBehavior(page: Page): Promise<void> {
@@ -27,7 +28,7 @@ async function recordNextHandScrollBehavior(page: Page): Promise<void> {
 }
 
 test("the game motion preference is immediate, persistent, and still defers to the operating system", async ({ page }, testInfo) => {
-  await enterDeclaration(page);
+  await enterGame(page);
 
   const layout = page.locator("main.layout");
   const settingsButton = page.getByTestId("game-settings");
@@ -75,7 +76,7 @@ test("the game motion preference is immediate, persistent, and still defers to t
   await expect(layout).toHaveAttribute("data-reduce-motion", "false");
   await page.keyboard.press("Escape");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const systemTransitionSeconds = await page.getByTestId("confirm-declaration").evaluate((element) =>
+  const systemTransitionSeconds = await page.getByTestId("game-settings").evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).transitionDuration) || 0,
   );
   expect(systemTransitionSeconds).toBeLessThanOrEqual(0.00001);

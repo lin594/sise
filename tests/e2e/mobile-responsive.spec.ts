@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
 
 async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
   const text = (await locator.textContent())?.trim() ?? "";
@@ -559,11 +559,8 @@ test.describe("phone portrait landscape canvas", () => {
     test.setTimeout(90_000);
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
+    await finishDeclarationIfNeeded(page);
     const layout = page.locator("main.layout");
-    await expect(layout).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await applyLocalDebugScenario(page, "local_draw_pass");
 
@@ -697,12 +694,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
-    await stageDeclarationForTest(page);
-
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
+    await finishDeclarationIfNeeded(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
 
     const layout = page.locator(".layout");
@@ -771,8 +763,9 @@ test.describe("phone portrait landscape canvas", () => {
   test("keeps settings and history reachable inside the rotated effective viewport", async ({ page }, testInfo) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 320, height: 568 });
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
+    await stageDeclarationForTest(page);
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
@@ -1559,10 +1552,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     await page.getByTestId("lobby-start").click();
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
-    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await finishDeclarationIfNeeded(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await page.setViewportSize({ width: 568, height: 320 });
 
@@ -1676,10 +1666,7 @@ test.describe("compact landscape gameplay", () => {
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
-    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await finishDeclarationIfNeeded(page);
     await page.setViewportSize({ width: 568, height: 320 });
 
     const autoPlay = page.getByTestId("game-auto-play");
@@ -1721,10 +1708,7 @@ test.describe("compact landscape gameplay", () => {
     });
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
-    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await finishDeclarationIfNeeded(page);
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await expect(page.locator(".fx-card")).toHaveCount(0, { timeout: 6_000 });
 
@@ -2412,8 +2396,9 @@ test.describe("desktop declaration", () => {
 
   test("uses the same grouped declaration workflow without compact styling", async ({ page }) => {
     test.setTimeout(60_000);
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
+    await stageDeclarationForTest(page);
 
     const panel = page.locator(".declare-panel");
     await expect(panel).toBeVisible({ timeout: 15_000 });

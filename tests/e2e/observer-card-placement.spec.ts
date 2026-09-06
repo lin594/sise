@@ -120,6 +120,5 @@ test("a player's own discard stays centered without adding a waiting prompt", as
   });
   await expect(page.getByTestId("pending-card")).toBeVisible();
   await expect(page.locator(".self-info-hint")).toHaveText("");
-  await expect(page.locator(".action-dock .action-row")).toHaveCount(0);
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
 });

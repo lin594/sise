@@ -40,21 +40,20 @@ export async function waitForDeclarationOrPlaying(page: Page, timeout = 20_000):
  */
 export async function stageDeclarationForTest(page: Page, timeout = 20_000): Promise<void> {
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout });
-  await page.evaluate(() => {
+  await expect.poll(() => page.evaluate(() => {
     const bridge = (window as Window & {
-      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+      __siseLocalTest?: {
+        setupScenario: (scenario: string) => void;
+        getLastResult: () => { scenario: string; ok: boolean } | null;
+      };
     }).__siseLocalTest;
-    if (!bridge) {
-      throw new Error("Local test bridge is unavailable");
+    if (!bridge) return null;
+    const result = bridge.getLastResult();
+    if (result?.scenario !== "staged_declaration" || !result.ok) {
+      bridge.setupScenario("staged_declaration");
     }
-    bridge.setupScenario("staged_declaration");
-  });
-  await expect.poll(() =>
-    page.evaluate(() =>
-      (window as Window & {
-        __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
-      }).__siseLocalTest?.getLastResult() ?? null,
-    ),
+    return result;
+  }),
     { timeout },
   ).toMatchObject({ scenario: "staged_declaration", ok: true });
   await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout });
