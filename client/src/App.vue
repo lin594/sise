@@ -1687,7 +1687,7 @@ function closeRules(restoreFocus = true): void {
       returnTarget?.isConnected && !returnToGameSettings
         ? returnTarget
         : document.querySelector<HTMLElement>(
-          "[data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='login-submit'], .reset-btn",
+          "[data-testid='lobby-rules']:not(:disabled), [data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='login-submit'], .reset-btn",
         );
     const restore = () => resolveTarget()?.focus({ preventScroll: true });
     restore();

@@ -42,11 +42,11 @@ test('friend waiting room rules entry opens the shared guide', async ({ page }) 
   await login(page);
   await page.getByTestId('mode-friends').click();
   await page.getByTestId('lobby-start').click();
-  await page.getByRole('button', { name: '查看规则', exact: true }).click();
+  await page.getByTestId('lobby-rules').click();
   await expect(page.getByTestId('rules-panel')).toBeVisible();
   await expect(page.getByText('现在怎么操作', { exact: true })).toBeVisible();
   await page.getByTestId('close-rules').click();
-  await expect(page.getByRole('button', { name: '查看规则', exact: true })).toBeFocused();
+  await expect(page.getByTestId('lobby-rules')).toBeFocused();
 });
 test('listening marks stay in the hand and only discard selection opens a preview', async ({ page }, info) => {
   await page.setViewportSize({ width: 667, height: 375 });
