@@ -832,9 +832,13 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   );
   const roomId = new URL(page.url()).searchParams.get("roomId");
   const inviteUrl = invitationUrlFromRoomPage(page);
-  expect(shared).toEqual({ text: `邀请你一起传承四色牌文化\n好友房 ${roomId}\n${inviteUrl}` });
-  expect(shared.text).not.toContain("playerToken");
-  expect(shared.text).not.toContain("hostKey");
+  expect(shared).toEqual({
+    title: "邀请你一起传承四色牌文化",
+    text: `好友房 ${roomId} · 点击进入四色牌同桌相聚`,
+    url: inviteUrl,
+  });
+  expect(shared.url).not.toContain("playerToken");
+  expect(shared.url).not.toContain("hostKey");
 });
 
 test("keeps the friend room unchanged when system sharing is cancelled", async ({ page }) => {

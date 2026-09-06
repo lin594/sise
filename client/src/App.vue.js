@@ -2264,10 +2264,10 @@ async function performInviteAction(action) {
     try {
         if (action === "share" && navigator.share) {
             try {
-                // Keep the URL in the message body instead of passing a separate
-                // link item that mobile share targets may turn into an attachment.
                 await navigator.share({
-                    text: `邀请你一起传承四色牌文化\n好友房 ${activeRoomId.value}\n${inviteUrl}`,
+                    title: "邀请你一起传承四色牌文化",
+                    text: `好友房 ${activeRoomId.value} · 点击进入四色牌同桌相聚`,
+                    url: inviteUrl,
                 });
                 globalError.value = "";
                 showGlobalNotice("邀请已分享，等待牌友加入");
