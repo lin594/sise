@@ -190,6 +190,8 @@ npm run smoke:imac-gateway
 - `ENABLE_DEBUG_SCENARIOS`：仅供本地自动化构造牌局；默认 `0`。只有非生产环境显式设为 `1` 才注册 `debug_setup`，且仅房主可调用；`NODE_ENV=production` 时即使误设为 `1` 也会硬禁用。
 - `REDIS_URL`：访客档案和活动房恢复快照的 Redis 地址。档案操作在故障时降级到当前进程内存并可在恢复后补写；牌局本身继续在内存运行，快照写入失败不阻塞操作，但只有已成功落盘的最新快照能在进程重建后恢复。
 
+从 2026-09 的旧部署升级时必须同时检查持久化 `.env`：历史值 `BOT_THINK_MIN_MS=1800`、`BOT_THINK_MAX_MS=3200`、`LOCAL_TRANSITION_DELAY_MS=5000` 会覆盖仓库与 Compose 的新默认值，使“真人出牌 → 机器人抓牌”出现约十秒的假死观感。应分别改为 `450`、`850`、`250`，再重建 server 容器，并用 `docker compose ... exec server env` 核对容器内的有效值。服务端对生产环境中的异常大值还会记录 `[game-timing]` 告警并回退到默认值，避免陈旧配置再次把牌桌拖慢；测试环境仍允许显式构造慢计时场景。
+
 ### 前端与镜像
 
 - `VITE_SERVER_URL`：浏览器连接的 WebSocket 地址。

@@ -109,6 +109,36 @@ test("online human forced pass keeps the fairness window without exposing a Pass
   assert.equal(room.state.lastAction, "B PASS");
 });
 
+test("response privacy protects a human draw but never delays their own discard", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.humanForcedPassDelayMs = 3_000;
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("private-draw", "white", "shi", "draw"),
+    collectives: new Map(),
+  };
+  assert.equal(room.responsePrivacyMinimumForSeat("A"), 3_000);
+
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("public-discard", "white", "shi", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["A"];
+  room.collectiveCursor = 0;
+  let resolved = false;
+  room.resolveCollectivePhase = () => {
+    resolved = true;
+  };
+
+  room.advanceCollectivePolling();
+  assert.equal(room.responsePrivacyMinimumForSeat("A"), 0);
+  assert.equal(room.pendingResponse.collectives.get("A")?.action, "pass");
+  assert.equal(room.collectiveTimer, null);
+  assert.equal(resolved, true);
+});
+
 test("a private preselection cannot make a human responder vanish instantly", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.humanForcedPassDelayMs = 35;

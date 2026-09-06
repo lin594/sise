@@ -78,6 +78,7 @@ import {
 } from "./flow/playing-flow.js";
 import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
 import { registerRoom, unregisterRoom, type PrivateStateSnapshot } from "./room-registry.js";
+import { GAME_TIMING_CONFIG } from "./game-timing-config.js";
 import { chooseBotAction, chooseBotDiscard } from "./bot-strategy.js";
 import { normalizeGuestProfileToken } from "../profiles/guest-profile-store.js";
 import {
@@ -204,22 +205,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private dealerPickerId: string | null = null;
   private nextRoundSetup: RoundBootstrapSetup | null = null;
   private awaitingDiscardOwnerId: string | null = null;
-  private readonly botThinkMinMs = Math.max(
-    0,
-    Number(process.env.BOT_THINK_MIN_MS ?? process.env.BOT_THINK_MS ?? 450),
-  );
-  private readonly botThinkMaxMs = Math.max(
-    this.botThinkMinMs,
-    Number(process.env.BOT_THINK_MAX_MS ?? 850),
-  );
-  private readonly botCollectiveThinkMinMs = Math.max(
-    0,
-    Number(process.env.BOT_COLLECTIVE_THINK_MIN_MS ?? 80),
-  );
-  private readonly botCollectiveThinkMaxMs = Math.max(
-    this.botCollectiveThinkMinMs,
-    Number(process.env.BOT_COLLECTIVE_THINK_MAX_MS ?? 180),
-  );
+  private readonly botThinkMinMs = GAME_TIMING_CONFIG.botThinkMinMs;
+  private readonly botThinkMaxMs = GAME_TIMING_CONFIG.botThinkMaxMs;
+  private readonly botCollectiveThinkMinMs = GAME_TIMING_CONFIG.botCollectiveThinkMinMs;
+  private readonly botCollectiveThinkMaxMs = GAME_TIMING_CONFIG.botCollectiveThinkMaxMs;
   private readonly operationTimeoutMs = Math.max(
     1000,
     Number(process.env.OP_TIMEOUT_MS ?? DEFAULT_OPERATION_TIMEOUT_MS),
@@ -229,7 +218,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
-  private readonly localTransitionDelayMs = Math.max(0, Number(process.env.LOCAL_TRANSITION_DELAY_MS ?? 250));
+  private readonly localTransitionDelayMs = GAME_TIMING_CONFIG.localTransitionDelayMs;
   private humanForcedPassDelayMs = Math.max(
     process.env.NODE_ENV === "test" ? 0 : 3000,
     Number(process.env.HUMAN_FORCED_PASS_DELAY_MS ?? 3000),
@@ -2707,6 +2696,17 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private responsePrivacyMinimumForSeat(seatId: string): number {
     if (this.state.roomMode === "practice") {
+      return 0;
+    }
+    // The player who discarded an upper card cannot respond to that same card,
+    // which is public knowledge. Holding that seat at the tail of the global
+    // queue protects no private information and makes bot tables look frozen.
+    // A self-drawn card is different: the owner's eat/pass ability is private,
+    // so draw responses continue to observe the full privacy floor.
+    if (
+      this.pendingResponse?.card.source === "upper" &&
+      this.pendingResponse.ownerId === seatId
+    ) {
       return 0;
     }
     const player = this.state.players.get(seatId);
