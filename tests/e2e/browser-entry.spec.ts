@@ -41,18 +41,42 @@ test("publishes a recognizable browser and home-screen identity", async ({ page 
   });
   expect(manifest.icons).toEqual(expect.arrayContaining([
     expect.objectContaining({ src: "/icons/sise-192.png", sizes: "192x192", type: "image/png" }),
-    expect.objectContaining({ src: "/icons/sise-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }),
+    expect.objectContaining({ src: "/icons/sise-512.png", sizes: "512x512", type: "image/png", purpose: "any" }),
+    expect.objectContaining({ src: "/icons/sise-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }),
   ]));
 
   for (const [src, size] of [
     ["/icons/sise-180.png", 180],
     ["/icons/sise-192.png", 192],
     ["/icons/sise-512.png", 512],
+    ["/icons/sise-maskable-512.png", 512],
   ] as const) {
     const response = await page.request.get(src);
     expect(response.ok(), `${src} should be available`).toBe(true);
     expect(response.headers()["content-type"]).toBe("image/png");
-    expect(pngInfo(await response.body())).toEqual({ width: size, height: size, colorType: 2 });
+    const info = pngInfo(await response.body());
+    expect(info.width).toBe(size);
+    expect(info.height).toBe(size);
+    expect([2, 6]).toContain(info.colorType);
+  }
+
+  const shareThumbnailResponse = await page.request.get("/share-thumbnail-v2.png");
+  expect(shareThumbnailResponse.ok()).toBe(true);
+  expect(shareThumbnailResponse.headers()["content-type"]).toBe("image/png");
+  const shareThumbnailInfo = pngInfo(await shareThumbnailResponse.body());
+  expect(shareThumbnailInfo).toMatchObject({ width: 800, height: 800 });
+  expect([2, 6]).toContain(shareThumbnailInfo.colorType);
+
+  for (const src of ["/favicon.svg", "/share-thumbnail-v2.svg"]) {
+    const response = await page.request.get(src);
+    expect(response.ok(), `${src} should be available`).toBe(true);
+    expect(response.headers()["content-type"]).toContain("image/svg+xml");
+    const svg = await response.text();
+    for (const face of ["帥", "相", "車", "士"]) {
+      expect(svg.match(new RegExp(`>${face}<`, "gu")), `${src} should print ${face} at both ends`).toHaveLength(2);
+    }
+    expect(svg).not.toMatch(/>[帅车]</u);
+    expect(svg.match(/rotate\(180 /gu)).toHaveLength(4);
   }
 
   const legacyIconResponse = await page.request.get("/favicon.ico");
@@ -71,4 +95,79 @@ test("does not disguise missing icon files as the app shell", async () => {
     "client/src/App.vue",
   ].map((relativePath) => readFile(path.join(process.cwd(), relativePath), "utf8")));
   expect(sourceFiles.join("\n")).not.toContain("serviceWorker.register");
+});
+
+test("offers one-click installation when Chromium exposes the install prompt", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.addEventListener("load", () => {
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      Object.defineProperties(event, {
+        prompt: {
+          value: async () => sessionStorage.setItem("sise_test_install_prompted", "1"),
+        },
+        userChoice: {
+          value: Promise.resolve({ outcome: "accepted", platform: "web" }),
+        },
+      });
+      window.dispatchEvent(event);
+    }, { once: true });
+  });
+
+  await page.goto("/");
+  const installButton = page.getByTestId("pwa-install-entry");
+  await expect(installButton).toBeVisible();
+  await installButton.click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("sise_test_install_prompted"))).toBe("1");
+  await expect(page.getByTestId("global-notice")).toHaveText("四色牌已安装，可以从桌面直接打开");
+  await expect(installButton).toHaveCount(0);
+});
+
+test("guides WeChat visitors to keep the current link and open it in a browser", async ({ browser }) => {
+  const context = await browser.newContext({
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 MicroMessenger/8.0.50",
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto("/");
+    await page.getByTestId("pwa-install-entry").click();
+    const guide = page.getByTestId("pwa-install-guide-mask");
+    await expect(guide.getByRole("heading")).toHaveText("先在浏览器里打开");
+    await expect(guide).toContainText("当前好友房地址会保留");
+    await expect(guide).toContainText("选择“在浏览器打开”");
+    await page.getByTestId("close-pwa-install-guide").click();
+    await expect(guide).toHaveCount(0);
+    await expect(page.getByTestId("pwa-install-entry")).toBeFocused();
+  } finally {
+    await context.close();
+  }
+});
+
+test("does not offer installation inside an installed standalone app", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "standalone", { configurable: true, value: true });
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
+});
+
+test("keeps installation discoverable in game settings without occupying the table header", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.goto("/?e2eDebug=1");
+  await page.getByTestId("nickname-input").fill("桌面应用测试");
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("lobby-start").click();
+  await expect(page.getByTestId("game-settings")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
+
+  await page.getByTestId("game-settings").click();
+  const settingsInstall = page.getByTestId("settings-install-app");
+  await expect(settingsInstall).toBeVisible();
+  await settingsInstall.click();
+  await expect(page.getByTestId("pwa-install-guide-mask")).toBeVisible();
+  await page.getByTestId("close-pwa-install-guide").click();
+  await expect(page.getByTestId("game-settings")).toBeFocused();
 });

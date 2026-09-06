@@ -355,6 +355,19 @@
           </span>
           <span class="switch-state">不可用</span>
         </div>
+        <button
+          v-if="props.installAppAvailable"
+          class="setting-switch install-app-setting"
+          type="button"
+          data-testid="settings-install-app"
+          @click="requestInstallApp"
+        >
+          <span>
+            <strong>安装四色牌</strong>
+            <small>独立窗口打开，牌面空间更宽；游戏仍需联网</small>
+          </span>
+          <span class="switch-state install-state">安装</span>
+        </button>
         <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
@@ -441,6 +454,7 @@ const props = withDefaults(
     autoPlayPending?: boolean;
     spokenTurnGuidanceSupported?: boolean;
     screenWakeLockSupported?: boolean;
+    installAppAvailable?: boolean;
   }>(),
   {
     decisionActive: false,
@@ -453,12 +467,14 @@ const props = withDefaults(
     autoPlayPending: false,
     spokenTurnGuidanceSupported: false,
     screenWakeLockSupported: false,
+    installAppAvailable: false,
   },
 );
 
 const emit = defineEmits<{
   "update:modelValue": [preferences: GameDisplayPreferences];
   openRules: [];
+  installApp: [];
   returnToDecision: [];
   exit: [];
   setAutoPlay: [enabled: boolean];
@@ -711,6 +727,11 @@ function setReduceMotion(reduceMotion: boolean): void {
 
 function setCardColorAssist(showCardColorAssist: boolean): void {
   emit("update:modelValue", { ...props.modelValue, showCardColorAssist });
+}
+
+function requestInstallApp(): void {
+  closeSettings();
+  emit("installApp");
 }
 
 let rulesOpeningPending = false;
@@ -1267,6 +1288,16 @@ onBeforeUnmount(() => {
 .switch-state.active {
   background: #047857;
   color: #ecfdf5;
+}
+
+.install-app-setting {
+  border-color: rgba(251, 191, 36, 0.66);
+  background: rgba(120, 53, 15, 0.26);
+}
+
+.install-app-setting .install-state {
+  background: #92400e;
+  color: #fef3c7;
 }
 
 .alert-options button {

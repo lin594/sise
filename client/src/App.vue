@@ -46,6 +46,20 @@
         :show-connected="!showGameTools"
         @retry="retryConnection"
       />
+      <button
+        v-if="!showGameTools && canOfferPwaInstall"
+        class="ghost reset-btn install-app-entry"
+        type="button"
+        data-testid="pwa-install-entry"
+        aria-label="安装四色牌到桌面，以独立窗口打开"
+        @click="requestPwaInstall"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 16v4h14v-4" />
+        </svg>
+        <span class="install-label-full">安装四色牌</span>
+        <span class="install-label-short">安装</span>
+      </button>
       <GameTools
         ref="gameToolsRef"
         v-if="showGameTools"
@@ -60,7 +74,9 @@
         :auto-play-pending="isEnded && !Boolean(mePlayer?.isAutoPlay)"
         :spoken-turn-guidance-supported="spokenTurnGuidanceSupported"
         :screen-wake-lock-supported="screenWakeLockSupported"
+        :install-app-available="canOfferPwaInstall"
         @open-rules="openRules"
+        @install-app="requestPwaInstall"
         @return-to-decision="returnToDecision"
         @set-auto-play="setAutoPlay"
         @exit="handleLeaveRoom"
@@ -240,6 +256,12 @@
       :url="inviteQrUrl"
       :room-id="inviteQrRoomId"
       @close="closeInviteQr"
+    />
+
+    <PwaInstallDialog
+      v-if="pwaInstallGuide"
+      :guide="pwaInstallGuide"
+      @close="closePwaInstallGuide"
     />
 
 
@@ -627,6 +649,8 @@ import GameTools from "@/components/GameTools.vue";
 import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
 import LoginPage from "@/components/LoginPage.vue";
+import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
+import { usePwaInstall, type PwaInstallGuide } from "@/composables/usePwaInstall";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { useGuestProfile } from "@/composables/useGuestProfile";
@@ -673,6 +697,46 @@ const HTTP_URL = BACKEND_HTTP_URL;
 const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
 const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
 const browserStoragePersistent = hasPersistentBrowserStorage();
+const { canOfferInstall: canOfferPwaInstall, requestInstall: installPwa } = usePwaInstall();
+const pwaInstallGuide = ref<PwaInstallGuide | null>(null);
+let pwaInstallReturnFocus: HTMLElement | null = null;
+
+async function requestPwaInstall(): Promise<void> {
+  if (!canOfferPwaInstall.value) return;
+  pwaInstallReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  try {
+    const result = await installPwa();
+    if (result.kind === "guide") {
+      pwaInstallGuide.value = result.guide;
+      return;
+    }
+    if (result.kind === "accepted") {
+      globalError.value = "";
+      showGlobalNotice("四色牌已安装，可以从桌面直接打开");
+    }
+  } catch {
+    globalError.value = "暂时无法打开安装提示，请从浏览器菜单选择“安装应用”或“添加到主屏幕”。";
+  }
+}
+
+function closePwaInstallGuide(restoreFocus = true): void {
+  if (!pwaInstallGuide.value) return;
+  pwaInstallGuide.value = null;
+  if (!restoreFocus) {
+    pwaInstallReturnFocus = null;
+    return;
+  }
+  void nextTick(() => {
+    window.requestAnimationFrame(() => {
+      const returnTarget = pwaInstallReturnFocus?.isConnected
+        && !pwaInstallReturnFocus.closest("[data-testid='settings-panel']")
+        ? pwaInstallReturnFocus
+        : document.querySelector<HTMLElement>("[data-testid='pwa-install-entry'], [data-testid='game-settings']");
+      returnTarget?.focus({ preventScroll: true });
+      pwaInstallReturnFocus = null;
+    });
+  });
+}
 
 function normalizeCardDisplayMode(value: unknown): CardDisplayMode | null {
   return value === "large" || value === "adaptive" || value === "long" ? value : null;
@@ -1900,6 +1964,10 @@ function releaseRoomNavigationGuard(): void {
 function closeTopmostRoomLayerForBack(): boolean {
   if (confirmingResumeAbandon.value) {
     cancelResumeAbandon();
+    return true;
+  }
+  if (pwaInstallGuide.value) {
+    closePwaInstallGuide();
     return true;
   }
   if (inviteQrUrl.value) {
@@ -3389,6 +3457,7 @@ watch(activeRoomId, (roomId, previousRoomId) => {
     clearLobbyReadyPending();
     clearSettlementTransitionPending();
     closeInviteQr(false);
+    closePwaInstallGuide(false);
   }
   if (previousRoomId && !roomId) {
     entryInviteRoomId.value = "";
@@ -3473,6 +3542,35 @@ watch(
   font-family: inherit;
   font-size: max(0.875rem, 14px);
   font-weight: 750;
+}
+
+.install-app-entry {
+  flex: 0 0 auto;
+  min-height: 2.55rem;
+  margin-left: auto;
+  padding: 0.4rem 0.7rem;
+  border-color: rgba(251, 191, 36, 0.72);
+  background: rgba(120, 53, 15, 0.44);
+  color: #fef3c7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.install-app-entry svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.install-label-short {
+  display: none;
 }
 
 .layout.playing {
@@ -4601,6 +4699,20 @@ watch(
     flex-wrap: nowrap;
     justify-content: flex-end;
     overflow: hidden;
+  }
+
+  .install-app-entry {
+    min-height: max(2.2rem, 36px);
+    padding: 0.28rem 0.5rem;
+    font-size: max(0.78rem, 13px);
+  }
+
+  .layout.ultra-compact-viewport .install-label-full {
+    display: none;
+  }
+
+  .layout.ultra-compact-viewport .install-label-short {
+    display: inline;
   }
 
   .layout.compact-landscape.playing {

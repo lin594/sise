@@ -7,7 +7,10 @@ test("invite page provides a room-specific cultural share card and safe entry li
   assert.match(html, /邀请你一起传承四色牌文化/);
   assert.match(html, /好友房 room_42/);
   assert.match(html, /property="og:url" content="https:\/\/cards\.example\.com\/invite\/room_42"/);
-  assert.match(html, /property="og:image" content="https:\/\/cards\.example\.com\/share-card\.png"/);
+  assert.match(html, /property="og:image" content="https:\/\/cards\.example\.com\/share-thumbnail-v2\.png"/);
+  assert.match(html, /property="og:image:width" content="800"/);
+  assert.match(html, /property="og:image:height" content="800"/);
+  assert.match(html, /rel="image_src" href="https:\/\/cards\.example\.com\/share-thumbnail-v2\.png"/);
   assert.match(html, /url=https:\/\/cards\.example\.com\/\?roomId=room_42/);
   assert.doesNotMatch(html, /playerToken|hostKey/);
 });

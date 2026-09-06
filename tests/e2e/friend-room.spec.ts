@@ -353,7 +353,9 @@ test("invite card exposes cultural metadata and auto-joins with a confirmed loca
     const html = await response.text();
     expect(html).toContain('property="og:title" content="邀请你一起传承四色牌文化"');
     expect(html).toContain(`好友房 ${roomId}`);
-    expect(html).toContain("/share-card.png");
+    expect(html).toContain("/share-thumbnail-v2.png");
+    expect(html).toContain('property="og:image:width" content="800"');
+    expect(html).toContain('property="og:image:height" content="800"');
     expect(html).not.toContain("playerToken");
     expect(html).not.toContain("hostKey");
 

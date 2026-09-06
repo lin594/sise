@@ -94,9 +94,9 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 正式页面通过 HTTPS 提供时，浏览器链路必须分别是 HTTPS API 和 WSS，不能配置 `http://` 或 `ws://` 造成混合内容。客户端在只设置其中一项时会从相同主机、端口和路径推导另一项，例如 `https://sise-api.example.com` 对应 `wss://sise-api.example.com`；正式部署仍建议像上例一样同时显式填写，便于上线前审阅。地址中的查询参数、片段和尾部斜杠不会进入运行时基础地址。
 
-Web 镜像会同源提供 `/site.webmanifest`、favicon 和手机主屏图标。正式 HTTPS 页面可由浏览器添加到主屏；当前没有注册 Service Worker，也不支持离线牌局，部署时不要额外给 API、WebSocket 或首页套用离线缓存。图标文件可长期缓存，Manifest 和首页保持可重新验证，以便升级后及时更新入口信息。
+Web 镜像会同源提供 `/site.webmanifest`、favicon、手机主屏图标和版本化分享缩略图。正式 HTTPS 页面提供“安装四色牌”入口：支持 `beforeinstallprompt` 的浏览器直接拉起系统安装，其余平台显示添加到主屏或程序坞的步骤。当前没有注册 Service Worker，也不支持离线牌局，部署时不要额外给 API、WebSocket 或首页套用离线缓存。图标和版本化分享图可长期缓存，Manifest 和首页保持可重新验证，以便升级后及时更新入口信息。
 
-`PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 生成绝对卡片链接和分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。
+`PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 生成绝对卡片链接和 `/share-thumbnail-v2.png` 分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。更换分享图时使用新的版本化文件名并同步邀请页元数据，避免微信继续使用旧缩略图缓存。
 
 ## 6. iMac 试玩环境
 

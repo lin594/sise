@@ -25,7 +25,7 @@ export function buildInvitePage(roomId: string, publicWebOrigin: string): string
   const safeRoomId = escapeHtml(roomId);
   const inviteUrl = `${publicWebOrigin}/invite/${encodeURIComponent(roomId)}`;
   const entryUrl = `${publicWebOrigin}/?roomId=${encodeURIComponent(roomId)}`;
-  const imageUrl = `${publicWebOrigin}/share-card.png`;
+  const imageUrl = `${publicWebOrigin}/share-thumbnail-v2.png`;
   const title = "邀请你一起传承四色牌文化";
   const description = `好友房 ${roomId} · 点击进入四色牌同桌相聚`;
   return `<!doctype html>
@@ -35,15 +35,17 @@ export function buildInvitePage(roomId: string, publicWebOrigin: string): string
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="description" content="${escapeHtml(description)}" />
+    <link rel="image_src" href="${escapeHtml(imageUrl)}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="四色牌" />
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(inviteUrl)}" />
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="邀请你一起传承四色牌文化" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="800" />
+    <meta property="og:image:height" content="800" />
+    <meta property="og:image:alt" content="四色牌文化：黃帥、紅相、綠車、白士" />
     <meta http-equiv="refresh" content="0;url=${escapeHtml(entryUrl)}" />
     <title>${title}｜好友房 ${safeRoomId}</title>
   </head>

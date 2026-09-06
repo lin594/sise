@@ -1,9 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#020617"/>
-  <g stroke="#e2e8f0" stroke-width="8">
-    <rect x="110" y="128" width="58" height="256" rx="29" fill="#facc15"/>
-    <rect x="188" y="128" width="58" height="256" rx="29" fill="#ef4444"/>
-    <rect x="266" y="128" width="58" height="256" rx="29" fill="#22c55e"/>
-    <rect x="344" y="128" width="58" height="256" rx="29" fill="#f8fafc"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">四色牌</title>
+  <desc id="desc">黃帥、紅相、綠車、白士四張圓頭長牌</desc>
+  <defs>
+    <linearGradient id="bg" x1="74" y1="42" x2="438" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#142d50"/>
+      <stop offset=".58" stop-color="#081326"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-25%" width="160%" height="165%">
+      <feDropShadow dx="0" dy="12" stdDeviation="9" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="102" cy="88" r="142" fill="#f59e0b" opacity=".055"/>
+  <g filter="url(#shadow)" font-family="STKaiti, Kaiti TC, BiauKai, KaiTi, serif" font-weight="900" text-anchor="middle" dominant-baseline="central">
+    <g transform="rotate(-8 112 260)">
+      <rect x="70" y="112" width="84" height="296" rx="42" fill="#f5c518" stroke="#fff6cf" stroke-width="7"/>
+      <text x="112" y="200" fill="#17120a" font-size="48">帥</text>
+      <text x="112" y="320" fill="#17120a" font-size="48" transform="rotate(180 112 320)">帥</text>
+      <circle cx="112" cy="260" r="13" fill="none" stroke="#6b4b08" stroke-width="3" opacity=".72"/>
+      <circle cx="112" cy="260" r="5" fill="#6b4b08" opacity=".52"/>
+    </g>
+    <g transform="rotate(-3 208 250)">
+      <rect x="166" y="102" width="84" height="296" rx="42" fill="#e84545" stroke="#ffe2e2" stroke-width="7"/>
+      <text x="208" y="190" fill="#180808" font-size="48">相</text>
+      <text x="208" y="310" fill="#180808" font-size="48" transform="rotate(180 208 310)">相</text>
+      <circle cx="208" cy="250" r="13" fill="none" stroke="#6f1111" stroke-width="3" opacity=".72"/>
+      <circle cx="208" cy="250" r="5" fill="#6f1111" opacity=".52"/>
+    </g>
+    <g transform="rotate(3 304 250)">
+      <rect x="262" y="102" width="84" height="296" rx="42" fill="#28b85c" stroke="#ddfbe8" stroke-width="7"/>
+      <text x="304" y="190" fill="#07160c" font-size="48">車</text>
+      <text x="304" y="310" fill="#07160c" font-size="48" transform="rotate(180 304 310)">車</text>
+      <circle cx="304" cy="250" r="13" fill="none" stroke="#0c5d2b" stroke-width="3" opacity=".72"/>
+      <circle cx="304" cy="250" r="5" fill="#0c5d2b" opacity=".52"/>
+    </g>
+    <g transform="rotate(8 400 260)">
+      <rect x="358" y="112" width="84" height="296" rx="42" fill="#f7f4eb" stroke="#e2e8f0" stroke-width="7"/>
+      <text x="400" y="200" fill="#111827" font-size="48">士</text>
+      <text x="400" y="320" fill="#111827" font-size="48" transform="rotate(180 400 320)">士</text>
+      <circle cx="400" cy="260" r="13" fill="none" stroke="#475569" stroke-width="3" opacity=".72"/>
+      <circle cx="400" cy="260" r="5" fill="#475569" opacity=".52"/>
+    </g>
   </g>
 </svg>
