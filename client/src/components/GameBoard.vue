@@ -87,16 +87,27 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
-              <CardComp
-                v-for="card in group.cards"
-                :key="`top-group-card-${card.id}`"
-                :card="card"
-                :style="movingCardStyle(card.id)"
-                :mode="props.tableCardMode"
-                size="xs"
-                class="mini-card"
-                :title="cardLabel(card)"
-              />
+              <template v-if="group.faceDownCount">
+                <span
+                  v-for="slot in group.faceDownCount"
+                  :key="`top-group-back-${group.id}-${slot}`"
+                  class="mini-card pending-fish-back"
+                  data-card-back="red-four-color"
+                  aria-hidden="true"
+                ><i v-for="mark in 4" :key="mark"></i></span>
+              </template>
+              <template v-else>
+                <CardComp
+                  v-for="card in group.cards"
+                  :key="`top-group-card-${card.id}`"
+                  :card="card"
+                  :style="movingCardStyle(card.id)"
+                  :mode="props.tableCardMode"
+                  size="xs"
+                  class="mini-card"
+                  :title="cardLabel(card)"
+                />
+              </template>
             </div>
           </div>
         </div>
@@ -180,16 +191,27 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
-              <CardComp
-                v-for="card in group.cards"
-                :key="`left-group-card-${card.id}`"
-                :card="card"
-                :style="movingCardStyle(card.id)"
-                :mode="props.tableCardMode"
-                size="xs"
-                class="mini-card"
-                :title="cardLabel(card)"
-              />
+              <template v-if="group.faceDownCount">
+                <span
+                  v-for="slot in group.faceDownCount"
+                  :key="`left-group-back-${group.id}-${slot}`"
+                  class="mini-card pending-fish-back"
+                  data-card-back="red-four-color"
+                  aria-hidden="true"
+                ><i v-for="mark in 4" :key="mark"></i></span>
+              </template>
+              <template v-else>
+                <CardComp
+                  v-for="card in group.cards"
+                  :key="`left-group-card-${card.id}`"
+                  :card="card"
+                  :style="movingCardStyle(card.id)"
+                  :mode="props.tableCardMode"
+                  size="xs"
+                  class="mini-card"
+                  :title="cardLabel(card)"
+                />
+              </template>
             </div>
           </div>
         </div>
@@ -325,16 +347,27 @@
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
             <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
-              <CardComp
-                v-for="card in group.cards"
-                :key="`right-group-card-${card.id}`"
-                :card="card"
-                :style="movingCardStyle(card.id)"
-                :mode="props.tableCardMode"
-                size="xs"
-                class="mini-card"
-                :title="cardLabel(card)"
-              />
+              <template v-if="group.faceDownCount">
+                <span
+                  v-for="slot in group.faceDownCount"
+                  :key="`right-group-back-${group.id}-${slot}`"
+                  class="mini-card pending-fish-back"
+                  data-card-back="red-four-color"
+                  aria-hidden="true"
+                ><i v-for="mark in 4" :key="mark"></i></span>
+              </template>
+              <template v-else>
+                <CardComp
+                  v-for="card in group.cards"
+                  :key="`right-group-card-${card.id}`"
+                  :card="card"
+                  :style="movingCardStyle(card.id)"
+                  :mode="props.tableCardMode"
+                  size="xs"
+                  class="mini-card"
+                  :title="cardLabel(card)"
+                />
+              </template>
             </div>
           </div>
         </div>
@@ -380,16 +413,27 @@
             >
               <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
               <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`self-exp-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="props.tableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
+                <template v-if="group.faceDownCount">
+                  <span
+                    v-for="slot in group.faceDownCount"
+                    :key="`self-group-back-${group.id}-${slot}`"
+                    class="mini-card pending-fish-back"
+                    data-card-back="red-four-color"
+                    aria-hidden="true"
+                  ><i v-for="mark in 4" :key="mark"></i></span>
+                </template>
+                <template v-else>
+                  <CardComp
+                    v-for="card in group.cards"
+                    :key="`self-exp-card-${card.id}`"
+                    :card="card"
+                    :style="movingCardStyle(card.id)"
+                    :mode="props.tableCardMode"
+                    size="xs"
+                    class="mini-card"
+                    :title="cardLabel(card)"
+                  />
+                </template>
               </div>
             </div>
           </div>
@@ -751,6 +795,7 @@ type ExposedGroup = {
 type VisibleGroupBlock = {
   id: string;
   cards: Card[];
+  faceDownCount?: number;
   badge?: string;
   tone: "meld" | "fish" | "public";
 };
@@ -999,6 +1044,15 @@ function splitFishGroups(cards: Card[], prefix: string): ExposedGroup[] {
 }
 
 function buildPlayerGroupBlocks(player: PlayerState, prefix: string): VisibleGroupBlock[] {
+  // 鱼的具体牌面属于声明阶段的隐私：只公开每组张数，等所有玩家完成声明后
+  // 才由服务端把真实牌面移入 fishArea 并统一翻开。
+  const pendingFish = (player.pendingFishGroupSizes ?? []).map((size, index) => ({
+    id: `${prefix}-pending-fish-${index}`,
+    cards: [],
+    faceDownCount: Math.max(0, Number(size) || 0),
+    badge: "鱼",
+    tone: "fish" as const,
+  }));
   const fish = splitFishGroups(player.fishArea ?? [], prefix).map((group) => ({
     ...group,
     badge: "鱼",
@@ -1008,7 +1062,7 @@ function buildPlayerGroupBlocks(player: PlayerState, prefix: string): VisibleGro
     ...group,
     tone: "meld" as const,
   }));
-  return [...fish, ...exposed];
+  return [...pendingFish, ...fish, ...exposed];
 }
 
 const selfGroupBlocks = computed<VisibleGroupBlock[]>(() => {
@@ -1896,6 +1950,10 @@ function playerAccessibleSummary(player: PlayerState, _groupCount: number): stri
     `当前明示牌组基础分 ${player.visibleGroupScore} 分`,
     statusText(player),
   ];
+  const pendingFishGroups = player.pendingFishGroupSizes?.length ?? 0;
+  if (pendingFishGroups > 0) {
+    parts.push(`待揭晓鱼 ${pendingFishGroups} 组`);
+  }
   if (isDealer(player.clientId)) {
     parts.push("庄家");
   }
@@ -3548,6 +3606,38 @@ watch(
   height: clamp(1.95rem, 3.8vh, 2.3rem);
   font-size: clamp(0.54rem, 1vh, 0.66rem);
 }
+
+.pending-fish-back {
+  position: relative;
+  width: clamp(1.55rem, 3vh, 1.8rem);
+  height: clamp(1.68rem, 3.2vh, 1.95rem);
+  overflow: hidden;
+  border-color: rgba(254, 202, 202, 0.84);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 30% 70%, rgba(69, 10, 10, 0.2)),
+    #dc2626;
+  box-shadow: inset 0 0 0 2px rgba(127, 29, 29, 0.68), 0 2px 5px rgba(2, 6, 23, 0.36);
+}
+
+.mini-card-strip.mode-long .pending-fish-back {
+  width: clamp(0.95rem, 1.7vh, 1.15rem);
+  height: clamp(1.95rem, 3.8vh, 2.3rem);
+}
+
+.pending-fish-back i {
+  position: absolute;
+  left: 50%;
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 50%;
+  background: rgba(254, 202, 202, 0.84);
+  transform: translateX(-50%);
+}
+
+.pending-fish-back i:nth-child(1) { top: 18%; }
+.pending-fish-back i:nth-child(2) { top: 39%; }
+.pending-fish-back i:nth-child(3) { top: 60%; }
+.pending-fish-back i:nth-child(4) { top: 81%; }
 
 .group-chip {
   appearance: none;

@@ -20,6 +20,7 @@ import {
   areAllDeclarationsReady as areAllDeclarationsReadyUtil,
   buildDefaultDeclarationPayload,
   buildDeclarationSelection,
+  buildFishGroupSizes,
   buildRoundResultPlayers as buildRoundResultPlayersFlow,
   calculateVisibleGroupScore,
   canReturnLobby,
@@ -118,8 +119,7 @@ type ActionRequest =
 
 type DiscardCardRequest = { cardId?: string; decisionKey?: string } | string;
 
-interface DeclareSetupPayload {
-  declaredKongs?: number;
+interface DeclareFishPayload {
   fishCardIds?: string[];
 }
 
@@ -389,15 +389,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       if (!seatId || this.botIds.has(seatId) || this.state.phase !== "declaring") {
         return;
       }
-      this.submitDeclaration(seatId, { declaredKongs: value, fishCardIds: [] });
+      this.submitKongDeclaration(seatId, value);
     });
 
-    this.onMessage("declare_setup", (client, payload: DeclareSetupPayload) => {
+    this.onMessage("declare_fish", (client, payload: DeclareFishPayload) => {
       const seatId = this.seatBySession.get(client.sessionId);
       if (!seatId || this.botIds.has(seatId) || this.state.phase !== "declaring") {
         return;
       }
-      this.submitDeclaration(seatId, payload ?? {});
+      this.submitFishDeclaration(seatId, payload ?? {});
     });
 
     this.onMessage("request_more_time", (client, payload: { decisionKey?: unknown } | undefined) => {
@@ -757,7 +757,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.awaitingDiscardOwnerId = privateState.awaitingDiscardOwnerId;
     this.pendingFishDeclarations.clear();
     for (const [seatId, cards] of privateState.pendingFishDeclarations) {
-      this.pendingFishDeclarations.set(seatId, cloneCards(cards));
+      const cloned = cloneCards(cards);
+      this.pendingFishDeclarations.set(seatId, cloned);
+      const player = this.state.players.get(seatId);
+      if (!player) continue;
+      // 旧快照会把待亮鱼留在私有手牌中；恢复时必须归一化到分阶段模型，
+      // 避免声明过程中部署导致同一张牌重复出现或提前暴露。
+      const fishIds = new Set(cloned.map((card) => card.id));
+      this.playerHands.set(
+        seatId,
+        (this.playerHands.get(seatId) ?? []).filter((card) => !fishIds.has(card.id)),
+      );
+      if (player.pendingFishGroupSizes.length === 0) {
+        for (const size of buildFishGroupSizes(cloned)) player.pendingFishGroupSizes.push(size);
+      }
+      player.declarationStep = player.declaredReady ? "done" : "kong";
+    }
+    for (const seatId of this.playerOrder) {
+      const player = this.state.players.get(seatId);
+      if (player?.declaredReady) player.declarationStep = "done";
     }
     this.declareTimeExtensionUsedBy.clear();
     for (const seatId of privateState.declareTimeExtensionUsedBy) {
@@ -1921,6 +1939,15 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.declareTimerTotalMs = practiceUntimed ? 0 : this.declareTimeoutMs;
     this.declareDecisionWindowId += 1;
     this.state.declareEndsAt = practiceUntimed ? 0 : Date.now() + this.declareTimeoutMs;
+    // 没有鱼候选时由服务端直接跳过；即使真人断线，也不能依赖客户端挂载
+    // 声明面板才能越过一个没有任何选择的阶段。
+    for (const seatId of this.playerOrder) {
+      const hand = this.playerHands.get(seatId) ?? [];
+      if (buildDefaultDeclarationPayload(hand).fishCardIds.length === 0) {
+        this.submitFishDeclaration(seatId, { fishCardIds: [] });
+        if (this.state.phase !== "declaring") return;
+      }
+    }
     startDeclaringFlow({
       playerOrder: this.playerOrder,
       getPlayer: (seatId) => this.state.players.get(seatId),
@@ -2203,13 +2230,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       if (!player || selectedCards.length === 0) {
         continue;
       }
-      const hand = this.playerHands.get(seatId) ?? [];
-      const removeIds = new Set(selectedCards.map((card) => card.id));
-      this.playerHands.set(seatId, hand.filter((card) => !removeIds.has(card.id)));
       for (const card of selectedCards) {
         player.fishArea.push(this.ops.toSchemaCard(card, true, card.source ?? "upper"));
       }
     }
+    for (const seatId of this.playerOrder) this.state.players.get(seatId)?.pendingFishGroupSizes.clear();
     this.pendingFishDeclarations.clear();
     const dealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
       ? this.roundDealerId
@@ -2219,47 +2244,76 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.enterDiscardStage(dealerId, "OPENING_DISCARD");
   }
 
+  private rejectDeclaration(seatId: string, reason: string): void {
+    const target = this.clients.find((client) => this.seatBySession.get(client.sessionId) === seatId);
+    target?.send("declare_rejected", { reason });
+  }
+
   /**
-   * 作用：提交单个玩家声明数据（杠数/亮鱼）。
-   * 关键输入/输出：输入 seat 与 payload；输出无返回值。
-   * 副作用：更新玩家声明字段、fishArea 和手牌，必要时触发阶段推进。
+   * 先确认鱼再计算坎：选中的鱼立即移出私有手牌，公共状态只发布每组张数。
+   * 这样第二阶段的坎候选来自权威剩余手牌，同时不会在正式开局前暴露鱼牌面。
    */
-  private submitDeclaration(seatId: string, payload: DeclareSetupPayload, force = false): void {
-    if (this.state.phase !== "declaring") {
-      return;
-    }
+  private submitFishDeclaration(seatId: string, payload: DeclareFishPayload, force = false): void {
+    if (this.state.phase !== "declaring") return;
     const player = this.state.players.get(seatId);
-    if (!player || player.declaredReady) {
-      return;
-    }
+    if (!player || player.declaredReady || player.declarationStep !== "fish") return;
 
     const hand = this.playerHands.get(seatId) ?? [];
-    const { declaredKongs, selectedCards, idMatch, fishValid } = buildDeclarationSelection(hand, payload ?? {});
-
-    if (!force && (!idMatch || !fishValid)) {
-      const target = this.clients.find((c) => this.seatBySession.get(c.sessionId) === seatId);
-      target?.send("declare_rejected", { reason: "亮鱼组合不合法或牌不在手中" });
+    const requestedIds = force
+      ? buildDefaultDeclarationPayload(hand).fishCardIds
+      : Array.isArray(payload.fishCardIds) ? payload.fishCardIds : [];
+    const selection = buildDeclarationSelection(hand, { declaredKongs: 0, fishCardIds: requestedIds });
+    if (!selection.idMatch || !selection.fishValid) {
+      this.rejectDeclaration(seatId, "亮鱼组合不合法或牌不在手中");
       return;
     }
 
-    player.declaredKongs = declaredKongs;
-    player.declaredReady = true;
-
-    if (idMatch && fishValid && selectedCards.length > 0) {
-      this.pendingFishDeclarations.set(seatId, selectedCards.map((card) => ({ ...card })));
-    }
-
+    const selectedIds = new Set(selection.selectedCards.map((card) => card.id));
+    this.playerHands.set(seatId, hand.filter((card) => !selectedIds.has(card.id)));
+    this.pendingFishDeclarations.set(seatId, selection.selectedCards.map((card) => ({ ...card })));
+    player.pendingFishGroupSizes.clear();
+    for (const size of selection.fishGroupSizes) player.pendingFishGroupSizes.push(size);
+    player.declarationStep = "kong";
     this.syncAllPrivateHands();
     this.broadcastAvailableActions();
 
-    if (this.areAllDeclarationsReady()) {
-      this.finishDeclaringPhase();
+    // 剩余手牌没有坎时不存在玩家决策，直接完成第二阶段，避免闪现空面板。
+    const remaining = this.playerHands.get(seatId) ?? [];
+    const maximum = buildDeclarationSelection(remaining, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
+    if (maximum === 0) this.submitKongDeclaration(seatId, 0, true);
+  }
+
+  /** 完成坎声明；客户端选择数字只改草稿，必须再点“开始游戏”才会提交。 */
+  private submitKongDeclaration(seatId: string, rawCount: number, force = false): void {
+    if (this.state.phase !== "declaring") return;
+    const player = this.state.players.get(seatId);
+    if (!player || player.declaredReady || player.declarationStep !== "kong") return;
+    const hand = this.playerHands.get(seatId) ?? [];
+    const maximum = buildDeclarationSelection(hand, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
+    const requested = Number.isFinite(Number(rawCount)) ? Math.floor(Number(rawCount)) : maximum;
+    if (!force && (requested < 0 || requested > maximum)) {
+      this.rejectDeclaration(seatId, "声明坎数超过当前手牌可声明数量");
+      return;
     }
+    player.declaredKongs = force ? maximum : requested;
+    player.declarationStep = "done";
+    player.declaredReady = true;
+    this.syncAllPrivateHands();
+    this.broadcastAvailableActions();
+    if (this.areAllDeclarationsReady()) this.finishDeclaringPhase();
   }
 
   private submitDefaultDeclaration(seatId: string, force = true): void {
-    const hand = this.playerHands.get(seatId) ?? [];
-    this.submitDeclaration(seatId, buildDefaultDeclarationPayload(hand), force);
+    if (this.state.phase !== "declaring") return;
+    const player = this.state.players.get(seatId);
+    if (!player || player.declaredReady) return;
+    if (player.declarationStep === "fish") {
+      this.submitFishDeclaration(seatId, {}, force);
+    }
+    if (this.state.phase !== "declaring" || player.declaredReady) return;
+    if (player.declarationStep === "kong") {
+      this.submitKongDeclaration(seatId, Number.MAX_SAFE_INTEGER, force);
+    }
   }
 
   // ===== 回合主循环 =====
@@ -3552,6 +3606,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           handCount: player.handCount,
           visibleGroupScore: player.visibleGroupScore,
           declaredKongs: player.declaredKongs,
+          declarationStep: player.declarationStep,
+          pendingFishGroupSizes: Array.from(player.pendingFishGroupSizes),
           declaredReady: player.declaredReady,
           lobbyReady: player.lobbyReady,
           isBot: player.isBot,

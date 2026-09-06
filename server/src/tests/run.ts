@@ -12,6 +12,7 @@ import {
   chooseBotDisplayName,
   dealInitialHands,
   makeUniqueHumanName,
+  resolveDeclaredHandGroups,
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
@@ -937,15 +938,9 @@ t("round_result: undeclared identical triplets settle as peng after declared hid
     [
       "A",
       [
-        c("rj1", "red", "ju"),
-        c("rj2", "red", "ju"),
-        c("rj3", "red", "ju"),
-        c("rj4", "red", "ju"),
-        c("rj5", "red", "ju"),
-        c("rj6", "red", "ju"),
-        c("rj7", "red", "ju"),
-        c("rj8", "red", "ju"),
-        c("rj9", "red", "ju"),
+        c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju"),
+        c("rm1", "red", "ma"), c("rm2", "red", "ma"), c("rm3", "red", "ma"),
+        c("rp1", "red", "pao"), c("rp2", "red", "pao"), c("rp3", "red", "pao"),
       ],
     ],
     ["B", []],
@@ -965,8 +960,50 @@ t("round_result: undeclared identical triplets settle as peng after declared hid
   assert.ok(seatA);
   const gains = seatA!.scoreBreakdown.filter((item) => item.key.startsWith("MutualGain:A:"));
   assert.equal(gains.filter((item) => item.label.includes("坎") && item.unit === 3).length, 6);
-  assert.equal(gains.filter((item) => item.label.includes("碰") && item.unit === 1).length, 3);
-  assert.equal(seatA!.totalScore, 21);
+  assert.equal(gains.filter((item) => item.label.includes("碰")).length, 0);
+  assert.equal(seatA!.resolvedHandGroups.filter((group) => group.key === "Peng").length, 1);
+  assert.equal(seatA!.totalScore, 18);
+});
+
+t("round_result: exact kong quota uses different optimal grouping for winner and non-winner", () => {
+  const hand = [
+    c("g1", "gold", "gong"), c("g2", "gold", "hou"), c("g3", "gold", "bo"),
+    c("rj1", "red", "ju"), c("rj2", "red", "ju"), c("rj3", "red", "ju"),
+    c("rm1", "red", "ma"), c("rm2", "red", "ma"), c("rm3", "red", "ma"),
+  ];
+  const huGroups = resolveDeclaredHandGroups(hand, 2, "hu");
+  assert.deepEqual(huGroups.map((group) => group.key).sort(), ["SingleGold", "SingleGold", "SingleGold", "Triplet", "Triplet"]);
+  assert.equal(huGroups.reduce((sum, group) => sum + ({ Triplet: 3, SingleGold: 3 }[group.key] ?? 0), 0), 15);
+
+  const mutualGroups = resolveDeclaredHandGroups(hand, 2, "mutual");
+  assert.deepEqual(mutualGroups.map((group) => group.key).sort(), ["GoldTriplet", "Peng", "Triplet"]);
+  assert.equal(mutualGroups
+    .filter((group) => group.key === "GoldTriplet" || group.key === "Triplet")
+    .reduce((sum, group) => sum + (group.key === "GoldTriplet" ? 9 : 3), 0), 12);
+});
+
+t("round_result: multiple fish join mutual settlement, but the winner never joins mutual payment", () => {
+  const state = new GameState();
+  for (const seat of ["A", "B", "C", "D"]) {
+    const player = new PlayerState();
+    player.clientId = seat;
+    player.name = seat;
+    state.players.set(seat, player);
+  }
+  const hands = new Map<string, Card[]>([["A", []], ["B", []], ["C", []], ["D", []]]);
+  const ops = createRoomStateOps(state, hands, () => null);
+  const fishOwner = state.players.get("B")!;
+  [
+    c("f1", "white", "pao"), c("f2", "white", "pao"), c("f3", "white", "pao"), c("f4", "white", "pao"),
+    c("g1", "gold", "gong"), c("g2", "gold", "hou"), c("g3", "gold", "bo"), c("g4", "gold", "zi"),
+  ].forEach((card) => fishOwner.fishArea.push(ops.toSchemaCard(card, false, "upper")));
+
+  const drawResult = buildRoundResultPlayers(["A", "B", "C", "D"], state.players, hands, (card) => ops.toPlainCard(card), null, []);
+  assert.equal(drawResult.find((player) => player.clientId === "B")?.totalScore, 96);
+  assert.equal(drawResult.find((player) => player.clientId === "A")?.totalScore, -32);
+
+  const huResult = buildRoundResultPlayers(["A", "B", "C", "D"], state.players, hands, (card) => ops.toPlainCard(card), "B", []);
+  assert.equal(huResult.every((player) => player.scoreBreakdown.every((item) => !item.key.startsWith("Mutual"))), true);
 });
 
 t("round_result: winner response gold is shown as winning group and hand leftovers do not inflate hu score", () => {

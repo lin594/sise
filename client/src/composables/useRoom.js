@@ -191,6 +191,10 @@ function normalizePlayer(raw) {
         handCount: Number(raw?.handCount ?? 0),
         visibleGroupScore: Math.max(0, Number(raw?.visibleGroupScore ?? 0)),
         declaredKongs: Number(raw?.declaredKongs ?? 0),
+        declarationStep: raw?.declarationStep === "kong" || raw?.declarationStep === "done"
+            ? raw.declarationStep
+            : "fish",
+        pendingFishGroupSizes: asNumberArray(raw?.pendingFishGroupSizes),
         declaredReady: Boolean(raw?.declaredReady),
         lobbyReady: Boolean(raw?.lobbyReady),
         isBot: Boolean(raw?.isBot),
@@ -1058,6 +1062,8 @@ export function useRoom(playerName = "Player") {
             player.name,
             player.handCount ?? 0,
             player.declaredKongs ?? 0,
+            player.declarationStep,
+            player.pendingFishGroupSizes.join(","),
             player.connected ? 1 : 0,
             player.declaredReady ? 1 : 0,
             player.lobbyReady ? 1 : 0,
@@ -1865,13 +1871,18 @@ export function useRoom(playerName = "Player") {
             reportUnsentAction(decisionKey);
         }
     }
-    function declareKongs(count) {
-        safeRoomSend("declare_kongs", count);
-    }
-    function declareSetup(payload) {
+    function declareFish(fishCardIds) {
         declareError.value = "";
-        if (!connected.value || !safeRoomSend("declare_setup", payload)) {
-            declareError.value = "网络连接不稳定，确认没有发出；恢复后请重新提交。";
+        if (!connected.value || !safeRoomSend("declare_fish", { fishCardIds })) {
+            declareError.value = "网络连接不稳定，亮鱼声明没有发出；恢复后请重新提交。";
+            return false;
+        }
+        return true;
+    }
+    function declareKongs(count) {
+        declareError.value = "";
+        if (!connected.value || !safeRoomSend("declare_kongs", count)) {
+            declareError.value = "网络连接不稳定，坎声明没有发出；恢复后请重新提交。";
             return false;
         }
         return true;
@@ -2053,8 +2064,8 @@ export function useRoom(playerName = "Player") {
         clearActionLogs,
         sendAction,
         sendDiscardCard,
+        declareFish,
         declareKongs,
-        declareSetup,
         requestMoreTime,
         debugSetup,
         startGame,

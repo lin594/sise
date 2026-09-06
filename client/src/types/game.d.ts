@@ -50,6 +50,8 @@ export interface PlayerState {
     handCount?: number;
     visibleGroupScore: number;
     declaredKongs: number;
+    declarationStep: "fish" | "kong" | "done";
+    pendingFishGroupSizes: number[];
     declaredReady: boolean;
     lobbyReady: boolean;
     isBot: boolean;

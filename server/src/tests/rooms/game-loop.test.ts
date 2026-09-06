@@ -635,6 +635,11 @@ test("practice keeps connected human decisions untimed while bot decisions still
   room.state.roomMode = "practice";
   room.state.phase = "declaring";
   room.state.players.get("A").connected = true;
+  room.playerHands.set("A", [
+    mkCard("a-kan-1", "red", "ma", "upper"),
+    mkCard("a-kan-2", "red", "ma", "upper"),
+    mkCard("a-kan-3", "red", "ma", "upper"),
+  ]);
   for (const seatId of ["B", "C", "D"]) {
     room.state.players.get(seatId).isBot = true;
     room.botIds.add(seatId);
@@ -670,6 +675,45 @@ test("practice keeps connected human decisions untimed while bot decisions still
   assert.equal(botTurn.untimed, false);
   assert.equal(botTurn.endsAt > Date.now(), true);
   assert.notEqual(room.collectiveTimer, null);
+  room.clearCollectiveTimer();
+});
+
+test("fish declaration hides faces, removes selected cards, then asks for the exact kong quota", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.phase = "declaring";
+  const fish = [1, 2, 3, 4].map((index) => mkCard(`fish-${index}`, "white", "pao", "upper"));
+  const kong = [1, 2, 3].map((index) => mkCard(`kong-${index}`, "red", "ma", "upper"));
+  room.playerHands.set("A", [...fish, ...kong]);
+
+  room.submitFishDeclaration("A", { fishCardIds: fish.map((card) => card.id) });
+
+  const player = room.state.players.get("A");
+  assert.equal(player.declarationStep, "kong");
+  assert.equal(player.declaredReady, false);
+  assert.deepEqual(Array.from(player.pendingFishGroupSizes), [4]);
+  assert.equal(player.fishArea.length, 0);
+  assert.deepEqual(room.playerHands.get("A").map((card: Card) => card.id), kong.map((card) => card.id));
+  assert.deepEqual(room.pendingFishDeclarations.get("A").map((card: Card) => card.id), fish.map((card) => card.id));
+
+  room.submitKongDeclaration("A", 0);
+  assert.equal(player.declarationStep, "done");
+  assert.equal(player.declaredReady, true);
+  assert.equal(player.declaredKongs, 0);
+});
+
+test("empty declaration steps are skipped without waiting for a client panel", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.phase = "declaring";
+  for (const seatId of ["A", "B", "C", "D"]) room.playerHands.set(seatId, []);
+
+  room.startDeclaringPhase();
+
+  assert.notEqual(room.state.phase, "declaring");
+  for (const seatId of ["A", "B", "C", "D"]) {
+    const player = room.state.players.get(seatId);
+    assert.equal(player.declarationStep, "done");
+    assert.equal(player.declaredReady, true);
+  }
   room.clearCollectiveTimer();
 });
 

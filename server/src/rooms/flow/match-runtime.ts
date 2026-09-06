@@ -363,6 +363,8 @@ export function resetRoundPlayers(
       continue;
     }
     player.declaredKongs = 0;
+    player.declarationStep = "fish";
+    player.pendingFishGroupSizes.clear();
     player.declaredReady = false;
     player.discardPile.clear();
     player.exposedArea.clear();
@@ -431,6 +433,22 @@ function validateFishSelection(cards: Card[]): boolean {
   return goldCount === 0 || goldCount === 4 || goldCount === 5;
 }
 
+export function buildFishGroupSizes(cards: Card[]): number[] {
+  const nonGold = new Map<string, number>();
+  let goldCount = 0;
+  for (const card of cards) {
+    if (card.color === "gold") {
+      goldCount += 1;
+      continue;
+    }
+    const key = `${card.color}:${card.type}`;
+    nonGold.set(key, (nonGold.get(key) ?? 0) + 1);
+  }
+  const sizes: number[] = [...nonGold.values()].filter((count) => count === 4);
+  if (goldCount === 4 || goldCount === 5) sizes.push(goldCount);
+  return sizes;
+}
+
 function countHiddenKansFromCards(cards: Card[]): number {
   const counter = new Map<string, number>();
   for (const card of cards) {
@@ -482,6 +500,7 @@ function buildDefaultFishCards(hand: Card[]): Card[] {
 export interface DeclarationSelection {
   declaredKongs: number;
   selectedCards: Card[];
+  fishGroupSizes: number[];
   idMatch: boolean;
   fishValid: boolean;
 }
@@ -504,6 +523,7 @@ export function buildDeclarationSelection(hand: Card[], payload: { declaredKongs
   return {
     declaredKongs,
     selectedCards,
+    fishGroupSizes: fishValid ? buildFishGroupSizes(selectedCards) : [],
     idMatch,
     fishValid,
   };
@@ -619,6 +639,8 @@ export function resetToLobby(context: LobbyResetContext): void {
       continue;
     }
     player.declaredKongs = 0;
+    player.declarationStep = "fish";
+    player.pendingFishGroupSizes.clear();
     player.declaredReady = false;
     if (!player.isConfiguredBot) {
       player.lobbyReady = false;
@@ -1163,24 +1185,27 @@ function buildFishGroupDetails(fishArea: Card[]): SettlementGroupDetail[] {
   if (!fishArea.length) {
     return [];
   }
-  if (fishArea.every((card) => card.color === "gold") && (fishArea.length === 4 || fishArea.length === 5)) {
-    return [
-      {
-        key: "GoldFish",
-        label: "金条鱼",
-        unit: scoreUnitForKey("GoldFish"),
-        cards: [...fishArea],
-      },
-    ];
-  }
   const counter = new Map<string, Card[]>();
+  const goldCards: Card[] = [];
   for (const card of fishArea) {
+    if (card.color === "gold") {
+      goldCards.push(card);
+      continue;
+    }
     const groupKey = `${card.color}:${card.type}`;
     const list = counter.get(groupKey) ?? [];
     list.push(card);
     counter.set(groupKey, list);
   }
   const details: SettlementGroupDetail[] = [];
+  if (goldCards.length === 4 || goldCards.length === 5) {
+    details.push({
+      key: "GoldFish",
+      label: "金条鱼",
+      unit: scoreUnitForKey("GoldFish"),
+      cards: goldCards,
+    });
+  }
   for (const cards of counter.values()) {
     if (cards.length === 4) {
       details.push({
@@ -1291,7 +1316,18 @@ function normalizeWinningResponseGroups(
   });
 }
 
-function buildPrivateTripletDetailsFromHand(hand: Card[], declaredKongs: number): SettlementGroupDetail[] {
+export type PrivateHandGroupingGoal = "hu" | "mutual";
+
+/**
+ * 按已声明的准确坎数重组私有手牌。胡牌者比较“坎”和剩余牌的胡牌总分，
+ * 非胡牌者只比较互付分；因此前者优先保留普通坎并把金条拆成单张，后者
+ * 优先保留金条坎。未占用声明名额的普通三张组只能按碰展示，金条没有碰。
+ */
+export function resolveDeclaredHandGroups(
+  hand: Card[],
+  declaredKongs: number,
+  goal: PrivateHandGroupingGoal,
+): Array<{ key: string; cards: Card[] }> {
   const counter = new Map<string, Card[]>();
   for (const card of hand) {
     const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
@@ -1299,32 +1335,56 @@ function buildPrivateTripletDetailsFromHand(hand: Card[], declaredKongs: number)
     list.push(card);
     counter.set(key, list);
   }
-  const details: SettlementGroupDetail[] = [];
-  let remainingDeclaredKongs = Math.max(0, Math.floor(Number(declaredKongs) || 0));
-  for (const cards of counter.values()) {
-    const fullTriplets = Math.floor(cards.length / 3);
-    for (let index = 0; index < fullTriplets; index += 1) {
-      const chunk = cards.slice(index * 3, index * 3 + 3);
-      if (chunk.length < 3) {
-        continue;
+  const candidates = [...counter.entries()]
+    .filter(([, cards]) => cards.length >= 3)
+    .map(([token, cards]) => ({ token, cards: cards.slice(0, 3), allCards: cards }));
+  candidates.sort((a, b) => {
+    const aGold = a.token === "gold";
+    const bGold = b.token === "gold";
+    if (aGold !== bGold) {
+      // 胡牌时三张金条拆成单张同为 9 分，声明名额应让给能净增 2 分的普通坎；
+      // 互付时单金条不参与，必须反过来优先选择 9 分的金条坎。
+      return goal === "hu" ? (aGold ? 1 : -1) : (aGold ? -1 : 1);
+    }
+    return a.token.localeCompare(b.token);
+  });
+
+  const selectedTokens = new Set(
+    candidates
+      .slice(0, Math.min(candidates.length, Math.max(0, Math.floor(Number(declaredKongs) || 0))))
+      .map((candidate) => candidate.token),
+  );
+  const groups: Array<{ key: string; cards: Card[] }> = [];
+  for (const candidate of candidates) {
+    if (selectedTokens.has(candidate.token)) {
+      const key = candidate.token === "gold"
+        ? "GoldTriplet"
+        : candidate.cards[0]?.type === "jiang" ? "JiangTriplet" : "Triplet";
+      groups.push({ key, cards: candidate.cards });
+      if (candidate.token === "gold") {
+        for (const card of candidate.allCards.slice(3)) groups.push({ key: "SingleGold", cards: [card] });
       }
-      if (remainingDeclaredKongs <= 0) {
-        details.push(detailFromKey("Peng", chunk));
-        continue;
-      }
-      remainingDeclaredKongs -= 1;
-      if (chunk.every((card) => card.color === "gold")) {
-        details.push(detailFromKey("GoldTriplet", chunk));
-        continue;
-      }
-      if (chunk[0].type === "jiang") {
-        details.push(detailFromKey("JiangTriplet", chunk));
-        continue;
-      }
-      details.push(detailFromKey("Triplet", chunk));
+      continue;
+    }
+    if (candidate.token === "gold") {
+      for (const card of candidate.allCards) groups.push({ key: "SingleGold", cards: [card] });
+    } else {
+      groups.push({ key: "Peng", cards: candidate.cards });
     }
   }
-  return details;
+  return groups;
+}
+
+function buildOutcomeHandGroups(
+  hand: Card[],
+  declaredKongs: number,
+  goal: PrivateHandGroupingGoal,
+): Array<{ key: string; cards: Card[] }> {
+  const declaredGroups = resolveDeclaredHandGroups(hand, declaredKongs, goal);
+  const reservedIds = new Set(declaredGroups.flatMap((group) => group.cards.map((card) => card.id)));
+  const remainder = hand.filter((card) => !reservedIds.has(card.id));
+  const remainderGroups = (explainHand(remainder).details ?? []).map((group) => ({ key: group.key, cards: group.cards }));
+  return [...declaredGroups, ...remainderGroups];
 }
 
 const CHI_DETAIL_KEYS = new Set(["FrameJMP", "FrameJSX", "TripleZu", "QuadZu", "Pair"]);
@@ -1377,6 +1437,7 @@ export function buildScoreBreakdown(groups: string[]): { items: ScoreBreakdownIt
 function sortSettlementBreakdown(items: ScoreBreakdownItem[]): ScoreBreakdownItem[] {
   return [...items].sort(
     (a, b) =>
+      (a.key.startsWith("Hu") ? 0 : 1) - (b.key.startsWith("Hu") ? 0 : 1) ||
       Math.abs(b.total) - Math.abs(a.total) ||
       b.total - a.total ||
       Math.abs(b.unit) - Math.abs(a.unit) ||
@@ -1385,16 +1446,16 @@ function sortSettlementBreakdown(items: ScoreBreakdownItem[]): ScoreBreakdownIte
 }
 
 function buildWinnerHuBreakdown(view: RoundResultView, payerCount: number): WinnerHuBreakdown {
-  const winningCardIds = new Set(view.winningGroupDetails.flatMap((detail) => detail.cards.map((card) => card.id)));
-  const handCardsForHiddenKan = view.hand.filter((card) => !winningCardIds.has(card.id));
   const lineDetails = [
     ...view.exposedGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || PENG_DETAIL_KEYS.has(detail.key) || KAI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
     ...view.generalGroupDetails.filter((detail) => SINGLE_DETAIL_KEYS.has(detail.key)),
     ...view.fishGroupDetails.filter((detail) => FISH_DETAIL_KEYS.has(detail.key)),
     ...view.winningGroupDetails.filter((detail) => detail.unit > 0),
-    ...view.resolvedHandGroupDetails.filter((detail) => CHI_DETAIL_KEYS.has(detail.key) || SINGLE_DETAIL_KEYS.has(detail.key)),
-    ...buildPrivateTripletDetailsFromHand(handCardsForHiddenKan, view.declaredKongs).filter(
-      (detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key) || PENG_DETAIL_KEYS.has(detail.key),
+    ...view.resolvedHandGroupDetails.filter((detail) =>
+      CHI_DETAIL_KEYS.has(detail.key) ||
+      PENG_DETAIL_KEYS.has(detail.key) ||
+      HIDDEN_KAN_DETAIL_KEYS.has(detail.key) ||
+      SINGLE_DETAIL_KEYS.has(detail.key),
     ),
   ].filter((detail) => detail.unit > 0);
 
@@ -1533,8 +1594,9 @@ function buildWinnerHuBreakdownFromKeys(groups: string[], payerCount: number): W
 
 function buildMutualSettlementDetails(view: RoundResultView): SettlementGroupDetail[] {
   return [
-    ...buildPrivateTripletDetailsFromHand(view.hand, view.declaredKongs),
+    ...view.resolvedHandGroupDetails.filter((detail) => HIDDEN_KAN_DETAIL_KEYS.has(detail.key)),
     ...view.exposedGroupDetails.filter((detail) => KAI_DETAIL_KEYS.has(detail.key)),
+    ...view.fishGroupDetails.filter((detail) => FISH_DETAIL_KEYS.has(detail.key)),
   ];
 }
 
@@ -1643,7 +1705,21 @@ export function buildRoundResultPlayers(
       winnerId && seatId === winnerId
         ? normalizeWinningResponseGroups(splitGroups.winningGroups, winnerResponseCard)
         : splitGroups.winningGroups;
-    const resolvedHandGroups = splitGroups.remainingGroups;
+    const winningHandCardIds = new Set(
+      winningGroups.flatMap((group) => group.cards.map((card) => card.id)),
+    );
+    const handOutsideWinningGroup = hand.filter((card) => !winningHandCardIds.has(card.id));
+    const winningGroupConsumesDeclaredKong = winnerId === seatId && winningGroups.some((group) =>
+      (group.key === "Quad" || group.key === "JiangQuad" || group.key === "GoldQuad") &&
+      group.cards.some((card) => card.id === winnerResponseCard?.id),
+    );
+    const remainingDeclaredKongs = Math.max(0, declaredKongs - (winningGroupConsumesDeclaredKong ? 1 : 0));
+    const groupingGoal: PrivateHandGroupingGoal = winnerId === seatId ? "hu" : "mutual";
+    const resolvedHandGroups = buildOutcomeHandGroups(
+      handOutsideWinningGroup,
+      remainingDeclaredKongs,
+      groupingGoal,
+    );
     const exposedGroupDetails = buildExposedVisibleGroupDetails(exposedArea, exposedGroupSizes, exposedGroupKinds);
     const generalGroupDetails = buildGeneralGroupDetails(generalArea);
     const fishGroupDetails = buildFishGroupDetails(fishArea);

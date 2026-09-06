@@ -11,11 +11,11 @@
       tabindex="-1"
       @keydown.tab="trapFocus"
     >
-      <span id="declare-description" class="sr-only">已按推荐选好，需要时可调整鱼和坎。</span>
+      <span id="declare-description" class="sr-only">{{ declarationDescription }}</span>
       <header class="declare-header">
         <div class="declare-heading">
           <h2 id="declare-title">开局确认</h2>
-          <p>已按推荐选好，需要时可调整</p>
+          <p>{{ step === "fish" ? "确认要亮出的鱼" : "确认本局声明的坎数" }}</p>
         </div>
         <div v-if="!embedded" class="declare-timer-tools">
           <div
@@ -42,9 +42,9 @@
             </div>
             <div class="hand-heading-tools">
               <span class="hand-total">共 {{ hand.length }} 张</span>
-              <div v-if="fishOptions.length || hiddenKongAnalysis.count" class="legend" aria-label="手牌标记说明">
-                <span v-if="fishOptions.length" class="legend-item fish"><i></i>鱼</span>
-                <span v-if="hiddenKongAnalysis.count" class="legend-item kong"><i></i>坎</span>
+              <div v-if="activeCandidateCount" class="legend" aria-label="手牌标记说明">
+                <span v-if="step === 'fish'" class="legend-item fish"><i></i>已选鱼</span>
+                <span v-else-if="step === 'kong'" class="legend-item kong"><i></i>坎候选</span>
               </div>
               <div v-if="handHasOverflow" class="declare-hand-scroll-tools" data-testid="declare-hand-scroll-tools">
                 <button
@@ -82,8 +82,8 @@
               :key="`declare-preview-${card.id}`"
               class="hand-preview-card"
               :class="{
-                fish: selectedFishCardIds.has(card.id),
-                kong: hiddenKongAnalysis.cardIds.has(card.id),
+                fish: step === 'fish' && selectedFishCardIds.has(card.id),
+                kong: step === 'kong' && hiddenKongAnalysis.cardIds.has(card.id),
               }"
             >
               <CardComp :card="card" size="sm" :mode="cardMode" />
@@ -91,8 +91,8 @@
           </div>
         </section>
 
-        <div v-if="fishOptions.length || hiddenKongAnalysis.count" class="declare-controls">
-          <section v-if="fishOptions.length" class="declare-section fish-section" aria-labelledby="fish-title">
+        <div v-if="step === 'fish' && fishOptions.length" class="declare-controls single-step">
+          <section class="declare-section fish-section" aria-labelledby="fish-title">
             <div class="section-heading">
               <div>
                 <h3 id="fish-title">鱼</h3>
@@ -148,12 +148,15 @@
             </div>
           </section>
 
-          <section v-if="hiddenKongAnalysis.count" class="declare-section kong-section" aria-labelledby="kong-title">
+        </div>
+
+        <div v-else-if="step === 'kong' && hiddenKongAnalysis.count" class="declare-controls single-step">
+          <section class="declare-section kong-section" aria-labelledby="kong-title">
             <div class="section-heading">
               <div>
                 <h3 id="kong-title">坎</h3>
               </div>
-              <span class="section-result amber">建议 {{ hiddenKongAnalysis.count }} 个</span>
+              <span class="section-result amber">最多 {{ hiddenKongAnalysis.count }} 坎</span>
             </div>
 
             <div v-if="!isLocked" class="kong-choices" role="radiogroup" aria-label="坎数量">
@@ -169,7 +172,7 @@
                 @click="selectKongCount(count)"
               >
                 <strong>{{ count }}</strong>
-                <span>个</span>
+                <span>坎</span>
               </button>
             </div>
             <div
@@ -214,10 +217,10 @@
           class="confirm-declaration"
           type="button"
           data-testid="confirm-declaration"
-          @click="submit"
+          @click="submitCurrentStep"
         >
           <span>{{ confirmationText }}</span>
-          <small>确认后不可修改</small>
+          <small>{{ step === "fish" ? "确认后牌背公开" : `已选 ${declaredKongs} 坎` }}</small>
         </button>
         <div
           v-else
@@ -245,8 +248,6 @@ import {
   buildFishOptions,
   getRecommendedFishOptionIds,
   getSelectedFishCardIds,
-  getDeclarationStartLabel,
-  reconcileDeclaredKongs,
   toggleFishOptionId,
   type FishOption,
 } from "@/utils/declaration";
@@ -254,6 +255,7 @@ import {
 const props = defineProps<{
   hand: Card[];
   handReady: boolean;
+  step: "fish" | "kong" | "done";
   submitted: boolean;
   embedded?: boolean;
   secondsLeft: number;
@@ -270,13 +272,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   status: [message: string];
   marks: [value: { fish: string[]; kong: string[] }];
-  submit: [payload: { declaredKongs: number; fishCardIds: string[] }];
+  "submit-fish": [fishCardIds: string[]];
+  "submit-kongs": [declaredKongs: number];
 }>();
 
 const initialized = ref(false);
 const selectedFishOptionIds = ref<Set<string>>(new Set());
 const declaredKongs = ref(0);
-const kongSelectionTouched = ref(false);
 const submitPending = ref(false);
 const localSubmitError = ref("");
 const panelRef = ref<HTMLElement | null>(null);
@@ -289,6 +291,7 @@ const handVisibleRange = ref({ start: 0, end: 0, total: 0 });
 let primaryFocusPlaced = false;
 let submitRetryTimer: number | null = null;
 let handResizeObserver: ResizeObserver | null = null;
+let initializedStepKey = "";
 
 const SUBMIT_CONFIRM_WAIT_MS = 3500;
 
@@ -307,15 +310,22 @@ function clearSubmitRetryTimer(): void {
 const fishOptions = computed(() => buildFishOptions(props.hand));
 const recommendedFishOptionIds = computed(() => getRecommendedFishOptionIds(fishOptions.value));
 const selectedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions.value, selectedFishOptionIds.value));
-const recommendedFishCardIds = computed(() => getSelectedFishCardIds(fishOptions.value, recommendedFishOptionIds.value));
-const hiddenKongAnalysis = computed(() => analyzeHiddenKongs(props.hand, selectedFishCardIds.value));
-watch([selectedFishCardIds, hiddenKongAnalysis], () => emit('marks', { fish: [...selectedFishCardIds.value], kong: [...hiddenKongAnalysis.value.cardIds] }), { immediate: true });
-const recommendedKongCount = computed(() => analyzeHiddenKongs(props.hand, recommendedFishCardIds.value).count);
+const hiddenKongAnalysis = computed(() => analyzeHiddenKongs(props.hand, new Set()));
+const activeCandidateCount = computed(() => props.step === "fish" ? fishOptions.value.length : props.step === "kong" ? hiddenKongAnalysis.value.count : 0);
+watch(
+  [() => props.step, () => props.handReady, selectedFishCardIds, hiddenKongAnalysis],
+  () => emit("marks", {
+    fish: props.handReady && props.step === "fish" ? [...selectedFishCardIds.value] : [],
+    kong: props.handReady && props.step === "kong" ? [...hiddenKongAnalysis.value.cardIds] : [],
+  }),
+  { immediate: true },
+);
+const recommendedKongCount = computed(() => hiddenKongAnalysis.value.count);
 const kongChoices = computed(() => Array.from({ length: hiddenKongAnalysis.value.count + 1 }, (_, index) => index));
 const isLocked = computed(
-  () => !props.handReady || !props.connectionReady || props.submitted || submitPending.value,
+  () => !props.handReady || !props.connectionReady || props.submitted || props.step === "done" || submitPending.value,
 );
-const canSubmit = computed(() => initialized.value && !isLocked.value);
+const canSubmit = computed(() => initialized.value && !isLocked.value && activeCandidateCount.value > 0);
 const displayedError = computed(() => {
   if (!props.connectionReady) {
     return "网络已断开，恢复后可继续提交；刚才的选择还在。";
@@ -323,29 +333,35 @@ const displayedError = computed(() => {
   return props.serverError || localSubmitError.value;
 });
 const isAtRecommendation = computed(() => {
-  if (declaredKongs.value !== recommendedKongCount.value) {
-    return false;
-  }
+  if (props.step !== "fish") return true;
   if (selectedFishOptionIds.value.size !== recommendedFishOptionIds.value.size) {
     return false;
   }
   return [...recommendedFishOptionIds.value].every((id) => selectedFishOptionIds.value.has(id));
 });
 const canRestoreRecommendation = computed(
-  () => initialized.value && !isLocked.value && !isAtRecommendation.value,
+  () => props.step === "fish" && initialized.value && !isLocked.value && !isAtRecommendation.value,
 );
 const confirmationText = computed(() => {
-  return getDeclarationStartLabel(selectedFishOptionIds.value.size, declaredKongs.value);
+  return props.step === "fish" ? `声明 ${selectedFishOptionIds.value.size} 鱼` : "开始游戏";
 });
+const declarationDescription = computed(() => props.step === "fish"
+  ? "选择要亮出的鱼；默认已选推荐鱼，确认后其他玩家先看到红色牌背。"
+  : props.step === "kong"
+    ? "选择声明坎数，再点击开始游戏；手牌中的坎候选均已标出。"
+    : "声明已经完成，正在等待其他玩家声明。",
+);
 const declarationStatusText = computed(() => {
   if (!props.connectionReady) return "等待网络恢复";
-  if (props.submitted) return "已确认，等待其他玩家";
+  if (props.submitted || props.step === "done") return "正在等待其他玩家声明";
   if (!props.handReady || !initialized.value) return "正在整理手牌";
   if (submitPending.value) return "提交中…";
-  return "正在整理手牌";
+  return props.step === "fish" ? "正在整理鱼牌" : "正在整理坎数";
 });
 
-watch([canSubmit, declarationStatusText], () => emit('status', canSubmit.value ? '开局确认 · 选择鱼和坎' : declarationStatusText.value), { immediate: true });
+watch([canSubmit, declarationStatusText, () => props.step], () => emit("status", canSubmit.value
+  ? props.step === "fish" ? "开局确认 · 声明鱼" : "开局确认 · 声明坎"
+  : declarationStatusText.value), { immediate: true });
 
 function focusableControls(): HTMLElement[] {
   const panel = panelRef.value;
@@ -416,8 +432,6 @@ function fishOptionTitle(option: FishOption): string {
 
 function restoreRecommendation() {
   selectedFishOptionIds.value = new Set(recommendedFishOptionIds.value);
-  kongSelectionTouched.value = false;
-  declaredKongs.value = recommendedKongCount.value;
   initialized.value = true;
 }
 
@@ -426,35 +440,27 @@ function toggleFish(option: FishOption) {
     return;
   }
   selectedFishOptionIds.value = toggleFishOptionId(selectedFishOptionIds.value, option);
-  declaredKongs.value = reconcileDeclaredKongs(
-    declaredKongs.value,
-    hiddenKongAnalysis.value.count,
-    kongSelectionTouched.value,
-  );
 }
 
 function selectKongCount(count: number) {
   if (isLocked.value) {
     return;
   }
-  kongSelectionTouched.value = true;
-  declaredKongs.value = reconcileDeclaredKongs(count, hiddenKongAnalysis.value.count, true);
+  declaredKongs.value = Math.min(hiddenKongAnalysis.value.count, Math.max(0, Math.floor(count)));
 }
 
-function submit() {
+function submitCurrentStep() {
   if (isLocked.value || !initialized.value) {
     return;
   }
   localSubmitError.value = "";
   clearSubmitRetryTimer();
   submitPending.value = true;
-  emit("submit", {
-    declaredKongs: declaredKongs.value,
-    fishCardIds: [...selectedFishCardIds.value],
-  });
+  if (props.step === "fish") emit("submit-fish", [...selectedFishCardIds.value]);
+  else if (props.step === "kong") emit("submit-kongs", declaredKongs.value);
   submitRetryTimer = window.setTimeout(() => {
     submitRetryTimer = null;
-    if (props.submitted) {
+    if (props.submitted || props.step === "done") {
       return;
     }
     submitPending.value = false;
@@ -532,10 +538,27 @@ function observeHandScroller(rail: HTMLElement | null): void {
 }
 
 watch(
-  () => `${props.handReady ? "ready" : "waiting"}|${props.hand.map((card) => card.id).join("|")}`,
-  () => {
-    if (props.handReady && props.hand.length > 0 && !props.submitted && !submitPending.value) {
-      restoreRecommendation();
+  () => `${props.step}|${props.handReady ? "ready" : "waiting"}|${props.hand.map((card) => card.id).join("|")}`,
+  (stepKey) => {
+    if (stepKey !== initializedStepKey) {
+      initializedStepKey = stepKey;
+      clearSubmitRetryTimer();
+      submitPending.value = false;
+      localSubmitError.value = "";
+      primaryFocusPlaced = false;
+
+      // 阶段切换以服务端状态为准：每个阶段只初始化一次推荐值，之后必须保留
+      // 玩家手动做出的选择，直到阶段或权威手牌发生变化。
+      if (props.handReady && props.hand.length > 0 && !props.submitted && props.step === "fish") {
+        selectedFishOptionIds.value = new Set(recommendedFishOptionIds.value);
+        initialized.value = true;
+      } else if (props.handReady && props.hand.length > 0 && !props.submitted && props.step === "kong") {
+        selectedFishOptionIds.value = new Set();
+        declaredKongs.value = recommendedKongCount.value;
+        initialized.value = true;
+      } else {
+        initialized.value = false;
+      }
     }
     void nextTick(() => {
       if (handRailRef.value) {
@@ -558,7 +581,7 @@ watch(
 );
 
 watch(
-  () => [props.connectionReady, props.submitted] as const,
+  () => [props.connectionReady, props.submitted, props.step] as const,
   ([connectionReady, submitted]) => {
     if (connectionReady && !submitted) {
       localSubmitError.value = "";
@@ -935,6 +958,10 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.65fr);
   gap: 0.7rem;
   min-width: 0;
+}
+
+.declare-controls.single-step {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .fish-options {

@@ -15,6 +15,10 @@ export class PlayerState extends Schema {
   @type("number") handCount: number = 0;
   @type("number") visibleGroupScore: number = 0;
   @type("number") declaredKongs: number = 0;
+  // 声明有两个玩家私有阶段：正式开局前不公开鱼的牌面，只公开每组张数，
+  // 让所有座位能画出已确认的红色牌背而无法反推出具体牌。
+  @type("string") declarationStep: "fish" | "kong" | "done" = "fish";
+  @type(["number"]) pendingFishGroupSizes = new ArraySchema<number>();
   @type("boolean") declaredReady: boolean = false;
   @type("boolean") lobbyReady: boolean = false;
   @type("boolean") isBot: boolean = false;

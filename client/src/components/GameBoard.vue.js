@@ -155,6 +155,15 @@ function splitFishGroups(cards, prefix) {
     return groups;
 }
 function buildPlayerGroupBlocks(player, prefix) {
+    // 鱼的具体牌面属于声明阶段的隐私：只公开每组张数，等所有玩家完成声明后
+    // 才由服务端把真实牌面移入 fishArea 并统一翻开。
+    const pendingFish = (player.pendingFishGroupSizes ?? []).map((size, index) => ({
+        id: `${prefix}-pending-fish-${index}`,
+        cards: [],
+        faceDownCount: Math.max(0, Number(size) || 0),
+        badge: "鱼",
+        tone: "fish",
+    }));
     const fish = splitFishGroups(player.fishArea ?? [], prefix).map((group) => ({
         ...group,
         badge: "鱼",
@@ -164,7 +173,7 @@ function buildPlayerGroupBlocks(player, prefix) {
         ...group,
         tone: "meld",
     }));
-    return [...fish, ...exposed];
+    return [...pendingFish, ...fish, ...exposed];
 }
 const selfGroupBlocks = computed(() => {
     const player = selfPlayer.value;
@@ -966,6 +975,10 @@ function playerAccessibleSummary(player, _groupCount) {
         `当前明示牌组基础分 ${player.visibleGroupScore} 分`,
         statusText(player),
     ];
+    const pendingFishGroups = player.pendingFishGroupSizes?.length ?? 0;
+    if (pendingFishGroups > 0) {
+        parts.push(`待揭晓鱼 ${pendingFishGroups} 组`);
+    }
     if (isDealer(player.clientId)) {
         parts.push("庄家");
     }
@@ -1957,6 +1970,14 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
 /** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-chip']} */ ;
@@ -2431,27 +2452,44 @@ if (__VLS_ctx.topPlayer) {
                 ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
-            for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`top-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }));
-                const __VLS_10 = __VLS_9({
-                    key: (`top-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+            if (group.faceDownCount) {
+                for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        key: (`top-group-back-${group.id}-${slot}`),
+                        ...{ class: "mini-card pending-fish-back" },
+                        'data-card-back': "red-four-color",
+                        'aria-hidden': "true",
+                    });
+                    for (const [mark] of __VLS_getVForSourceType((4))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                            key: (mark),
+                        });
+                    }
+                }
+            }
+            else {
+                for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`top-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }));
+                    const __VLS_10 = __VLS_9({
+                        key: (`top-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+                }
             }
         }
     }
@@ -2613,27 +2651,44 @@ if (__VLS_ctx.leftPlayer) {
                 ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
-            for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`left-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }));
-                const __VLS_22 = __VLS_21({
-                    key: (`left-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+            if (group.faceDownCount) {
+                for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        key: (`left-group-back-${group.id}-${slot}`),
+                        ...{ class: "mini-card pending-fish-back" },
+                        'data-card-back': "red-four-color",
+                        'aria-hidden': "true",
+                    });
+                    for (const [mark] of __VLS_getVForSourceType((4))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                            key: (mark),
+                        });
+                    }
+                }
+            }
+            else {
+                for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`left-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }));
+                    const __VLS_22 = __VLS_21({
+                        key: (`left-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+                }
             }
         }
     }
@@ -2887,27 +2942,44 @@ if (__VLS_ctx.rightPlayer) {
                 ...{ class: "mini-card-strip stacked" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
-            for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`right-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }));
-                const __VLS_34 = __VLS_33({
-                    key: (`right-group-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+            if (group.faceDownCount) {
+                for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        key: (`right-group-back-${group.id}-${slot}`),
+                        ...{ class: "mini-card pending-fish-back" },
+                        'data-card-back': "red-four-color",
+                        'aria-hidden': "true",
+                    });
+                    for (const [mark] of __VLS_getVForSourceType((4))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                            key: (mark),
+                        });
+                    }
+                }
+            }
+            else {
+                for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`right-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }));
+                    const __VLS_34 = __VLS_33({
+                        key: (`right-group-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+                }
             }
         }
     }
@@ -2979,27 +3051,44 @@ if (__VLS_ctx.selfPlayer) {
                 ...{ class: "mini-card-strip" },
                 ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
             });
-            for (const [card] of __VLS_getVForSourceType((group.cards))) {
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_39 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    key: (`self-exp-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }));
-                const __VLS_40 = __VLS_39({
-                    key: (`self-exp-card-${card.id}`),
-                    card: (card),
-                    ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                    mode: (props.tableCardMode),
-                    size: "xs",
-                    ...{ class: "mini-card" },
-                    title: (__VLS_ctx.cardLabel(card)),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_39));
+            if (group.faceDownCount) {
+                for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
+                    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                        key: (`self-group-back-${group.id}-${slot}`),
+                        ...{ class: "mini-card pending-fish-back" },
+                        'data-card-back': "red-four-color",
+                        'aria-hidden': "true",
+                    });
+                    for (const [mark] of __VLS_getVForSourceType((4))) {
+                        __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+                            key: (mark),
+                        });
+                    }
+                }
+            }
+            else {
+                for (const [card] of __VLS_getVForSourceType((group.cards))) {
+                    /** @type {[typeof CardComp, ]} */ ;
+                    // @ts-ignore
+                    const __VLS_39 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        key: (`self-exp-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }));
+                    const __VLS_40 = __VLS_39({
+                        key: (`self-exp-card-${card.id}`),
+                        card: (card),
+                        ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
+                        mode: (props.tableCardMode),
+                        size: "xs",
+                        ...{ class: "mini-card" },
+                        title: (__VLS_ctx.cardLabel(card)),
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_39));
+                }
             }
         }
     }
@@ -3690,6 +3779,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
@@ -3717,6 +3808,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['stacked']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-board']} */ ;
@@ -3769,6 +3862,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
 /** @type {__VLS_StyleScopedClasses['stacked']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
@@ -3778,6 +3873,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['group-block']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['pending-fish-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;

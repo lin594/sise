@@ -10,7 +10,6 @@
 
 import assert from "node:assert/strict";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
-import { buildDefaultDeclarationPayload } from "../../rooms/flow/match-runtime.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 
 interface FakeClient {
@@ -161,7 +160,7 @@ function runOneGame(): { phase: string; lastAction: string; deckRemaining: numbe
       for (const seatId of room.playerOrder) {
         const player = room.state.players.get(seatId);
         if (player && !player.declaredReady) {
-          room.submitDeclaration(seatId, buildDefaultDeclarationPayload(room.playerHands.get(seatId) ?? []), true);
+          room.submitDefaultDeclaration(seatId, true);
         }
       }
       if (room.areAllDeclarationsReady()) {

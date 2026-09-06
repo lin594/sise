@@ -242,6 +242,7 @@
             v-if="shouldShowDeclarePanel"
             embedded
             :hand="privateHand"
+            :step="mePlayer?.declarationStep || 'fish'"
             @marks="declarationMarks = $event"
             @status="declarationStatus = $event"
             :submitted="isDeclareSubmitted"
@@ -255,7 +256,8 @@
             :card-mode="resolvedOwnCardMode"
             :untimed="decisionTimer.untimed"
             :decision-key="decisionTimer.decisionKey"
-            @submit="submitDeclaration"
+            @submit-fish="submitFishDeclaration"
+            @submit-kongs="submitKongDeclaration"
           />
         </template>
       </GameBoard>
@@ -863,7 +865,8 @@ const {
   debugSetup,
   sendAction,
   sendDiscardCard,
-  declareSetup,
+  declareFish,
+  declareKongs,
   startGame,
   nextRound,
   returnLobby,
@@ -2446,11 +2449,14 @@ function submitDeferredGrabIfReady() {
   sendAction("pass");
 }
 
-function submitDeclaration(payload: { declaredKongs: number; fishCardIds: string[] }) {
-  if (isDeclareSubmitted.value) {
-    return;
-  }
-  declareSetup(payload);
+function submitFishDeclaration(fishCardIds: string[]) {
+  if (isDeclareSubmitted.value || mePlayer.value?.declarationStep !== "fish") return;
+  declareFish(fishCardIds);
+}
+
+function submitKongDeclaration(count: number) {
+  if (isDeclareSubmitted.value || mePlayer.value?.declarationStep !== "kong") return;
+  declareKongs(count);
 }
 
 watch(

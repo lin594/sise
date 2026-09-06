@@ -112,6 +112,8 @@ export declare function useRoom(playerName?: string): {
             handCount?: number | undefined;
             visibleGroupScore: number;
             declaredKongs: number;
+            declarationStep: "fish" | "kong" | "done";
+            pendingFishGroupSizes: number[];
             declaredReady: boolean;
             lobbyReady: boolean;
             isBot: boolean;
@@ -351,6 +353,8 @@ export declare function useRoom(playerName?: string): {
             handCount?: number | undefined;
             visibleGroupScore: number;
             declaredKongs: number;
+            declarationStep: "fish" | "kong" | "done";
+            pendingFishGroupSizes: number[];
             declaredReady: boolean;
             lobbyReady: boolean;
             isBot: boolean;
@@ -911,11 +915,8 @@ export declare function useRoom(playerName?: string): {
     clearActionLogs: () => void;
     sendAction: (input: ActionRequest) => ActionSendResult;
     sendDiscardCard: (cardId: string) => void;
-    declareKongs: (count: number) => void;
-    declareSetup: (payload: {
-        declaredKongs: number;
-        fishCardIds: string[];
-    }) => boolean;
+    declareFish: (fishCardIds: string[]) => boolean;
+    declareKongs: (count: number) => boolean;
     requestMoreTime: () => void;
     debugSetup: (scenario: string) => void;
     startGame: () => boolean;
