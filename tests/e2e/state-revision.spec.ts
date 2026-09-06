@@ -7,9 +7,15 @@ test("newer room revisions win and same revisions only enrich private state", as
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const declaration = page.getByTestId("confirm-declaration");
+    if (await declaration.isVisible().catch(() => false) && await declaration.isEnabled()) {
+      await declaration.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
   await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
 
   const result = await page.evaluate(() => {
@@ -40,8 +46,6 @@ test("newer room revisions win and same revisions only enrich private state", as
       lastAction: "SAME_REVISION_MUST_NOT_REPLACE",
       decisionTimer: {
         untimed: false,
-        canRequestMoreTime: true,
-        extensionSeconds: 20,
         totalMs: 30_000,
         endsAt: Date.now() + 30_000,
         decisionKey: "same-revision-private-update",
@@ -51,6 +55,7 @@ test("newer room revisions win and same revisions only enrich private state", as
       stateRevision: baseRevision + 3,
       phase: "playing",
       lastAction: "REVISION_NEW",
+      deckCount: Number(initial.deckCount) + 1,
       players: sortedPlayers,
     }, "schema");
     bridge.applyRoomSnapshot({
@@ -64,7 +69,9 @@ test("newer room revisions win and same revisions only enrich private state", as
       phase: finalState.phase,
       lastAction: finalState.lastAction,
       storedRevision: finalState.stateRevision,
-      expectedVisibleRevision: baseRevision + 2,
+      expectedFinalRevision: baseRevision + 3,
+      deckCount: finalState.deckCount,
+      expectedDeckCount: Number(initial.deckCount) + 1,
       playerIds: finalState.players.map((player: { clientId: string }) => player.clientId),
       sortedPlayerIds: sortedPlayers.map((player: { clientId: string }) => player.clientId),
       decisionKey: bridge.getDecisionTimer().decisionKey,
@@ -74,7 +81,8 @@ test("newer room revisions win and same revisions only enrich private state", as
   expect(result).toMatchObject({
     phase: "playing",
     lastAction: "REVISION_NEW",
-    storedRevision: result.expectedVisibleRevision,
+    storedRevision: result.expectedFinalRevision,
+    deckCount: result.expectedDeckCount,
     playerIds: result.sortedPlayerIds,
     decisionKey: "same-revision-private-update",
   });

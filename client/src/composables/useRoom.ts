@@ -593,8 +593,6 @@ export function useRoom(playerName = "Player") {
   const matchClockSync = ref({ deadline: 0, offsetMs: 0 });
   const decisionTimer = ref<DecisionTimerState>({
     untimed: false,
-    canRequestMoreTime: false,
-    extensionSeconds: 20,
     totalMs: 0,
     endsAt: 0,
     decisionKey: "",
@@ -1116,8 +1114,6 @@ export function useRoom(playerName = "Player") {
     declareError.value = "";
     decisionTimer.value = {
       untimed: false,
-      canRequestMoreTime: false,
-      extensionSeconds: 20,
       totalMs: 0,
       endsAt: 0,
       decisionKey: "",
@@ -1266,8 +1262,6 @@ export function useRoom(playerName = "Player") {
     const raw = input as Partial<DecisionTimerState>;
     const nextTimer: DecisionTimerState = {
       untimed: Boolean(raw.untimed),
-      canRequestMoreTime: Boolean(raw.canRequestMoreTime),
-      extensionSeconds: Math.max(1, Math.ceil(Number(raw.extensionSeconds) || 20)),
       totalMs: Math.max(0, Number(raw.totalMs) || 0),
       endsAt: Math.max(0, Number(raw.endsAt) || 0),
       decisionKey: typeof raw.decisionKey === "string" ? raw.decisionKey.trim() : "",
@@ -2072,14 +2066,6 @@ export function useRoom(playerName = "Player") {
     return true;
   }
 
-  function requestMoreTime() {
-    const decisionKey = decisionTimer.value.decisionKey;
-    if (!decisionTimer.value.canRequestMoreTime || !decisionKey) {
-      return;
-    }
-    safeRoomSend("request_more_time", { decisionKey });
-  }
-
   function debugSetup(scenario: string) {
     safeRoomSend("debug_setup", scenario);
   }
@@ -2274,7 +2260,6 @@ export function useRoom(playerName = "Player") {
     sendDiscardCard,
     declareFish,
     declareKongs,
-    requestMoreTime,
     debugSetup,
     startGame,
     nextRound,

@@ -59,7 +59,7 @@ async function useViewport(page: Page, viewport: ViewportCase): Promise<void> {
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
-async function expectOpeningHandGate(page: Page): Promise<void> {
+async function expectOpeningHandGate(page: Page): Promise<boolean> {
   const samples: number[] = [];
   const deadline = Date.now() + 4_000;
   while (Date.now() < deadline) {
@@ -69,41 +69,64 @@ async function expectOpeningHandGate(page: Page): Promise<void> {
       const button = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
       return {
         declaring: Boolean(button && button.getClientRects().length && getComputedStyle(button).visibility !== "hidden"),
+        playing: document.querySelector("main.layout")?.classList.contains("playing") ?? false,
         count: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
     if (sample.declaring) break;
+    if (sample.playing) return false;
     samples.push(sample.count);
     await page.waitForTimeout(40);
   }
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => {
+    if (await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) return "declaring";
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    return layoutClass?.split(/\s+/u).includes("playing") ? "playing" : "waiting";
+  }, { timeout: 20_000 }).toMatch(/^(?:declaring|playing)$/u);
+  if (!await page.getByTestId("confirm-declaration").isVisible().catch(() => false)) return false;
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
     samples.every((count) => count < fullHandCount),
     `Opening hand reached its authoritative ${fullHandCount}-card total before declaration: ${samples.join(",")}`,
   ).toBe(true);
+  return true;
 }
 
-async function applySettlementScenario(page: Page): Promise<void> {
-  await page.evaluate(() => {
+async function finishOpeningDeclaration(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const button = page.getByTestId("confirm-declaration");
+    if (await button.isVisible().catch(() => false) && await button.isEnabled()) await button.click();
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
+}
+
+async function applyDebugScenario(page: Page, scenario: string): Promise<void> {
+  await page.evaluate((nextScenario) => {
     const bridge = (window as Window & {
       __siseLocalTest?: { setupScenario: (scenario: string) => void };
     }).__siseLocalTest;
     if (!bridge) {
       throw new Error("Local test bridge is unavailable");
     }
-    bridge.setupScenario("settlement_hu");
-  });
+    bridge.setupScenario(nextScenario);
+  }, scenario);
   await expect.poll(() =>
-    page.evaluate(() =>
-      (window as Window & {
+    page.evaluate((nextScenario) => {
+      const result = (window as Window & {
         __siseLocalTest?: {
           getLastResult: () => { scenario: string; ok: boolean } | null;
         };
-      }).__siseLocalTest?.getLastResult() ?? null,
-    ),
-  ).toMatchObject({ scenario: "settlement_hu", ok: true });
+      }).__siseLocalTest?.getLastResult() ?? null;
+      return result?.scenario === nextScenario ? result : null;
+    }, scenario),
+  ).toMatchObject({ scenario, ok: true });
+}
+
+async function applySettlementScenario(page: Page): Promise<void> {
+  await applyDebugScenario(page, "settlement_hu");
   await expect(page.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
 }
 
@@ -135,11 +158,16 @@ async function expectPageContained(page: Page, requiredSelectors: string[]): Pro
   );
 }
 
-async function saveReleaseScreenshot(page: Page, testInfo: TestInfo, viewport: ViewportCase): Promise<void> {
+async function saveReleaseScreenshot(
+  page: Page,
+  testInfo: TestInfo,
+  viewport: ViewportCase,
+  stage: "playing" | "settlement",
+): Promise<void> {
   const selected = new Set(["568x320", "844x390", "915x412", "390x844", "1280x720"]);
   const name = `${viewport.width}x${viewport.height}`;
   if (selected.has(name)) {
-    await page.screenshot({ path: testInfo.outputPath(`settlement-${name}.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`${stage}-${name}.png`) });
   }
 }
 
@@ -150,42 +178,55 @@ test.describe("mobile responsive release gate", () => {
     test.setTimeout(180_000);
     await page.goto("/?e2eDebug=1");
     await expectPageContained(page, ["main.layout", ".entry-shell"]);
-    await page.getByTestId("random-nickname").click();
+    await page.getByTestId("nickname-input").fill("这是一段非常长的四色牌昵称");
     await page.getByTestId("login-submit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     await expectPageContained(page, ["main.layout", ".lobby"]);
 
     await page.getByTestId("lobby-start").click();
-    await expectOpeningHandGate(page);
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await applyDebugScenario(page, "staged_declaration");
+    const hasDeclaration = await expectOpeningHandGate(page);
+    expect(hasDeclaration).toBe(true);
 
-    for (const viewport of allViewports) {
-      await useViewport(page, viewport);
-      await expectPageContained(page, ["main.layout", "[data-testid='game-control-header']", "[data-testid='game-board']", ".declare-panel"]);
-      const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
-        const confirm = panel.querySelector<HTMLElement>("[data-testid='confirm-declaration']")!;
-        const panelRect = panel.getBoundingClientRect();
-        const confirmRect = confirm.getBoundingClientRect();
-        return {
-          noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
-          confirmContained:
-            confirmRect.left >= panelRect.left - 1 &&
-            confirmRect.right <= panelRect.right + 1 &&
-            confirmRect.top >= panelRect.top - 1 &&
-            confirmRect.bottom <= panelRect.bottom + 1,
-          panelRect: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
-          confirmRect: { left: confirmRect.left, right: confirmRect.right, top: confirmRect.top, bottom: confirmRect.bottom },
-          confirmHeight: confirm.offsetHeight,
-        };
-      });
-      const declarationMessage = `${viewport.width}x${viewport.height}: ${JSON.stringify(declarationGeometry)}`;
-      expect(declarationGeometry.noHorizontalOverflow, declarationMessage).toBe(true);
-      expect(declarationGeometry.confirmContained, declarationMessage).toBe(true);
-      expect(declarationGeometry.confirmHeight, declarationMessage).toBeGreaterThanOrEqual(48);
+    if (hasDeclaration) {
+      for (const viewport of allViewports) {
+        await useViewport(page, viewport);
+        await expectPageContained(page, ["main.layout", "[data-testid='game-control-header']", "[data-testid='game-board']", ".declare-panel"]);
+        const declarationGeometry = await page.locator(".declare-panel").evaluate((panel) => {
+          const confirm = panel.querySelector<HTMLElement>("[data-testid='confirm-declaration']")!;
+          const panelRect = panel.getBoundingClientRect();
+          const confirmRect = confirm.getBoundingClientRect();
+          return {
+            noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
+            confirmContained:
+              confirmRect.left >= panelRect.left - 1 &&
+              confirmRect.right <= panelRect.right + 1 &&
+              confirmRect.top >= panelRect.top - 1 &&
+              confirmRect.bottom <= panelRect.bottom + 1,
+            panelRect: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+            confirmRect: { left: confirmRect.left, right: confirmRect.right, top: confirmRect.top, bottom: confirmRect.bottom },
+            confirmHeight: confirm.offsetHeight,
+          };
+        });
+        const declarationMessage = `${viewport.width}x${viewport.height}: ${JSON.stringify(declarationGeometry)}`;
+        expect(declarationGeometry.noHorizontalOverflow, declarationMessage).toBe(true);
+        expect(declarationGeometry.confirmContained, declarationMessage).toBe(true);
+        expect(declarationGeometry.confirmHeight, declarationMessage).toBeGreaterThanOrEqual(48);
+      }
     }
 
     await useViewport(page, landscapeViewports.find((viewport) => viewport.width === 844)!);
-    await page.getByTestId("confirm-declaration").click();
+    const declarationButton = page.getByTestId("confirm-declaration");
+    await expect(declarationButton.locator("span")).toHaveText("声明 1 鱼");
+    await declarationButton.click();
+    await expect(page.locator(".pending-fish-back")).toHaveCount(4);
+    await expect(declarationButton.locator("span")).toHaveText("开始游戏");
+    await expect(page.getByTestId("kong-count-0")).toBeVisible();
+    await expect(page.getByTestId("kong-count-1")).toHaveAttribute("aria-checked", "true");
+    await finishOpeningDeclaration(page);
     await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await expect(page.locator(".self-info-card h3")).toHaveAttribute("data-name-fallback", "true");
 
     for (const viewport of allViewports) {
       await useViewport(page, viewport);
@@ -197,6 +238,7 @@ test.describe("mobile responsive release gate", () => {
         ".self-hand-card",
         ".action-dock",
       ]);
+      await saveReleaseScreenshot(page, testInfo, viewport, "playing");
     }
 
     await applySettlementScenario(page);
@@ -252,7 +294,7 @@ test.describe("mobile responsive release gate", () => {
         expect(geometry.firstThreeSummariesVisible, `${viewport.width}x${viewport.height}: ${JSON.stringify(geometry)}`).toBe(true);
         expect(geometry.minimumButtonHeight, `${viewport.width}x${viewport.height}: ${JSON.stringify(geometry)}`).toBeGreaterThanOrEqual(48);
       }
-      await saveReleaseScreenshot(page, testInfo, viewport);
+      await saveReleaseScreenshot(page, testInfo, viewport, "settlement");
     }
 
     for (const width of [568, 844, 915]) {

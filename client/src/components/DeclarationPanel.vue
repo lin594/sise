@@ -206,7 +206,7 @@
             恢复推荐
           </button>
           <p v-if="untimed" class="untimed-message">
-            <span class="untimed-dot"></span>{{ ultraCompact ? "选择鱼和坎 · 练习不限时" : "不限时，请按自己的节奏确认" }}
+            <span class="untimed-dot"></span>练习不限时
           </p>
           <p v-else><span class="timeout-dot"></span>超时将按系统建议提交</p>
           <p v-if="displayedError" class="declare-error" role="alert">{{ displayedError }}</p>

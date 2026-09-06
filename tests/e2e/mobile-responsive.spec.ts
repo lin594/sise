@@ -2100,7 +2100,7 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
     await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
-    await expect(page.locator(".untimed-message")).toHaveText("选择鱼和坎 · 练习不限时");
+    await expect(page.locator(".untimed-message")).toHaveText("练习不限时");
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     await page.getByTestId("game-settings").click();
     await page.getByTestId("hand-layout-paged").click();

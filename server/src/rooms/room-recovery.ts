@@ -30,8 +30,6 @@ export interface RoomRecoveryPrivateState {
   nextRoundSetup: { mode: "picker"; pickerId: string } | { mode: "fixed"; dealerId: string } | null;
   awaitingDiscardOwnerId: string | null;
   pendingFishDeclarations: Array<[string, Card[]]>;
-  declareTimeExtensionUsedBy: string[];
-  responseTimeExtensionUsed: boolean;
   declareTimerTotalMs: number;
   responseTimerTotalMs: number;
   declareDecisionWindowId: number;
@@ -108,8 +106,6 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
     typeof privateState.hostKeyConsumed === "boolean" &&
     Array.isArray(privateState.publicGeneralPool) &&
     isEntryArray(privateState.pendingFishDeclarations) &&
-    Array.isArray(privateState.declareTimeExtensionUsedBy) &&
-    typeof privateState.responseTimeExtensionUsed === "boolean" &&
     isFiniteInteger(privateState.declareTimerTotalMs) &&
     isFiniteInteger(privateState.responseTimerTotalMs) &&
     isFiniteInteger(privateState.declareDecisionWindowId) &&

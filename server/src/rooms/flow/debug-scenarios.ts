@@ -36,8 +36,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     return false;
   }
 
-  // The scenario replaces the hand, so declarations derived from the random
-  // opening hand must not constrain the injected candidates.
+  // 调试场景会替换手牌，随机开局产生的声明不能继续约束新候选。
   context.clearAwaitingDiscardOwner();
   context.resetCollectivePolling();
   player.declaredKongs = 0;
@@ -46,7 +45,38 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
   const seq = context.nextDebugSeq();
 
-  if (scenario === "draw_choice" || scenario === "draw_gold_settlement" || scenario === "draw_peng_settlement") {
+  if (scenario === "staged_declaration") {
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id)!;
+      seat.declaredKongs = 0;
+      seat.declaredReady = id !== seatId;
+      seat.declarationStep = id === seatId ? "fish" : "done";
+      seat.pendingFishGroupSizes.clear();
+      seat.fishArea.clear();
+    }
+    add("fish-red-ju-1", "red", "ju");
+    add("fish-red-ju-2", "red", "ju");
+    add("fish-red-ju-3", "red", "ju");
+    add("fish-red-ju-4", "red", "ju");
+    add("kong-green-ma-1", "green", "ma");
+    add("kong-green-ma-2", "green", "ma");
+    add("kong-green-ma-3", "green", "ma");
+    add("spare-white-shi", "white", "shi");
+    context.setPendingResponse(null);
+    context.state.phase = "declaring";
+    context.state.responsePhase = "collective";
+    context.state.responseCard = new CardSchema();
+    context.state.activeResponderId = "";
+    context.state.pendingReceiverId = "";
+    context.state.responseEndsAt = 0;
+    context.state.declareEndsAt = 0;
+    context.state.lastAction = `DEBUG: staged_declaration#${seq}`;
+    context.playerHands.set(seatId, hand);
+    context.updatePublicHandCounts();
+    context.syncAllPrivateHands();
+    context.broadcastAvailableActions();
+    return true;
+  } else if (scenario === "draw_choice" || scenario === "draw_gold_settlement" || scenario === "draw_peng_settlement") {
     context.state.publicDiscardPile.clear();
     for (const id of context.playerOrder) {
       const seat = context.state.players.get(id)!;

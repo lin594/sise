@@ -96,7 +96,6 @@ test("all human forced passes share one fairness window without exposing Pass co
   assert.equal(room.collectiveResponderId, "B");
   assert.equal(room.pendingResponse.collectives.has("B"), false);
   assert.equal(room.state.responseEndsAt >= startedAt + 30, true);
-  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
   assert.equal(room.buildDecisionTimerSnapshot("C").endsAt, room.state.responseEndsAt);
   assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
   assert.equal(resolved, false);
@@ -165,8 +164,8 @@ test("a private non-pass preselection may resolve immediately when nobody can ou
 
 test("an active human choice is held until the collective privacy floor", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 40;
-  room.collectiveTimeoutMs = 200;
+  room.humanForcedPassDelayMs = 150;
+  room.collectiveTimeoutMs = 300;
   room.playerHands.set("B", [
     mkCard("peng-1", "red", "ju", "upper"),
     mkCard("peng-2", "red", "ju", "upper"),
@@ -180,7 +179,7 @@ test("an active human choice is held until the collective privacy floor", async 
   room.state.responsePhase = "collective";
   room.collectiveQueue = ["B"];
   room.collectiveCursor = 0;
-  room.collectiveGlobalPrivacyEndsAt = Date.now() + 40;
+  room.collectiveGlobalPrivacyEndsAt = Date.now() + 150;
   room.state.players.get("B").connected = true;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
@@ -195,9 +194,9 @@ test("an active human choice is held until the collective privacy floor", async 
   );
   assert.equal(room.pendingResponse.collectives.get("B")?.action, "pass");
   assert.equal(resolved, false);
-  await new Promise((resolve) => setTimeout(resolve, 15));
+  await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(resolved, false);
-  await new Promise((resolve) => setTimeout(resolve, 45));
+  await new Promise((resolve) => setTimeout(resolve, 160));
   assert.equal(resolved, true);
 });
 
@@ -394,90 +393,6 @@ test("collective hu is disabled when it would split a declared hidden triplet", 
   assert.equal(hu?.enabled, false);
 });
 
-test("declaration time extension is available once per connected human", () => {
-  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.state.phase = "declaring";
-  room.declareTimeoutMs = 1_000;
-  room.timeExtensionMs = 5_000;
-  room.declareTimerTotalMs = 1_000;
-  room.declareDecisionWindowId = 7;
-  room.state.declareEndsAt = Date.now() + 1_000;
-  room.broadcastAvailableActions = () => undefined;
-  for (const seatId of ["A", "B"]) {
-    room.state.players.get(seatId).connected = true;
-    room.seatBySession.set(`session-${seatId}`, seatId);
-  }
-  const clientA = { sessionId: "session-A", send: () => undefined };
-  const clientB = { sessionId: "session-B", send: () => undefined };
-  const decisionKey = room.buildDecisionTimerSnapshot("A").decisionKey;
-
-  const beforeA = room.state.declareEndsAt;
-  room.handleRequestMoreTime(clientA, { decisionKey });
-  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
-  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, true);
-  assert.equal(room.buildDecisionTimerSnapshot("A").totalMs, 6_000);
-  assert.equal(room.buildDecisionTimerSnapshot("A").endsAt, room.state.declareEndsAt);
-  assert.equal(room.state.declareEndsAt >= beforeA + 4_900, true);
-
-  const afterA = room.state.declareEndsAt;
-  room.handleRequestMoreTime(clientA, { decisionKey });
-  assert.equal(room.state.declareEndsAt, afterA);
-
-  room.handleRequestMoreTime(clientB, { decisionKey });
-  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
-  assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 11_000);
-  room.clearDeclareTimer();
-});
-
-test("stale time-extension request cannot extend the next decision window", () => {
-  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.collectiveTimeoutMs = 1_000;
-  room.localTimeoutMs = 1_000;
-  room.operationTimeoutMs = 1_000;
-  room.timeExtensionMs = 5_000;
-  room.state.players.get("A").connected = true;
-  room.seatBySession.set("session-A", "A");
-  room.broadcastAvailableActions = () => undefined;
-  const clientA = { sessionId: "session-A", send: () => undefined };
-
-  room.pendingResponse = {
-    ownerId: "B",
-    card: mkCard("first", "red", "ju", "upper"),
-    collectives: new Map(),
-  };
-  room.state.responsePhase = "collective";
-  room.collectiveResponderId = "A";
-  room.scheduleCollectiveTimeout();
-  const oldDecisionKey = room.buildDecisionTimerSnapshot("A").decisionKey;
-  room.handleRequestMoreTime(clientA, { decisionKey: oldDecisionKey });
-  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
-
-  room.clearCollectiveTimer();
-  room.pendingResponse = {
-    ownerId: "A",
-    card: mkCard("second", "yellow", "ma", "draw"),
-    collectives: new Map(),
-  };
-  room.state.responsePhase = "local_draw";
-  room.awaitingDiscardOwnerId = "A";
-  room.scheduleCollectiveTimeout();
-  const nextDecision = room.buildDecisionTimerSnapshot("A");
-  assert.notEqual(nextDecision.decisionKey, oldDecisionKey);
-  assert.equal(nextDecision.canRequestMoreTime, true);
-
-  const beforeStaleRequest = room.state.responseEndsAt;
-  room.handleRequestMoreTime(clientA, { decisionKey: oldDecisionKey });
-  assert.equal(room.state.responseEndsAt, beforeStaleRequest);
-  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, true);
-
-  room.handleRequestMoreTime(clientA, { decisionKey: nextDecision.decisionKey });
-  assert.equal(room.state.responseEndsAt >= beforeStaleRequest + 4_900, true);
-  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
-  assert.equal(room.buildDecisionTimerSnapshot("A").totalMs, 6_000);
-  assert.equal(room.buildDecisionTimerSnapshot("A").endsAt, room.state.responseEndsAt);
-  room.clearCollectiveTimer();
-});
-
 test("a delayed action from an older decision window is ignored", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.pendingResponse = {
@@ -616,20 +531,6 @@ test("a valid discard gets an authoritative receipt", () => {
   );
 });
 
-test("bots and disconnected players cannot request more decision time", () => {
-  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.state.phase = "declaring";
-  room.declareDecisionWindowId = 1;
-  room.state.declareEndsAt = Date.now() + 1_000;
-  room.state.players.get("A").connected = false;
-  room.state.players.get("B").connected = true;
-  room.state.players.get("B").isBot = true;
-  room.botIds.add("B");
-
-  assert.equal(room.buildDecisionTimerSnapshot("A").canRequestMoreTime, false);
-  assert.equal(room.buildDecisionTimerSnapshot("B").canRequestMoreTime, false);
-});
-
 test("practice keeps connected human decisions untimed while bot decisions still advance", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.state.roomMode = "practice";
@@ -648,7 +549,6 @@ test("practice keeps connected human decisions untimed while bot decisions still
   room.startDeclaringPhase();
   const declareTimer = room.buildDecisionTimerSnapshot("A");
   assert.equal(declareTimer.untimed, true);
-  assert.equal(declareTimer.canRequestMoreTime, false);
   assert.equal(declareTimer.endsAt, 0);
   assert.equal(room.declareTimer, null);
 

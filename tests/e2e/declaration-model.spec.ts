@@ -5,7 +5,6 @@ import {
   buildFishOptions,
   getRecommendedFishOptionIds,
   getSelectedFishCardIds,
-  getDeclarationStartLabel,
   reconcileDeclaredKongs,
   toggleFishOptionId,
 } from "../../client/src/utils/declaration";
@@ -59,11 +58,4 @@ test("untouched hidden kong count follows recommendations while a manual value i
   expect(reconcileDeclaredKongs(1, 3, false)).toBe(3);
   expect(reconcileDeclaredKongs(1, 3, true)).toBe(1);
   expect(reconcileDeclaredKongs(3, 1, true)).toBe(1);
-});
-
-test("declaration start labels explain both the action and selected result", () => {
-  expect(getDeclarationStartLabel(0, 0)).toBe("开始游戏");
-  expect(getDeclarationStartLabel(2, 0)).toBe("开始游戏 · 鱼 2");
-  expect(getDeclarationStartLabel(0, 1)).toBe("开始游戏 · 坎 1");
-  expect(getDeclarationStartLabel(2, 1)).toBe("开始游戏 · 鱼 2 · 坎 1");
 });

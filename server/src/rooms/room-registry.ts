@@ -12,8 +12,6 @@ export type PrivateStateSnapshot = {
   availableActions: unknown[];
   decisionTimer: {
     untimed: boolean;
-    canRequestMoreTime: boolean;
-    extensionSeconds: number;
     totalMs: number;
     endsAt: number;
     decisionKey: string;

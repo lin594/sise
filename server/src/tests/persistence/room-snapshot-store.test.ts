@@ -36,8 +36,6 @@ function snapshot(roomId: string, savedAt: number, expiresAt = savedAt + 60_000)
       nextRoundSetup: null,
       awaitingDiscardOwnerId: null,
       pendingFishDeclarations: [],
-      declareTimeExtensionUsedBy: [],
-      responseTimeExtensionUsed: false,
       declareTimerTotalMs: 0,
       responseTimerTotalMs: 0,
       declareDecisionWindowId: 0,

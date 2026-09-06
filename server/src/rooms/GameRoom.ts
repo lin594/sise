@@ -167,7 +167,6 @@ const QUICK_PHRASES_BY_ID = new Map(quickPhrases.map((phrase) => [phrase.id, phr
 export const DEFAULT_OPERATION_TIMEOUT_MS = 30_000;
 export const DEFAULT_DECLARE_TIMEOUT_MS = 45_000;
 export const DEFAULT_RECONNECT_GRACE_MS = 5_000;
-export const DEFAULT_TIME_EXTENSION_MS = 20_000;
 
 export function isDebugScenarioFeatureEnabled(nodeEnv: unknown, rawFlag: unknown): boolean {
   return String(nodeEnv ?? "").trim().toLowerCase() !== "production" && String(rawFlag ?? "").trim() === "1";
@@ -237,10 +236,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     1000,
     Number(process.env.DECLARE_TIMEOUT_MS ?? DEFAULT_DECLARE_TIMEOUT_MS),
   );
-  private readonly timeExtensionMs = Math.min(
-    60_000,
-    Math.max(5_000, Number(process.env.TIME_EXTENSION_MS ?? DEFAULT_TIME_EXTENSION_MS)),
-  );
   private readonly lobbySeatHoldMs = Math.max(1000, Number(process.env.LOBBY_SEAT_HOLD_MS ?? 60000));
   private readonly waitingRoomIdleMs = Math.max(1000, Number(process.env.WAITING_ROOM_IDLE_MS ?? 60000));
   private readonly activeRoomIdleMs = Math.max(1000, Number(process.env.ACTIVE_ROOM_IDLE_MS ?? 300000));
@@ -276,8 +271,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
   private readonly pendingFishDeclarations = new Map<string, Card[]>();
   private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly declareTimeExtensionUsedBy = new Set<string>();
-  private responseTimeExtensionUsed = false;
   private declareTimerTotalMs = 0;
   private responseTimerTotalMs = 0;
   private declareDecisionWindowId = 0;
@@ -398,10 +391,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
       this.submitFishDeclaration(seatId, payload ?? {});
-    });
-
-    this.onMessage("request_more_time", (client, payload: { decisionKey?: unknown } | undefined) => {
-      this.handleRequestMoreTime(client, payload);
     });
 
     this.onMessage("set_auto_play", (client, payload: { enabled?: unknown } | undefined) => {
@@ -700,8 +689,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
         pendingFishDeclarations: [...this.pendingFishDeclarations]
           .map(([seatId, cards]) => [seatId, cloneCards(cards)]),
-        declareTimeExtensionUsedBy: [...this.declareTimeExtensionUsedBy],
-        responseTimeExtensionUsed: this.responseTimeExtensionUsed,
         declareTimerTotalMs: this.declareTimerTotalMs,
         responseTimerTotalMs: this.responseTimerTotalMs,
         declareDecisionWindowId: this.declareDecisionWindowId,
@@ -777,11 +764,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       const player = this.state.players.get(seatId);
       if (player?.declaredReady) player.declarationStep = "done";
     }
-    this.declareTimeExtensionUsedBy.clear();
-    for (const seatId of privateState.declareTimeExtensionUsedBy) {
-      this.declareTimeExtensionUsedBy.add(seatId);
-    }
-    this.responseTimeExtensionUsed = privateState.responseTimeExtensionUsed;
     this.declareTimerTotalMs = privateState.declareTimerTotalMs;
     this.responseTimerTotalMs = privateState.responseTimerTotalMs;
     this.declareDecisionWindowId = privateState.declareDecisionWindowId;
@@ -845,7 +827,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     } else if (this.state.phase === "declaring") {
       this.startDeclaringPhase();
     } else if (this.state.phase === "playing") {
-      this.responseTimeExtensionUsed = false;
       this.responseTimerTotalMs = this.state.responsePhase === "collective"
         ? this.collectiveTimeoutMs
         : this.localTimeoutMs;
@@ -1934,7 +1915,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private startDeclaringPhase(): void {
     this.clearDeclareIntroTimer();
     this.state.responseEndsAt = 0;
-    this.declareTimeExtensionUsedBy.clear();
     const practiceUntimed = this.playerOrder.some((seatId) => this.isPracticeDecisionUntimed(seatId));
     this.declareTimerTotalMs = practiceUntimed ? 0 : this.declareTimeoutMs;
     this.declareDecisionWindowId += 1;
@@ -2011,47 +1991,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
   }
 
-  private canSeatRequestMoreTime(seatId: string): boolean {
-    const player = this.state.players.get(seatId);
-    if (!player || !player.connected || player.isBot || this.botIds.has(seatId)) {
-      return false;
-    }
-    if (this.isPracticeDecisionUntimed(seatId)) {
-      return false;
-    }
-    const now = Date.now();
-    if (this.state.phase === "declaring") {
-      return (
-        !this.declareTimeExtensionUsedBy.has(seatId) &&
-        !player.declaredReady &&
-        this.state.declareEndsAt > now
-      );
-    }
-    if (
-      this.state.phase !== "playing" ||
-      this.responseTimeExtensionUsed ||
-      this.collectivePrivacyDelaySeatId === seatId ||
-      this.state.responseEndsAt <= now ||
-      !this.pendingResponse
-    ) {
-      return false;
-    }
-    if (this.state.responsePhase === "collective") {
-      return (
-        this.collectiveResponderId === seatId &&
-        !this.pendingResponse.collectives.has(seatId)
-      );
-    }
-    return (
-      this.pendingResponse.ownerId === seatId &&
-      (this.state.currentPlayerId === seatId || this.awaitingDiscardOwnerId === seatId)
-    );
-  }
-
   private buildDecisionTimerSnapshot(seatId: string): {
     untimed: boolean;
-    canRequestMoreTime: boolean;
-    extensionSeconds: number;
     totalMs: number;
     endsAt: number;
     decisionKey: string;
@@ -2066,8 +2007,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           : 0;
     return {
       untimed,
-      canRequestMoreTime: this.canSeatRequestMoreTime(seatId),
-      extensionSeconds: Math.ceil(this.timeExtensionMs / 1000),
       totalMs,
       endsAt: untimed
         ? 0
@@ -2111,42 +2050,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.pendingResponse.ownerId === seatId &&
       (this.state.currentPlayerId === seatId || this.awaitingDiscardOwnerId === seatId)
     );
-  }
-
-  private handleRequestMoreTime(client: Client, payload?: { decisionKey?: unknown }): void {
-    const seatId = this.seatBySession.get(client.sessionId);
-    const requestedDecisionKey = typeof payload?.decisionKey === "string" ? payload.decisionKey.trim() : "";
-    const currentDecisionKey = seatId ? this.buildDecisionTimerSnapshot(seatId).decisionKey : "";
-    if (
-      !seatId ||
-      !requestedDecisionKey ||
-      requestedDecisionKey !== currentDecisionKey ||
-      !this.canSeatRequestMoreTime(seatId)
-    ) {
-      if (seatId) {
-        this.sendAvailableActionsToClient(client, seatId);
-      }
-      return;
-    }
-
-    const now = Date.now();
-    if (this.state.phase === "declaring") {
-      const remainingMs = Math.max(1, this.state.declareEndsAt - now);
-      this.declareTimeExtensionUsedBy.add(seatId);
-      this.declareTimerTotalMs = Math.max(this.declareTimeoutMs, this.declareTimerTotalMs) + this.timeExtensionMs;
-      this.state.declareEndsAt = now + remainingMs + this.timeExtensionMs;
-      this.scheduleDeclareTimeout(remainingMs + this.timeExtensionMs);
-      this.traceStep("declare_time_extended", `seat=${seatId} ms=${this.timeExtensionMs}`);
-      this.broadcastAvailableActions();
-      return;
-    }
-
-    const remainingMs = Math.max(1, this.state.responseEndsAt - now);
-    this.responseTimeExtensionUsed = true;
-    this.responseTimerTotalMs = Math.max(1, this.responseTimerTotalMs) + this.timeExtensionMs;
-    this.scheduleCollectiveTimeout(remainingMs + this.timeExtensionMs, true);
-    this.traceStep("response_time_extended", `seat=${seatId} ms=${this.timeExtensionMs}`);
-    this.broadcastAvailableActions();
   }
 
   /**
@@ -4161,7 +4064,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private scheduleCollectiveTimeout(
     timeoutOverrideMs?: number,
-    preserveExtensionState = false,
+    preserveDecisionWindow = false,
     responsePrivacyDelay = false,
   ): void {
     const isCollectivePhase = this.state.responsePhase === "collective";
@@ -4170,8 +4073,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const existingPrivacyFloorSeatId = this.collectivePrivacyFloorSeatId;
     const existingPrivacyFloorEndsAt = this.collectivePrivacyFloorEndsAt;
     this.clearCollectiveTimer();
-    if (!preserveExtensionState) {
-      this.responseTimeExtensionUsed = false;
+    if (!preserveDecisionWindow) {
       this.responseTimerTotalMs = responsePrivacyDelay ? timeoutMs : baseTimeoutMs;
       this.responseDecisionWindowId += 1;
     }
@@ -4186,14 +4088,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
     if (
-      preserveExtensionState &&
+      preserveDecisionWindow &&
       !responsePrivacyDelay &&
       existingPrivacyFloorSeatId === decisionSeatId &&
       existingPrivacyFloorEndsAt > Date.now()
     ) {
       this.collectivePrivacyFloorSeatId = existingPrivacyFloorSeatId;
       this.collectivePrivacyFloorEndsAt = existingPrivacyFloorEndsAt;
-    } else if (!preserveExtensionState && isCollectivePhase && this.responsePrivacyMinimumForSeat(decisionSeatId) > 0) {
+    } else if (!preserveDecisionWindow && isCollectivePhase && this.responsePrivacyMinimumForSeat(decisionSeatId) > 0) {
       this.collectivePrivacyFloorSeatId = decisionSeatId;
       this.collectivePrivacyFloorEndsAt = Date.now() + this.responsePrivacyMinimumForSeat(decisionSeatId);
     }

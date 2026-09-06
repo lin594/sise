@@ -897,15 +897,11 @@ export declare function useRoom(playerName?: string): {
     }>;
     decisionTimer: import("vue").Ref<{
         untimed: boolean;
-        canRequestMoreTime: boolean;
-        extensionSeconds: number;
         totalMs: number;
         endsAt: number;
         decisionKey: string;
     }, DecisionTimerState | {
         untimed: boolean;
-        canRequestMoreTime: boolean;
-        extensionSeconds: number;
         totalMs: number;
         endsAt: number;
         decisionKey: string;
@@ -917,7 +913,6 @@ export declare function useRoom(playerName?: string): {
     sendDiscardCard: (cardId: string) => void;
     declareFish: (fishCardIds: string[]) => boolean;
     declareKongs: (count: number) => boolean;
-    requestMoreTime: () => void;
     debugSetup: (scenario: string) => void;
     startGame: () => boolean;
     nextRound: () => boolean;
