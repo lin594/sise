@@ -112,7 +112,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
       if (!visibleCount) return;
       const rect = viewport.getBoundingClientRect();
       probe.__siseHandScaleSamples.push({
-        scale: Number.parseFloat(getComputedStyle(hand).zoom || '1'),
+        scale: Number.parseFloat(hand.dataset.handScale || '1'),
         visibleCount,
         authoritativeCount: cards.length,
         left: rect.left,
@@ -135,6 +135,73 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
   for (const key of ['left', 'top', 'width', 'height'] as const) {
     const values = samples.map((sample) => sample[key]);
     expect(Math.max(...values) - Math.min(...values), `${key} must stay stable during the deal`).toBeLessThanOrEqual(0.5);
+  }
+});
+test('single-row hand stays stable while shrinking from 20 to 12 cards', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 667, height: 375 });
+  await login(page);
+  await page.getByTestId('lobby-start').click();
+  await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20_000 });
+
+  const allSamples: Array<{ count: number; scales: number[]; viewportRects: Array<{ left: number; top: number; width: number; height: number }>; cardsFit: boolean }> = [];
+  for (const count of [20, 18, 17, 16, 15, 14, 13, 12]) {
+    await page.evaluate((nextCount) => {
+      const bridge = (window as any).__siseLocalTest;
+      const state = bridge.getRoomState();
+      const types = ['jiang', 'shi', 'xiang', 'ju', 'ma', 'pao', 'zu'];
+      const colors = ['yellow', 'red', 'green', 'white'];
+      bridge.applyRoomSnapshot({
+        stateRevision: state.stateRevision + 1,
+        privateHand: Array.from({ length: nextCount }, (_, index) => ({
+          id: `stable-${nextCount}-${index}`,
+          color: colors[index % colors.length],
+          type: types[index % types.length],
+        })),
+        players: state.players.map((player: any) => player.isBot ? player : { ...player, handCount: nextCount }),
+      });
+    }, count);
+    await expect(page.locator('.cards.hand.single-line [data-card-id]')).toHaveCount(count);
+    const sample = await page.evaluate(async (nextCount) => {
+      const scales: number[] = [];
+      const viewportRects: Array<{ left: number; top: number; width: number; height: number }> = [];
+      let cardsFit = true;
+      await new Promise<void>((resolve) => {
+        const startedAt = performance.now();
+        const timer = window.setInterval(() => {
+          const hand = document.querySelector<HTMLElement>('.cards.hand.single-line')!;
+          const viewport = document.querySelector<HTMLElement>('.hand-viewport.single-line')!;
+          const viewportRect = viewport.getBoundingClientRect();
+          const cardRects = [...hand.querySelectorAll<HTMLElement>('[data-card-id]')]
+            .map((card) => card.getBoundingClientRect());
+          scales.push(Number.parseFloat(hand.dataset.handScale || '1'));
+          viewportRects.push({
+            left: viewportRect.left,
+            top: viewportRect.top,
+            width: viewportRect.width,
+            height: viewportRect.height,
+          });
+          cardsFit &&= cardRects.every((rect) =>
+            rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
+            rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1);
+          if (performance.now() - startedAt >= 320) {
+            window.clearInterval(timer);
+            resolve();
+          }
+        }, 8);
+      });
+      return { count: nextCount, scales, viewportRects, cardsFit };
+    }, count);
+    allSamples.push(sample);
+  }
+
+  for (const sample of allSamples) {
+    expect(new Set(sample.scales.map((scale) => scale.toFixed(4))).size, `${sample.count} cards must keep one scale`).toBe(1);
+    expect(sample.cardsFit, `${sample.count} cards must stay inside the hand viewport`).toBe(true);
+    for (const key of ['left', 'top', 'width', 'height'] as const) {
+      const values = sample.viewportRects.map((rect) => rect[key]);
+      expect(Math.max(...values) - Math.min(...values), `${sample.count} cards viewport ${key} must not move`).toBeLessThanOrEqual(0.5);
+    }
   }
 });
 test('21-card single row adapts to both card styles and layout preference survives refresh', async ({ page }) => {

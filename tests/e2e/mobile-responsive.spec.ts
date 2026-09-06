@@ -803,7 +803,7 @@ test.describe("phone portrait landscape canvas", () => {
         cardWidth: card.offsetWidth,
         cardHeight: card.offsetHeight,
         glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
-        handScale: Number.parseFloat(getComputedStyle(hand).zoom || "1"),
+        handScale: Number.parseFloat(hand.dataset.handScale || "1"),
         cardsInsideViewport: cardRects.every((rect) =>
           rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
           rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1),
@@ -2011,7 +2011,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("hand-layout-paged")).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(".cards.hand")).not.toHaveClass(/single-line/);
     await expect.poll(() => page.locator(".cards.hand").evaluate((hand) =>
-      Number.parseFloat(getComputedStyle(hand).zoom || "1"),
+      Number.parseFloat((hand as HTMLElement).dataset.handScale || "1"),
     )).toBe(1);
     const longDeclarationCard = page.locator(".cards.hand [data-card-mode='long']").first();
     await expect(longDeclarationCard).toBeVisible();

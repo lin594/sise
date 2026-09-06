@@ -614,7 +614,7 @@ const interactionPausedMessage = computed(() => {
     if (connectionState.value === "retry_wait") {
         return "暂时未连上，系统会继续重试";
     }
-    return "正在恢复牌局，请稍候";
+    return "网络不稳定，正在恢复牌局，请稍候";
 });
 const pendingDeferredChiIntent = ref(null);
 const pendingDeferredGrab = ref(false);

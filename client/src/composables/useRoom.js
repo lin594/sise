@@ -14,6 +14,8 @@ const MAX_RECONNECT_DELAY_MS = 15000;
 const RESTORED_NOTICE_MS = 6000;
 const ACTION_RECEIPT_WAIT_MS = 2500;
 const ACTION_REJECTED_VISIBLE_MS = 3600;
+const CONNECTION_PROBE_INTERVAL_MS = 4000;
+const CONNECTION_PROBE_TIMEOUT_MS = 7000;
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
     4101: "房间已经坐满，无法恢复原座位。系统已停止自动恢复。",
@@ -433,6 +435,10 @@ export function useRoom(playerName = "Player") {
     let lastPhase = "";
     let missingHandSyncTimer = null;
     let reconnectTimer = null;
+    let connectionProbeInterval = null;
+    let connectionProbeTimeout = null;
+    let pendingConnectionProbeNonce = 0;
+    let nextConnectionProbeNonce = 0;
     let restoredNoticeTimer = null;
     let stateSyncFingerprint = "";
     let lastAppliedStateRevision = -1;
@@ -542,6 +548,60 @@ export function useRoom(playerName = "Player") {
             reconnectTimer = null;
         }
     }
+    function clearPendingConnectionProbe() {
+        if (connectionProbeTimeout !== null) {
+            window.clearTimeout(connectionProbeTimeout);
+            connectionProbeTimeout = null;
+        }
+        pendingConnectionProbeNonce = 0;
+    }
+    function clearConnectionProbeTimers() {
+        if (connectionProbeInterval !== null) {
+            window.clearInterval(connectionProbeInterval);
+            connectionProbeInterval = null;
+        }
+        clearPendingConnectionProbe();
+    }
+    function failStaleConnection(targetRoom, reason) {
+        if (room.value !== targetRoom || !connected.value || document.visibilityState !== "visible") {
+            return;
+        }
+        clearConnectionProbeTimers();
+        connected.value = false;
+        joinError.value = "网络不稳定，正在恢复牌局。";
+        scheduleReconnect(reason, true);
+    }
+    function sendConnectionProbe(targetRoom) {
+        if (room.value !== targetRoom ||
+            !connected.value ||
+            document.visibilityState !== "visible" ||
+            connectionProbeTimeout !== null) {
+            return;
+        }
+        const nonce = ++nextConnectionProbeNonce;
+        pendingConnectionProbeNonce = nonce;
+        if (!safeRoomSend("connection_probe", { nonce })) {
+            clearPendingConnectionProbe();
+            failStaleConnection(targetRoom, "connection_probe_send_failed");
+            return;
+        }
+        connectionProbeTimeout = window.setTimeout(() => {
+            connectionProbeTimeout = null;
+            if (pendingConnectionProbeNonce !== nonce) {
+                return;
+            }
+            pendingConnectionProbeNonce = 0;
+            failStaleConnection(targetRoom, "connection_probe_timeout");
+        }, CONNECTION_PROBE_TIMEOUT_MS);
+    }
+    function startConnectionProbes(targetRoom) {
+        clearConnectionProbeTimers();
+        sendConnectionProbe(targetRoom);
+        if (room.value !== targetRoom || !connected.value) {
+            return;
+        }
+        connectionProbeInterval = window.setInterval(() => sendConnectionProbe(targetRoom), CONNECTION_PROBE_INTERVAL_MS);
+    }
     function clearRestoredNoticeTimer() {
         if (restoredNoticeTimer !== null) {
             window.clearTimeout(restoredNoticeTimer);
@@ -552,6 +612,7 @@ export function useRoom(playerName = "Player") {
         suppressReconnect = true;
         clearMissingHandSyncTimer();
         clearReconnectTimer();
+        clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         clearActionFeedback();
         connected.value = false;
@@ -615,10 +676,12 @@ export function useRoom(playerName = "Player") {
         const token = playerToken.value.trim();
         const name = localPlayerName.value.trim();
         if (!roomId || !token || !name) {
+            clearConnectionProbeTimers();
             connected.value = false;
             connectionState.value = "failed";
             return;
         }
+        clearConnectionProbeTimers();
         connected.value = false;
         clearRestoredNoticeTimer();
         if (!navigator.onLine) {
@@ -671,6 +734,7 @@ export function useRoom(playerName = "Player") {
         }
         connected.value = false;
         clearReconnectTimer();
+        clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         clearActionFeedback();
         connectionState.value = "offline";
@@ -684,11 +748,15 @@ export function useRoom(playerName = "Player") {
     }
     function handleVisibilityChange() {
         if (document.visibilityState !== "visible") {
+            clearPendingConnectionProbe();
             return;
         }
         if (!connected.value) {
             handleBrowserOnline();
             return;
+        }
+        if (room.value) {
+            sendConnectionProbe(room.value);
         }
         requestSyncState("page_visible");
         void fetchPrivateState("page_visible");
@@ -1221,6 +1289,7 @@ export function useRoom(playerName = "Player") {
         suppressReconnect = false;
         connectInFlight = true;
         clearReconnectTimer();
+        clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         connectionState.value = reconnecting ? "reconnecting" : "connecting";
         const connectionSeq = ++activeConnectionSeq;
@@ -1363,6 +1432,16 @@ export function useRoom(playerName = "Player") {
                     return;
                 }
                 applySnapshot(payload, "explicit");
+            });
+            joined.onMessage("connection_probe_ack", (payload) => {
+                if (!isCurrentJoinedRoom()) {
+                    return;
+                }
+                const nonce = Number(payload?.nonce);
+                if (!Number.isSafeInteger(nonce) || nonce !== pendingConnectionProbeNonce) {
+                    return;
+                }
+                clearPendingConnectionProbe();
             });
             joined.onMessage("private_hand", (payload) => {
                 if (!isCurrentJoinedRoom()) {
@@ -1566,6 +1645,7 @@ export function useRoom(playerName = "Player") {
             if (joined.state) {
                 applySnapshot(joined.state);
             }
+            startConnectionProbes(joined);
             void fetchPrivateState("after_join");
             return true;
         }
@@ -1736,6 +1816,7 @@ export function useRoom(playerName = "Player") {
         pendingConnectionRoomId = "";
         clearMissingHandSyncTimer();
         clearReconnectTimer();
+        clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         room.value = null;
         connected.value = false;
@@ -1784,6 +1865,7 @@ export function useRoom(playerName = "Player") {
     onUnmounted(() => {
         clearMissingHandSyncTimer();
         clearReconnectTimer();
+        clearConnectionProbeTimers();
         clearRestoredNoticeTimer();
         clearActionFeedback();
         window.removeEventListener("offline", handleBrowserOffline);

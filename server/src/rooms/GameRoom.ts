@@ -423,6 +423,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.syncClientState(client);
     });
 
+    this.onMessage("connection_probe", (client, payload: { nonce?: unknown } | undefined) => {
+      const nonce = Number(payload?.nonce);
+      if (!Number.isSafeInteger(nonce) || nonce <= 0) {
+        return;
+      }
+      client.send("connection_probe_ack", { nonce });
+    });
+
     if (this.debugScenariosEnabled) {
       this.onMessage("debug_setup", (client, scenario: string) => {
         const seatId = this.seatBySession.get(client.sessionId);

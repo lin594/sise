@@ -3309,7 +3309,8 @@ if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ onScroll: (__VLS_ctx.scheduleHandLayoutUpdate) },
         ...{ class: "cards hand" },
-        ...{ style: ({ zoom: __VLS_ctx.handLayout !== 'paged' ? __VLS_ctx.handScale : 1 }) },
+        ...{ style: ({ '--hand-scale': __VLS_ctx.handLayout !== 'paged' ? __VLS_ctx.handScale : 1 }) },
+        'data-hand-scale': ((__VLS_ctx.handLayout !== 'paged' ? __VLS_ctx.handScale : 1).toFixed(4)),
         ...{ class: ({
                 'single-line': __VLS_ctx.handLayout !== 'paged',
                 'can-scroll-backward': __VLS_ctx.handCanScrollBackward,

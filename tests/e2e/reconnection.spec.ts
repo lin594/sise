@@ -6,6 +6,36 @@ const BACKEND_HOST = new URL(BACKEND_URL).host;
 test.describe("牌局断线恢复", () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
+  test("半开连接无回包时主动提示网络不稳并恢复", async ({ page }, testInfo) => {
+    test.setTimeout(45_000);
+    await page.goto("/");
+    await page.getByTestId("random-nickname").click();
+    await page.getByTestId("login-submit").click();
+    await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("confirm-declaration").click();
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 15_000 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "connected");
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 60_000,
+      downloadThroughput: 1,
+      uploadThroughput: 1,
+      connectionType: "cellular2g",
+    });
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+    const status = page.getByTestId("connection-status");
+    await expect(status).toHaveAttribute("data-state", /reconnecting|retry_wait/, { timeout: 15_000 });
+    await expect(status).toContainText(/网络不稳|未连上/);
+    await expect(page.getByTestId("game-board")).toBeVisible();
+    await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
+    await expect(page.getByTestId("action-paused")).toContainText(/网络不稳定|暂时未连上/);
+    await page.screenshot({ path: testInfo.outputPath("half-open-network-warning.png") });
+  });
+
   test("保留当前牌桌并在联网后自动恢复", async ({ context, page }, testInfo) => {
     test.setTimeout(90_000);
     let roomSocketCount = 0;

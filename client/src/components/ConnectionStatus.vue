@@ -63,7 +63,7 @@ const title = computed(() => {
     case "closed":
       return "已停止自动恢复";
     case "reconnecting":
-      return props.attempt > 0 ? `正在恢复（第${props.attempt}次）` : "正在恢复牌局";
+      return props.attempt > 0 ? `网络不稳 · 恢复中（第${props.attempt}次）` : "网络不稳 · 正在恢复";
     default:
       return "正在连接";
   }

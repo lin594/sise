@@ -594,7 +594,8 @@
         >
           <div
             class="cards hand"
-            :style="{ zoom: handLayout !== 'paged' ? handScale : 1 }"
+            :style="{ '--hand-scale': handLayout !== 'paged' ? handScale : 1 }"
+            :data-hand-scale="(handLayout !== 'paged' ? handScale : 1).toFixed(4)"
             :class="{
               'single-line': handLayout !== 'paged',
               'can-scroll-backward': handCanScrollBackward,
@@ -5047,7 +5048,7 @@ watch(
 .decision-status strong { flex: 1; min-width: 0; }
 .fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
 .decision-status button { min-height: 40px; padding: 3px 8px; }
-.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; }
+.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; transform: scale(var(--hand-scale, 1)); transform-origin: center center; }
 .cards.hand.single-line .hand-card { flex: 0 0 auto; width: max-content; }
 .hand-mark { position: absolute; top: 0; left: 0; z-index: 2; background: #0f766e; color: white; border-radius: 3px; font-size: 11px; padding: 1px 3px; }
 .listening-mark { background: #047857; }
