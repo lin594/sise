@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
-  <title id="title">四色牌文化</title>
-  <desc id="desc">黃帥、紅相、綠車、白士四張傳統圓頭長牌與四色牌文化文字</desc>
+  <title id="title">四色牌</title>
+  <desc id="desc">黄帥、红相、绿車、白士四张圆头长牌，每张牌的两端各有一个繁体牌面字，下方写四色牌与象棋魂、麻将韵、纸牌趣</desc>
   <defs>
     <radialGradient id="bg" cx="0" cy="0" r="1" gradientTransform="translate(194 126) rotate(46) scale(770 720)" gradientUnits="userSpaceOnUse">
       <stop stop-color="#193b63"/>
@@ -21,39 +21,31 @@
   <circle cx="730" cy="662" r="270" fill="#22c55e" opacity=".04"/>
   <path d="M93 713c170 35 444 35 614 0" fill="none" stroke="#dcae38" stroke-width="2" opacity=".35"/>
 
-  <g filter="url(#shadow)" font-family="STKaiti, Kaiti TC, BiauKai, KaiTi, serif" font-weight="900" text-anchor="middle" dominant-baseline="central">
+  <g filter="url(#shadow)" font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-weight="900" text-anchor="middle" dominant-baseline="central">
     <g transform="rotate(-13 242 304)">
       <rect x="187" y="100" width="110" height="408" rx="55" fill="#f5c518" stroke="#fff5c2" stroke-width="9"/>
-      <text x="242" y="214" fill="#17120a" font-size="72">帥</text>
-      <text x="242" y="394" fill="#17120a" font-size="72" transform="rotate(180 242 394)">帥</text>
-      <circle cx="242" cy="304" r="20" fill="none" stroke="#6b4b08" stroke-width="4" opacity=".72"/>
-      <circle cx="242" cy="304" r="7" fill="#6b4b08" opacity=".52"/>
+      <text x="242" y="190" fill="#17120a" font-size="72">帥</text>
+      <text x="242" y="418" fill="#17120a" font-size="72" transform="rotate(180 242 418)">帥</text>
     </g>
     <g transform="rotate(-5 350 282)">
       <rect x="295" y="78" width="110" height="408" rx="55" fill="#e84545" stroke="#ffe0e0" stroke-width="9"/>
-      <text x="350" y="192" fill="#180808" font-size="72">相</text>
-      <text x="350" y="372" fill="#180808" font-size="72" transform="rotate(180 350 372)">相</text>
-      <circle cx="350" cy="282" r="20" fill="none" stroke="#6f1111" stroke-width="4" opacity=".72"/>
-      <circle cx="350" cy="282" r="7" fill="#6f1111" opacity=".52"/>
+      <text x="350" y="168" fill="#180808" font-size="72">相</text>
+      <text x="350" y="396" fill="#180808" font-size="72" transform="rotate(180 350 396)">相</text>
     </g>
     <g transform="rotate(5 458 282)">
       <rect x="403" y="78" width="110" height="408" rx="55" fill="#28b85c" stroke="#daf8e5" stroke-width="9"/>
-      <text x="458" y="192" fill="#07160c" font-size="72">車</text>
-      <text x="458" y="372" fill="#07160c" font-size="72" transform="rotate(180 458 372)">車</text>
-      <circle cx="458" cy="282" r="20" fill="none" stroke="#0c5d2b" stroke-width="4" opacity=".72"/>
-      <circle cx="458" cy="282" r="7" fill="#0c5d2b" opacity=".52"/>
+      <text x="458" y="168" fill="#07160c" font-size="72">車</text>
+      <text x="458" y="396" fill="#07160c" font-size="72" transform="rotate(180 458 396)">車</text>
     </g>
     <g transform="rotate(13 566 304)">
       <rect x="511" y="100" width="110" height="408" rx="55" fill="#f7f4eb" stroke="#e2e8f0" stroke-width="9"/>
-      <text x="566" y="214" fill="#111827" font-size="72">士</text>
-      <text x="566" y="394" fill="#111827" font-size="72" transform="rotate(180 566 394)">士</text>
-      <circle cx="566" cy="304" r="20" fill="none" stroke="#475569" stroke-width="4" opacity=".72"/>
-      <circle cx="566" cy="304" r="7" fill="#475569" opacity=".52"/>
+      <text x="566" y="190" fill="#111827" font-size="72">士</text>
+      <text x="566" y="418" fill="#111827" font-size="72" transform="rotate(180 566 418)">士</text>
     </g>
   </g>
 
   <g text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
     <text x="400" y="638" fill="#f8fafc" font-size="104" font-weight="900" letter-spacing="10">四色牌</text>
-    <text x="400" y="706" fill="url(#gold)" font-size="34" font-weight="700" letter-spacing="24">文化</text>
+    <text x="400" y="706" fill="url(#gold)" font-size="25" font-weight="700" letter-spacing="3">象棋魂 · 麻将韵 · 纸牌趣</text>
   </g>
 </svg>

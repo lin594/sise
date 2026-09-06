@@ -352,7 +352,7 @@ test("invite card exposes cultural metadata and auto-joins with a confirmed loca
     const html = await response.text();
     expect(html).toContain('property="og:title" content="邀请你一起传承四色牌文化"');
     expect(html).toContain(`好友房 ${roomId}`);
-    expect(html).toContain("/share-thumbnail-v2.png");
+    expect(html).toContain("/share-thumbnail-v3.png");
     expect(html).toContain('property="og:image:width" content="800"');
     expect(html).toContain('property="og:image:height" content="800"');
     expect(html).not.toContain("playerToken");
@@ -900,7 +900,7 @@ test("copies an invite link on an insecure LAN deployment", async ({ page }) => 
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
-  await expect(page.getByTestId("share-invite")).toHaveCount(0);
+  await expect(page.getByTestId("share-invite")).toBeVisible();
   await page.getByTestId("copy-invite").click();
   await expect(page.getByTestId("global-notice")).toHaveText("邀请链接已复制，可以发给朋友了");
   await expect(page.getByTestId("copy-invite")).toBeFocused();

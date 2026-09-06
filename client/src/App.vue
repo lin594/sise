@@ -35,6 +35,7 @@
         <div class="brand-lockup">
           <span class="brand-suits" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <h1>四色牌</h1>
+          <span v-if="showGameTools" class="compact-game-slogan">象棋魂 · 麻将韵 · 纸牌趣</span>
         </div>
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
       </div>
@@ -163,6 +164,7 @@
       @copy-invite="copyInviteLink"
       @share-invite="shareInviteLink"
       @show-invite-qr="showInviteQr"
+      @share-game="shareGame"
       @claim-seat="requestSeatClaim"
       @add-bot="addBot($event, 50)"
       @fill-bots="fillBots"
@@ -691,7 +693,7 @@ import type {
   TurnAlertMode,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
-import { getRoundKey, isQuietSelfDiscardWait } from "@/utils/gameFlowPresentation";
+import { getDisplayedTurnPlayerId, getRoundKey, isQuietSelfDiscardWait } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
   () => import("@/components/FriendInviteQrDialog.vue"),
@@ -1401,15 +1403,13 @@ watch(
   { flush: "sync" },
 );
 const displayTurnPlayerId = computed(() => {
-  if (state.value?.responsePhase === "collective") {
-    return (
-      state.value?.currentTurnPlayerId ||
-      state.value?.currentPlayerId ||
-      state.value?.pollOriginPlayerId ||
-      ""
-    );
-  }
-  return state.value?.currentTurnPlayerId || state.value?.currentPlayerId || "";
+  return getDisplayedTurnPlayerId({
+    responsePhase: state.value?.responsePhase,
+    pendingReceiverId: state.value?.pendingReceiverId,
+    currentTurnPlayerId: state.value?.currentTurnPlayerId,
+    currentPlayerId: state.value?.currentPlayerId,
+    playerIds: players.value.map((player) => player.clientId),
+  });
 });
 const isMyTurn = computed(() => {
   if (!mySeatId.value || displayTurnPlayerId.value !== mySeatId.value) {
@@ -1560,7 +1560,7 @@ const lobbyPageRef = ref<{
 const inviteCopyFallbackUrl = ref("");
 const inviteQrUrl = ref("");
 const inviteQrRoomId = ref("");
-const canShareInvite = typeof navigator.share === "function";
+const canShareInvite = true;
 const inviteActionPending = ref<"copy" | "share" | null>(null);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
@@ -3391,6 +3391,10 @@ function buildInviteUrl(): string {
   return new URL(`/invite/${encodeURIComponent(activeRoomId.value)}`, window.location.origin).toString();
 }
 
+function buildPublicShareUrl(): string {
+  return new URL("/share", window.location.origin).toString();
+}
+
 async function copyInviteLink() {
   await performInviteAction("copy");
 }
@@ -3399,24 +3403,32 @@ async function shareInviteLink() {
   await performInviteAction("share");
 }
 
-async function performInviteAction(action: "copy" | "share") {
-  if (!activeRoomId.value || inviteActionPending.value) {
+async function shareGame() {
+  await performInviteAction("share", "game");
+}
+
+async function performInviteAction(action: "copy" | "share", target: "invite" | "game" = "invite") {
+  if ((target === "invite" && !activeRoomId.value) || inviteActionPending.value) {
     return;
   }
   inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   inviteActionPending.value = action;
-  const inviteUrl = buildInviteUrl();
+  const inviteUrl = target === "invite" ? buildInviteUrl() : buildPublicShareUrl();
+  const title = "邀请你一起传承四色牌文化";
+  const shareText = target === "invite"
+    ? `好友房 ${activeRoomId.value} · 点击进入四色牌同桌相聚`
+    : "象棋魂 · 麻将韵 · 纸牌趣——四色牌，一局见真章！";
   let restoreFocus = true;
   try {
     if (action === "share" && navigator.share) {
       try {
         await navigator.share({
-          title: "邀请你一起传承四色牌文化",
-          text: `好友房 ${activeRoomId.value} · 点击进入四色牌同桌相聚`,
+          title,
+          text: shareText,
           url: inviteUrl,
         });
         globalError.value = "";
-        showGlobalNotice("邀请已分享，等待牌友加入");
+        showGlobalNotice(target === "invite" ? "邀请已分享，等待牌友加入" : "四色牌已分享到系统分享菜单");
         return;
       } catch (error) {
         if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") {
@@ -3456,7 +3468,10 @@ async function performInviteAction(action: "copy" | "share") {
     }
     if (copied) {
       globalError.value = "";
-      showGlobalNotice("邀请链接已复制，可以发给朋友了");
+      const embeddedSocial = /MicroMessenger|MQQBrowser|QQ\//i.test(navigator.userAgent);
+      showGlobalNotice(embeddedSocial
+        ? "链接已复制，也可以点右上角分享到微信或 QQ"
+        : target === "invite" ? "邀请链接已复制，可以发给朋友了" : "四色牌链接已复制，可以发给朋友了");
     } else {
       globalError.value = "";
       inviteCopyFallbackUrl.value = inviteUrl;
@@ -3747,6 +3762,16 @@ watch(
   margin: 0;
   color: #fde68a;
   font-size: clamp(0.6rem, calc(var(--effective-vh, 1vh) * 1.3), 0.8rem);
+}
+
+.compact-game-slogan {
+  min-width: 0;
+  overflow: hidden;
+  color: #fde68a;
+  font-size: clamp(0.62rem, calc(var(--effective-vh, 1vh) * 1.4), 0.78rem);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {

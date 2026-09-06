@@ -96,7 +96,7 @@ TRAEFIK_SERVER_RULE=Host(`sise-api.example.com`)
 
 Web 镜像会同源提供 `/site.webmanifest`、favicon、手机主屏图标和版本化分享缩略图。正式 HTTPS 页面提供“安装四色牌”入口：支持 `beforeinstallprompt` 的浏览器直接拉起系统安装，其余平台显示添加到主屏或程序坞的步骤。Manifest 将同源链接声明为优先交给已安装应用，并请求复用现有应用窗口；Chrome 139+ 等支持链接捕获的环境可自动把邀请链接交给 PWA，最终行为仍服从浏览器和用户偏好。当前没有注册 Service Worker，也不支持离线牌局，部署时不要额外给 API、WebSocket 或首页套用离线缓存。图标和版本化分享图可长期缓存，Manifest 和首页保持可重新验证，以便升级后及时更新入口信息。
 
-`PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 生成绝对卡片链接和 `/share-thumbnail-v2.png` 分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。更换分享图时使用新的版本化文件名并同步邀请页元数据，避免微信继续使用旧缩略图缓存。
+`PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 和 `/share` 生成绝对卡片链接及 `/share-thumbnail-v3.png` 分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。更换分享图时使用新的版本化文件名并同步分享页元数据，避免微信或 QQ 继续使用旧缩略图缓存。
 
 ## 6. iMac 试玩环境
 
@@ -181,7 +181,6 @@ npm run smoke:imac-gateway
 - `GUEST_PROFILE_RATE_LIMIT`：同一客户端每窗口读取或更新本机档案的合计次数，默认 60。
 - `OP_TIMEOUT_MS`：真人响应和出牌默认超时，默认 30000ms；`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS` 未设置时继承该值。
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。
-- `TIME_EXTENSION_MS`：好友房真人每个声明或牌局决策窗口可主动增加的时间，默认 20000ms，服务端限制在 5000–60000ms；单人练习的在线真人不限时，不使用该值。
 - `RECONNECT_GRACE_MS`：活动牌局真人断线后等待重连、再启用机器人托管的宽限期，默认 5000ms；设为 0 可恢复立即托管。
 - `LOCAL_TRANSITION_DELAY_MS`：无人胡、开、碰后进入本地吃/抓阶段的提示过渡，默认 250ms。
 - `DEALER_PICK_INTRO_MS`、`DEALER_REVEAL_INTRO_MS`、`OPENING_DEAL_DELAY_MS`：定庄和发牌动画延时。

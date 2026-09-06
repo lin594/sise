@@ -71,14 +71,14 @@ test("publishes a recognizable browser and home-screen identity", async ({ page 
     expect([2, 6]).toContain(info.colorType);
   }
 
-  const shareThumbnailResponse = await page.request.get("/share-thumbnail-v2.png");
+  const shareThumbnailResponse = await page.request.get("/share-thumbnail-v3.png");
   expect(shareThumbnailResponse.ok()).toBe(true);
   expect(shareThumbnailResponse.headers()["content-type"]).toBe("image/png");
   const shareThumbnailInfo = pngInfo(await shareThumbnailResponse.body());
   expect(shareThumbnailInfo).toMatchObject({ width: 800, height: 800 });
   expect([2, 6]).toContain(shareThumbnailInfo.colorType);
 
-  for (const src of ["/favicon.svg", "/share-thumbnail-v2.svg"]) {
+  for (const src of ["/favicon.svg", "/share-thumbnail-v3.svg"]) {
     const response = await page.request.get(src);
     expect(response.ok(), `${src} should be available`).toBe(true);
     expect(response.headers()["content-type"]).toContain("image/svg+xml");
@@ -106,6 +106,31 @@ test("does not disguise missing icon files as the app shell", async () => {
     "client/src/App.vue",
   ].map((relativePath) => readFile(path.join(process.cwd(), relativePath), "utf8")));
   expect(sourceFiles.join("\n")).not.toContain("serviceWorker.register");
+});
+
+test("shares the public game card from mode selection", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        sessionStorage.setItem("sise_test_shared_game", JSON.stringify(data));
+      },
+    });
+  });
+  await page.goto("/");
+  await page.getByTestId("random-nickname").click();
+  await page.getByTestId("login-submit").click();
+
+  const shareButton = page.getByTestId("share-game");
+  await expect(shareButton).toHaveText("分享四色牌");
+  await page.screenshot({ path: testInfo.outputPath("mode-selection-share.png") });
+  await shareButton.click();
+  await expect(page.getByTestId("global-notice")).toHaveText("四色牌已分享到系统分享菜单");
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("sise_test_shared_game") ?? "{}"))).toEqual({
+    title: "邀请你一起传承四色牌文化",
+    text: "象棋魂 · 麻将韵 · 纸牌趣——四色牌，一局见真章！",
+    url: `${new URL(page.url()).origin}/share`,
+  });
 });
 
 test("offers one-click installation when Chromium exposes the install prompt", async ({ page }) => {

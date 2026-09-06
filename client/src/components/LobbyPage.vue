@@ -76,6 +76,19 @@
         </button>
       </div>
 
+      <div v-if="modes.length" class="mode-share-card">
+        <div>
+          <strong>把四色牌推荐给朋友</strong>
+        </div>
+        <button
+          class="ghost invite-button"
+          type="button"
+          data-testid="share-game"
+          :disabled="invitePending !== null"
+          @click="$emit('share-game')"
+        >{{ invitePending === "share" ? "正在打开…" : "分享四色牌" }}</button>
+      </div>
+
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
@@ -505,6 +518,7 @@ const emit = defineEmits<{
   "copy-invite": [];
   "share-invite": [];
   "show-invite-qr": [];
+  "share-game": [];
   "claim-seat": [seatIndex: number];
   "add-bot": [seatIndex: number];
   "fill-bots": [];
@@ -796,6 +810,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .lobby-head,
 .lobby-head-actions,
+.mode-share-card,
 .invite-card,
 .invite-actions,
 .seat-head,
@@ -807,9 +822,25 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .lobby-head,
+.mode-share-card,
 .invite-card,
 .seat-head {
   justify-content: space-between;
+}
+
+.mode-share-card {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(217, 170, 45, 0.5);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.45), rgba(15, 23, 42, 0.96));
+}
+
+.mode-share-card > div {
+  min-width: 0;
+}
+
+.mode-share-card strong {
+  color: #fef3c7;
 }
 
 .lobby-head > div:first-child {
@@ -934,6 +965,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .mode-card,
 .seat-card,
+.mode-share-card,
 .invite-card,
 .match-status-card,
 .scoring-card {
@@ -1556,6 +1588,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .mode-card,
   .seat-card,
+  .mode-share-card,
   .invite-card,
   .match-status-card,
   .scoring-card {
