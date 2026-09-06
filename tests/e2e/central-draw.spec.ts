@@ -134,7 +134,12 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
   }, expectedIds);
 
   await page.getByTestId("action-peng").click();
-  await expect.poll(() => page.evaluate(() => Boolean((window as any).__siseMeldHandoff?.done))).toBe(true);
+  // CPU throttling slows both the animation and this page-side RAF sampler.
+  // Leave enough wall-clock headroom for the 6x-throttled coverage case.
+  await expect.poll(
+    () => page.evaluate(() => Boolean((window as any).__siseMeldHandoff?.done)),
+    { timeout: 30_000 },
+  ).toBe(true);
   return page.evaluate(() => (window as any).__siseMeldHandoff as MeldHandoff);
 }
 
