@@ -7,7 +7,7 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
-import { quickPhrases } from "@/generated/quickPhrases";
+import { quickPhraseWindowMs, quickPhrases } from "@/generated/quickPhrases";
 import { readStoredValue, removeStoredValue, withSafeBrowserStorage, writeStoredValue, } from "@/utils/safeStorage";
 const WS_URL = BACKEND_WS_URL;
 const HTTP_URL = BACKEND_HTTP_URL;
@@ -498,14 +498,10 @@ export function useRoom(playerName = "Player") {
         quickPhrase.value = { seatId, phraseId, text: phrase.label, sequence };
         if (quickPhraseTimer !== null)
             window.clearTimeout(quickPhraseTimer);
-        const requestedDuration = options.durationMs;
-        const durationMs = Number.isFinite(requestedDuration)
-            ? Math.max(1_000, Math.min(10_000, Number(requestedDuration)))
-            : phrase.durationMs;
         quickPhraseTimer = window.setTimeout(() => {
             quickPhraseTimer = null;
             quickPhrase.value = null;
-        }, durationMs);
+        }, quickPhraseWindowMs);
         if (options.play !== false)
             playQuickPhrase(phraseId);
     }
@@ -1604,7 +1600,6 @@ export function useRoom(playerName = "Player") {
                     pendingLocalQuickPhrase = null;
                 presentQuickPhrase(seatId, phraseId, Number(payload?.sequence ?? Date.now()), {
                     play: !isLocalEcho,
-                    durationMs: Number(payload?.durationMs),
                 });
             });
             joined.onMessage("action_rejected", (payload) => {

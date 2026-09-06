@@ -12,6 +12,7 @@ npm --prefix server test
 npm run build
 npm run e2e:responsive
 npm run e2e
+npm audit --registry=https://registry.npmjs.org
 npm --prefix server audit --omit=dev --registry=https://registry.npmjs.org
 npm --prefix client audit --omit=dev --registry=https://registry.npmjs.org
 ```
@@ -35,7 +36,46 @@ PLAYWRIGHT_CHANNEL=chrome npm run e2e
 git diff --check
 ```
 
-## 2. 服务端回归矩阵
+## 2. GitHub CI 与合并门禁
+
+`.github/workflows/ci.yml` 在每个 Pull Request、`main` 更新和手动触发时都从干净 checkout 运行，不复用开发机上的 `dist`、`node_modules` 或浏览器服务。工作流固定使用 Node.js 22 和 npm 官方 registry，并包含：
+
+- 服务端完整规则、HTTP、持久化和房间回归；
+- 服务端与客户端 TypeScript/生产构建，以及生成文件是否已经提交；
+- Chromium 全量浏览器回归与 WebKit 移动关键流；
+- 根目录 CI/开发工具以及服务端、客户端生产依赖的已知漏洞审计；
+- 普通、开发、Traefik、iMac Compose 配置验证和生产容器镜像构建；
+- 汇总以上结果的稳定必需检查 `CI gate`。
+
+浏览器用例失败时，Actions 会保留 7 天的 Playwright trace、截图和测试结果。不能用本地结果、某一个子任务或旧提交的绿色状态替代当前 Pull Request 的 `CI gate`。
+
+`main` 的远端规则要求分支与目标分支保持最新、所有对话已解决并通过 `CI gate`；规则同样约束管理员，禁止直接 push、force push 和删除分支。仓库关闭 Merge Commit 与 Rebase and Merge，只保留 Squash and Merge，因此每次进入 `main` 的变更都对应一个通过远端门禁的 Pull Request。
+
+本地复现全部代码与浏览器检查时执行：
+
+```bash
+npm ci
+npm ci --prefix server
+npm ci --prefix client
+npm --prefix server test
+npm run build
+git diff --exit-code
+npx playwright test --project=chromium
+npx playwright test --project=webkit-responsive
+npm audit --registry=https://registry.npmjs.org
+npm --prefix server audit --omit=dev --registry=https://registry.npmjs.org
+npm --prefix client audit --omit=dev --registry=https://registry.npmjs.org
+npm run compose:imac:check
+docker compose build server web
+```
+
+首次运行浏览器检查前安装对应浏览器：
+
+```bash
+npx playwright install chromium webkit
+```
+
+## 3. 服务端回归矩阵
 
 ### 房间与身份
 
@@ -106,7 +146,7 @@ git diff --check
 - 候选过期、手牌 ID 缺失或目标牌变化时，执行原子失败：手牌、牌池、明示区与流程阶段均不发生部分修改。
 - 吃、碰、开共享扣牌路径的普通牌回归仍通过。
 
-## 3. 浏览器回归矩阵
+## 4. 浏览器回归矩阵
 
 Playwright 的有效横屏矩阵为 568×320、667×375、740×360、812×375、844×390、852×393、896×414、915×412、926×428；物理竖持自动旋转矩阵为 320×568、375×667、390×844、393×852、412×915、428×926，另保留 1024×768 平板与 1280×720 桌面基线。
 
@@ -126,7 +166,7 @@ Playwright 的有效横屏矩阵为 568×320、667×375、740×360、812×375、
 | 快速桌个人重配 | 四家结算到齐后每名真人都看到“再来一局（重新配桌）”，不显示房主下一局/返厅；点击者进入新房并获得新 token，未点击者仍留在原结算页 |
 | 练习结算导航 | 只显示“再练一局”和“返回玩法选择”；返回后停止旧房重连、清除凭证，并同时看到单人练习、快速配桌、好友同桌三个入口 |
 | 浏览器、分享与主屏入口 | 首页只引用一份 Manifest，并提供主题色、SVG/ICO favicon、Apple Touch Icon、旧 iOS standalone 标记、普通 192/512 与独立 maskable PNG；Manifest 声明作用域内链接优先交给已安装 PWA、复用现有应用窗口导航，并建立同源应用自关联供支持的 Chromium 检测。方形分享图为版本化 800×800 PNG，邀请页声明同源 Manifest 及相同图片地址、尺寸、类型和替代文字。浏览器模式在非牌局顶栏和牌局设置提供安装入口：Chromium 系统提示只触发一次，微信/iOS/Safari 显示对应步骤，安装成功、standalone 或浏览器报告已安装时隐藏；安装检测期间不闪现，失败后正常提供入口。不支持链接捕获或用户关闭接管时仍正常走网页邀请，不能循环跳转。568×320、320×568、844×390 无顶部交叠或指引裁切。Docker 中 Manifest/SVG/PNG 类型正确，缺失静态资源返回 404；不注册离线 Service Worker、不宣称离线可玩 |
-| 顶部控制栏 | 声明、对局、结算均常驻；含四色牌、记录、互动、设置、托管、退出，控制文字在老旧小屏不小于 14px，且不与座位或弹层重叠。互动按钮与文案由 `assets/audio/quick-phrases/` 文件名生成，服务端按生成白名单和音频时长全桌串行播放，消息不进入记录，自动音频可在本地关闭 |
+| 顶部控制栏 | 声明、对局、结算均常驻；含四色牌、记录、互动、设置、托管、退出，控制文字在老旧小屏不小于 14px，且不与座位或弹层重叠。互动按钮与文案由 `assets/audio/quick-phrases/` 文件名生成，服务端按生成白名单和固定 3 秒窗口全桌串行播放，消息不进入记录，自动音频可在本地关闭 |
 | 断线恢复状态 | 667×375、568×320 与 320×568 自动旋转画布中，断网、重连和恢复成功的主文字不小于 14px，完整位于顶栏并避开招牌与右侧控制；空间不足只隐藏辅助说明。可手动重试时按钮至少 36px 高、14px 字，连接状态机、牌桌保留和自动恢复行为不变 |
 | 主动托管 | 在线真人开启前二次确认，默认聚焦“暂不开启”且背景不能抢走焦点；开启后保留昵称、真人及房主身份，顶部持续高亮“取消托管”，人工牌局动作禁用且机器人继续推进；取消一次点击立即生效。定庄揭晓期间切换不取消动画或提前显示声明；刷新重连保留选择，返回大厅清除；配置机器人不能调用该消息 |
 | 开局确认 | 标题、区块、图例、按钮和读屏名称只使用“鱼／坎”；无候选时不显示对应区块或零值控件。系统推荐完成后主按钮按非零项显示“开始游戏 · 鱼 N · 坎 N”并获得焦点；只有偏离系统推荐后才出现“恢复推荐”，同步/提交/已确认和锁定选择均不保留按钮语义。568×320 显示“上下滑调整 · 手牌可前后翻 · 练习不限时”，主要操作首屏可见且 Tab/Shift+Tab 不得逃到背景 |
@@ -192,7 +232,7 @@ Playwright 的有效横屏矩阵为 568×320、667×375、740×360、812×375、
 
 每轮视觉调整至少保存定庄完成、普通等待、待响应、选牌待确认、设置展开及两种座位方向截图，检查全局溢出、可读性与控件交叠。响应式发布门禁另外固定保存 568×320、844×390、915×412、390×844 自动旋转及 1280×720 的确定性结算截图，人工核对牌型阅读顺序。
 
-## 4. 人工试玩清单
+## 5. 人工试玩清单
 
 - 使用真实触屏完成：加入、声明、吃/碰/开/过、选牌确认、设置、退出和结算。
 - 在 568×320 老旧小屏、667×375 iPhone SE、844×390、915×412 等现代全面屏尺寸重点检查老年玩家是否能辨认牌字、玩家名、余牌数和动作文字；把同一局切到对应竖持自动旋转尺寸，确认本人明示牌区没有伸出牌桌或被裁掉。
@@ -211,7 +251,7 @@ Playwright 的有效横屏矩阵为 568×320、667×375、740×360、812×375、
 - 用两台设备选择“快速配桌”，确认进入同桌、倒计时不会因刷新重置；其中一人结算后重新配桌，另一人应继续留在原结算页。
 - 好友房选择“本桌累计”后连续完成两局，中途分别使用“下一局”和“全桌返回大厅”，核对四席累计值没有清零或重复计算；最后解散房间，确认返回模式选择。
 
-## 5. 部署后冒烟测试
+## 6. 部署后冒烟测试
 
 按 [DEPLOYMENT.md](DEPLOYMENT.md) 更新 iMac 后：
 
@@ -262,11 +302,11 @@ PLAYWRIGHT_BASE_URL=http://imac.tajuren.cn PLAYWRIGHT_USE_EXTERNAL_SERVERS=1 \
 
 下一局用例在 localhost 使用受限调试场景以缩短回归时间；连接外部部署时不要求、也不允许生产调试桥，而是让两名真人座位从界面开启托管，由真实牌局自然完成后再验证结算确认和下一局同步。
 
-## 6. 文档链接检查
+## 7. 文档链接检查
 
 文档改名或归档后，使用 `rg` 搜索旧文件名，并逐一确认 Markdown 的相对链接存在。档案可以保留历史文字，但当前 `README.md`、`docs/README.md` 与六份权威文档不得链接到已移走的旧路径。
 
-## 7. iOS Edge 与微信邀请真机验收
+## 8. iOS Edge 与微信邀请真机验收
 
 浏览器自动化只能验证分享参数和网页行为，不能替代以下真机检查：
 

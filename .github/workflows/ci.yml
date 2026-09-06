@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+
+jobs:
+  build:
+    name: Build and generated files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install application dependencies
+        run: |
+          npm ci --prefix server
+          npm ci --prefix client
+
+      - name: Build server and client
+        run: npm run build
+
+      - name: Verify generated files are committed
+        run: git diff --exit-code
+
+  server-tests:
+    name: Server tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Run server regression suite
+        run: npm --prefix server test
+
+  browser-tests:
+    name: Browser tests (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+          - project: webkit-responsive
+            browser: webkit
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install all dependencies
+        run: |
+          npm ci
+          npm ci --prefix server
+          npm ci --prefix client
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
+
+      - name: Build current source
+        run: npm run build
+
+      - name: Run browser regression suite
+        run: npx playwright test --project="${{ matrix.project }}"
+
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.project }}-${{ github.run_attempt }}
+          path: output/playwright/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Audit CI and development dependencies
+        run: npm audit
+
+      - name: Audit server production dependencies
+        run: npm --prefix server audit --omit=dev
+
+      - name: Audit client production dependencies
+        run: npm --prefix client audit --omit=dev
+
+  container-build:
+    name: Container and Compose validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_IMAGE: node:22-alpine
+      NGINX_IMAGE: nginx:1.27-alpine
+      CORS_ALLOWED_ORIGINS: https://sise.example.com
+      PUBLIC_WEB_ORIGIN: https://sise.example.com
+      VITE_SERVER_URL: wss://sise-api.example.com
+      VITE_SERVER_HTTP_URL: https://sise-api.example.com
+      TRAEFIK_WEB_RULE: Host(`sise.example.com`)
+      TRAEFIK_SERVER_RULE: Host(`sise-api.example.com`)
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate Compose configurations
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.traefik.yml config --quiet
+          npm run compose:imac:check
+
+      - name: Build production container images
+        run: docker compose -f docker-compose.yml build server web
+
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs:
+      - build
+      - server-tests
+      - browser-tests
+      - dependency-audit
+      - container-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to pass
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          SERVER_TESTS_RESULT: ${{ needs.server-tests.result }}
+          BROWSER_TESTS_RESULT: ${{ needs.browser-tests.result }}
+          DEPENDENCY_AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+          CONTAINER_BUILD_RESULT: ${{ needs.container-build.result }}
+        run: |
+          for result in \
+            "$BUILD_RESULT" \
+            "$SERVER_TESTS_RESULT" \
+            "$BROWSER_TESTS_RESULT" \
+            "$DEPENDENCY_AUDIT_RESULT" \
+            "$CONTAINER_BUILD_RESULT"
+          do
+            test "$result" = "success"
+          done

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -32,9 +33,7 @@ async function start(page: Page, scenario: string) {
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-  await page.getByTestId("confirm-declaration").click();
-  await expect(page.locator("main.layout")).toHaveClass(/playing/);
+  await finishDeclarationIfNeeded(page);
   await page.evaluate((name) => {
     (window as any).__drawStages = [];
     new MutationObserver(() => {

@@ -24,7 +24,7 @@ import { BACKEND_HTTP_URL, BACKEND_WS_URL } from "@/config/backend";
 import { apiErrorMessage, retryAfterMilliseconds } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
-import { quickPhrases } from "@/generated/quickPhrases";
+import { quickPhraseWindowMs, quickPhrases } from "@/generated/quickPhrases";
 import {
   readStoredValue,
   removeStoredValue,
@@ -554,20 +554,16 @@ export function useRoom(playerName = "Player") {
     seatId: string,
     phraseId: string,
     sequence: number,
-    options: { play?: boolean; durationMs?: number } = {},
+    options: { play?: boolean } = {},
   ): void {
     const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
     if (!phrase) return;
     quickPhrase.value = { seatId, phraseId, text: phrase.label, sequence };
     if (quickPhraseTimer !== null) window.clearTimeout(quickPhraseTimer);
-    const requestedDuration = options.durationMs;
-    const durationMs = Number.isFinite(requestedDuration)
-      ? Math.max(1_000, Math.min(10_000, Number(requestedDuration)))
-      : phrase.durationMs;
     quickPhraseTimer = window.setTimeout(() => {
       quickPhraseTimer = null;
       quickPhrase.value = null;
-    }, durationMs);
+    }, quickPhraseWindowMs);
     if (options.play !== false) playQuickPhrase(phraseId);
   }
 
@@ -1770,7 +1766,7 @@ export function useRoom(playerName = "Player") {
           visible: false,
         });
       });
-      joined.onMessage("quick_phrase", (payload: { seatId?: unknown; phraseId?: unknown; durationMs?: unknown; sequence?: unknown }) => {
+      joined.onMessage("quick_phrase", (payload: { seatId?: unknown; phraseId?: unknown; sequence?: unknown }) => {
         if (!isCurrentJoinedRoom()) return;
         const seatId = String(payload?.seatId ?? "");
         const phraseId = String(payload?.phraseId ?? "");
@@ -1784,7 +1780,6 @@ export function useRoom(playerName = "Player") {
         if (isLocalEcho) pendingLocalQuickPhrase = null;
         presentQuickPhrase(seatId, phraseId, Number(payload?.sequence ?? Date.now()), {
           play: !isLocalEcho,
-          durationMs: Number(payload?.durationMs),
         });
       });
       joined.onMessage("action_rejected", (payload: { reason?: string; decisionKey?: string; message?: string }) => {

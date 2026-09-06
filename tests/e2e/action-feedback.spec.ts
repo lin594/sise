@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
@@ -40,10 +41,7 @@ test("an invalid meld is explained and immediately becomes retryable", async ({ 
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
 
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await setupChiScenario(page);
   await expect(page.getByTestId("action-chi")).toBeEnabled();
@@ -73,10 +71,7 @@ test("an accepted meld yields immediately to the next discard instruction", asyn
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
 
-  const declaration = page.getByTestId("confirm-declaration");
-  await expect(declaration).toBeEnabled({ timeout: 20_000 });
-  await declaration.click();
-  await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+  await finishDeclarationIfNeeded(page);
 
   await setupChiScenario(page);
 

@@ -1,5 +1,7 @@
 # 四色牌
 
+[![CI](https://github.com/lin594/sise/actions/workflows/ci.yml/badge.svg)](https://github.com/lin594/sise/actions/workflows/ci.yml)
+
 基于 Vue 3、TypeScript 与 Colyseus 的四色牌游戏。目前支持单人练习、快速真人配桌和好友同桌：在线人数不足时快速桌会自动补电脑，好友也可以通过房间链接自由选座。
 
 ## 快速开始
@@ -25,6 +27,8 @@ npm run e2e:responsive
 npm run e2e
 ```
 
+`main` 只接受通过 `CI gate` 的 Pull Request，并且只使用 Squash and Merge。完整门禁、本地复现命令和失败证据说明见 [测试与验收](docs/TESTING.md#2-github-ci-与合并门禁)。
+
 普通 Docker 部署：
 
 ```bash
@@ -35,7 +39,7 @@ docker compose up --build
 
 `assets/audio/quick-phrases/` 是快捷互动的唯一原始素材目录。加入或删除 `.m4a`、`.mp3`、`.aac`、`.wav`、`.ogg` 文件后运行 `npm run build`，系统会按文件名生成互动按钮，并同步生成前后端白名单与网页资源；不需要再改代码。音频文件名去掉扩展名后就是玩家看到的文案。
 
-现有 M4A 使用 AAC 编码，可直接用于 iOS 与现代 Android 浏览器，无需强制转成 MP3。构建脚本会读取音频时长，用它控制全桌串行发送，避免上一条尚未播放完成时再次发送。
+现有 M4A 使用 AAC 编码，可直接用于 iOS 与现代 Android 浏览器，无需强制转成 MP3。服务端使用固定 3 秒窗口控制全桌串行发送，既避免短句重叠和刷屏，也不让构建依赖平台特定的媒体时长探测工具。
 
 ## 目录
 

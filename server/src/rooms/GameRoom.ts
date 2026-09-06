@@ -7,7 +7,7 @@ import {
 import { Room, Client, CloseCode } from "@colyseus/core";
 import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
-import { quickPhrases } from "../generated/quickPhrases.js";
+import { quickPhraseWindowMs, quickPhrases } from "../generated/quickPhrases.js";
 import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi } from "./flow/actions/chi.js";
@@ -403,12 +403,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
       const now = Date.now();
       if (!seatId || !phrase || now < this.quickPhraseBusyUntil) return;
-      this.quickPhraseBusyUntil = now + phrase.durationMs;
+      this.quickPhraseBusyUntil = now + quickPhraseWindowMs;
       this.broadcast("quick_phrase", {
         seatId,
         phraseId: phrase.id,
         text: phrase.label,
-        durationMs: phrase.durationMs,
         sequence: ++this.quickPhraseSequence,
         sentAt: now,
       });

@@ -162,7 +162,7 @@
 | `action` | 提交胡、开、碰、吃或过 |
 | `discard_card` | 提交已确认的弃牌 ID |
 | `set_auto_play` | 在线真人开启或取消当前座位的主动托管 |
-| `quick_phrase` | 发送由 `assets/audio/quick-phrases/` 构建生成的 `phraseId`；服务端查表得到文案与时长并全桌串行广播，不信任客户端文案，也不写入房间状态与操作记录 |
+| `quick_phrase` | 发送由 `assets/audio/quick-phrases/` 构建生成的 `phraseId`；服务端查表得到文案并按固定 3 秒窗口全桌串行广播，不信任客户端文案，也不写入房间状态与操作记录 |
 | `set_scoring_mode` | 好友房房主在首局开始前选择单局或本桌累计计分 |
 | `set_lobby_ready` | 好友房等待阶段的非房主真人确认或取消准备 |
 | `dissolve_room` | 好友房房主在等待阶段解散整桌 |

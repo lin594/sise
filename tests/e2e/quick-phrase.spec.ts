@@ -61,9 +61,11 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
 
-    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await host.getByTestId("game-interaction").click();
+    const hostInteraction = host.getByTestId("game-interaction");
+    const guestInteraction = guest.getByTestId("game-interaction");
+    await expect(hostInteraction).toBeEnabled({ timeout: 20_000 });
+    await expect(guestInteraction).toBeEnabled({ timeout: 20_000 });
+    await hostInteraction.click();
     for (const phrase of quickPhrases) {
       await expect(host.getByRole("button", { name: phrase.label, exact: true })).toBeVisible();
     }
@@ -79,8 +81,8 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await expect(guestToast).toContainText(PHRASE.label);
     await expect.poll(() => playedAudio(host)).toEqual([PHRASE.url]);
     await expect.poll(() => playedAudio(guest)).toEqual([PHRASE.url]);
-    await expect(host.getByTestId("game-interaction")).toBeDisabled();
-    await expect(guest.getByTestId("game-interaction")).toBeDisabled();
+    await expect(hostInteraction).toBeDisabled();
+    await expect(guestInteraction).toBeDisabled();
     await host.waitForTimeout(500);
     await expect.poll(() => playedAudio(host)).toHaveLength(1);
     await expect.poll(() => playedAudio(guest)).toHaveLength(1);
@@ -88,8 +90,8 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await host.screenshot({ path: testInfo.outputPath("quick-phrase-host-568x320.png") });
     await expect(hostToast).toHaveCount(0, { timeout: 4_000 });
     await expect(guestToast).toHaveCount(0, { timeout: 4_000 });
-    await expect(host.getByTestId("game-interaction")).toBeEnabled();
-    await expect(guest.getByTestId("game-interaction")).toBeEnabled();
+    await expect(hostInteraction).toBeEnabled();
+    await expect(guestInteraction).toBeEnabled();
   } finally {
     await guestContext.close();
     await hostContext.close();
