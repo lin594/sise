@@ -2546,6 +2546,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
 /** @type {__VLS_StyleScopedClasses['brand-suits']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['top']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-control-header']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-game-slogan']} */ ;
+/** @type {__VLS_StyleScopedClasses['compact-game-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['front-lobby-meta']} */ ;
@@ -2874,7 +2878,10 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "top" },
-    ...{ class: ({ 'game-control-header': __VLS_ctx.showGameTools }) },
+    ...{ class: ({
+            'game-control-header': __VLS_ctx.showGameTools,
+            'connection-alert': __VLS_ctx.showGameTools && __VLS_ctx.connectionState !== 'connected' && __VLS_ctx.connectionState !== 'restored',
+        }) },
     'data-testid': (__VLS_ctx.showGameTools ? 'game-control-header' : undefined),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({

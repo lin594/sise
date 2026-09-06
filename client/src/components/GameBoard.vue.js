@@ -85,21 +85,22 @@ const selfZoneRef = ref(null);
 const selfOpenRef = ref(null);
 const selfIdentityRef = ref(null);
 const selfIdentityMetaRef = ref(null);
+const selfNameRef = ref(null);
 const selfNameMeasureRef = ref(null);
 const useSelfNameFallback = ref(false);
 let selfNameResizeObserver = null;
 const seatRefMap = new Map();
 function updateSelfNameFit() {
     const identity = selfIdentityRef.value;
+    const nameElement = selfNameRef.value;
     const measure = selfNameMeasureRef.value;
-    if (!identity || !measure) {
+    if (!identity || !nameElement || !measure) {
         useSelfNameFallback.value = false;
         return;
     }
-    const nameElement = measure.parentElement;
     const style = getComputedStyle(identity);
     const gap = Number.parseFloat(style.columnGap || style.gap || "0") || 0;
-    const siblings = Array.from(identity.children).filter((child) => child !== nameElement);
+    const siblings = Array.from(identity.children).filter((child) => child !== nameElement && child !== measure);
     const available = identity.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth, 0) - gap * siblings.length;
     useSelfNameFallback.value = measure.scrollWidth > Math.max(24, available);
 }
@@ -111,6 +112,8 @@ function observeSelfNameFit() {
         selfNameResizeObserver.observe(selfIdentityRef.value);
         if (selfIdentityMetaRef.value)
             selfNameResizeObserver.observe(selfIdentityMetaRef.value);
+        if (selfNameRef.value)
+            selfNameResizeObserver.observe(selfNameRef.value);
         if (selfNameMeasureRef.value)
             selfNameResizeObserver.observe(selfNameMeasureRef.value);
     }
@@ -1963,8 +1966,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['active']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
@@ -2065,6 +2066,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-main']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
@@ -2188,7 +2190,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
@@ -2228,7 +2229,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-empty']} */ ;
 /** @type {__VLS_StyleScopedClasses['deck-number']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -2334,7 +2334,10 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ onKeydown: (__VLS_ctx.clearChiSelection) },
     ref: "boardRef",
     ...{ class: "board" },
-    ...{ class: ({ 'crowded-action-dock': __VLS_ctx.crowdedActionDock, 'board-declaring': __VLS_ctx.state?.phase === 'declaring' }) },
+    ...{ class: ({
+            'crowded-action-dock': __VLS_ctx.crowdedActionDock,
+            'board-declaring': __VLS_ctx.state?.phase === 'declaring',
+        }) },
     'data-testid': "game-board",
     'data-response-phase': (props.responsePhase ?? ''),
     'data-response-placement': (__VLS_ctx.responseCardPlacement),
@@ -3313,7 +3316,7 @@ if (__VLS_ctx.selfPlayer) {
         'data-player-id': (__VLS_ctx.selfPlayer.clientId),
         role: "group",
         'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.selfPlayer, __VLS_ctx.selfGroupBlocks.length)),
-        ...{ class: ({ active: __VLS_ctx.isMyTurn, dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
+        ...{ class: ({ dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
@@ -3333,9 +3336,11 @@ if (__VLS_ctx.selfPlayer) {
     });
     /** @type {typeof __VLS_ctx.selfIdentityRef} */ ;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
+        ref: "selfNameRef",
         title: (__VLS_ctx.selfPlayer.name),
         'data-name-fallback': (__VLS_ctx.useSelfNameFallback ? 'true' : 'false'),
     });
+    /** @type {typeof __VLS_ctx.selfNameRef} */ ;
     (__VLS_ctx.useSelfNameFallback ? "你" : __VLS_ctx.selfPlayer.name);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ref: "selfNameMeasureRef",
@@ -3349,10 +3354,6 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "seat-identity-meta" },
     });
     /** @type {typeof __VLS_ctx.selfIdentityMetaRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "self-seat-badge" },
-        'aria-hidden': "true",
-    });
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
     const __VLS_60 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
@@ -3547,21 +3548,12 @@ if (__VLS_ctx.selfPlayer) {
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-hand-panel" },
+        ...{ class: ({ 'has-toolbar': __VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow }) },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "hand-toolbar" },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "discard-tip" },
-    });
-    (__VLS_ctx.displayPrivateHand.length);
-    if (__VLS_ctx.showDealAnimation) {
-        (props.privateHand.length);
-    }
-    if (__VLS_ctx.canDiscard) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    }
     if (__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "hand-toolbar" },
+        });
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "hand-scroll-tools" },
             'data-testid': "hand-scroll-tools",
@@ -3755,6 +3747,13 @@ if (props.state?.phase === 'playing') {
         onSubmit: (__VLS_ctx.onSubmitAction)
     };
     var __VLS_82;
+}
+if (__VLS_ctx.isMyTurn) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-turn-outline" },
+        'data-testid': "self-turn-outline",
+        'aria-hidden': "true",
+    });
 }
 const __VLS_88 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
@@ -3982,7 +3981,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-name-measure']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-seat-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
@@ -4010,7 +4008,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
-/** @type {__VLS_StyleScopedClasses['discard-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
@@ -4026,6 +4023,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-turn-outline']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;
@@ -4073,6 +4071,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             selfOpenRef: selfOpenRef,
             selfIdentityRef: selfIdentityRef,
             selfIdentityMetaRef: selfIdentityMetaRef,
+            selfNameRef: selfNameRef,
             selfNameMeasureRef: selfNameMeasureRef,
             useSelfNameFallback: useSelfNameFallback,
             selfGroupBlocks: selfGroupBlocks,
@@ -4095,7 +4094,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             effectiveInteractionPausedMessage: effectiveInteractionPausedMessage,
-            displayPrivateHand: displayPrivateHand,
             handLayoutCards: handLayoutCards,
             isDealConcealedCard: isDealConcealedCard,
             handVisibleRangeLabel: handVisibleRangeLabel,

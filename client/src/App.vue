@@ -28,7 +28,10 @@
   >
     <header
       class="top"
-      :class="{ 'game-control-header': showGameTools }"
+      :class="{
+        'game-control-header': showGameTools,
+        'connection-alert': showGameTools && connectionState !== 'connected' && connectionState !== 'restored',
+      }"
       :data-testid="showGameTools ? 'game-control-header' : undefined"
     >
       <div class="top-brand">
@@ -3715,8 +3718,11 @@ watch(
 }
 
 .top-brand {
+  min-width: 0;
+  flex: 1 1 auto;
   display: grid;
   gap: 0.18rem;
+  container-type: inline-size;
 }
 
 .brand-lockup {
@@ -3772,6 +3778,16 @@ watch(
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.top.game-control-header.connection-alert .compact-game-slogan {
+  display: none;
+}
+
+@container (max-width: 16rem) {
+  .compact-game-slogan {
+    display: none;
+  }
 }
 
 .meta {

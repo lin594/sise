@@ -62,6 +62,18 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     add("kong-green-ma-2", "green", "ma");
     add("kong-green-ma-3", "green", "ma");
     add("spare-white-shi", "white", "shi");
+    add("spare-white-jiang", "white", "jiang");
+    add("spare-white-xiang", "white", "xiang");
+    add("spare-white-ju", "white", "ju");
+    add("spare-white-ma", "white", "ma");
+    add("spare-white-pao", "white", "pao");
+    add("spare-white-zu", "white", "zu");
+    add("spare-yellow-jiang", "yellow", "jiang");
+    add("spare-yellow-xiang", "yellow", "xiang");
+    add("spare-yellow-ju", "yellow", "ju");
+    add("spare-yellow-ma", "yellow", "ma");
+    add("spare-yellow-pao", "yellow", "pao");
+    add("spare-yellow-zu", "yellow", "zu");
     context.setPendingResponse(null);
     context.state.phase = "declaring";
     context.state.responsePhase = "collective";

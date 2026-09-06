@@ -226,7 +226,11 @@ test.describe("mobile responsive release gate", () => {
     await expect(page.getByTestId("kong-count-1")).toHaveAttribute("aria-checked", "true");
     await finishOpeningDeclaration(page);
     await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await applyDebugScenario(page, "chi_local_upper");
+    await expect(page.getByTestId("action-chi")).toBeVisible();
     await expect(page.locator(".self-info-card h3")).toHaveAttribute("data-name-fallback", "true");
+    await expect(page.locator(".self-seat-badge")).toHaveCount(0);
+    await expect(page.locator(".discard-tip")).toHaveCount(0);
 
     for (const viewport of allViewports) {
       await useViewport(page, viewport);
@@ -237,7 +241,29 @@ test.describe("mobile responsive release gate", () => {
         ".table",
         ".self-hand-card",
         ".action-dock",
+        "[data-testid='self-turn-outline']",
       ]);
+      const selfTurnGeometry = await page.evaluate(() => {
+        const read = (selector: string) => {
+          const rect = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+          return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+        };
+        const slogan = document.querySelector<HTMLElement>(".compact-game-slogan");
+        return {
+          outline: read("[data-testid='self-turn-outline']"),
+          identity: read(".self-info-card"),
+          hand: read(".self-hand-panel"),
+          actions: read(".action-dock"),
+          sloganFullyVisibleOrHidden: !slogan
+            || getComputedStyle(slogan).display === "none"
+            || slogan.scrollWidth <= slogan.clientWidth,
+        };
+      });
+      expect(selfTurnGeometry.outline.left).toBeLessThanOrEqual(selfTurnGeometry.identity.left);
+      expect(selfTurnGeometry.outline.top).toBeLessThanOrEqual(selfTurnGeometry.identity.top);
+      expect(selfTurnGeometry.outline.right).toBeGreaterThanOrEqual(selfTurnGeometry.actions.right);
+      expect(selfTurnGeometry.outline.bottom).toBeGreaterThanOrEqual(selfTurnGeometry.hand.bottom);
+      expect(selfTurnGeometry.sloganFullyVisibleOrHidden).toBe(true);
       await saveReleaseScreenshot(page, testInfo, viewport, "playing");
     }
 

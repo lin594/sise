@@ -2,7 +2,10 @@
   <div
     ref="boardRef"
     class="board"
-    :class="{ 'crowded-action-dock': crowdedActionDock, 'board-declaring': state?.phase === 'declaring' }"
+    :class="{
+      'crowded-action-dock': crowdedActionDock,
+      'board-declaring': state?.phase === 'declaring',
+    }"
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
@@ -536,23 +539,22 @@
       :data-player-id="selfPlayer.clientId"
       role="group"
       :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
-      :class="{ active: isMyTurn, dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
+      :class="{ dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
       <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
       <header class="self-head">
         <div>
           <div ref="selfIdentityRef" class="seat-identity">
-            <h3 :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
+            <h3 ref="selfNameRef" :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
               {{ useSelfNameFallback ? "你" : selfPlayer.name }}
-              <span ref="selfNameMeasureRef" class="self-name-measure" aria-hidden="true">{{ selfPlayer.name }}</span>
             </h3>
+            <span ref="selfNameMeasureRef" class="self-name-measure" aria-hidden="true">{{ selfPlayer.name }}</span>
             <span ref="selfIdentityMetaRef" class="seat-identity-meta">
-            <span class="self-seat-badge" aria-hidden="true">你</span>
-            <PlayerStatusIcon v-bind="statusIconProps(selfPlayer)" />
-            <span class="hand-count-badge" :aria-label="`剩余手牌 ${playerHandCount(selfPlayer)} 张`">{{ playerHandCount(selfPlayer) }}张</span>
-            <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${selfPlayer.declaredKongs} 个`">{{ selfPlayer.declaredKongs }}坎</span>
-            <span class="group-score-badge" :class="{ positive: selfPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${selfPlayer.visibleGroupScore} 分`">牌面{{ selfPlayer.visibleGroupScore }}分</span>
+              <PlayerStatusIcon v-bind="statusIconProps(selfPlayer)" />
+              <span class="hand-count-badge" :aria-label="`剩余手牌 ${playerHandCount(selfPlayer)} 张`">{{ playerHandCount(selfPlayer) }}张</span>
+              <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${selfPlayer.declaredKongs} 个`">{{ selfPlayer.declaredKongs }}坎</span>
+              <span class="group-score-badge" :class="{ positive: selfPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${selfPlayer.visibleGroupScore} 分`">牌面{{ selfPlayer.visibleGroupScore }}分</span>
             </span>
             <span v-if="showDealerSeatMarker(selfPlayer.clientId)" class="dealer-seat-lockup" data-testid="self-dealer-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
@@ -623,12 +625,12 @@
           </span>
         </template>
       </div>
-      <div class="self-hand-panel">
-        <div class="hand-toolbar">
-          <p class="discard-tip">
-            手牌（{{ displayPrivateHand.length }}<template v-if="showDealAnimation">/{{ props.privateHand.length }}</template>张）<span v-if="canDiscard"> · 选牌后点“出”</span>
-          </p>
-          <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-scroll-tools" data-testid="hand-scroll-tools">
+      <div
+        class="self-hand-panel"
+        :class="{ 'has-toolbar': handLayout === 'paged' && handHasOverflow }"
+      >
+        <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-toolbar">
+          <div class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
               type="button"
               data-testid="hand-scroll-prev"
@@ -743,6 +745,13 @@
       @confirm-discard="confirmDiscard"
       @submit="onSubmitAction"
     />
+
+    <div
+      v-if="isMyTurn"
+      class="self-turn-outline"
+      data-testid="self-turn-outline"
+      aria-hidden="true"
+    ></div>
 
     <Teleport to="body">
       <div v-for="flight in tableFlights" :key="flight.key" class="table-flight"
@@ -981,6 +990,7 @@ const selfZoneRef = ref<HTMLElement | null>(null);
 const selfOpenRef = ref<HTMLElement | null>(null);
 const selfIdentityRef = ref<HTMLElement | null>(null);
 const selfIdentityMetaRef = ref<HTMLElement | null>(null);
+const selfNameRef = ref<HTMLElement | null>(null);
 const selfNameMeasureRef = ref<HTMLElement | null>(null);
 const useSelfNameFallback = ref(false);
 let selfNameResizeObserver: ResizeObserver | null = null;
@@ -988,15 +998,17 @@ const seatRefMap = new Map<string, HTMLElement>();
 
 function updateSelfNameFit(): void {
   const identity = selfIdentityRef.value;
+  const nameElement = selfNameRef.value;
   const measure = selfNameMeasureRef.value;
-  if (!identity || !measure) {
+  if (!identity || !nameElement || !measure) {
     useSelfNameFallback.value = false;
     return;
   }
-  const nameElement = measure.parentElement;
   const style = getComputedStyle(identity);
   const gap = Number.parseFloat(style.columnGap || style.gap || "0") || 0;
-  const siblings = Array.from(identity.children).filter((child) => child !== nameElement) as HTMLElement[];
+  const siblings = Array.from(identity.children).filter(
+    (child) => child !== nameElement && child !== measure,
+  ) as HTMLElement[];
   const available = identity.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth, 0) - gap * siblings.length;
   useSelfNameFallback.value = measure.scrollWidth > Math.max(24, available);
 }
@@ -1008,6 +1020,7 @@ function observeSelfNameFit(): void {
     selfNameResizeObserver = new ResizeObserver(updateSelfNameFit);
     selfNameResizeObserver.observe(selfIdentityRef.value);
     if (selfIdentityMetaRef.value) selfNameResizeObserver.observe(selfIdentityMetaRef.value);
+    if (selfNameRef.value) selfNameResizeObserver.observe(selfNameRef.value);
     if (selfNameMeasureRef.value) selfNameResizeObserver.observe(selfNameMeasureRef.value);
   }
   void nextTick(updateSelfNameFit);
@@ -3173,8 +3186,7 @@ watch(
   height: 100%;
 }
 
-.player-card.active,
-.self-info-card.active {
+.player-card.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
 }
@@ -3324,22 +3336,6 @@ watch(
   font-weight: 900;
   line-height: 1;
   white-space: nowrap;
-}
-
-.self-seat-badge {
-  flex: 0 0 auto;
-  min-width: 1.65rem;
-  min-height: 1.65rem;
-  padding: 0.08rem 0.35rem;
-  border: 1px solid rgba(56, 189, 248, 0.82);
-  border-radius: 999px;
-  background: rgba(3, 105, 161, 0.52);
-  color: #e0f2fe;
-  display: inline-grid;
-  place-items: center;
-  font-size: max(0.8125rem, 13px);
-  font-weight: 900;
-  line-height: 1;
 }
 
 .hand-count-badge {
@@ -4147,8 +4143,12 @@ watch(
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: clamp(0.25rem, 0.7vh, 0.5rem);
+}
+
+.self-hand-panel.has-toolbar {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .hand-viewport {
@@ -4253,12 +4253,6 @@ watch(
   max-height: none;
   overflow: visible;
   padding-right: 2px;
-}
-
-.discard-tip {
-  margin: 0;
-  color: #bfdbfe;
-  font-size: 13px;
 }
 
 .tone-red {
@@ -5016,10 +5010,6 @@ watch(
     font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.28), 0.66rem);
   }
 
-  .discard-tip {
-    font-size: max(0.8125rem, 13px);
-  }
-
   .hand-scroll-tools {
     gap: 0.2rem;
   }
@@ -5153,10 +5143,6 @@ watch(
     line-height: 1.15;
   }
 
-  .discard-tip span {
-    display: none;
-  }
-
   .discard-empty {
     display: none;
   }
@@ -5285,6 +5271,17 @@ watch(
   border-radius: 0.65rem;
   background: rgba(11, 18, 32, 0.92);
   overflow: hidden;
+}
+.self-turn-outline {
+  grid-column: 1 / -1;
+  grid-row: 2 / 4;
+  z-index: 11;
+  min-width: 0;
+  min-height: 0;
+  border: 2px solid #22c55e;
+  border-radius: 0.7rem;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3) inset, 0 0 14px rgba(34, 197, 94, 0.18);
+  pointer-events: none;
 }
 .self-hand-card > :deep(.declare-mask) {
   grid-column: 2 / -1;

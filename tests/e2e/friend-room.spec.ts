@@ -16,6 +16,18 @@ function invitationUrlFromRoomPage(page: Page): string {
   return new URL(`/invite/${encodeURIComponent(roomId)}`, roomPageUrl.origin).toString();
 }
 
+async function finishOpeningIfNeeded(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const declaration = page.getByTestId("confirm-declaration");
+    if (await declaration.isVisible().catch(() => false) && await declaration.isEnabled()) {
+      await declaration.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
+}
+
 async function observeDealFlights(page: Page): Promise<void> {
   await page.evaluate(() => {
     const trackingWindow = window as Window & {
@@ -99,9 +111,7 @@ test("both friend-room clients receive one concealed deal sequence in the first 
       expectOneNewDealSequence(host, 0),
       expectOneNewDealSequence(guest, 0),
     ]);
-    await host.getByTestId("confirm-declaration").click();
-    await guest.getByTestId("confirm-declaration").click();
-    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await Promise.all([finishOpeningIfNeeded(host), finishOpeningIfNeeded(guest)]);
 
     await host.evaluate(() => {
       const bridge = (window as Window & {
@@ -291,10 +301,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(guest.getByTestId("player-top")).toHaveAttribute("data-player-id", "seat_3");
     await expect(guest.getByTestId("player-left")).toHaveAttribute("data-player-id", "seat_0");
 
-    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 15_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 15_000 });
-    await host.getByTestId("confirm-declaration").click();
-    await guest.getByTestId("confirm-declaration").click();
+    await Promise.all([finishOpeningIfNeeded(host), finishOpeningIfNeeded(guest)]);
     await expect(host.getByTestId("confirm-declaration")).toHaveCount(0, { timeout: 15_000 });
 
     const guestIdentity = await guest.evaluate(() => ({
@@ -327,7 +334,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(restoredGuest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(restoredGuest.getByTestId("player-self")).toHaveAttribute("data-player-id", guestIdentity.seatId);
     await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）");
-    await expect(restoredGuest.getByTestId("player-self").locator(".self-seat-badge")).toHaveText("你");
+    await expect(restoredGuest.getByTestId("player-self").locator(".self-seat-badge")).toHaveCount(0);
     await host.setViewportSize({ width: 1280, height: 720 });
     await expect(guestSeatOnHost).toHaveAccessibleName(/真人在线/);
     await expect(guestSeatOnHost).toContainText(guestIdentity.name!);
@@ -586,11 +593,7 @@ test("a later friend can preselect while the current peng winner receives the di
     await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
-    await expect(host.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await expect(guest.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
-    await host.getByTestId("confirm-declaration").click();
-    await guest.getByTestId("confirm-declaration").click();
-    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
+    await Promise.all([finishOpeningIfNeeded(host), finishOpeningIfNeeded(guest)]);
 
     await host.evaluate(() => {
       const bridge = (window as Window & {

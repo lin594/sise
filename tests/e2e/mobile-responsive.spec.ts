@@ -224,14 +224,14 @@ async function expectReadableCompactSeatIdentities(page: Page): Promise<void> {
       };
     });
     const self = document.querySelector<HTMLElement>(".self-info-card")!;
-    const selfBadge = document.querySelector<HTMLElement>(".self-info-card .self-seat-badge")!;
+    const selfName = document.querySelector<HTMLElement>(".self-info-card h3")!;
     const selfRect = self.getBoundingClientRect();
     const selfMeta = document.querySelector<HTMLElement>(".self-info-card .seat-identity-meta")!.getBoundingClientRect();
-    const selfBadgeRect = selfBadge.getBoundingClientRect();
     return {
       sideNames,
-      selfBadgeText: selfBadge.textContent?.trim() ?? "",
-      selfBadgeWidth: selfBadgeRect.width,
+      selfNameText: selfName.childNodes[0]?.textContent?.trim() ?? "",
+      selfNameFallback: selfName.dataset.nameFallback,
+      selfBadgeCount: document.querySelectorAll(".self-info-card .self-seat-badge").length,
       selfMetaContained: selfMeta.left >= selfRect.left - 1 && selfMeta.right <= selfRect.right + 1,
     };
   });
@@ -240,8 +240,9 @@ async function expectReadableCompactSeatIdentities(page: Page): Promise<void> {
   expect(Math.min(...metrics.sideNames.map((name) => name.width))).toBeGreaterThanOrEqual(40);
   expect(Math.max(...metrics.sideNames.map((name) => name.horizontalOverflow))).toBeLessThanOrEqual(1);
   expect(metrics.sideNames.every((name) => name.metaContained && name.adaptiveLine)).toBe(true);
-  expect(metrics.selfBadgeText).toBe("你");
-  expect(metrics.selfBadgeWidth).toBeGreaterThanOrEqual(24);
+  expect(metrics.selfNameText.length).toBeGreaterThan(0);
+  expect(["true", "false"]).toContain(metrics.selfNameFallback);
+  expect(metrics.selfBadgeCount).toBe(0);
   expect(metrics.selfMetaContained).toBe(true);
 }
 
@@ -1156,9 +1157,9 @@ test.describe("compact landscape gameplay", () => {
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
     await expect(gameHistory).toBeFocused();
     await expect.poll(async () => {
-      const label = (await page.locator(".discard-tip").textContent()) ?? "";
-      const match = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);
-      return Boolean(match && !match[2] && (await page.locator("[data-testid^='hand-card-']").count()) === Number(match[1]));
+      const cards = page.locator("[data-testid^='hand-card-']");
+      return await cards.count() > 0
+        && await page.locator("[data-testid^='hand-card-'].deal-concealed").count() === 0;
     }).toBe(true);
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-guidance")).toContainText("练习不限时");
@@ -1815,18 +1816,14 @@ test.describe("compact landscape gameplay", () => {
   test("shows one clear waiting state instead of disabled actions", async ({ page }, testInfo) => {
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
-    await confirmDeclaration.click();
-    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
-    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await page.setViewportSize({ width: 568, height: 320 });
 
     await applyLocalDebugScenario(page, "waiting_other_turn");
     await expect.poll(async () => {
-      const text = (await page.locator(".discard-tip").textContent()) ?? "";
-      return /手牌（3张）/.test(text) && !text.includes("/");
+      const cards = page.locator("[data-testid^='hand-card-']");
+      return await cards.count() === 3
+        && await page.locator("[data-testid^='hand-card-'].deal-concealed").count() === 0;
     }).toBe(true);
     const waiting = page.getByTestId("action-waiting");
     await expect(waiting).toHaveCount(0);
@@ -1926,6 +1923,8 @@ test.describe("compact landscape gameplay", () => {
     });
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await applyLocalDebugScenario(page, "staged_declaration");
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
@@ -2094,12 +2093,14 @@ test.describe("legacy small landscape gameplay", () => {
     test.setTimeout(90_000);
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await applyLocalDebugScenario(page, "staged_declaration");
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^开始游戏(?: · 鱼 \d+)?(?: · 坎 \d+)?$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText("声明 1 鱼");
     await expect(page.locator(".untimed-message")).toHaveText("练习不限时");
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     await page.getByTestId("game-settings").click();
@@ -2210,7 +2211,14 @@ test.describe("legacy small landscape gameplay", () => {
     expect((await readVisibleHandRange(declarationHandRange)).start).toBe(1);
     await page.screenshot({ path: testInfo.outputPath("iphone-5-declaration.png") });
     await confirmDeclaration.click();
-
+    await expect.poll(async () => {
+      const layoutClass = await page.locator("main.layout").getAttribute("class");
+      if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+      if (await confirmDeclaration.isVisible().catch(() => false) && await confirmDeclaration.isEnabled()) {
+        await confirmDeclaration.click();
+      }
+      return "waiting";
+    }, { timeout: 20_000 }).toBe("playing");
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expectDedicatedGameHeader(page);
     await expect(page.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
@@ -2224,13 +2232,14 @@ test.describe("legacy small landscape gameplay", () => {
       const board = document.querySelector<HTMLElement>("[data-testid='game-board']")!;
       const self = document.querySelector<HTMLElement>(".self-info-card")!;
       const hand = document.querySelector<HTMLElement>(".hand")!;
+      const handPanel = document.querySelector<HTMLElement>(".self-hand-panel")!;
       const dock = document.querySelector<HTMLElement>(".action-dock")!;
+      const turnOutline = document.querySelector<HTMLElement>("[data-testid='self-turn-outline']")!;
       const opponentCounts = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count']"));
       const botIdentities = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='player-status-icon']"));
-      const handCount = document.querySelector<HTMLElement>(".discard-tip")!;
       const handRange = document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!;
       const essentialTurnSignals = Array.from(document.querySelectorAll<HTMLElement>(
-        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, [data-testid='self-seat-meta'], .dealer-badge, .self-seat-badge, .history-count, .action-dock .instruction, .action-dock .untimed-label",
+        ".tag.turn, .response-caption, .center-seat-action, .flow-card p, [data-testid='self-seat-meta'], .dealer-badge, .history-count, .action-dock .instruction, .action-dock .untimed-label",
       ));
       const deckUnit = document.querySelector<HTMLElement>(".deck-number small")!;
       const handRect = hand.getBoundingClientRect();
@@ -2261,7 +2270,9 @@ test.describe("legacy small landscape gameplay", () => {
         board: rectOf(board),
         self: rectOf(self),
         hand: rectOf(hand),
+        handPanel: rectOf(handPanel),
         dock: rectOf(dock),
+        turnOutline: rectOf(turnOutline),
         cardRows: new Set(cardRects.map((rect) => Math.round(rect.top))).size,
         fullyVisibleCards: cardRects.filter(
           (rect) => rect.left >= handRect.left && rect.right <= handRect.right + 0.5,
@@ -2277,7 +2288,6 @@ test.describe("legacy small landscape gameplay", () => {
         minimumBotIdentityFontSize: Math.min(
           ...botIdentities.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
         ),
-        handCountFontSize: Number.parseFloat(getComputedStyle(handCount).fontSize),
         handRangeFontSize: Number.parseFloat(getComputedStyle(handRange).fontSize),
         essentialTurnSignalCount: essentialTurnSignals.length,
         minimumEssentialTurnSignalFontSize: Math.min(
@@ -2295,6 +2305,10 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.self.right).toBeLessThanOrEqual(metrics.dock.left);
     expect(metrics.self.bottom).toBeLessThanOrEqual(metrics.hand.top);
     expect(metrics.dock.bottom).toBeLessThanOrEqual(metrics.hand.top);
+    expect(metrics.turnOutline.left).toBeLessThanOrEqual(metrics.self.left);
+    expect(metrics.turnOutline.top).toBeLessThanOrEqual(metrics.self.top);
+    expect(metrics.turnOutline.right).toBeGreaterThanOrEqual(metrics.dock.right);
+    expect(metrics.turnOutline.bottom).toBeGreaterThanOrEqual(metrics.handPanel.bottom);
     expect(metrics.cardRows).toBe(1);
     expect(metrics.fullyVisibleCards).toBeGreaterThanOrEqual(8);
     expect(metrics.minimumCardWidth).toBeGreaterThanOrEqual(40);
@@ -2304,7 +2318,6 @@ test.describe("legacy small landscape gameplay", () => {
     expect(metrics.minimumDockButtonHeight).toBeGreaterThanOrEqual(40);
     expect(metrics.minimumOpponentCountFontSize).toBeGreaterThanOrEqual(13);
     expect(metrics.minimumBotIdentityFontSize).toBeGreaterThanOrEqual(13);
-    expect(metrics.handCountFontSize).toBeGreaterThanOrEqual(13);
     expect(metrics.handRangeFontSize).toBeGreaterThanOrEqual(13);
     // The exact phase decides whether the pending caption or a directional
     // action badge is mounted; current turn, dealer, self and history remain.
@@ -2363,7 +2376,6 @@ test.describe("legacy small landscape gameplay", () => {
             document.querySelectorAll<HTMLElement>("[data-testid='opponent-hand-count'], [data-testid='player-status-icon']"),
           ).map((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
         ),
-        handCountFontSize: Number.parseFloat(getComputedStyle(document.querySelector<HTMLElement>(".discard-tip")!).fontSize),
         handRangeFontSize: Number.parseFloat(getComputedStyle(
           document.querySelector<HTMLElement>("[data-testid='hand-visible-range']")!,
         ).fontSize),
@@ -2375,7 +2387,6 @@ test.describe("legacy small landscape gameplay", () => {
     expect(rotatedControls.minimumButtonWidth).toBeGreaterThanOrEqual(40);
     expect(rotatedControls.minimumButtonHeight).toBeGreaterThanOrEqual(40);
     expect(rotatedControls.minimumCounterFontSize).toBeGreaterThanOrEqual(13);
-    expect(rotatedControls.handCountFontSize).toBeGreaterThanOrEqual(13);
     expect(rotatedControls.handRangeFontSize).toBeGreaterThanOrEqual(13);
     const rotatedHandRange = await readVisibleHandRange(handVisibleRange);
     expect(rotatedHandRange.start).toBe(1);

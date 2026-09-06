@@ -1,7 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
 const BACKEND_HOST = new URL(BACKEND_URL).host;
+
+async function finishOpeningIfNeeded(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const declaration = page.getByTestId("confirm-declaration");
+    if (await declaration.isVisible().catch(() => false) && await declaration.isEnabled()) {
+      await declaration.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
+}
 
 test.describe("牌局断线恢复", () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
@@ -13,8 +25,7 @@ test.describe("牌局断线恢复", () => {
     await page.getByTestId("login-submit").click();
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("confirm-declaration").click();
-    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 15_000 });
+    await finishOpeningIfNeeded(page);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "connected");
 
     const cdp = await page.context().newCDPSession(page);
@@ -31,8 +42,9 @@ test.describe("牌局断线恢复", () => {
     await expect(status).toHaveAttribute("data-state", /reconnecting|retry_wait/, { timeout: 15_000 });
     await expect(status).toContainText(/网络不稳|未连上/);
     await expect(page.getByTestId("game-board")).toBeVisible();
-    await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
-    await expect(page.getByTestId("action-paused")).toContainText(/网络不稳定|暂时未连上/);
+    await expect(page.getByTestId("table-notice-toast")).toContainText(/网络不稳定|暂时未连上/);
+    await expect(page.getByTestId("action-guidance")).toHaveCount(0);
+    await expect(page.getByTestId("action-paused")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("half-open-network-warning.png") });
   });
 
@@ -61,21 +73,13 @@ test.describe("牌局断线恢复", () => {
     expect(recoveryHeaders.authorization).toMatch(/^Bearer pt_/);
     expect((await recoveryResponse?.allHeaders())?.["cache-control"]).toContain("no-store");
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
-    await confirmDeclaration.click();
+    await finishOpeningIfNeeded(page);
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible();
     await expect.poll(async () => {
       const cards = page.locator("[data-testid^='hand-card-']");
-      const label = (await page.locator(".discard-tip").textContent()) ?? "";
-      const countMatch = label.match(/手牌（(\d+)(?:\/(\d+))?张）/);
-      return Boolean(
-        countMatch &&
-        !countMatch[2] &&
-        Number(countMatch[1]) > 0 &&
-        (await cards.count()) === Number(countMatch[1]),
-      );
+      return await cards.count() > 0
+        && await page.locator("[data-testid^='hand-card-'].deal-concealed").count() === 0;
     }, { timeout: 15_000 }).toBe(true);
 
     const beforeDisconnect = await page.evaluate(() => {
@@ -101,6 +105,7 @@ test.describe("牌局断线恢复", () => {
     await page.setViewportSize({ width: 568, height: 320 });
     const offlineStatus = page.getByTestId("connection-status");
     await expect(offlineStatus).toContainText("断网 · 自动恢复中");
+    await expect(page.locator(".compact-game-slogan")).toBeHidden();
     const offlineStatusGeometry = await offlineStatus.evaluate((status) => {
       const header = document.querySelector<HTMLElement>("[data-testid='game-control-header']")!;
       const brand = header.querySelector<HTMLElement>(".top-brand")!;
@@ -140,9 +145,9 @@ test.describe("牌局断线恢复", () => {
       ),
     ).toBeGreaterThanOrEqual(0.95);
     await expect(page.locator(".action-dock button:enabled")).toHaveCount(0);
-    await expect(page.getByTestId("action-guidance")).toContainText("操作已暂停");
-    await expect(page.getByTestId("action-guidance")).toContainText("联网后自动恢复");
-    await expect(page.getByTestId("action-paused")).toContainText("网络已断开，联网后自动恢复");
+    await expect(page.getByTestId("table-notice-toast")).toContainText("网络已断开，联网后自动恢复");
+    await expect(page.getByTestId("action-guidance")).toHaveCount(0);
+    await expect(page.getByTestId("action-paused")).toHaveCount(0);
     await expect(page.getByTestId("action-waiting")).toHaveCount(0);
     await expect(page.getByTestId("player-self")).toContainText("网络已断开，联网后自动恢复");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-offline.png") });
@@ -233,9 +238,7 @@ test.describe("牌局断线恢复", () => {
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
-    await confirmDeclaration.click();
+    await finishOpeningIfNeeded(page);
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible({ timeout: 15_000 });
 
     const beforeReload = await page.evaluate(() => {
@@ -353,9 +356,7 @@ test.describe("牌局断线恢复", () => {
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
-    await confirmDeclaration.click();
+    await finishOpeningIfNeeded(page);
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible({ timeout: 15_000 });
     const originalSeatId = await page.getByTestId("player-self").getAttribute("data-player-id");
     expect(originalSeatId).toBeTruthy();
@@ -385,7 +386,7 @@ test.describe("牌局断线恢复", () => {
     });
     await expect(page.getByTestId("connection-status")).toContainText("已停止自动恢复");
     await expect(page.getByTestId("connection-status")).toContainText("其他窗口恢复");
-    await expect(page.getByTestId("action-guidance")).toContainText("其他窗口恢复");
+    await expect(page.getByTestId("table-notice-toast")).toContainText("其他窗口恢复");
     await expect(page.getByTestId("terminal-return-to-modes")).toBeVisible();
     await expect(page.getByTestId("terminal-return-to-modes")).toBeFocused();
 
@@ -406,9 +407,7 @@ test.describe("牌局断线恢复", () => {
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
-    const confirmDeclaration = page.getByTestId("confirm-declaration");
-    await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
-    await confirmDeclaration.click();
+    await finishOpeningIfNeeded(page);
     await expect(page.locator("[data-testid^='hand-card-']").first()).toBeVisible({ timeout: 15_000 });
 
     let releaseResponse = () => undefined;
