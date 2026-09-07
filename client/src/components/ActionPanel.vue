@@ -302,6 +302,7 @@ function onClick(item: PanelAction): void {
 }
 
 .btn.enabled {
+  color: #f8fafc;
   border-color: var(--ui-accent, #38bdf8);
   background: #075985;
   cursor: pointer;
@@ -337,7 +338,7 @@ function onClick(item: PanelAction): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ui-accent-text, #dbeafe);
+  color: #dbeafe;
   background: #172554;
   font-size: clamp(0.72rem, calc(var(--effective-vh, 1vh) * 1.55), 0.88rem);
   font-weight: 800;
@@ -357,7 +358,7 @@ function onClick(item: PanelAction): void {
 .more-time-button {
   min-width: 48px;
   padding-inline: 0.4rem;
-  color: var(--ui-gold-text, #fef3c7);
+  color: #fef3c7;
   border-color: #92400e;
   background: #451a03;
   font-size: clamp(0.75rem, calc(var(--effective-vh, 1vh) * 1.7), 0.9rem);
