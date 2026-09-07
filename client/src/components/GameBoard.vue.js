@@ -1954,7 +1954,7 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
         return;
     }
     void nextTick(() => {
-        if (document.querySelector("[aria-modal='true']")) {
+        if (document.querySelector("[aria-modal='true']") || document.activeElement?.closest(".game-tools")) {
             return;
         }
         const board = boardRef.value;

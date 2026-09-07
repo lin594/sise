@@ -3087,7 +3087,7 @@ watch(
       return;
     }
     void nextTick(() => {
-      if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
+      if (document.querySelector<HTMLElement>("[aria-modal='true']") || document.activeElement?.closest(".game-tools")) {
         return;
       }
       const board = boardRef.value;
