@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
@@ -107,6 +108,7 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
   })).toEqual({ lanesStable: true, cardsStable: true });
 
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "seat-direction-clockwise");
   await page.getByTestId("seat-direction-clockwise").click();
   await page.getByRole("button", { name: "关闭设置" }).click();
   expect(await laneState()).toEqual({
