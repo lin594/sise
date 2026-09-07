@@ -119,11 +119,7 @@
       data-testid="global-notice"
     >{{ globalNotice }}</p>
 
-    <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
-      <span>屏幕较小，紧凑布局能留出更多操作空间</span>
-      <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
-      <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
-    </aside>
+
 
     <LoginPage
       v-if="showEntry"
@@ -186,7 +182,15 @@
       @set-scoring-mode="setScoringMode"
       @open-rules="openRules"
       @set-lobby-ready="requestLobbyReady"
-    />
+    >
+      <template #recommendation>
+    <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
+      <span>屏幕较小，紧凑布局能留出更多操作空间</span>
+      <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
+      <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
+    </aside>
+      </template>
+    </LobbyPage>
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
       <div class="sync-card" data-testid="resume-session-screen">

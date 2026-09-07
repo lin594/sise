@@ -63,6 +63,7 @@
     </div>
 
     <div class="lobby-scroll" data-testid="lobby-scroll">
+      <slot v-if="modes.length" name="recommendation" />
       <div v-if="modes.length" class="mode-grid">
         <button
           v-for="mode in modes"
@@ -310,6 +311,7 @@
         </ol>
       </section>
 
+      <slot v-if="!modes.length" name="recommendation" />
       <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
     </div>
 
