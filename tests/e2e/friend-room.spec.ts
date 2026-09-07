@@ -55,21 +55,36 @@ async function expectOneNewDealSequence(page: Page, previousCount: number): Prom
   while (Date.now() < deadline) {
     const sample = await page.evaluate(() => {
       const declaration = document.querySelector<HTMLElement>("[data-testid='confirm-declaration']");
-      const declarationStatus = document.querySelector<HTMLElement>("[data-testid='declaration-status']");
-      const layout = document.querySelector<HTMLElement>("main.layout");
+      const playing = document.querySelector("main.layout")?.classList.contains("playing") ?? false;
+      const board = document.querySelector<HTMLElement>("[data-testid='game-board']");
+      const openingReady = Boolean(
+        board?.classList.contains("board-declaring") &&
+        !board.querySelector("[data-testid^='hand-card-'].deal-concealed"),
+      );
       return {
-        openingComplete:
-          Boolean(declaration?.getClientRects().length)
-          || Boolean(declarationStatus?.getClientRects().length)
-          || Boolean(layout?.classList.contains("playing")),
+        declaring: Boolean(declaration?.getClientRects().length) || openingReady,
+        playing,
         handCount: document.querySelectorAll("[data-testid^='hand-card-']:not(.deal-concealed)").length,
       };
     });
-    if (sample.openingComplete) break;
+    // 没有鱼、坎时服务端会直接跳过声明；此时进入 playing 也是合法的发牌终点。
+    if (sample.declaring || sample.playing) break;
     samples.push(sample.handCount);
     await page.waitForTimeout(40);
   }
-  await waitForDeclarationOrPlaying(page);
+  await expect.poll(async () => {
+    const declaring = await page.evaluate(() => {
+      const confirm = document.querySelector<HTMLButtonElement>("[data-testid='confirm-declaration']");
+      const board = document.querySelector<HTMLElement>("[data-testid='game-board']");
+      return Boolean(
+        confirm && !confirm.disabled ||
+        board?.classList.contains("board-declaring") &&
+        !board.querySelector("[data-testid^='hand-card-'].deal-concealed"),
+      );
+    });
+    const playing = (await page.locator("main.layout").getAttribute("class"))?.split(/\s+/u).includes("playing") ?? false;
+    return declaring || playing;
+  }, { timeout: 20_000 }).toBe(true);
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
@@ -339,7 +354,11 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await restoredGuest.goto(inviteUrl);
     await expect(restoredGuest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(restoredGuest.getByTestId("player-self")).toHaveAttribute("data-player-id", guestIdentity.seatId);
-    await expect(restoredGuest.getByTestId("player-self").getByRole("heading")).toHaveText("同名牌友（2）");
+    const restoredSelf = restoredGuest.getByTestId("player-self");
+    const restoredHeading = restoredSelf.getByRole("heading");
+    await expect(restoredHeading).toHaveAttribute("title", "同名牌友（2）");
+    await expect(restoredHeading).toHaveText(/^(同名牌友（2）|你)$/);
+    await expect(restoredSelf).toHaveAccessibleName(/^同名牌友（2），你的位置/);
     await expect(restoredGuest.getByTestId("player-self").locator(".self-seat-badge")).toHaveCount(0);
     await host.setViewportSize({ width: 1280, height: 720 });
     await expect(guestSeatOnHost).toHaveAccessibleName(/真人在线/);
@@ -618,11 +637,10 @@ test("a later friend can preselect while the current peng winner receives the di
       ),
     ).toMatchObject({ scenario: "early_collective_choice", ok: true });
 
-    const guidance = host.getByTestId("action-guidance");
-    await expect(guidance).toContainText(/该你操作了|现在可以先选/);
     await expect(host.getByTestId("action-peng")).toBeEnabled();
-    await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了|现在可以先选/);
     await expect(guest.getByTestId("action-peng")).toBeEnabled();
+    await expect(host.getByTestId("action-guidance")).toContainText(/提交拦截/);
+    await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了/);
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 
@@ -631,7 +649,7 @@ test("a later friend can preselect while the current peng winner receives the di
     await expect(receipt).toHaveCount(0);
     await expect(host.getByTestId("action-pass")).toHaveCount(0);
     await expect(host.getByTestId("action-waiting")).toHaveCount(0);
-    await expect(host.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
+    await expect(host.getByTestId("dynamic-action-track")).not.toContainText(/正在操作|轮到你时会提醒/);
 
     // The two compact boards share a live countdown and can reflow by a few
     // pixels while Playwright is computing the click point. Dispatch through
@@ -639,8 +657,9 @@ test("a later friend can preselect while the current peng winner receives the di
     // authoritative post-peng turn owner.
     await guest.getByTestId("action-peng").evaluate((button: HTMLButtonElement) => button.click());
     await expect(guest.getByTestId("discard-confirm")).toBeVisible({ timeout: 10_000 });
-    await expect(guest.getByTestId("player-self")).toContainText("当前回合");
-    await expect(host.getByTestId("player-self")).not.toContainText("当前回合");
+    await expect(guest.getByTestId("self-turn-outline")).toBeVisible();
+    await expect(host.getByTestId("self-turn-outline")).toHaveCount(0);
+    await expect(guest.getByText("当前回合", { exact: true })).toHaveCount(0);
   } finally {
     await guestContext.close();
     await hostContext.close();

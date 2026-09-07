@@ -21,7 +21,7 @@ export interface DebugScenarioContext {
   broadcastAvailableActions: () => void;
   startCollectivePolling: () => void;
   tickBots: () => void;
-  setHumanForcedPassDelayMs: (delayMs: number) => void;
+  setCollectiveResponseWindowMs: (delayMs: number) => void;
   endRound: (lastAction: string, winnerId: string, groups: string[]) => void;
 }
 
@@ -44,6 +44,18 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   hand.length = 0;
   const add = (id: string, color: Card["color"], type: Card["type"]) => hand.push({ id, color, type });
   const seq = context.nextDebugSeq();
+  const alignCollectivePublicTurn = () => {
+    const pending = context.getPendingResponse();
+    if (!pending || context.state.responsePhase !== "collective") return;
+    // 调试场景也必须遵守生产语义：公开箭头只指向下一接牌者，不能泄露内部响应游标。
+    const receiverId = pending.card.source === "draw"
+      ? pending.ownerId
+      : context.getNextPlayerId(pending.ownerId);
+    context.state.currentPlayerId = receiverId;
+    context.state.currentTurnPlayerId = receiverId;
+    context.state.pendingReceiverId = receiverId;
+    context.state.activeResponderId = "";
+  };
 
   if (scenario === "staged_declaration") {
     for (const id of context.playerOrder) {
@@ -193,9 +205,8 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       const tablePlayer = context.state.players.get(id);
       if (tablePlayer) tablePlayer.declaredKongs = 0;
       if (id !== seatId) {
-        // Keep this fixture about the human's deferred Chi only. Reusing the
-        // random opening hands can give a bot two white Zu cards, whose valid
-        // Peng correctly outranks Chi and makes the regression nondeterministic.
+        // 该夹具只验证真人在全局窗口结束后的本地吃牌。若复用随机开局手牌，
+        // 机器人可能恰好持有两张白卒并合法碰牌，正确抢占吃牌却会让回归不稳定。
         context.playerHands.set(id, [
           { id: `chi-bystander-${id}-${seq}`, color: "red", type: "shi" },
         ]);
@@ -247,9 +258,8 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
   } else if (scenario === "collective_no_actions" || scenario === "collective_passive_wait") {
     if (scenario === "collective_passive_wait") {
-      // Give the second browser enough time to consume its independent state
-      // and private-message queues. Production keeps the configured 3 seconds.
-      context.setHumanForcedPassDelayMs(5_000);
+      // 第二个浏览器需要时间接收自己的状态与私有消息；该场景直接沿用生产的三秒窗口。
+      context.setCollectiveResponseWindowMs(3_000);
       const selfIndex = context.playerOrder.indexOf(seatId);
       const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
       for (const id of context.playerOrder) {
@@ -283,6 +293,8 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
     }
   } else if (scenario === "early_collective_choice") {
+    // 该场景需要让两个真人都来得及提交并发拦截，不能沿用 E2E 的 20ms 快速窗口。
+    context.setCollectiveResponseWindowMs(3_000);
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
       if (tablePlayer) tablePlayer.declaredKongs = 0;
@@ -321,7 +333,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: early_collective_choice#${seq}`;
   } else if (scenario === "crowded_collective_actions") {
-    context.setHumanForcedPassDelayMs(15_000);
+    context.setCollectiveResponseWindowMs(3_000);
     context.state.publicDiscardPile.clear();
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
@@ -556,6 +568,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   context.updatePublicHandCounts();
   context.syncAllPrivateHands();
   if (scenario.startsWith("draw_") || scenario === "upper_peng_xiang") {
+    alignCollectivePublicTurn();
     context.startCollectivePolling();
     return true;
   }
@@ -583,6 +596,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "chi_collective_zu4" ||
     scenario === "hu_fail_case"
   ) {
+    alignCollectivePublicTurn();
     context.startCollectivePolling();
     return true;
   }

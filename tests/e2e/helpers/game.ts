@@ -1,10 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-/**
- * Complete any real declaration choice, while accepting the valid fast path
- * where a hand with no fish or hidden kan enters play without rendering the
- * declaration panel.
- */
+/** 有鱼或坎时完成声明；两者都没有时接受服务端直接进入牌局的正常快路径。 */
 export async function finishDeclarationIfNeeded(page: Page, timeout = 20_000): Promise<void> {
   const layout = page.locator("main.layout");
   const confirm = page.getByTestId("confirm-declaration");
@@ -23,8 +19,7 @@ export async function finishDeclarationIfNeeded(page: Page, timeout = 20_000): P
   }, { timeout }).toBe(true);
 }
 
-/** Wait until dealing reaches either an actionable declaration, an already
- * confirmed waiting state, or the no-choice fast path into play. */
+/** 等待发牌进入可操作的声明、已确认等待，或无候选直接开局的任一合法状态。 */
 export async function waitForDeclarationOrPlaying(page: Page, timeout = 20_000): Promise<void> {
   await expect.poll(async () =>
     await page.getByTestId("confirm-declaration").isVisible().catch(() => false)
@@ -34,10 +29,7 @@ export async function waitForDeclarationOrPlaying(page: Page, timeout = 20_000):
   ).toBe(true);
 }
 
-/**
- * Replace a random opening hand with a deterministic declaration fixture for
- * tests whose subject is the declaration UI itself.
- */
+/** 用确定性的声明夹具替换随机开局手牌，避免声明界面测试受牌型随机性影响。 */
 export async function stageDeclarationForTest(page: Page, timeout = 20_000): Promise<void> {
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout });
   await expect.poll(() => page.evaluate(() => {

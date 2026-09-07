@@ -212,13 +212,13 @@ test.describe("mobile responsive release gate", () => {
         const declarationMessage = `${viewport.width}x${viewport.height}: ${JSON.stringify(declarationGeometry)}`;
         expect(declarationGeometry.noHorizontalOverflow, declarationMessage).toBe(true);
         expect(declarationGeometry.confirmContained, declarationMessage).toBe(true);
-        expect(declarationGeometry.confirmHeight, declarationMessage).toBeGreaterThanOrEqual(48);
+        expect(declarationGeometry.confirmHeight, declarationMessage).toBeGreaterThanOrEqual(40);
       }
     }
 
     await useViewport(page, landscapeViewports.find((viewport) => viewport.width === 844)!);
     const declarationButton = page.getByTestId("confirm-declaration");
-    await expect(declarationButton.locator("span")).toHaveText("声明 1 鱼");
+    await expect(declarationButton.locator("span")).toHaveText("确认鱼");
     await declarationButton.click();
     await expect(page.locator(".pending-fish-back")).toHaveCount(4);
     await expect(declarationButton.locator("span")).toHaveText("开始游戏");

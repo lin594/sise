@@ -23,7 +23,7 @@ function mkRoomWithSeats(seats: string[]) {
   (room as any).playerOrder = [...seats];
   state.roomMode = "friends";
   state.phase = "playing";
-  (room as any).collectiveTimeoutMs = 5;
+  (room as any).collectiveResponseWindowMs = 5;
   (room as any).localTimeoutMs = 5;
   (room as any).operationTimeoutMs = 5;
   return room as any;
@@ -51,6 +51,28 @@ test("collective order for upper starts from next and includes owner at tail", (
   assert.deepEqual(order, ["B", "C", "D", "A"]);
 });
 
+test("the discard owner cannot interrupt their own upper card", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("own-discard", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.playerHands.set("A", [
+    mkCard("own-ju-1", "red", "ju", "upper"),
+    mkCard("own-ju-2", "red", "ju", "upper"),
+  ]);
+
+  assert.equal(room.hasCollectiveActionBeyondPass("A"), false);
+  assert.equal(
+    room.getAvailableActions("A", true).some((entry: { action: string; enabled: boolean }) =>
+      entry.action !== "pass" && entry.enabled,
+    ),
+    false,
+  );
+});
+
 test("entering discard after a collective meld restores the winner as the displayed turn", () => {
   for (const tag of ["PENG", "KAI"]) {
     const state = new GameState();
@@ -69,7 +91,7 @@ test("entering discard after a collective meld restores the winner as the displa
 
 test("all human forced passes share one fairness window without exposing Pass controls", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 40;
+  room.collectiveResponseWindowMs = 40;
   room.pendingResponse = {
     ownerId: "A",
     card: mkCard("fair-pass", "red", "ju", "upper"),
@@ -78,7 +100,7 @@ test("all human forced passes share one fairness window without exposing Pass co
   room.state.responsePhase = "collective";
   room.collectiveQueue = ["B", "C", "D", "A"];
   room.collectiveCursor = 0;
-  room.collectiveGlobalPrivacyEndsAt = Date.now() + 40;
+  room.collectiveResponseEndsAt = Date.now() + 40;
   for (const seat of ["B", "C", "D"]) room.state.players.get(seat).connected = true;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
@@ -107,18 +129,165 @@ test("all human forced passes share one fairness window without exposing Pass co
   await new Promise((resolve) => setTimeout(resolve, 45));
   assert.equal(resolved, true);
   assert.equal(room.collectiveCursor, 4);
-  assert.equal(room.state.lastAction, "B PASS");
+  assert.equal(
+    [...room.pendingResponse.collectives.values()].every((choice: { action: string }) => choice.action === "pass"),
+    true,
+  );
 });
 
-test("response privacy protects a human draw but never delays their own discard", () => {
+test("collective window is shared and the prepared receiver gets a fresh local timer", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 3_000;
+  room.collectiveResponseWindowMs = 40;
+  room.localTimeoutMs = 1_000;
+  room.localTransitionDelayMs = 0;
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("shared-window", "yellow", "pao", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.state.currentPlayerId = "B";
+  room.state.currentTurnPlayerId = "B";
+  room.state.pendingReceiverId = "B";
+  for (const seatId of ["B", "C", "D"]) {
+    room.state.players.get(seatId).connected = true;
+  }
+
+  const startedAt = Date.now();
+  room.startCollectivePolling();
+  const collectiveTimer = room.buildDecisionTimerSnapshot("B");
+  const collectiveDecisionKey = collectiveTimer.decisionKey;
+
+  assert.equal(collectiveTimer.totalMs, 40);
+  assert.equal(collectiveTimer.endsAt <= startedAt + 55, true);
+  assert.equal(room.state.currentTurnPlayerId, "B");
+  assert.equal(room.state.pendingReceiverId, "B");
+  assert.equal(room.state.activeResponderId, "");
+
+  await new Promise((resolve) => setTimeout(resolve, 65));
+
+  assert.equal(room.state.responsePhase, "local_upper");
+  assert.equal(room.state.currentTurnPlayerId, "B");
+  const localTimer = room.buildDecisionTimerSnapshot("B");
+  assert.equal(localTimer.totalMs, 1_000);
+  assert.notEqual(localTimer.decisionKey, collectiveDecisionKey);
+  assert.equal(localTimer.endsAt >= Date.now() + 850, true);
+  room.clearCollectiveTimer();
+});
+
+test("a human discard to three computers does not create an artificial privacy wait", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = 3_000;
+  room.state.players.get("A").connected = true;
+  for (const seatId of ["B", "C", "D"]) {
+    room.state.players.get(seatId).isConfiguredBot = true;
+    room.botIds.add(seatId);
+  }
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("bot-table-discard", "white", "shi", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+
+  assert.equal(room.currentCollectiveResponseWindowMs(), 0);
+});
+
+test("a computer interrupt resolves immediately when no responder can outrank it", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("bot-interrupt", "white", "shi", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  room.getAvailableActions = () => [{ action: "pass", enabled: true }];
+  let resolvedWinner = "";
+  room.executeResponseWinner = (seatId: string) => {
+    resolvedWinner = seatId;
+  };
+
+  const takenOver = room.acceptBotCollectiveChoice("B", { action: "peng", candidateId: "bot-peng" });
+
+  assert.equal(takenOver, true);
+  assert.equal(resolvedWinner, "B");
+  assert.equal(room.collectiveResponseEndsAt, 0);
+  assert.equal(room.collectiveTimer, null);
+});
+
+test("same-priority interrupt waits only for an earlier seat and resolves as soon as it passes", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("ordered-hu", "red", "ju", "upper"),
+    collectives: new Map([["C", { action: "hu" }]]),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  room.getAvailableActions = (seatId: string) => seatId === "B"
+    ? [{ action: "hu", enabled: true }, { action: "pass", enabled: true }]
+    : [{ action: "pass", enabled: true }];
+  let resolvedWinner = "";
+  room.executeResponseWinner = (seatId: string) => {
+    resolvedWinner = seatId;
+  };
+
+  assert.equal(room.tryResolveCollectiveInterrupt(), true);
+  assert.equal(resolvedWinner, "");
+  assert.deepEqual(room.collectiveQueue, ["B"]);
+
+  room.pendingResponse.collectives.set("B", { action: "pass" });
+  assert.equal(room.tryResolveCollectiveInterrupt(), true);
+  assert.equal(resolvedWinner, "C");
+  assert.equal(room.collectiveResponseEndsAt, 0);
+});
+
+test("an earlier same-priority responder's Pass releases the waiting interrupt immediately", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("ordered-hu-handle", "red", "ju", "upper"),
+    collectives: new Map([["C", { action: "hu" }]]),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  room.responseDecisionWindowId = 8;
+  room.seatBySession.set("session-B", "B");
+  room.getAvailableActions = (seatId: string) => seatId === "B"
+    ? [{ action: "hu", enabled: true }, { action: "pass", enabled: true }]
+    : [{ action: "pass", enabled: true }];
+  let resolvedWinner = "";
+  room.executeResponseWinner = (seatId: string) => {
+    resolvedWinner = seatId;
+  };
+
+  room.handleAction(
+    { sessionId: "session-B", send: () => undefined },
+    { action: "pass", decisionKey: "play:8" },
+  );
+
+  assert.equal(resolvedWinner, "C");
+  assert.equal(room.collectiveResponseEndsAt, 0);
+  assert.equal(room.collectiveTimer, null);
+});
+
+test("collective privacy includes a human draw but skips the public discard owner", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = 3_000;
   room.pendingResponse = {
     ownerId: "A",
     card: mkCard("private-draw", "white", "shi", "draw"),
     collectives: new Map(),
   };
-  assert.equal(room.responsePrivacyMinimumForSeat("A"), 3_000);
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  assert.equal(room.collectiveResponseRemainingMsForSeat("A") > 2_900, true);
 
   room.pendingResponse = {
     ownerId: "A",
@@ -134,7 +303,7 @@ test("response privacy protects a human draw but never delays their own discard"
   };
 
   room.advanceCollectivePolling();
-  assert.equal(room.responsePrivacyMinimumForSeat("A"), 0);
+  assert.equal(room.collectiveResponseRemainingMsForSeat("A"), 0);
   assert.equal(room.pendingResponse.collectives.get("A")?.action, "pass");
   assert.equal(room.collectiveTimer, null);
   assert.equal(resolved, true);
@@ -142,7 +311,7 @@ test("response privacy protects a human draw but never delays their own discard"
 
 test("a private non-pass preselection may resolve immediately when nobody can outrank it", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 35;
+  room.collectiveResponseWindowMs = 35;
   room.pendingResponse = {
     ownerId: "A",
     card: mkCard("fair-preselect", "red", "ju", "upper"),
@@ -162,10 +331,9 @@ test("a private non-pass preselection may resolve immediately when nobody can ou
   assert.equal(resolved, true);
 });
 
-test("an active human choice is held until the collective privacy floor", async () => {
+test("an active human pass is held until the collective privacy floor", async () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 150;
-  room.collectiveTimeoutMs = 300;
+  room.collectiveResponseWindowMs = 150;
   room.playerHands.set("B", [
     mkCard("peng-1", "red", "ju", "upper"),
     mkCard("peng-2", "red", "ju", "upper"),
@@ -179,7 +347,7 @@ test("an active human choice is held until the collective privacy floor", async 
   room.state.responsePhase = "collective";
   room.collectiveQueue = ["B"];
   room.collectiveCursor = 0;
-  room.collectiveGlobalPrivacyEndsAt = Date.now() + 150;
+  room.collectiveResponseEndsAt = Date.now() + 150;
   room.state.players.get("B").connected = true;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
@@ -211,7 +379,7 @@ test("a non-pass interrupt is not held by the privacy floor when nobody can outr
   room.collectiveQueue = ["B", "C", "D", "A"];
   room.collectiveCursor = 0;
   room.collectiveResponderId = "B";
-  room.collectiveGlobalPrivacyEndsAt = Date.now() + 3_000;
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
   room.resolveCollectivePhase = () => { resolved = true; };
@@ -231,7 +399,7 @@ test("a submitted peng waits only for an earlier or higher-priority capable resp
   room.collectiveQueue = ["B", "C", "D", "A"];
   room.collectiveCursor = 0;
   room.collectiveResponderId = "B";
-  room.collectiveGlobalPrivacyEndsAt = Date.now() + 3_000;
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
   room.seatBySession.set("session-B", "B");
   let resolved = false;
   room.resolveCollectivePhase = () => { resolved = true; };
@@ -242,9 +410,42 @@ test("a submitted peng waits only for an earlier or higher-priority capable resp
   room.clearCollectiveTimer();
 });
 
+test("a hu candidate resolves as soon as an earlier blocker explicitly chooses peng", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands = new Map([
+    ["B", [mkCard("b1", "red", "ju", "upper"), mkCard("b2", "red", "ju", "upper")]],
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("target", "red", "ju", "upper"),
+    collectives: new Map([["C", { action: "hu" }]]),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  room.collectiveResponderId = "B";
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  room.seatBySession.set("session-B", "B");
+  let resolvedWinner = "";
+  room.executeResponseWinner = (seatId: string) => {
+    resolvedWinner = seatId;
+  };
+  const actions = room.getAvailableActions("B");
+  assert.equal(actions.some((item: any) => item.action === "hu" && item.enabled), true);
+  const candidateId = actions.find((item: any) => item.action === "peng")?.candidates?.[0]?.id;
+
+  room.handleAction(
+    { sessionId: "session-B", send: () => {} },
+    { action: "peng", candidateId },
+  );
+
+  assert.equal(resolvedWinner, "C");
+  assert.equal(room.collectiveResponseEndsAt, 0);
+});
+
 test("a collective responder with a meaningful choice still receives Pass", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
-  room.humanForcedPassDelayMs = 40;
+  room.collectiveResponseWindowMs = 40;
   room.playerHands.set("B", [
     mkCard("peng-1", "red", "ju", "upper"),
     mkCard("peng-2", "red", "ju", "upper"),
@@ -261,6 +462,37 @@ test("a collective responder with a meaningful choice still receives Pass", () =
   const actions = room.buildClientDecisionView("B").availableActions;
   assert.equal(actions.some((entry: { action: string }) => entry.action === "peng"), true);
   assert.equal(actions.some((entry: { action: string }) => entry.action === "pass"), true);
+});
+
+test("the prepared receiver sees Chi only after the collective window becomes local", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [
+    mkCard("chi-ju", "yellow", "ju", "upper"),
+    mkCard("chi-ma", "yellow", "ma", "upper"),
+    mkCard("spare", "green", "shi", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("chi-target", "yellow", "pao", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveResponderId = "B";
+
+  assert.equal(
+    room.getAvailableActions("B").find((entry: any) => entry.action === "chi")?.deferred,
+    true,
+  );
+  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
+
+  room.enterOwnerLocalPhaseAfterNoResponse("A");
+  assert.equal(room.state.responsePhase, "local_upper");
+  assert.equal(
+    room.buildClientDecisionView("B").availableActions.some((entry: any) => entry.action === "chi"),
+    true,
+  );
+  room.clearCollectiveTimer();
 });
 
 test("no-response on upper enters local_upper for next player", () => {
@@ -567,9 +799,25 @@ test("practice keeps connected human decisions untimed while bot decisions still
   assert.equal(humanTurn.endsAt, 0);
   assert.equal(room.collectiveTimer, null);
 
+  room.pendingResponse = {
+    ownerId: "B",
+    card: mkCard("collective-target", "red", "ju", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveResponderId = "A";
+  room.collectiveResponseEndsAt = Date.now() + 3_000;
+  room.state.responseEndsAt = room.collectiveResponseEndsAt;
+  room.responseTimerTotalMs = 3_000;
+  const collectiveTurn = room.buildDecisionTimerSnapshot("A");
+  assert.equal(collectiveTurn.untimed, false);
+  assert.equal(collectiveTurn.totalMs, 3_000);
+
   room.state.players.get("A").connected = false;
   room.state.players.get("A").isBot = true;
   room.botIds.add("A");
+  room.state.responsePhase = "local_draw";
+  room.pendingResponse.ownerId = "A";
   room.scheduleCollectiveTimeout();
   const botTurn = room.buildDecisionTimerSnapshot("A");
   assert.equal(botTurn.untimed, false);

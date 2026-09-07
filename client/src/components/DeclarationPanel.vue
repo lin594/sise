@@ -122,6 +122,7 @@
                     :mode="cardMode"
                   />
                 </span>
+                <span v-if="embedded" class="embedded-option-label">{{ fishOptionTitle(option) }}</span>
                 <span class="option-check" aria-hidden="true">✓</span>
               </button>
               <div
@@ -143,6 +144,7 @@
                     :mode="cardMode"
                   />
                 </span>
+                <span v-if="embedded" class="embedded-option-label">{{ fishOptionTitle(option) }}</span>
                 <span class="option-check" aria-hidden="true">✓</span>
               </div>
             </div>
@@ -270,7 +272,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  status: [message: string];
   marks: [value: { fish: string[]; kong: string[] }];
   "submit-fish": [fishCardIds: string[]];
   "submit-kongs": [declaredKongs: number];
@@ -343,7 +344,7 @@ const canRestoreRecommendation = computed(
   () => props.step === "fish" && initialized.value && !isLocked.value && !isAtRecommendation.value,
 );
 const confirmationText = computed(() => {
-  return props.step === "fish" ? `声明 ${selectedFishOptionIds.value.size} 鱼` : "开始游戏";
+  return props.step === "fish" ? "确认鱼" : "开始游戏";
 });
 const declarationDescription = computed(() => props.step === "fish"
   ? "选择要亮出的鱼；默认已选推荐鱼，确认后其他玩家先看到红色牌背。"
@@ -358,10 +359,6 @@ const declarationStatusText = computed(() => {
   if (submitPending.value) return "提交中…";
   return props.step === "fish" ? "正在整理鱼牌" : "正在整理坎数";
 });
-
-watch([canSubmit, declarationStatusText, () => props.step], () => emit("status", canSubmit.value
-  ? props.step === "fish" ? "开局确认 · 声明鱼" : "开局确认 · 声明坎"
-  : declarationStatusText.value), { immediate: true });
 
 function focusableControls(): HTMLElement[] {
   const panel = panelRef.value;
@@ -538,7 +535,7 @@ function observeHandScroller(rail: HTMLElement | null): void {
 }
 
 watch(
-  () => `${props.step}|${props.handReady ? "ready" : "waiting"}|${props.hand.map((card) => card.id).join("|")}`,
+  () => `${props.step}|${props.handReady ? "ready" : "waiting"}|${props.submitted ? "submitted" : "editable"}|${props.hand.map((card) => card.id).join("|")}`,
   (stepKey) => {
     if (stepKey !== initializedStepKey) {
       initializedStepKey = stepKey;
@@ -1482,23 +1479,164 @@ button:focus-visible {
   }
 }
 
-.declare-mask.embedded { position: relative; inset: auto; z-index: auto; display: block; flex-shrink: 0; padding: 0; background: transparent; backdrop-filter: none; }
-.declare-mask.embedded .declare-panel { width: 100%; max-width: none; height: auto; max-height: none; padding: 6px; box-shadow: none; border: 1px solid #334155; border-radius: 8px; gap: 4px; }
-.embedded .declare-header { display: none; }
-.declare-mask.embedded .declare-scroll-region { max-height: min(calc(var(--effective-vh, 1vh) * 22), 100px); overflow: auto; }
-.embedded .declare-controls { display: flex; gap: 12px; }
-.embedded .declare-section { padding: 4px; flex: 1; min-width: 0; }
-.declare-mask.embedded .declare-footer { padding: 4px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.declare-mask.embedded .confirm-declaration { min-height: 48px; padding: 4px 12px; }
-.embedded .confirm-declaration small { display: none; }
-.embedded .footer-meta p { margin: 0; font-size: 11px; }
-.embedded .declare-progress { display: none; }
+.declare-mask.embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
 
-.declare-mask.embedded .declare-panel { --ink: #e2e8f0; --muted: #94a3b8; --line: #334155; --paper: #111e30; background: #111e30; border-color: #334155; }
-.declare-mask.embedded .declare-section { background: #142338; border-color: #334155; }
-.declare-mask.embedded .declare-footer { background: transparent; border-color: #334155; }
-.declare-mask.embedded .kong-choice { min-height: 48px; padding: 3px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
-.declare-mask.embedded .section-heading { margin-bottom: 4px; }
-.declare-mask.embedded .declaration-status { min-height: 32px; padding: 5px 10px; }
-.declare-mask.embedded .footer-meta .untimed-message { color: #6ee7b7; }
+/* 嵌入模式就是下方动态按钮区本身：候选和确认按钮必须同排可见，不能再套一层弹窗。 */
+.declare-mask.embedded .declare-panel {
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --line: #334155;
+  --paper: transparent;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.embedded .declare-header,
+.embedded .declare-progress,
+.embedded .section-heading {
+  display: none;
+}
+
+/* 偏离推荐后，“恢复推荐”也是当前阶段的有效动作，要和其他按钮一起留在动态区。 */
+.embedded .footer-meta {
+  display: contents;
+}
+
+.embedded .footer-meta p {
+  display: none;
+}
+
+.declare-mask.embedded .declare-scroll-region {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: none;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.declare-mask.embedded .declare-scroll-region::-webkit-scrollbar {
+  display: none;
+}
+
+.embedded .declare-controls,
+.embedded .declare-section,
+.embedded .fish-options,
+.embedded .kong-choices {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+}
+
+.embedded .declare-controls,
+.embedded .declare-section {
+  flex: 0 0 auto;
+  min-width: max-content;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.embedded .fish-option-cards {
+  display: none;
+}
+
+.embedded .embedded-option-label {
+  display: inline;
+  white-space: nowrap;
+  font-weight: 850;
+}
+
+.declare-mask.embedded .fish-option,
+.declare-mask.embedded .kong-choice {
+  flex: 0 0 auto;
+  min-width: 2.65rem;
+  min-height: 40px;
+  padding: 0.2rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.16rem;
+  border-radius: 0.52rem;
+}
+
+.declare-mask.embedded .fish-option {
+  width: auto;
+  justify-content: flex-start;
+  padding-right: 2rem;
+  border-color: #475569;
+  background: #172033;
+  color: #e2e8f0;
+}
+
+.declare-mask.embedded .fish-option.selected {
+  border-color: #34d399;
+  background: #064e3b;
+  color: #ecfdf5;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.24) inset;
+}
+
+.declare-mask.embedded .kong-choice strong {
+  font-size: 1rem;
+}
+
+.declare-mask.embedded .kong-choice span {
+  font-size: 0.75rem;
+}
+
+.declare-mask.embedded .declare-footer {
+  flex: 0 0 auto;
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.declare-mask.embedded .confirm-declaration {
+  min-height: 40px;
+  padding: 0.25rem 0.75rem;
+  white-space: nowrap;
+}
+
+.embedded .confirm-declaration small {
+  display: none;
+}
+
+.declare-mask.embedded .declaration-status {
+  min-height: 34px;
+  max-width: 10rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 </style>

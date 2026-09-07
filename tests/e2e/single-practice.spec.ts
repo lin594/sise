@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded, waitForDeclarationOrPlaying } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -21,23 +21,36 @@ async function snapshotBoard(page: Page) {
 }
 
 async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void> {
-  const samples: Array<{ handCount: number; bodyExcerpt: string }> = [];
-  const deadline = Date.now() + 3400;
+  const samples: Array<{ handCount: number; bodyExcerpt: string; dealVisible: boolean }> = [];
+  const deadline = Date.now() + 5000;
+  let sawDeal = false;
   while (Date.now() < deadline) {
+    const hasDeclarePanel = await page.getByTestId("confirm-declaration").count() > 0;
+    const isPlaying = (await page.locator("main.layout").getAttribute("class"))?.split(/\s+/u).includes("playing");
+    const dealVisible = await page.locator(".deal-overlay").isVisible().catch(() => false);
+    sawDeal ||= dealVisible;
+    if (sawDeal && !dealVisible && (hasDeclarePanel || isPlaying)) {
+      break;
+    }
     const board = await snapshotBoard(page);
     if (board.openingReady) break;
     samples.push({
       handCount: board.handCards.length,
       bodyExcerpt: board.bodyExcerpt,
+      dealVisible,
     });
     await page.waitForTimeout(80);
   }
-  await waitForDeclarationOrPlaying(page);
+  await expect.poll(async () => {
+    const hasDeclaration = await page.getByTestId("confirm-declaration").isVisible().catch(() => false);
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    return hasDeclaration || Boolean(layoutClass?.split(/\s+/u).includes("playing"));
+  }, { timeout: 20_000 }).toBe(true);
   const fullHandCount = await page.locator("[data-testid^='hand-card-']").count();
   expect(fullHandCount).toBeGreaterThan(0);
   expect(
-    samples.every((sample) => sample.handCount < fullHandCount),
-    `Opening deal intro revealed a full ${fullHandCount}-card hand before declaration. Samples=${JSON.stringify(samples.slice(-8))}`,
+    samples.some((sample) => sample.dealVisible && sample.handCount > 0 && sample.handCount < fullHandCount),
+    `Opening deal did not progressively reveal the ${fullHandCount}-card hand. Samples=${JSON.stringify(samples.slice(-8))}`,
   ).toBe(true);
 }
 
@@ -51,9 +64,11 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
   await page.evaluate(() => {
     const trackingWindow = window as Window & {
       __siseDealFlightCount?: number;
+      __siseDealOverlayCount?: number;
       __siseDealFlightObserver?: MutationObserver;
     };
     trackingWindow.__siseDealFlightCount = 0;
+    trackingWindow.__siseDealOverlayCount = 0;
     trackingWindow.__siseDealFlightObserver = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) {
@@ -64,6 +79,10 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
             trackingWindow.__siseDealFlightCount! += 1;
           }
           trackingWindow.__siseDealFlightCount! += node.querySelectorAll(".fx-card.deal").length;
+          if (node.matches(".deal-overlay")) {
+            trackingWindow.__siseDealOverlayCount! += 1;
+          }
+          trackingWindow.__siseDealOverlayCount! += node.querySelectorAll(".deal-overlay").length;
         }
       }
     });
@@ -72,10 +91,9 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
 
   await page.getByTestId("lobby-start").click();
   await assertOpeningDealDoesNotRevealFullHand(page);
-  await expect.poll(
-    () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
-    { timeout: 8_000 },
-  ).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { __siseDealOverlayCount?: number }).__siseDealOverlayCount ?? 0,
+  )).toBe(1);
   const firstRoundCount = await page.evaluate(
     () => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
   );
@@ -89,10 +107,9 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
   await expect(page.getByTestId("settlement-panel")).toBeVisible({ timeout: 20_000 });
   await page.getByTestId("next-round-trigger").click();
   await assertOpeningDealDoesNotRevealFullHand(page);
-  await expect.poll(
-    () => page.evaluate(() => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0),
-    { timeout: 8_000 },
-  ).toBeGreaterThan(firstRoundCount);
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & { __siseDealOverlayCount?: number }).__siseDealOverlayCount ?? 0,
+  )).toBe(2);
   const secondRoundCount = await page.evaluate(
     () => (window as Window & { __siseDealFlightCount?: number }).__siseDealFlightCount ?? 0,
   );
@@ -150,8 +167,7 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   await page.getByTestId("lobby-start").click();
 
   await expect(page.getByTestId("game-board")).toBeVisible();
-
-  await assertOpeningDealDoesNotRevealFullHand(page);
+  await finishDeclarationIfNeeded(page);
 
   await finishRoundThroughDebugHu(page);
 

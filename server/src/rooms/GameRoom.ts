@@ -219,16 +219,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     1000,
     Number(process.env.OP_TIMEOUT_MS ?? DEFAULT_OPERATION_TIMEOUT_MS),
   );
-  private readonly collectiveTimeoutMs = Math.max(
-    1000,
-    Number(process.env.COLLECTIVE_TIMEOUT_MS ?? this.operationTimeoutMs),
-  );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = GAME_TIMING_CONFIG.localTransitionDelayMs;
-  private humanForcedPassDelayMs = Math.max(
-    process.env.NODE_ENV === "test" ? 0 : 3000,
-    Number(process.env.HUMAN_FORCED_PASS_DELAY_MS ?? 3000),
-  );
+  // 生产规则固定为三秒：无人拦截时完整保护隐私，有胜者时仍允许提前裁决。
+  // 单元测试可直接覆写该私有时钟，避免把测试加速旋钮暴露成生产配置。
+  private collectiveResponseWindowMs = process.env.NODE_ENV === "test"
+    ? Math.min(3000, Math.max(0, Number(process.env.TEST_COLLECTIVE_RESPONSE_WINDOW_MS ?? 0)))
+    : 3000;
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 2000));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
@@ -275,10 +272,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private responseTimerTotalMs = 0;
   private declareDecisionWindowId = 0;
   private responseDecisionWindowId = 0;
-  private collectivePrivacyDelaySeatId: string | null = null;
-  private collectivePrivacyFloorSeatId: string | null = null;
-  private collectivePrivacyFloorEndsAt = 0;
-  private collectiveGlobalPrivacyEndsAt = 0;
+  private collectiveResponseEndsAt = 0;
   private collectiveQueue: string[] = [];
   private collectiveCursor = 0;
   private collectiveResponderId: string | null = null;
@@ -827,7 +821,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.startDeclaringPhase();
     } else if (this.state.phase === "playing") {
       this.responseTimerTotalMs = this.state.responsePhase === "collective"
-        ? this.collectiveTimeoutMs
+        ? this.collectiveResponseWindowMs
         : this.localTimeoutMs;
       this.responseDecisionWindowId += 1;
       this.tickBots();
@@ -2042,9 +2036,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.phase !== "playing" || !this.pendingResponse) {
       return false;
     }
-    if (this.state.responsePhase === "collective") {
-      return this.collectiveResponderId === seatId && !this.pendingResponse.collectives.has(seatId);
-    }
+    // 练习模式的本地思考可以不限时；全局拦截仍是共享的最多三秒窗口。
+    if (this.state.responsePhase === "collective") return false;
     return (
       this.pendingResponse.ownerId === seatId &&
       (this.state.currentPlayerId === seatId || this.awaitingDiscardOwnerId === seatId)
@@ -2481,37 +2474,41 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (decision === "collective_accept") {
       this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
-      const waitsForResponsePrivacyDelay =
-        action === "pass" &&
-        isCurrentResponder &&
-        this.responsePrivacyMinimumForSeat(seatId) > 0 &&
-        this.collectiveGlobalPrivacyEndsAt > Date.now() &&
-        ![...pending.collectives.values()].some((choice) => choice.action !== "pass");
-      if (isCurrentResponder && !waitsForResponsePrivacyDelay) {
-        this.clearCollectiveTimer();
-      }
       pending.collectives.set(seatId, {
         action: action === "pass" ? "pass" : action,
         candidateId: action === "pass" ? undefined : candidateId,
       });
+
+      // 任何拦截信号都交给服务端统一裁决。若已有候选胜者，当前这个“过”
+      // 也可能刚好解除最后一个更高优先级阻塞，必须立即重算，不能硬等三秒。
+      const hasInterrupt = [...pending.collectives.values()].some((choice) =>
+        this.isCollectiveInterruptAction(choice.action),
+      );
+      if (hasInterrupt && this.tryResolveCollectiveInterrupt()) {
+        return;
+      }
+
+      const waitsForCollectiveWindow =
+        action === "pass" &&
+        isCurrentResponder &&
+        this.collectiveResponseRemainingMsForSeat(seatId) > 0;
+      if (isCurrentResponder && !waitsForCollectiveWindow) {
+        this.clearCollectiveTimer();
+      }
       this.traceStep(
-        waitsForResponsePrivacyDelay
-          ? "collective_choice_held_for_fairness"
+        waitsForCollectiveWindow
+          ? "collective_choice_held_until_deadline"
           : isCurrentResponder
             ? "collective_accept"
             : "collective_preselect",
         `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
       );
-      if (waitsForResponsePrivacyDelay) {
+      if (waitsForCollectiveWindow) {
         this.scheduleCollectiveTimeout(
-          Math.max(1, this.collectiveGlobalPrivacyEndsAt - Date.now()),
-          true,
+          Math.max(1, this.collectiveResponseEndsAt - Date.now()),
           true,
         );
         this.broadcastAvailableActions();
-        return;
-      }
-      if (action !== "pass" && this.tryResolveCollectiveInterrupt()) {
         return;
       }
       if (isCurrentResponder) {
@@ -2648,23 +2645,23 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private resolveCollectivePhase(): void {
     const pending = this.pendingResponse;
     const hasInterrupt = Boolean(
-      pending && [...pending.collectives.values()].some((choice) => choice.action !== "pass"),
+      pending && [...pending.collectives.values()].some((choice) => this.isCollectiveInterruptAction(choice.action)),
     );
-    const privacyRemainingMs = Math.max(0, this.collectiveGlobalPrivacyEndsAt - Date.now());
-    if (pending && !hasInterrupt && privacyRemainingMs > 0) {
+    const windowRemainingMs = Math.max(0, this.collectiveResponseEndsAt - Date.now());
+    if (pending && !hasInterrupt && windowRemainingMs > 0) {
       if (this.collectiveTimer) {
         clearTimeout(this.collectiveTimer);
       }
       this.collectiveTimer = setTimeout(() => {
         this.collectiveTimer = null;
-        this.collectiveGlobalPrivacyEndsAt = 0;
+        this.collectiveResponseEndsAt = 0;
         this.resolveCollectivePhase();
-      }, privacyRemainingMs);
-      this.state.responseEndsAt = this.collectiveGlobalPrivacyEndsAt;
+      }, windowRemainingMs);
+      this.state.responseEndsAt = this.collectiveResponseEndsAt;
       this.broadcastAvailableActions();
       return;
     }
-    this.collectiveGlobalPrivacyEndsAt = 0;
+    this.collectiveResponseEndsAt = 0;
     this.traceStep("resolve_collective:begin");
     resolveCollectivePhaseFlow({
       pending: this.pendingResponse,
@@ -2681,29 +2678,31 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private hasCollectiveActionBeyondPass(seatId: string): boolean {
     const acts = this.getAvailableActions(seatId, true);
     return acts.some((item) =>
-      item.action !== "pass" && (Boolean(item.deferred) || item.enabled),
+      this.isCollectiveInterruptAction(item.action) && item.enabled,
     );
   }
 
   /**
-   * Give an online human a fixed response slot when an automatic pass or a
-   * private preselection would otherwise skip the seat. Every other manual
-   * response also observes the same minimum through the separate privacy floor.
+   * 作用：返回该真人座位仍可参与全局拦截的共享剩余时间。
+   * 设计原因：吃、抓属于下一接牌者的本地决策，不能把全局阶段拖成 30 秒；
+   * 所有人共用同一个最多 3 秒的截止点，才能同时保护手牌隐私和保持流程迅速。
    */
-  private responsePrivacyDelayForSeat(seatId: string): number {
-    if (this.responsePrivacyMinimumForSeat(seatId) <= 0) {
+  private collectiveResponseRemainingMsForSeat(seatId: string): number {
+    if (!this.isHumanCollectiveSeat(seatId)) {
       return 0;
     }
-    if ([...(this.pendingResponse?.collectives.values() ?? [])].some((choice) => choice.action !== "pass")) {
-      return 0;
-    }
-    const remainingMs = Math.max(0, this.collectiveGlobalPrivacyEndsAt - Date.now());
-    if (remainingMs <= 0) return 0;
     const choice = this.pendingResponse?.collectives.get(seatId);
-    return choice?.action === "pass" || !this.hasCollectiveActionBeyondPass(seatId) ? remainingMs : 0;
+    if (choice && this.isCollectiveInterruptAction(choice.action)) {
+      return 0;
+    }
+    return Math.max(0, this.collectiveResponseEndsAt - Date.now());
   }
 
-  /** Resolve a submitted interrupt as soon as no unsubmitted seat can outrank it. */
+  private isCollectiveInterruptAction(action: ActionType): boolean {
+    return action === "hu" || action === "kai" || action === "peng";
+  }
+
+  /** 已提交候选不再有更高或更靠前的潜在阻塞者时，立即完成全局裁决。 */
   private tryResolveCollectiveInterrupt(): boolean {
     const pending = this.pendingResponse;
     if (!pending || this.state.responsePhase !== "collective") return false;
@@ -2742,26 +2741,33 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return true;
   }
 
-  private responsePrivacyMinimumForSeat(seatId: string): number {
-    if (this.state.roomMode === "practice") {
-      return 0;
-    }
-    // The player who discarded an upper card cannot respond to that same card,
-    // which is public knowledge. Holding that seat at the tail of the global
-    // queue protects no private information and makes bot tables look frozen.
-    // A self-drawn card is different: the owner's eat/pass ability is private,
-    // so draw responses continue to observe the full privacy floor.
+  private isHumanCollectiveSeat(seatId: string): boolean {
+    // 打出上家牌的人不能再响应同一张牌，这是公开事实，不需要为他等待。
     if (
       this.pendingResponse?.card.source === "upper" &&
       this.pendingResponse.ownerId === seatId
     ) {
-      return 0;
+      return false;
     }
     const player = this.state.players.get(seatId);
     if (!player?.connected || player.isConfiguredBot || this.botIds.has(seatId)) {
-      return 0;
+      return false;
     }
-    return this.humanForcedPassDelayMs;
+    return true;
+  }
+
+  private currentCollectiveResponseWindowMs(): number {
+    const connectedHumans = this.playerOrder.filter((seatId) => {
+      const player = this.state.players.get(seatId);
+      return Boolean(player?.connected && !player.isConfiguredBot && !this.botIds.has(seatId));
+    });
+    const protectedHumans = connectedHumans.filter((seatId) => this.isHumanCollectiveSeat(seatId));
+    const needsManualInterruptDecision = protectedHumans.some((seatId) => this.hasCollectiveActionBeyondPass(seatId));
+    // 单真人打给三台机器人且本人不能响应时无需空等；若真人确有胡、开、碰，
+    // 仍给他完整三秒。两名以上真人同桌则统一等待，以隐藏谁能响应、谁只能过。
+    return (needsManualInterruptDecision || connectedHumans.length >= 2 && protectedHumans.length > 0)
+      ? this.collectiveResponseWindowMs
+      : 0;
   }
 
   private canSeatPreselectCollective(seatId: string): boolean {
@@ -2790,7 +2796,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!pending) {
       return;
     }
-    this.collectiveGlobalPrivacyEndsAt = 0;
+    this.collectiveResponseEndsAt = 0;
     const sourceOwnerId = String(this.state.pollOriginPlayerId || pending.ownerId || "");
     if (
       pending.card.source === "upper" &&
@@ -2914,25 +2920,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private enterOwnerLocalPhaseAfterNoResponse(ownerId: string): void {
     const pending = this.pendingResponse;
-    if (pending?.card.source === "draw" && pending.ownerId === ownerId) {
-      const choice = pending.collectives.get(ownerId);
-      this.state.responsePhase = "local_draw";
-      this.state.currentPlayerId = ownerId;
-      this.state.currentTurnPlayerId = ownerId;
-      this.state.loopStage = "local_poll";
-      this.resetCollectivePolling();
-      if (choice?.action === "chi" && this.executeEat(ownerId, choice.candidateId)) return;
-      if (isDiscardRestricted(pending.card)) {
-        if (choice?.action === "pass") { this.retainPendingSpecial(ownerId); return; }
-        this.tickBots();
-      } else {
-        this.executePassToNext(ownerId);
-      }
-      return;
-    }
     if (pending?.card.source === "upper") {
       this.recordTableTransition("flow", [{ card: pending.card, from: { zone: "center" }, to: { zone: "flow", playerId: ownerId } }]);
     }
+    // 全局三秒只处理胡、开、碰。无人拦截后，无论是摸牌还是上家来牌，
+    // 都进入一个全新的本地决策窗，让牌主用完整时限选择吃、抓或过。
     enterOwnerLocalPhaseAfterNoResponseFlow({
       pending: this.pendingResponse,
       ownerId,
@@ -3363,11 +3355,17 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         (this.collectiveResponderId === seatId || this.canSeatPreselectCollective(seatId)),
       );
       const hasMeaningfulChoice = internalActions.some(
-        (entry) => entry.action !== "pass" && (entry.enabled || Boolean(entry.deferred)),
+        (entry) => this.isCollectiveInterruptAction(entry.action) && entry.enabled,
       );
       if (!canStillChoose || !hasMeaningfulChoice) {
         return { availableActions: [], decisionTimer };
       }
+      return {
+        availableActions: internalActions.filter((entry) =>
+          entry.action === "pass" || this.isCollectiveInterruptAction(entry.action),
+        ).filter((entry) => entry.enabled),
+        decisionTimer,
+      };
     }
 
     return {
@@ -3984,9 +3982,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       clearTimeout(this.collectiveTimer);
       this.collectiveTimer = null;
     }
-    this.collectivePrivacyDelaySeatId = null;
-    this.collectivePrivacyFloorSeatId = null;
-    this.collectivePrivacyFloorEndsAt = 0;
     this.state.responseEndsAt = 0;
   }
 
@@ -3997,7 +3992,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.collectiveResponderId = null;
     this.state.activeResponderId = "";
     this.state.pendingReceiverId = "";
-    this.collectiveGlobalPrivacyEndsAt = 0;
+    this.collectiveResponseEndsAt = 0;
   }
 
   /**
@@ -4015,8 +4010,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         from: kind === "draw" ? { zone: "deck" } : { zone: "hand", playerId: pending.ownerId }, to: { zone: "center" } }]);
     }
     if (this.waitForPresentation()) return;
-    if (this.state.roomMode !== "practice" && this.collectiveGlobalPrivacyEndsAt <= Date.now()) {
-      this.collectiveGlobalPrivacyEndsAt = Date.now() + this.humanForcedPassDelayMs;
+    if (this.collectiveResponseEndsAt <= Date.now()) {
+      // 一轮全局响应只创建一次共享截止点。轮询到哪位、谁有无可响应动作，
+      // 都不能重新续时，否则外部可以从等待长度反推出各家的暗牌信息。
+      const responseWindowMs = this.currentCollectiveResponseWindowMs();
+      this.collectiveResponseEndsAt = Date.now() + responseWindowMs;
+      this.responseTimerTotalMs = responseWindowMs;
+      this.responseDecisionWindowId += 1;
     }
     this.traceStep("start_collective_polling");
     startCollectiveFlow({
@@ -4064,20 +4064,23 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private scheduleCollectiveTimeout(
     timeoutOverrideMs?: number,
     preserveDecisionWindow = false,
-    responsePrivacyDelay = false,
   ): void {
     const isCollectivePhase = this.state.responsePhase === "collective";
-    const baseTimeoutMs = isCollectivePhase ? this.collectiveTimeoutMs : this.localTimeoutMs;
-    const timeoutMs = Math.max(1, timeoutOverrideMs ?? baseTimeoutMs);
-    const existingPrivacyFloorSeatId = this.collectivePrivacyFloorSeatId;
-    const existingPrivacyFloorEndsAt = this.collectivePrivacyFloorEndsAt;
+    const baseTimeoutMs = isCollectivePhase ? this.collectiveResponseWindowMs : this.localTimeoutMs;
+    const collectiveRemainingMs = Math.max(0, this.collectiveResponseEndsAt - Date.now());
+    const timeoutMs = Math.max(
+      1,
+      isCollectivePhase
+        ? Math.min(timeoutOverrideMs ?? collectiveRemainingMs, collectiveRemainingMs || 1)
+        : timeoutOverrideMs ?? baseTimeoutMs,
+    );
     this.clearCollectiveTimer();
     if (!preserveDecisionWindow) {
-      this.responseTimerTotalMs = responsePrivacyDelay ? timeoutMs : baseTimeoutMs;
+      this.responseTimerTotalMs = baseTimeoutMs;
       this.responseDecisionWindowId += 1;
     }
     const decisionSeatId = isCollectivePhase ? this.collectiveResponderId ?? "" : this.pendingResponse?.ownerId ?? "";
-    if (decisionSeatId && this.isPracticeDecisionUntimed(decisionSeatId)) {
+    if (!isCollectivePhase && decisionSeatId && this.isPracticeDecisionUntimed(decisionSeatId)) {
       this.responseTimerTotalMs = 0;
       this.state.responseEndsAt = 0;
       this.traceStep(
@@ -4086,20 +4089,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       );
       return;
     }
-    if (
-      preserveDecisionWindow &&
-      !responsePrivacyDelay &&
-      existingPrivacyFloorSeatId === decisionSeatId &&
-      existingPrivacyFloorEndsAt > Date.now()
-    ) {
-      this.collectivePrivacyFloorSeatId = existingPrivacyFloorSeatId;
-      this.collectivePrivacyFloorEndsAt = existingPrivacyFloorEndsAt;
-    } else if (!preserveDecisionWindow && isCollectivePhase && this.responsePrivacyMinimumForSeat(decisionSeatId) > 0) {
-      this.collectivePrivacyFloorSeatId = decisionSeatId;
-      this.collectivePrivacyFloorEndsAt = Date.now() + this.responsePrivacyMinimumForSeat(decisionSeatId);
-    }
-    this.collectivePrivacyDelaySeatId = responsePrivacyDelay ? decisionSeatId : null;
-    this.state.responseEndsAt = Date.now() + timeoutMs;
+    this.state.responseEndsAt = isCollectivePhase
+      ? this.collectiveResponseEndsAt
+      : Date.now() + timeoutMs;
     this.traceStep(
       "schedule_collective_timeout",
       `phase=${this.state.responsePhase} ms=${timeoutMs} awaiting=${this.awaitingDiscardOwnerId ?? "-"}`,
@@ -4108,46 +4100,30 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.collectiveTimer = null;
       const pending = this.pendingResponse;
       if (!pending || this.state.phase !== "playing") {
-        this.collectivePrivacyDelaySeatId = null;
         this.traceStep("collective_timeout_skip");
         return;
       }
       if (this.state.responsePhase === "collective") {
-        const responderId = this.collectiveResponderId;
-        if (!responderId) {
-          this.collectivePrivacyDelaySeatId = null;
-          this.traceStep("collective_timeout_skip");
+        if (Date.now() < this.collectiveResponseEndsAt) {
+          this.scheduleCollectiveTimeout(
+            Math.max(1, this.collectiveResponseEndsAt - Date.now()),
+            true,
+          );
           return;
         }
-        const heldPrivateChoice =
-          this.collectivePrivacyDelaySeatId === responderId &&
-          pending.collectives.has(responderId);
-        this.collectivePrivacyDelaySeatId = null;
-        if (pending.collectives.has(responderId) && !heldPrivateChoice) {
-          this.traceStep("collective_timeout_already_responded", `responder=${responderId}`);
-          return;
+        // 共享窗口到点后一次性补齐未响应座位，不能再逐家各开 30 秒。
+        // 本轮尚未表态的座位统一记为“过”；吃和抓只在随后新开的本地阶段选择。
+        for (const seatId of this.collectiveQueue) {
+          if (!pending.collectives.has(seatId)) {
+            pending.collectives.set(seatId, { action: "pass" });
+          }
         }
-        if (!heldPrivateChoice) {
-          pending.collectives.set(responderId, { action: "pass" });
-          // Keep the public action indistinguishable from a deliberate Pass;
-          // the private trace records that the fairness timer supplied it.
-          this.state.lastAction = `${responderId} PASS`;
-        } else if (pending.collectives.get(responderId)?.action === "pass") {
-          this.state.lastAction = `${responderId} PASS`;
-        }
-        this.collectiveCursor += 1;
-        if (!responsePrivacyDelay) {
-          this.state.lastAction = `${responderId} TIMEOUT_PASS`;
-        }
-        this.traceStep(
-          heldPrivateChoice
-            ? "collective_fair_preselection_release"
-            : responsePrivacyDelay
-              ? "collective_fair_auto_pass"
-              : "collective_timeout_pass",
-          `responder=${responderId}`,
-        );
-        this.advanceCollectivePolling();
+        this.collectiveCursor = this.collectiveQueue.length;
+        this.collectiveResponderId = null;
+        this.state.activeResponderId = "";
+        this.collectiveResponseEndsAt = 0;
+        this.traceStep("collective_window_expired");
+        this.resolveCollectivePhase();
         return;
       }
 
@@ -4198,7 +4174,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       queue: this.collectiveQueue,
       cursor: this.collectiveCursor,
       hasActionBeyondPass: (seatId) => this.hasCollectiveActionBeyondPass(seatId),
-      responsePrivacyDelayMs: (seatId) => this.responsePrivacyDelayForSeat(seatId),
+      collectiveRemainingMs: (seatId) => this.collectiveResponseRemainingMsForSeat(seatId),
       setCollectivePass: (seatId) => {
         this.pendingResponse?.collectives.set(seatId, { action: "pass" });
       },
@@ -4208,19 +4184,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       setResponder: (responderId) => {
         this.collectiveResponderId = responderId;
       },
-      setActiveResponder: (responderId) => {
-        this.state.activeResponderId = responderId;
-      },
-      setCurrentPlayer: (seatId) => {
-        this.state.currentPlayerId = seatId;
-      },
-      setCurrentTurnPlayer: (seatId) => {
-        this.state.currentTurnPlayerId = seatId;
-      },
       isBot: (seatId) => this.botIds.has(seatId),
       scheduleBotStep: () => this.scheduleBotStep(),
-      scheduleCollectiveTimeout: (timeoutOverrideMs, responsePrivacyDelay) =>
-        this.scheduleCollectiveTimeout(timeoutOverrideMs, false, responsePrivacyDelay),
+      scheduleCollectiveTimeout: (timeoutOverrideMs) =>
+        this.scheduleCollectiveTimeout(timeoutOverrideMs, true),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       clearResponseEndsAt: () => {
         this.state.responseEndsAt = 0;
@@ -4305,10 +4272,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           declaredKongs: this.state.players.get(seatId)?.declaredKongs ?? 0,
           strength: this.state.players.get(seatId)?.botStrength ?? 50,
         })?.id ?? null,
-      setCollectiveChoice: (seatId, choice) => {
-        this.pendingResponse?.collectives.set(seatId, choice);
-        this.collectiveCursor += 1;
-      },
+      setCollectiveChoice: (seatId, choice) => this.acceptBotCollectiveChoice(seatId, choice),
       advanceCollectivePolling: () => this.advanceCollectivePolling(),
       broadcastAvailableActions: () => this.broadcastAvailableActions(),
       discardFromAndCollective: (ownerId, cardId) => this.discardFromAndCollective(ownerId, cardId),
@@ -4317,6 +4281,19 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       executeGrab: (ownerId) => this.executeGrab(ownerId),
       executePassToNext: (ownerId) => this.executePassToNext(ownerId),
     });
+  }
+
+  /**
+   * 作用：记录机器人在全局响应中的选择，并复用真人的即时优先级裁决。
+   * 返回 true 表示裁决器已经接管后续推进，调用方不得再推进旧游标。
+   */
+  private acceptBotCollectiveChoice(
+    seatId: string,
+    choice: { action: ActionType; candidateId?: string },
+  ): boolean {
+    this.pendingResponse?.collectives.set(seatId, choice);
+    this.collectiveCursor += 1;
+    return this.isCollectiveInterruptAction(choice.action) && this.tryResolveCollectiveInterrupt();
   }
 
   private buildBotVisibleCards(): Card[] {
@@ -4393,8 +4370,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         broadcastAvailableActions: () => this.broadcastAvailableActions(),
         startCollectivePolling: () => this.startCollectivePolling(),
         tickBots: () => this.tickBots(),
-        setHumanForcedPassDelayMs: (delayMs) => {
-          this.humanForcedPassDelayMs = Math.max(0, Math.trunc(delayMs));
+        setCollectiveResponseWindowMs: (delayMs) => {
+          this.collectiveResponseWindowMs = Math.min(3_000, Math.max(0, Math.trunc(delayMs)));
         },
         endRound: (lastAction, winnerId, groups) => this.endRound(lastAction, winnerId, groups),
       },

@@ -8,7 +8,15 @@ async function enterDebugPractice(page: Page): Promise<void> {
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await finishDeclarationIfNeeded(page);
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const confirm = page.getByTestId("confirm-declaration");
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled().catch(() => false)) {
+      await confirm.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
 }
 
 async function setupLocalUpperChi(page: Page): Promise<void> {
@@ -119,6 +127,7 @@ test("a player's own discard stays centered without adding a waiting prompt", as
     }, "explicit");
   });
   await expect(page.getByTestId("pending-card")).toBeVisible();
-  await expect(page.locator(".self-info-hint")).toHaveText("");
+  await expect(page.getByTestId("decision-status")).toHaveText("等待其他玩家响应");
+  await expect(page.locator(".action-dock .action-row")).toHaveCount(0);
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
 });

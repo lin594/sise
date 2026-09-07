@@ -168,7 +168,7 @@ npm run smoke:imac-gateway
 - `MATCH_FULL_START_MS`：快速桌四名真人到齐后的短展示时间，默认 900ms。
 - `BOT_THINK_MIN_MS` / `BOT_THINK_MAX_MS`：机器人执行吃牌、抓牌和出牌等可见动作的思考延时，默认 450–850ms。
 - `BOT_COLLECTIVE_THINK_MIN_MS` / `BOT_COLLECTIVE_THINK_MAX_MS`：机器人处理胡、开、碰或过等集体待响的短延时，默认 80–180ms，避免多名机器人依次等待。
-- `HUMAN_FORCED_PASS_DELAY_MS`：好友房和快速桌每轮全局响应共享的隐私窗口下限，生产环境不低于 3000ms；无人打断时不得提前结束。明确胡、开、碰可立即推进，只保留仍可能压过该动作的响应者。单人练习不受影响。
+- 全局响应窗口是固定的 3000ms 规则，不作为部署参数。胡、开、碰提交后，仅等待仍可能压过当前候选的玩家；阻塞者表态后可提前决胜。窗口结束后才为公开的下一接牌者另开本地操作倒计时。
 - `LOBBY_SEAT_HOLD_MS`：等待大厅断线座位保留时间。
 - `WAITING_ROOM_IDLE_MS` / `ACTIVE_ROOM_IDLE_MS`：全员离线后的回收时间。
 - `CORS_ALLOWED_ORIGINS`：逗号分隔的前端完整来源；生产环境必须显式配置，避免使用 `*`。
@@ -179,7 +179,7 @@ npm run smoke:imac-gateway
 - `ROOM_CREATE_RATE_LIMIT`：同一客户端每窗口通过新版或兼容入口创建、重置房间的合计次数，默认 10。
 - `PRIVATE_STATE_RATE_LIMIT`：同一客户端每窗口恢复私有状态次数，默认 180；默认值允许同一家庭网络下多名玩家正常轮询。
 - `GUEST_PROFILE_RATE_LIMIT`：同一客户端每窗口读取或更新本机档案的合计次数，默认 60。
-- `OP_TIMEOUT_MS`：真人响应和出牌默认超时，默认 30000ms；`COLLECTIVE_TIMEOUT_MS`、`LOCAL_TIMEOUT_MS` 未设置时继承该值。
+- `OP_TIMEOUT_MS`：真人本地操作和出牌默认超时，默认 30000ms；`LOCAL_TIMEOUT_MS` 未设置时继承该值。
 - `DECLARE_TIMEOUT_MS`：开局声明超时，默认 45000ms。
 - `RECONNECT_GRACE_MS`：活动牌局真人断线后等待重连、再启用机器人托管的宽限期，默认 5000ms；设为 0 可恢复立即托管。
 - `LOCAL_TRANSITION_DELAY_MS`：无人胡、开、碰后进入本地吃/抓阶段的提示过渡，默认 250ms。

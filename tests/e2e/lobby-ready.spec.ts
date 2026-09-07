@@ -67,10 +67,7 @@ test("friend-room guests explicitly prepare before the host can start", async ({
     await hostStart.click();
     await expect(host.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(guest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-    await Promise.all([
-      finishDeclarationIfNeeded(host),
-      finishDeclarationIfNeeded(guest),
-    ]);
+    await Promise.all([finishDeclarationIfNeeded(host), finishDeclarationIfNeeded(guest)]);
   } finally {
     await guestContext.close();
     await hostContext.close();

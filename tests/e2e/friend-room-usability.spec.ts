@@ -1,9 +1,23 @@
 import { expect, test, type Page } from '@playwright/test';
-import { finishDeclarationIfNeeded, stageDeclarationForTest, waitForDeclarationOrPlaying } from './helpers/game';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
   await page.getByTestId('random-nickname').click();
   await page.getByTestId('login-submit').click();
+}
+async function useStagedDeclaration(page: Page) {
+  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult()))
+    .toMatchObject({ scenario: 'staged_declaration', ok: true });
+  await expect(page.getByTestId('confirm-declaration')).toBeEnabled({ timeout: 20_000 });
+}
+async function finishStagedDeclaration(page: Page) {
+  await expect.poll(async () => {
+    const confirm = page.getByTestId('confirm-declaration');
+    if (!await confirm.isVisible().catch(() => false)) return 'playing';
+    if (await confirm.isEnabled()) await confirm.click();
+    return 'declaring';
+  }, { timeout: 20_000 }).toBe('playing');
 }
 async function assertHandFits(page: Page) {
   await expect.poll(() => page.locator('.cards.hand').evaluate((el) => {
@@ -17,13 +31,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await page.setViewportSize(viewport);
     await login(page);
     await page.getByTestId('lobby-start').click();
-    await stageDeclarationForTest(page);
+    await useStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveClass(/embedded/);
     await expect(page.locator('.hand-preview')).toHaveCount(0);
     await expect(page.getByTestId('decision-countdown')).toHaveText('不限时');
     await assertHandFits(page);
     await page.screenshot({ path: info.outputPath('declaration.png') });
-    await finishDeclarationIfNeeded(page);
+    await finishStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveCount(0);
     await page.getByTestId('game-settings').click();
     await page.getByTestId('hand-layout-paged').click();
@@ -52,7 +66,7 @@ test('listening marks stay in the hand and only discard selection opens a previe
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await finishDeclarationIfNeeded(page);
+  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
   await expect(page.getByTestId('hand-card-unique-red-jiang')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
@@ -129,7 +143,10 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     }, 8);
   });
   await page.getByTestId('lobby-start').click();
-  await waitForDeclarationOrPlaying(page);
+  await expect.poll(async () => {
+    if (await page.getByTestId('confirm-declaration').isVisible().catch(() => false)) return 'ready';
+    return await page.locator('main.layout').evaluate((node) => node.classList.contains('playing')) ? 'ready' : 'waiting';
+  }, { timeout: 20_000 }).toBe('ready');
   const samples = await page.evaluate(() => {
     const probe = window as any;
     window.clearInterval(probe.__siseHandScaleProbe);
@@ -137,7 +154,15 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
   });
   expect(samples.length).toBeGreaterThan(2);
   expect(samples.every((sample) => sample.authoritativeCount >= 20)).toBe(true);
-  expect(new Set(samples.map((sample) => sample.scale.toFixed(4))).size).toBe(1);
+  const scaleTimeline = samples.reduce<string[]>((timeline, sample) => {
+    const entry = `${sample.visibleCount}/${sample.authoritativeCount}:${sample.scale.toFixed(4)}@${sample.width.toFixed(2)}`;
+    if (timeline.at(-1) !== entry) timeline.push(entry);
+    return timeline;
+  }, []);
+  expect(
+    new Set(samples.map((sample) => sample.scale.toFixed(4))).size,
+    `opening scale changed: ${scaleTimeline.join(' -> ')}`,
+  ).toBe(1);
   for (const key of ['left', 'top', 'width', 'height'] as const) {
     const values = samples.map((sample) => sample[key]);
     expect(Math.max(...values) - Math.min(...values), `${key} must stay stable during the deal`).toBeLessThanOrEqual(0.5);
@@ -148,9 +173,15 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await stageDeclarationForTest(page);
+  await useStagedDeclaration(page);
 
-  const allSamples: Array<{ count: number; scales: number[]; viewportRects: Array<{ left: number; top: number; width: number; height: number }>; cardsFit: boolean }> = [];
+  const allSamples: Array<{
+    count: number;
+    scales: number[];
+    viewportRects: Array<{ left: number; top: number; width: number; height: number }>;
+    cardsFit: boolean;
+    lastBounds: { viewport: Record<string, number>; cards: Record<string, number> } | null;
+  }> = [];
   for (const count of [20, 18, 17, 16, 15, 14, 13, 12]) {
     await page.evaluate((nextCount) => {
       const bridge = (window as any).__siseLocalTest;
@@ -172,6 +203,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
       const scales: number[] = [];
       const viewportRects: Array<{ left: number; top: number; width: number; height: number }> = [];
       let cardsFit = true;
+      let lastBounds: { viewport: Record<string, number>; cards: Record<string, number> } | null = null;
       await new Promise<void>((resolve) => {
         const startedAt = performance.now();
         const timer = window.setInterval(() => {
@@ -180,6 +212,15 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
           const viewportRect = viewport.getBoundingClientRect();
           const cardRects = [...hand.querySelectorAll<HTMLElement>('[data-card-id]')]
             .map((card) => card.getBoundingClientRect());
+          lastBounds = {
+            viewport: { left: viewportRect.left, right: viewportRect.right, top: viewportRect.top, bottom: viewportRect.bottom },
+            cards: {
+              left: Math.min(...cardRects.map((rect) => rect.left)),
+              right: Math.max(...cardRects.map((rect) => rect.right)),
+              top: Math.min(...cardRects.map((rect) => rect.top)),
+              bottom: Math.max(...cardRects.map((rect) => rect.bottom)),
+            },
+          };
           scales.push(Number.parseFloat(hand.dataset.handScale || '1'));
           viewportRects.push({
             left: viewportRect.left,
@@ -196,14 +237,14 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
           }
         }, 8);
       });
-      return { count: nextCount, scales, viewportRects, cardsFit };
+      return { count: nextCount, scales, viewportRects, cardsFit, lastBounds };
     }, count);
     allSamples.push(sample);
   }
 
   for (const sample of allSamples) {
     expect(new Set(sample.scales.map((scale) => scale.toFixed(4))).size, `${sample.count} cards must keep one scale`).toBe(1);
-    expect(sample.cardsFit, `${sample.count} cards must stay inside the hand viewport`).toBe(true);
+    expect(sample.cardsFit, `${sample.count} cards must stay inside the hand viewport: ${JSON.stringify(sample.lastBounds)}`).toBe(true);
     for (const key of ['left', 'top', 'width', 'height'] as const) {
       const values = sample.viewportRects.map((rect) => rect[key]);
       expect(Math.max(...values) - Math.min(...values), `${sample.count} cards viewport ${key} must not move`).toBeLessThanOrEqual(0.5);
@@ -214,7 +255,7 @@ test('21-card single row adapts to both card styles and layout preference surviv
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
   await page.getByTestId('lobby-start').click();
-  await stageDeclarationForTest(page);
+  await useStagedDeclaration(page);
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
     const state = bridge.getRoomState();

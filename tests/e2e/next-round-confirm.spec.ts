@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded, waitForDeclarationOrPlaying } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a friend-room host confirms before pulling other players out of settlement", async ({ browser }, testInfo) => {
   test.setTimeout(240_000);
@@ -25,10 +25,7 @@ test("a friend-room host confirms before pulling other players out of settlement
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
 
-    await Promise.all([
-      finishDeclarationIfNeeded(host),
-      finishDeclarationIfNeeded(guest),
-    ]);
+    await Promise.all([finishDeclarationIfNeeded(host), finishDeclarationIfNeeded(guest)]);
 
     const usedDebugScenario = await host.evaluate(() => {
       const bridge = (window as Window & {
@@ -86,10 +83,8 @@ test("a friend-room host confirms before pulling other players out of settlement
     await host.getByTestId("confirm-next-round").click();
     await expect(host.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
     await expect(guest.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
-    await Promise.all([
-      waitForDeclarationOrPlaying(host),
-      waitForDeclarationOrPlaying(guest),
-    ]);
+    await expect(host.getByTestId("game-board")).toBeVisible();
+    await expect(guest.getByTestId("game-board")).toBeVisible();
   } finally {
     await guestContext.close();
     await hostContext.close();

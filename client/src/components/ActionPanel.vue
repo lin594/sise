@@ -181,7 +181,7 @@ const timerAccessibleLabel = computed(() =>
 const panelAnnouncement = computed(() => {
   if (actionFeedback.value) return actionFeedback.value.message;
   if (props.pausedHint) return `操作已暂停。${props.pausedHint}`;
-  if (isEarlyCollectiveChoice.value) return "现在可以先选，等待轮到你时结算。";
+  if (isEarlyCollectiveChoice.value) return "可以提交拦截；服务端会按动作优先级和座次顺序裁决。";
   const timing = props.untimed
     ? "练习不限时。"
     : secondsLeft.value === null || isEarlyCollectiveChoice.value

@@ -112,7 +112,7 @@ test("duplicate physical cards still count as one visible chi composition", asyn
     .toBe(1);
 });
 
-test("a complete chi draft survives collective to local_upper for the same card", async ({ page }) => {
+test("a complete local chi draft survives an authoritative refresh for the same card", async ({ page }) => {
   await enterPractice(page);
   await setupChiScenario(page, "chi_collective_zu4");
 
@@ -137,7 +137,7 @@ test("a complete chi draft survives collective to local_upper for the same card"
   await expect(page.getByTestId("action-chi")).toBeEnabled();
 });
 
-test("a confirmed collective chi is deferred and applied exactly once", async ({ page }) => {
+test("a confirmed local chi is applied exactly once after the collective window clears", async ({ page }) => {
   await enterPractice(page);
   await setupChiScenario(page, "chi_collective_zu4");
 

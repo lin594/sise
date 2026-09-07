@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded, waitForDeclarationOrPlaying } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type HeldSocketMessages = {
   count: () => number;
@@ -98,8 +98,7 @@ test("practice next round locks settlement actions and recovers after no receipt
   await expect.poll(() => heldMessageCount(page)).toBe(2);
 
   await releaseSocketMessages(page);
-  await expect(page.getByTestId("settlement-panel")).toHaveCount(0, { timeout: 20_000 });
-  await waitForDeclarationOrPlaying(page);
+  await finishDeclarationIfNeeded(page);
 });
 
 test("practice settlement returns personally to the complete mode picker", async ({ page }) => {

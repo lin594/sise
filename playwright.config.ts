@@ -3,8 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "./output/playwright/test-results",
-  // Stateful game-flow specs share one local Colyseus process. Running them in
-  // parallel makes their operation timers contend and produces false timeouts.
+  // 有状态牌局共用一个本地 Colyseus 进程；并行会让操作计时互相争抢并制造假超时。
   workers: 1,
   timeout: 180_000,
   expect: {
@@ -45,9 +44,7 @@ export default defineConfig({
             MIN_PLAYERS: "1",
             ROOM_CREATE_RATE_LIMIT: "1000",
             GUEST_PROFILE_RATE_LIMIT: "1000",
-            // Browser contexts and invitation pages can take several seconds
-            // to start on a loaded CI host. Match production's 60-second grace
-            // so a slow test runner cannot expire a room before the first join.
+            // CI 忙碌时浏览器上下文和邀请页可能数秒后才启动，因此沿用生产环境的宽限期。
             WAITING_ROOM_IDLE_MS: "60000",
             ACTIVE_ROOM_IDLE_MS: "3000",
             RECONNECT_GRACE_MS: process.env.RECONNECT_GRACE_MS || "300",
@@ -55,11 +52,13 @@ export default defineConfig({
             BOT_THINK_MAX_MS: "60",
             BOT_COLLECTIVE_THINK_MIN_MS: "10",
             BOT_COLLECTIVE_THINK_MAX_MS: "20",
-            HUMAN_FORCED_PASS_DELAY_MS: "20",
+            // 浏览器回归必须覆盖真实三秒窗；该变量只在 NODE_ENV=test 时读取。
+            TEST_COLLECTIVE_RESPONSE_WINDOW_MS: "3000",
             LOCAL_TRANSITION_DELAY_MS: "20",
             DEALER_PICK_INTRO_MS: "20",
             DEALER_REVEAL_INTRO_MS: "20",
-            OPENING_DEAL_DELAY_MS: "80",
+            // 仍显著快于生产，但要留出多帧才能验证“逐张揭示且缩放不抖”。
+            OPENING_DEAL_DELAY_MS: "600",
             ENABLE_DEBUG_SCENARIOS: "1",
           },
           url: "http://127.0.0.1:2567/health",

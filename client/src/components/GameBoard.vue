@@ -9,7 +9,7 @@
     data-testid="game-board"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
-    @keydown.esc="clearChiSelection"
+    @keydown.esc="handleBoardEscape"
   >
     <div class="table" ref="tableRef">
       <section
@@ -50,7 +50,6 @@
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
-        <div v-if="isCurrentTurn(topPlayer.clientId)" class="turn-arrow" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
@@ -72,9 +71,8 @@
             </span>
           </div>
           <div class="seat-tags">
-            <span v-if="isCurrentTurn(topPlayer.clientId)" class="tag turn">当前回合</span>
             <span
-              v-if="isCurrentTurn(topPlayer.clientId) && seatCountdownSeconds !== null"
+              v-if="isCurrentTurn(topPlayer.clientId) && props.responsePhase !== 'collective' && seatCountdownSeconds !== null"
               class="turn-countdown"
             >
               剩余 {{ seatCountdownSeconds }}s
@@ -154,7 +152,6 @@
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
-        <div v-if="isCurrentTurn(leftPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
@@ -176,9 +173,8 @@
             </span>
           </div>
           <div class="seat-tags">
-            <span v-if="isCurrentTurn(leftPlayer.clientId)" class="tag turn">当前回合</span>
             <span
-              v-if="isCurrentTurn(leftPlayer.clientId) && seatCountdownSeconds !== null"
+              v-if="isCurrentTurn(leftPlayer.clientId) && props.responsePhase !== 'collective' && seatCountdownSeconds !== null"
               class="turn-countdown"
             >
               剩余 {{ seatCountdownSeconds }}s
@@ -225,16 +221,16 @@
           <div
             v-if="topPlayer"
             class="center-seat center-seat-top"
-            :class="{ active: displayTurnPlayerId === topPlayer.clientId, responding: isCollectiveResponder(topPlayer.clientId), action: hasSeatAction(topPlayer.clientId) }"
+            :class="{ active: displayTurnPlayerId === topPlayer.clientId, action: hasSeatAction(topPlayer.clientId) }"
           >
-            <div v-if="seatActionText(topPlayer.clientId) || isCollectiveResponder(topPlayer.clientId)" class="center-seat-action">{{ seatActionText(topPlayer.clientId) || "待响" }}</div>
+            <div v-if="seatActionText(topPlayer.clientId)" class="center-seat-action">{{ seatActionText(topPlayer.clientId) }}</div>
           </div>
           <div
             v-if="leftPlayer"
             class="center-seat center-seat-left"
-            :class="{ active: displayTurnPlayerId === leftPlayer.clientId, responding: isCollectiveResponder(leftPlayer.clientId), action: hasSeatAction(leftPlayer.clientId) }"
+            :class="{ active: displayTurnPlayerId === leftPlayer.clientId, action: hasSeatAction(leftPlayer.clientId) }"
           >
-            <div v-if="seatActionText(leftPlayer.clientId) || isCollectiveResponder(leftPlayer.clientId)" class="center-seat-action">{{ seatActionText(leftPlayer.clientId) || "待响" }}</div>
+            <div v-if="seatActionText(leftPlayer.clientId)" class="center-seat-action">{{ seatActionText(leftPlayer.clientId) }}</div>
           </div>
           <div class="center-stage">
             <div class="center-card-pair" data-testid="center-card-pair">
@@ -263,8 +259,7 @@
                 >
                   <span
                     class="response-caption"
-                    :data-testid="showCollectiveCountdown ? 'collective-response-countdown' : undefined"
-                  >{{ showCollectiveCountdown ? `全局响应 · ${seatCountdownSeconds}s` : "待响" }}</span>
+                  >待响</span>
                   <CardComp
                     :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
                     :card="responseCard"
@@ -279,16 +274,16 @@
           <div
             v-if="rightPlayer"
             class="center-seat center-seat-right"
-            :class="{ active: displayTurnPlayerId === rightPlayer.clientId, responding: isCollectiveResponder(rightPlayer.clientId), action: hasSeatAction(rightPlayer.clientId) }"
+            :class="{ active: displayTurnPlayerId === rightPlayer.clientId, action: hasSeatAction(rightPlayer.clientId) }"
           >
-            <div v-if="seatActionText(rightPlayer.clientId) || isCollectiveResponder(rightPlayer.clientId)" class="center-seat-action">{{ seatActionText(rightPlayer.clientId) || "待响" }}</div>
+            <div v-if="seatActionText(rightPlayer.clientId)" class="center-seat-action">{{ seatActionText(rightPlayer.clientId) }}</div>
           </div>
           <div
             v-if="selfPlayer"
             class="center-seat center-seat-bottom"
-            :class="{ active: displayTurnPlayerId === selfPlayer.clientId, responding: isCollectiveResponder(selfPlayer.clientId), action: hasSeatAction(selfPlayer.clientId) }"
+            :class="{ active: displayTurnPlayerId === selfPlayer.clientId, action: hasSeatAction(selfPlayer.clientId) }"
           >
-            <div v-if="seatActionText(selfPlayer.clientId) || isCollectiveResponder(selfPlayer.clientId)" class="center-seat-action">{{ seatActionText(selfPlayer.clientId) || "待响" }}</div>
+            <div v-if="seatActionText(selfPlayer.clientId)" class="center-seat-action">{{ seatActionText(selfPlayer.clientId) }}</div>
           </div>
         </div>
         <div v-if="centerPointerDirection" class="center-pointer" :class="`pointer-${centerPointerDirection}`">
@@ -310,7 +305,6 @@
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
-        <div v-if="isCurrentTurn(rightPlayer.clientId)" class="turn-arrow turn-arrow-side" aria-hidden="true">▲</div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
@@ -332,9 +326,8 @@
             </span>
           </div>
           <div class="seat-tags">
-            <span v-if="isCurrentTurn(rightPlayer.clientId)" class="tag turn">当前回合</span>
             <span
-              v-if="isCurrentTurn(rightPlayer.clientId) && seatCountdownSeconds !== null"
+              v-if="isCurrentTurn(rightPlayer.clientId) && props.responsePhase !== 'collective' && seatCountdownSeconds !== null"
               class="turn-countdown"
             >
               剩余 {{ seatCountdownSeconds }}s
@@ -534,17 +527,16 @@
 
     <section
       v-if="selfPlayer"
-      class="self-info-card"
+      class="self-command-row"
+      :class="{ dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       data-testid="player-self"
       :data-player-id="selfPlayer.clientId"
       role="group"
       :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
-      :class="{ dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       ref="selfZoneRef"
     >
-      <div v-if="isMyTurn" class="turn-arrow self-turn-arrow" aria-hidden="true">▲</div>
-      <header class="self-head">
-        <div>
+      <div class="self-info-card">
+        <header class="self-head">
           <div ref="selfIdentityRef" class="seat-identity">
             <h3 ref="selfNameRef" :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
               {{ useSelfNameFallback ? "你" : selfPlayer.name }}
@@ -563,43 +555,70 @@
               </span>
             </span>
           </div>
-        </div>
-        <div class="seat-tags">
-          <span v-if="isMyTurn" class="tag turn">当前回合</span>
-          <span v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-countdown">剩余 {{ seatCountdownSeconds }}s</span>
-        </div>
-      </header>
-      <div v-if="isMyTurn && seatCountdownSeconds !== null" class="turn-timer-bar self-turn-timer">
-        <span :style="{ width: `${seatCountdownPercent}%` }"></span>
+        </header>
       </div>
-      <p class="self-info-hint">{{ compactCenterHint }}</p>
-      <span
-        v-if="currentListeningWaits.length"
-        class="current-listening-waits"
-        role="status"
-        :aria-label="currentListeningAccessibleLabel"
-        data-testid="current-listening-waits"
-      >
-        <span class="current-listening-label" aria-hidden="true">听</span>
+
+      <div class="dynamic-action-track" data-testid="dynamic-action-track">
+        <slot name="declaration" />
+        <ActionPanel
+          v-if="props.state?.phase === 'playing' && (canAct || canDiscard)"
+          class="embedded-actions action-dock"
+          fixed-status
+          :actions="props.actions ?? []"
+          :can-act="canAct"
+          :can-discard="canDiscard"
+          :has-discard-selection="Boolean(selectedDiscardCardId)"
+          :discard-pending="Boolean(discardingCardId)"
+          :is-current-turn="Boolean(props.isCurrentTurn)"
+          :response-phase="props.responsePhase ?? ''"
+          :paused-hint="effectiveInteractionPausedMessage"
+          :seconds-left="seatCountdownSeconds"
+          :untimed="Boolean(props.decisionUntimed)"
+          :decision-key="props.decisionKey ?? ''"
+          :action-feedback="effectiveActionFeedback"
+          :selected-chi-candidate-id="selectedChiCandidate?.id ?? null"
+          @confirm-discard="confirmDiscard"
+          @submit="onSubmitAction"
+        />
         <span
-          v-for="wait in currentListeningWaits"
-          :key="`current-wait-${wait.card.id}`"
-          class="current-listening-card"
-          :class="{ exhausted: wait.visibleRemaining === 0 }"
-          :data-visible-remaining="wait.visibleRemaining"
+          v-if="showInlineListeningWaits"
+          class="current-listening-waits"
+          role="status"
+          :aria-label="currentListeningAccessibleLabel"
+          data-testid="current-listening-waits"
         >
-          <CardComp :card="wait.card" size="xs" mode="large" />
-          <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
+          <span class="current-listening-label" aria-hidden="true">听</span>
+          <span
+            v-for="wait in currentListeningWaits"
+            :key="`current-wait-${wait.card.id}`"
+            class="current-listening-card"
+            :class="{ exhausted: wait.visibleRemaining === 0 }"
+            :data-visible-remaining="wait.visibleRemaining"
+          >
+            <CardComp :card="wait.card" size="xs" mode="large" />
+            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
+          </span>
         </span>
-      </span>
+        <span
+          v-if="showDecisionClock"
+          class="fixed-clock"
+          :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }"
+          data-testid="decision-countdown"
+        >{{ fixedClockText }}</span>
+      </div>
     </section>
 
+    <Transition name="quick-phrase">
+      <div
+        v-if="flowStatusText"
+        class="self-flow-toast"
+        data-testid="decision-status"
+        role="status"
+        aria-live="polite"
+      >{{ flowStatusText }}</div>
+    </Transition>
+
     <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
-      <div class="decision-status" data-testid="decision-status">
-        <strong>{{ fixedStatusText }}</strong>
-        <span v-if="showDecisionClock" class="fixed-clock" :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }" data-testid="decision-countdown">{{ fixedClockText }}</span>
-      </div>
-      <slot name="declaration" />
       <div
         v-if="selectedPreview"
         class="selected-card-preview"
@@ -629,6 +648,37 @@
         class="self-hand-panel"
         :class="{ 'has-toolbar': handLayout === 'paged' && handHasOverflow }"
       >
+        <button
+          v-if="currentListeningWaits.length"
+          ref="listeningToggleRef"
+          class="listening-toggle"
+          type="button"
+          data-testid="listening-toggle"
+          :aria-expanded="listeningDetailsOpen"
+          aria-controls="listening-details"
+          aria-label="查看听牌详情"
+          @click="listeningDetailsOpen = !listeningDetailsOpen"
+        >听</button>
+        <div
+          v-if="listeningDetailsOpen && currentListeningWaits.length"
+          id="listening-details"
+          ref="listeningDetailsRef"
+          class="listening-popover current-listening-waits"
+          role="dialog"
+          aria-label="听牌详情"
+        >
+          <span class="current-listening-label" aria-hidden="true">听</span>
+          <span
+            v-for="wait in currentListeningWaits"
+            :key="`popover-wait-${wait.card.id}`"
+            class="current-listening-card"
+            :class="{ exhausted: wait.visibleRemaining === 0 }"
+            :data-visible-remaining="wait.visibleRemaining"
+          >
+            <CardComp :card="wait.card" size="xs" mode="large" />
+            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
+          </span>
+        </div>
         <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-toolbar">
           <div class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
@@ -725,27 +775,6 @@
       </div>
     </section>
 
-    <ActionPanel
-      v-if="props.state?.phase === 'playing'"
-      class="embedded-actions action-dock"
-      fixed-status
-      :actions="props.actions ?? []"
-      :can-act="canAct"
-      :can-discard="canDiscard"
-      :has-discard-selection="Boolean(selectedDiscardCardId)"
-      :discard-pending="Boolean(discardingCardId)"
-      :is-current-turn="Boolean(props.isCurrentTurn)"
-      :response-phase="props.responsePhase ?? ''"
-      :paused-hint="effectiveInteractionPausedMessage"
-      :seconds-left="seatCountdownSeconds"
-      :untimed="Boolean(props.decisionUntimed)"
-      :decision-key="props.decisionKey ?? ''"
-      :action-feedback="effectiveActionFeedback"
-      :selected-chi-candidate-id="selectedChiCandidate?.id ?? null"
-      @confirm-discard="confirmDiscard"
-      @submit="onSubmitAction"
-    />
-
     <div
       v-if="isMyTurn"
       class="self-turn-outline"
@@ -806,7 +835,6 @@ import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 import {
   getDisplayedTurnPlayerId,
   getRoundKey,
-  isQuietSelfDiscardWait,
   projectResponseCardPlacement,
 } from "@/utils/gameFlowPresentation";
 
@@ -859,7 +887,6 @@ const props = defineProps<{
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
   acceptedStateRevision?: number;
-  declarationStatus?: string;
   declarationMarks?: { fish: string[]; kong: string[] };
   state: any;
   players: PlayerState[];
@@ -870,7 +897,6 @@ const props = defineProps<{
   canAct?: boolean;
   isCurrentTurn?: boolean;
   responsePhase?: string;
-  turnHint?: string;
   interactionPausedMessage?: string;
   decisionUntimed?: boolean;
   decisionTimerTotalMs?: number;
@@ -993,6 +1019,9 @@ const selfIdentityMetaRef = ref<HTMLElement | null>(null);
 const selfNameRef = ref<HTMLElement | null>(null);
 const selfNameMeasureRef = ref<HTMLElement | null>(null);
 const useSelfNameFallback = ref(false);
+const listeningToggleRef = ref<HTMLButtonElement | null>(null);
+const listeningDetailsRef = ref<HTMLElement | null>(null);
+const listeningDetailsOpen = ref(false);
 let selfNameResizeObserver: ResizeObserver | null = null;
 const seatRefMap = new Map<string, HTMLElement>();
 
@@ -1608,7 +1637,6 @@ const currentPlayer = computed(() => {
 
 const isMyTurn = computed(
   () =>
-    String(props.state?.responsePhase ?? "") !== "collective" &&
     Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot || currentPlayer.value?.isAutoPlay),
@@ -1784,16 +1812,6 @@ const latestSeatAction = computed<{ actorId: string; label: string } | null>(() 
   return { actorId: actor, label };
 });
 
-const fixedStatusText = computed(() => {
-  if (props.state?.phase === 'declaring') {
-    if (props.declarationStatus) return props.declarationStatus;
-    if (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done") return "正在等待其他玩家声明";
-    return selfPlayer.value?.declarationStep === "fish" ? "开局确认 · 声明鱼" : "开局确认 · 声明坎";
-  }
-  if (discardingCardId.value || props.actionFeedback?.status === 'pending') return '正在提交，请稍候';
-  if (canDiscard.value) return '轮到你出牌 · 选牌后点“出”';
-  return props.turnHint || '等待其他玩家操作';
-});
 const fixedClockText = computed(() => {
   if (effectiveInteractionPausedMessage.value || !['playing', 'declaring'].includes(props.state?.phase)) return '—';
   if (props.decisionUntimed) return '不限时';
@@ -1806,6 +1824,12 @@ const activeHints = computed(() => {
   return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
 const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
+const showInlineListeningWaits = computed(() =>
+  props.state?.phase === "playing" &&
+  currentListeningWaits.value.length > 0 &&
+  !canAct.value &&
+  !canDiscard.value,
+);
 const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
   .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
   .join("；")}`);
@@ -1841,7 +1865,7 @@ const seatCountdownSeconds = computed<number | null>(() => {
   ) {
     return null;
   }
-  const endsAt = playDecisionEndsAt.value;
+  const endsAt = activeDecisionEndsAt.value;
   if (!endsAt || endsAt <= nowMs.value) {
     return null;
   }
@@ -1852,25 +1876,8 @@ const seatCountdownSeconds = computed<number | null>(() => {
   );
 });
 
-const seatCountdownPercent = computed<number>(() => {
-  if (
-    /^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
-    Number(props.state?.responseEndsAt ?? 0) > nowMs.value
-  ) {
-    return 0;
-  }
-  const endsAt = playDecisionEndsAt.value;
-  if (!endsAt || endsAt <= nowMs.value) {
-    return 0;
-  }
-  const remain = endsAt - nowMs.value;
-  const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
-  const raw = (remain / totalMs) * 100;
-  return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
-});
-
-const playDecisionEndsAt = computed(() => {
-  if (props.decisionKey?.startsWith("play:") && Number(props.decisionTimerEndsAt ?? 0) > 0) {
+const activeDecisionEndsAt = computed(() => {
+  if (Number(props.decisionTimerEndsAt ?? 0) > 0) {
     return Number(props.decisionTimerEndsAt);
   }
   return Number(props.state?.responseEndsAt ?? 0);
@@ -1878,47 +1885,32 @@ const playDecisionEndsAt = computed(() => {
 
 const hasMeaningfulCollectiveAction = computed(() =>
   (props.actions ?? []).some((action) =>
-    action.action !== "pass" && (action.enabled || Boolean(action.deferred)),
+    (action.action === "hu" || action.action === "kai" || action.action === "peng") && action.enabled,
   ),
 );
-const showCollectiveCountdown = computed(() =>
-  String(props.state?.responsePhase ?? "") === "collective" &&
-  String(props.state?.activeResponderId ?? "") === props.mySeatId &&
-  hasMeaningfulCollectiveAction.value &&
-  seatCountdownSeconds.value !== null,
-);
 const showDecisionClock = computed(() =>
-  String(props.state?.phase ?? "") !== "playing" ||
-  String(props.state?.responsePhase ?? "") !== "collective" ||
-  showCollectiveCountdown.value,
+  props.state?.phase === "declaring"
+    ? !Boolean(selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done") &&
+      (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)
+    : props.state?.phase === "playing" &&
+      (canDiscard.value || canAct.value) &&
+      (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
+      (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null),
 );
 
-const compactCenterHint = computed(() => {
-  if (effectiveInteractionPausedMessage.value) {
-    return effectiveInteractionPausedMessage.value;
+const flowStatusText = computed(() => {
+  if (props.state?.phase === "declaring") {
+    return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
+      ? "等待其他玩家声明"
+      : "";
   }
-  if (props.turnHint) {
-    return props.turnHint;
+  if (discardingCardId.value || props.actionFeedback?.status === "pending") {
+    return "正在提交";
   }
-  if (canDiscard.value) {
-    return "选择手牌后确认出牌";
+  if (props.state?.phase === "playing" && props.state?.responsePhase === "collective") {
+    return canAct.value ? "" : "等待其他玩家响应";
   }
-  if (String(props.state?.responsePhase ?? "") === "collective") {
-    if (isQuietSelfDiscardWait({
-      responsePhase: String(props.state?.responsePhase ?? ""),
-      responseSource: responseCard.value?.source,
-      originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
-      viewerPlayerId: props.mySeatId,
-    })) return "";
-    return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
-  }
-  if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
-    return "可吃或抓";
-  }
-  if (String(props.state?.responsePhase ?? "") === "local_draw" && canAct.value) {
-    return "可吃或过";
-  }
-  return isMyTurn.value ? "轮到你操作" : "等待对方操作";
+  return "";
 });
 
 const crowdedActionDock = computed(() =>
@@ -1976,11 +1968,6 @@ function showDealerSeatMarker(playerId: string): boolean {
   return dealerSeatMarkerReady.value && isDealer(playerId) && Boolean(dealerInfoCard.value);
 }
 
-function isCollectiveResponder(playerId: string): boolean {
-  return String(props.state?.responsePhase ?? "") === "collective" &&
-    String(props.state?.pendingReceiverId ?? "") === playerId;
-}
-
 function seatActionText(playerId: string): string {
   return latestSeatAction.value?.actorId === playerId ? latestSeatAction.value.label : "";
 }
@@ -1990,9 +1977,6 @@ function hasSeatAction(playerId: string): boolean {
 }
 
 function isCurrentTurn(playerId: string): boolean {
-  if (String(props.state?.responsePhase ?? "") === "collective") {
-    return false;
-  }
   return displayTurnPlayerId.value === playerId;
 }
 
@@ -2034,7 +2018,7 @@ function playerAccessibleSummary(player: PlayerState, _groupCount: number): stri
     parts.push("庄家");
   }
   if (isCurrentTurn(player.clientId)) {
-    parts.push("当前回合");
+    parts.push(props.state?.responsePhase === "collective" ? "下一操作位" : "当前回合");
   }
   return parts.join("，");
 }
@@ -2140,6 +2124,27 @@ function clearChiSelection(event?: KeyboardEvent): void {
   selectedChiCardIds.value = [];
 }
 
+function closeListeningDetails(restoreFocus = false): void {
+  if (!listeningDetailsOpen.value) return;
+  listeningDetailsOpen.value = false;
+  if (restoreFocus) void nextTick(() => listeningToggleRef.value?.focus());
+}
+
+function handleBoardEscape(event?: KeyboardEvent): void {
+  if (listeningDetailsOpen.value) {
+    event?.preventDefault();
+    closeListeningDetails(true);
+    return;
+  }
+  clearChiSelection(event);
+}
+
+function handleDocumentPointerDown(event: PointerEvent): void {
+  if (!listeningDetailsOpen.value || !(event.target instanceof Node)) return;
+  if (listeningToggleRef.value?.contains(event.target) || listeningDetailsRef.value?.contains(event.target)) return;
+  closeListeningDetails();
+}
+
 function updateHandLayoutState(): void {
   const hand = selfHandRef.value;
   const viewport = handViewportRef.value;
@@ -2158,7 +2163,8 @@ function updateHandLayoutState(): void {
     const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
     const available = viewport?.clientWidth ?? 0;
     if (available > 0 && cards.length > 0) {
-      const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+      // 给缩放后的子像素取整留出少量余量，避免左右两端各溢出约 1px 而被外框裁切。
+      const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 8)));
       if (Math.abs(handScale.value - nextScale) > 0.001) {
         handScale.value = nextScale;
       }
@@ -2291,12 +2297,7 @@ function onSubmitAction(request: ActionRequest): void {
     request = { ...request, candidateId: selectedChiCandidate.value.id };
   }
   chiValidationMessage.value = "";
-  const keepsDeferredChiDraft =
-    typeof request !== "string" &&
-    request.action === "chi" &&
-    props.responsePhase === "collective" &&
-    responseCard.value?.source !== "draw";
-  if (typeof request !== "string" && request.action === "chi" && !keepsDeferredChiDraft) {
+  if (typeof request !== "string" && request.action === "chi") {
     selectedChiCardIds.value = [];
   }
   emit("submitAction", request);
@@ -2809,12 +2810,14 @@ function triggerDealerReveal(
 onMounted(() => {
   scheduleHandLayoutUpdate();
   observeSelfNameFit();
+  document.addEventListener("pointerdown", handleDocumentPointerDown);
   countdownTimer = setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
 });
 
 onUnmounted(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown);
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   if (handLayoutFrame !== null) cancelAnimationFrame(handLayoutFrame);
   handLayoutFrame = null;
@@ -2861,6 +2864,10 @@ watch(
   () => void nextTick(updateSelfNameFit),
 );
 watch(selfIdentityRef, observeSelfNameFit);
+watch(() => props.decisionKey, () => { listeningDetailsOpen.value = false; });
+watch(currentListeningWaits, (waits) => {
+  if (!waits.length) listeningDetailsOpen.value = false;
+});
 
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
 // Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
@@ -3297,22 +3304,6 @@ watch(
   min-width: 0;
 }
 
-.turn-arrow {
-  position: absolute;
-  left: 50%;
-  top: 4px;
-  transform: translateX(-50%);
-  color: #22c55e;
-  font-size: clamp(0.9rem, 1.9vh, 1.2rem);
-  line-height: 1;
-  text-shadow: 0 0 8px rgba(34, 197, 94, 0.65);
-  pointer-events: none;
-}
-
-.turn-arrow-side {
-  top: 2px;
-}
-
 .seat-head {
   display: flex;
   justify-content: space-between;
@@ -3487,13 +3478,6 @@ watch(
   border-color: #f59e0b;
   background: rgba(245, 158, 11, 0.16);
   color: #fde68a;
-}
-
-.self-info-hint {
-  margin: 0;
-  color: #bfdbfe;
-  font-size: clamp(0.74rem, 1.35vh, 0.88rem);
-  line-height: 1.35;
 }
 
 .seat-zone {
@@ -4086,10 +4070,6 @@ watch(
 
 .self-zone.actor-flash {
   isolation: isolate;
-}
-
-.self-turn-arrow {
-  top: 2px;
 }
 
 .self-head {
@@ -5022,10 +5002,6 @@ watch(
     grid-column: 2;
   }
 
-  .self-info-hint {
-    font-size: clamp(0.54rem, calc(var(--effective-vh, 1vh) * 1.28), 0.66rem);
-  }
-
   .hand-scroll-tools {
     gap: 0.2rem;
   }
@@ -5134,7 +5110,6 @@ watch(
 
 @media (max-width: 720px), (max-height: 380px) {
   .seat-meta,
-  .self-info-hint,
   .tag.status:not(.temporary-control) {
     display: none;
   }
@@ -5202,94 +5177,198 @@ watch(
   }
 }
 
-/* 各阶段共用固定高度的决策条，避免手牌随操作按钮出现或消失而上下跳动。 */
-.decision-status { display: flex; align-items: center; gap: 8px; min-height: 30px; font-size: 12px; flex-shrink: 0; }
-.decision-status strong { flex: 1; min-width: 0; }
-.fixed-clock { min-width: 64px; text-align: center; color: #fcd34d; font-variant-numeric: tabular-nums; }
-.decision-status button { min-height: 40px; padding: 3px 8px; }
-.cards.hand.single-line { flex: 0 0 auto; flex-wrap: nowrap; overflow: visible; justify-content: center; width: max-content; min-height: 0; transform: scale(calc(var(--hand-scale, 1) * 0.96)); transform-origin: center center; }
-.cards.hand.single-line .hand-card { flex: 0 0 auto; width: max-content; }
-.hand-mark { position: absolute; top: 0; left: 0; z-index: 2; background: #0f766e; color: white; border-radius: 3px; font-size: 11px; padding: 1px 3px; }
-.listening-mark { background: #047857; }
-.selected-card-preview { position: absolute; right: 4px; bottom: calc(100% + 4px); z-index: 8; max-width: min(70vw, 28rem); display: flex; align-items: center; gap: 6px; background: #0f172a; border: 1px solid #34d399; padding: 4px; border-radius: 6px; pointer-events: none; }
-.selected-preview-wait-label { color: #a7f3d0; font-size: 12px; font-weight: 800; }
-.selected-preview-waits { min-width: 0; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
-.selected-preview-wait { position: relative; display: inline-flex; }
-.selected-preview-wait.exhausted :deep(.card) { filter: grayscale(1); opacity: 0.48; }
-.wait-count-badge { position: absolute; right: -2px; top: -4px; z-index: 2; min-width: 22px; padding: 0 3px; border-radius: 999px; background: #065f46; color: #ecfdf5; box-shadow: 0 0 0 1px #0f172a; font-size: 9px; line-height: 14px; font-weight: 800; text-align: center; white-space: nowrap; }
-.selected-preview-wait.exhausted .wait-count-badge { background: #475569; color: #e2e8f0; }
-.seat-identity { flex-wrap: wrap; }
-.seat-identity > strong,
-.seat-identity > h3 { flex: 1 1 4.5rem; }
-.seat-identity-meta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.2rem; white-space: nowrap; }
-.group-score-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.3rem; border: 1px solid #475569; border-radius: 0.45rem; display: inline-grid; place-items: center; color: #94a3b8; background: rgba(15, 23, 42, 0.78); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
-.group-score-badge.positive { color: #fde68a; border-color: rgba(245, 158, 11, 0.62); background: rgba(120, 53, 15, 0.34); }
-.quick-phrase-toast { position: absolute; z-index: 12; left: 50%; top: 50%; transform: translate(-50%, calc(-50% - clamp(3.2rem, 10vh, 5rem))); width: max-content; max-width: min(18rem, calc(100% - 1rem)); padding: 0.38rem 0.62rem; border: 1px solid rgba(125, 211, 252, 0.78); border-radius: 0.78rem; background: rgba(248, 250, 252, 0.98); color: #0f172a; box-shadow: 0 8px 22px rgba(2, 6, 23, 0.48); display: flex; align-items: baseline; gap: 0.42rem; font-size: max(0.8125rem, 13px); font-weight: 800; line-height: 1.25; pointer-events: none; }
-.quick-phrase-toast strong { flex: 0 0 auto; color: #0369a1; }
-.quick-phrase-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.quick-phrase-enter-active,
-.quick-phrase-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
-.quick-phrase-enter-from,
-.quick-phrase-leave-to { opacity: 0; transform: translate(-50%, calc(-50% - clamp(2.7rem, 9vh, 4.5rem))) scale(0.96); }
-.table-notice-toast { position: absolute; z-index: 13; left: 50%; bottom: clamp(0.55rem, 2vh, 1rem); transform: translateX(-50%); width: max-content; max-width: min(26rem, calc(100% - 1rem)); padding: 0.42rem 0.72rem; border: 1px solid rgba(203, 213, 225, 0.9); border-radius: 0.72rem; background: rgba(248, 250, 252, 0.98); color: #0f172a; box-shadow: 0 8px 22px rgba(2, 6, 23, 0.46); font-size: max(0.8125rem, 13px); font-weight: 800; line-height: 1.3; text-align: center; pointer-events: none; }
-.kan-count-badge { flex: 0 0 auto; min-height: 1.55rem; padding: 0.12rem 0.28rem; border: 1px solid rgba(167, 139, 250, 0.58); border-radius: 0.45rem; display: inline-grid; place-items: center; color: #ddd6fe; background: rgba(76, 29, 149, 0.26); font-size: clamp(0.72rem, 1.65vh, 0.9rem); font-weight: 900; line-height: 1; white-space: nowrap; }
-.current-listening-waits { min-width: 0; max-width: min(42vw, 24rem); display: flex; align-items: center; gap: 0.22rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
-.current-listening-waits::-webkit-scrollbar { display: none; }
-.current-listening-label { flex: 0 0 auto; color: #a7f3d0; font-weight: 900; }
-.current-listening-card { position: relative; flex: 0 0 auto; display: inline-flex; }
-.current-listening-card :deep(.card) { width: 1.35rem; height: 2.2rem; font-size: 0.78rem; }
-.current-listening-card.exhausted :deep(.card) { filter: grayscale(1); opacity: 0.48; }
-.current-listening-card.exhausted .wait-count-badge { background: #475569; color: #e2e8f0; }
-.player-left .seat-identity,
-.player-right .seat-identity { flex-wrap: wrap; align-content: flex-start; }
-.player-left .seat-identity > strong,
-.player-right .seat-identity > strong { flex: 1 1 4.5rem; width: auto; }
-.turn-countdown, .self-turn-timer { display: none; }
-.board {
+/* 下方两行尺寸恒定：上行整段是动态操作区，下行整段是手牌，按钮切换不会推挤手牌。 */
+.board,
+.board.board-declaring,
+.board.crowded-action-dock {
+  position: relative;
   height: auto;
   align-self: stretch;
-  column-gap: 0;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) clamp(3rem, 8vh, 3.5rem) clamp(7rem, 21vh, 10rem);
+  gap: 2px;
 }
-.table { grid-row: 1; }
-.self-info-card {
+
+.table {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.self-command-row {
+  position: relative;
   grid-column: 1;
   grid-row: 2;
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: clamp(15rem, 34%, 18rem) minmax(0, 1fr);
+  align-items: stretch;
+  overflow: visible;
+  border: 1px solid #1e293b;
+  border-radius: 0.62rem;
+  background: rgba(11, 18, 32, 0.94);
+  color: #e2e8f0;
+}
+
+.self-command-row.dealer {
+  border-color: rgba(245, 158, 11, 0.92);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28) inset;
+}
+
+.self-command-row.actor-flash {
+  isolation: isolate;
+}
+
+.self-command-row.actor-flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 3px solid rgba(56, 189, 248, 0.86);
+  border-radius: inherit;
+  animation: actor-flash 0.72s ease-out both;
+}
+
+.self-info-card {
+  min-width: 0;
+  display: flex;
   align-items: center;
-  padding-block: 0.2rem;
-  border-radius: 0.55rem 0 0 0.55rem;
+  padding: 0.2rem 0.42rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
-.self-info-card .self-head { width: 100%; }
-.self-info-card > .current-listening-waits { max-width: min(9rem, 44%); justify-self: end; }
-.self-info-card .self-info-hint,
-.self-info-card .seat-tags { display: none; }
-.self-info-card .seat-identity { display: flex; flex-wrap: nowrap; }
-.self-info-card .seat-identity > h3 { flex: 1 1 auto; width: auto; }
-.self-hand-card { display: contents; }
-.self-hand-card > .decision-status {
-  grid-column: 2;
-  grid-row: 2;
-  min-width: 0;
-  padding: 0.2rem 0.45rem;
-  background: rgba(11, 18, 32, 0.88);
-  border-block: 1px solid #1e293b;
+
+.self-info-card .self-head,
+.self-info-card .seat-identity {
+  width: 100%;
 }
-.self-hand-card > .self-hand-panel {
-  grid-column: 1 / -1;
+
+.self-info-card .seat-identity {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.self-info-card .seat-identity > h3 {
+  display: block;
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.dynamic-action-track {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.35rem;
+  border-left: 1px solid rgba(51, 65, 85, 0.86);
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+}
+
+.dynamic-action-track::-webkit-scrollbar {
+  display: none;
+}
+
+.dynamic-action-track > :deep(.declare-mask),
+.action-dock {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.embedded-actions,
+.action-dock {
+  margin: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.embedded-actions :deep(.panel) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.embedded-actions :deep(.action-row) {
+  width: 100%;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.embedded-actions :deep(.btn) {
+  flex: 1 1 0;
+  min-width: 2.65rem;
+  min-height: 40px;
+  padding: 0.2rem 0.55rem;
+}
+
+.fixed-clock {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  flex: 0 0 auto;
+  min-width: 3.6rem;
+  min-height: 2.1rem;
+  padding: 0.22rem 0.42rem;
+  border: 1px solid rgba(245, 158, 11, 0.48);
+  border-radius: 0.48rem;
+  background: rgba(15, 23, 42, 0.96);
+  color: #fcd34d;
+  display: inline-grid;
+  place-items: center;
+  text-align: center;
+  font-size: max(0.75rem, 12px);
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fixed-clock.urgent {
+  border-color: #fb7185;
+  background: #9f1239;
+  color: #fff1f2;
+}
+
+.self-hand-card {
+  position: relative;
+  grid-column: 1;
   grid-row: 3;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.self-hand-card > .self-hand-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: clamp(0.2rem, 0.65vh, 0.42rem);
   border: 1px solid #1e293b;
   border-radius: 0.65rem;
-  background: rgba(11, 18, 32, 0.92);
+  background: rgba(11, 18, 32, 0.94);
   overflow: hidden;
 }
+
 .self-turn-outline {
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 2 / 4;
   z-index: 11;
   min-width: 0;
@@ -5299,37 +5378,370 @@ watch(
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3) inset, 0 0 14px rgba(34, 197, 94, 0.18);
   pointer-events: none;
 }
-.self-hand-card > :deep(.declare-mask) {
-  grid-column: 2 / -1;
+
+.self-flow-toast {
+  grid-column: 1;
   grid-row: 2;
-  min-width: 0;
+  z-index: 13;
+  align-self: start;
+  justify-self: center;
+  transform: translateY(calc(-100% - 0.25rem));
+  width: max-content;
+  max-width: min(22rem, calc(100% - 1rem));
+  padding: 0.36rem 0.68rem;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 0.7rem;
+  background: rgba(248, 250, 252, 0.98);
+  color: #0f172a;
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.46);
+  font-size: max(0.8125rem, 13px);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  pointer-events: none;
+}
+
+.quick-phrase-enter-active,
+.quick-phrase-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.self-flow-toast.quick-phrase-enter-from,
+.self-flow-toast.quick-phrase-leave-to {
+  opacity: 0;
+  transform: translateY(calc(-100% + 0.15rem)) scale(0.96);
+}
+
+.quick-phrase-toast.quick-phrase-enter-from,
+.quick-phrase-toast.quick-phrase-leave-to {
+  opacity: 0;
+  transform: translate(-50%, calc(-50% - clamp(2.7rem, 9vh, 4.5rem))) scale(0.96);
+}
+
+.table-notice-toast.quick-phrase-enter-from,
+.table-notice-toast.quick-phrase-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 0.35rem) scale(0.96);
+}
+
+.cards.hand.single-line {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: center;
+  width: max-content;
   min-height: 0;
+  overflow: visible;
+  transform: scale(var(--hand-scale, 1));
+  transform-origin: center center;
+}
+
+.cards.hand.single-line .hand-card {
+  flex: 0 0 auto;
+  width: max-content;
+}
+
+.hand-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: #0f766e;
+  color: white;
+  font-size: 11px;
+}
+
+.listening-mark {
+  background: #047857;
+}
+
+.selected-card-preview {
+  position: absolute;
+  right: clamp(0.3rem, 2vw, 1rem);
+  bottom: calc(100% + 0.25rem);
+  z-index: 14;
+  max-width: min(70vw, 28rem);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #34d399;
+  border-radius: 6px;
+  background: #0f172a;
+  pointer-events: none;
+}
+
+.selected-preview-wait-label {
+  color: #a7f3d0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.selected-preview-waits {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.selected-preview-wait,
+.current-listening-card {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.selected-preview-wait.exhausted :deep(.card),
+.current-listening-card.exhausted :deep(.card) {
+  filter: grayscale(1);
+  opacity: 0.48;
+}
+
+.wait-count-badge {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  z-index: 2;
+  min-width: 22px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #065f46;
+  color: #ecfdf5;
+  box-shadow: 0 0 0 1px #0f172a;
+  font-size: 9px;
+  line-height: 14px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.selected-preview-wait.exhausted .wait-count-badge,
+.current-listening-card.exhausted .wait-count-badge {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.current-listening-waits {
+  min-width: 0;
+  max-width: min(42vw, 24rem);
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-width: none;
 }
-.selected-card-preview { right: clamp(0.3rem, 2vw, 1rem); bottom: calc(clamp(7rem, 21vh, 10rem) + clamp(3rem, 8vh, 3.5rem) + 0.25rem); }
-.action-dock {
-  grid-column: 3;
-  grid-row: 2;
-  min-height: 0;
-  padding: 0.2rem 0.35rem;
-  border-radius: 0 0.55rem 0.55rem 0;
+
+.current-listening-waits::-webkit-scrollbar {
+  display: none;
 }
-.embedded-actions :deep(.action-row) { flex-wrap: nowrap; }
-.embedded-actions :deep(.btn) { flex: 1 1 0; min-width: 2.65rem; }
-.board.board-declaring { grid-template-rows: minmax(0, 1fr) clamp(3rem, 8vh, 3.5rem) clamp(7rem, 21vh, 10rem); }
-.board-declaring .self-info-card { display: flex; }
-.declaring-hand .self-hand-panel { flex-shrink: 0; }
+
+.dynamic-action-track > .current-listening-waits {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.current-listening-label {
+  flex: 0 0 auto;
+  color: #a7f3d0;
+  font-weight: 900;
+}
+
+.current-listening-card :deep(.card) {
+  width: 1.35rem;
+  height: 2.2rem;
+  font-size: 0.78rem;
+}
+
+.listening-toggle {
+  position: absolute;
+  right: 0.3rem;
+  top: 0.3rem;
+  z-index: 10;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.42rem;
+  border: 1px solid rgba(52, 211, 153, 0.78);
+  border-radius: 0.48rem;
+  background: rgba(6, 78, 59, 0.94);
+  color: #ecfdf5;
+  font-weight: 900;
+}
+
+.listening-popover {
+  position: absolute;
+  right: 0.3rem;
+  bottom: calc(100% + 0.28rem);
+  z-index: 15;
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 1rem));
+  min-height: 2.8rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid rgba(52, 211, 153, 0.72);
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.52);
+}
+
+.seat-identity {
+  flex-wrap: wrap;
+}
+
+.seat-identity > strong,
+.seat-identity > h3 {
+  flex: 1 1 4.5rem;
+}
+
+.seat-identity-meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.player-left .seat-identity,
+.player-right .seat-identity {
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.player-left .seat-identity > strong,
+.player-right .seat-identity > strong {
+  flex: 1 1 4.5rem;
+  width: auto;
+}
+
+.group-score-badge,
+.kan-count-badge {
+  flex: 0 0 auto;
+  min-height: 1.55rem;
+  padding: 0.12rem 0.3rem;
+  border-radius: 0.45rem;
+  display: inline-grid;
+  place-items: center;
+  font-size: clamp(0.72rem, 1.65vh, 0.9rem);
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.group-score-badge {
+  border: 1px solid #475569;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.group-score-badge.positive {
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.62);
+  background: rgba(120, 53, 15, 0.34);
+}
+
+.kan-count-badge {
+  border: 1px solid rgba(167, 139, 250, 0.58);
+  color: #ddd6fe;
+  background: rgba(76, 29, 149, 0.26);
+}
+
+.quick-phrase-toast {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, calc(-50% - clamp(3.2rem, 10vh, 5rem)));
+  width: max-content;
+  max-width: min(18rem, calc(100% - 1rem));
+  padding: 0.38rem 0.62rem;
+  border: 1px solid rgba(125, 211, 252, 0.78);
+  border-radius: 0.78rem;
+  background: rgba(248, 250, 252, 0.98);
+  color: #0f172a;
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.48);
+  display: flex;
+  align-items: baseline;
+  gap: 0.42rem;
+  font-size: max(0.8125rem, 13px);
+  font-weight: 800;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.quick-phrase-toast strong {
+  flex: 0 0 auto;
+  color: #0369a1;
+}
+
+.quick-phrase-toast span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-notice-toast {
+  position: absolute;
+  z-index: 13;
+  left: 50%;
+  bottom: clamp(0.55rem, 2vh, 1rem);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(26rem, calc(100% - 1rem));
+  padding: 0.42rem 0.72rem;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 0.72rem;
+  background: rgba(248, 250, 252, 0.98);
+  color: #0f172a;
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.46);
+  font-size: max(0.8125rem, 13px);
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.center-card-pair {
+  gap: clamp(0.8rem, 1.8vw, 1.25rem);
+}
+
+/* 八张牌背围绕几何中心对称分布，数字与牌堆都保持垂直居中。 */
+.deck-layer { --deck-y: 3.5px; }
+.deck-layer:nth-child(2) { --deck-y: 2.5px; }
+.deck-layer:nth-child(3) { --deck-y: 1.5px; }
+.deck-layer:nth-child(4) { --deck-y: 0.5px; }
+.deck-layer:nth-child(5) { --deck-y: -0.5px; }
+.deck-layer:nth-child(6) { --deck-y: -1.5px; }
+.deck-layer:nth-child(7) { --deck-y: -2.5px; }
+.deck-layer:nth-child(8) { --deck-y: -3.5px; }
+
+.turn-countdown,
+.self-turn-timer {
+  display: none;
+}
+
 @media (max-width: 960px), (max-height: 500px) {
   .board,
   .board.board-declaring,
   .board.crowded-action-dock {
-    grid-template-columns: clamp(13.5rem, calc(var(--effective-vw, 1vw) * 34), 14rem) minmax(0, 1fr) clamp(10rem, calc(var(--effective-vw, 1vw) * 29), 12rem);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 3rem clamp(5.8rem, calc(var(--effective-vh, 1vh) * 23), 7.2rem);
   }
-  .self-info-card .seat-identity > h3 { display: block; flex: 1 1 auto; width: auto; }
-  .self-info-card .seat-identity-meta { width: auto; justify-content: flex-start; }
-  .seat-identity-meta { gap: 0.12rem; }
+
+  .self-command-row {
+    grid-template-columns: clamp(12rem, 36%, 16rem) minmax(0, 1fr);
+  }
+
+  .self-info-card .seat-identity-meta {
+    width: auto;
+    justify-content: flex-start;
+  }
+
+  .seat-identity-meta {
+    gap: 0.12rem;
+  }
+
   .hand-count-badge,
   .kan-count-badge,
   .group-score-badge {
@@ -5338,15 +5750,31 @@ watch(
     border-radius: 0.35rem;
     font-size: max(0.75rem, 13px);
   }
+
   :deep(.player-status-icon) {
     width: 1.3rem;
     height: 1.3rem;
     flex-basis: 1.3rem;
     border-radius: 0.35rem;
   }
-  :deep(.player-status-icon svg) { width: 0.9rem; height: 0.9rem; }
-  .table { grid-template-columns: minmax(0, 28%) minmax(0, 1fr) minmax(0, 28%); }
-  .selected-card-preview { bottom: calc(clamp(5.8rem, calc(var(--effective-vh, 1vh) * 23), 7.2rem) + 3.25rem); }
+
+  :deep(.player-status-icon svg) {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .table {
+    grid-template-columns: minmax(0, 28%) minmax(0, 1fr) minmax(0, 28%);
+  }
+
+  .dynamic-action-track {
+    gap: 0.25rem;
+    padding-inline: 0.25rem;
+  }
+
+  .embedded-actions :deep(.btn) {
+    min-width: 2.5rem;
+    min-height: 40px;
+  }
 }
-.fixed-clock.urgent { color: #fff1f2; background: #9f1239; border-radius: 5px; font-weight: 800; }
 </style>

@@ -51,7 +51,7 @@ async function selectTableCardMode(page: Page, mode: "large" | "long") {
   await expect(page.getByTestId("pending-card").locator(`[data-card-mode="${mode}"]`)).toBeVisible();
 }
 
-async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<MeldHandoff> {
+async function recordPengHandoff(page: Page, expectedIds: string[], completionTimeout = 10_000): Promise<MeldHandoff> {
   await page.evaluate((ids) => {
     const trackingWindow = window as any;
     const result: MeldHandoff & { seen: boolean } = {
@@ -134,11 +134,9 @@ async function recordPengHandoff(page: Page, expectedIds: string[]): Promise<Mel
   }, expectedIds);
 
   await page.getByTestId("action-peng").click();
-  // CPU throttling slows both the animation and this page-side RAF sampler.
-  // Leave enough wall-clock headroom for the 6x-throttled coverage case.
   await expect.poll(
     () => page.evaluate(() => Boolean((window as any).__siseMeldHandoff?.done)),
-    { timeout: 30_000 },
+    { timeout: completionTimeout },
   ).toBe(true);
   return page.evaluate(() => (window as any).__siseMeldHandoff as MeldHandoff);
 }
@@ -201,7 +199,7 @@ test("a CPU-throttled meld still holds the exact final rectangles", async ({ pag
     await expect(page.getByTestId("action-peng")).toBeEnabled();
     const responseId = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState().responseCard.id as string);
     const expectedIds = [responseId, "red-xiang-1", "red-xiang-2"];
-    const handoff = await recordPengHandoff(page, expectedIds);
+    const handoff = await recordPengHandoff(page, expectedIds, 30_000);
     for (const id of expectedIds) {
       expectRectClose(handoff.lastFlights[id], handoff.targets[id]);
       expect(new Set(handoff.layoutSizes[id].map((size) => `${size.width}x${size.height}`)).size).toBe(1);
