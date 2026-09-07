@@ -1,4 +1,5 @@
 import { openGameAs, startLobbyAction } from "./helpers/game";
+import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 
 async function finishOpening(page: import("@playwright/test").Page): Promise<void> {
@@ -95,6 +96,7 @@ test("a passive human response keeps the privacy window without exposing a count
     await expect(host.getByTestId("settings-decision-reminder")).toHaveCount(0);
     await host.getByRole("button", { name: "关闭设置" }).click();
     await host.getByTestId("game-settings").click();
+    await revealSetting(host, "settings-rules");
     await host.getByTestId("settings-rules").click();
     await expect(host.getByTestId("rules-decision-reminder")).toHaveCount(0);
     await host.getByTestId("close-rules").click();

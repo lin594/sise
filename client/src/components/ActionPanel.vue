@@ -304,13 +304,13 @@ function onClick(item: PanelAction): void {
 .btn.enabled {
   color: #f8fafc;
   border-color: var(--ui-accent, #38bdf8);
-  background: #075985;
+  background: var(--ui-raised, #075985);
   cursor: pointer;
 }
 
 .btn.primary-action.enabled {
   border-color: #f59e0b;
-  background: #b45309;
+  background: var(--ui-raised, #b45309);
 }
 
 .btn:disabled,
@@ -338,29 +338,29 @@ function onClick(item: PanelAction): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #dbeafe;
-  background: #172554;
+  color: var(--ui-accent-text, #dbeafe);
+  background: var(--ui-raised, #172554);
   font-size: clamp(0.72rem, calc(var(--effective-vh, 1vh) * 1.55), 0.88rem);
   font-weight: 800;
 }
 
 .timer-chip.urgent,
 .feedback-rejected {
-  color: #fee2e2;
-  background: #7f1d1d;
+  color: var(--ui-text, #fee2e2);
+  background: var(--ui-raised, #7f1d1d);
 }
 
 .feedback-received {
-  color: #dcfce7;
-  background: #14532d;
+  color: var(--ui-text, #dcfce7);
+  background: var(--ui-raised, #14532d);
 }
 
 .more-time-button {
   min-width: 48px;
   padding-inline: 0.4rem;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   border-color: #92400e;
-  background: #451a03;
+  background: var(--ui-raised, #451a03);
   font-size: clamp(0.75rem, calc(var(--effective-vh, 1vh) * 1.7), 0.9rem);
 }
 
