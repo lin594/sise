@@ -581,25 +581,6 @@
           @submit="onSubmitAction"
         />
         <span
-          v-if="showInlineListeningWaits"
-          class="current-listening-waits"
-          role="status"
-          :aria-label="currentListeningAccessibleLabel"
-          data-testid="current-listening-waits"
-        >
-          <span class="current-listening-label" aria-hidden="true">听</span>
-          <span
-            v-for="wait in currentListeningWaits"
-            :key="`current-wait-${wait.card.id}`"
-            class="current-listening-card"
-            :class="{ exhausted: wait.visibleRemaining === 0 }"
-            :data-visible-remaining="wait.visibleRemaining"
-          >
-            <CardComp :card="wait.card" size="xs" mode="large" />
-            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
-          </span>
-        </span>
-        <span
           v-if="showDecisionClock"
           class="fixed-clock"
           :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }"
@@ -618,38 +599,27 @@
       >{{ flowStatusText }}</div>
     </Transition>
 
-    <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
-      <div
-        v-if="selectedPreview"
-        class="selected-card-preview"
-        data-testid="selected-card-preview"
-        :aria-label="selectedPreviewAccessibleLabel"
-      >
-        <CardComp :card="selectedPreview" size="xl" :mode="ownCardMode" />
-        <template v-if="selectedDiscardListeningRoute?.waits.length">
-          <span class="selected-preview-wait-label" aria-hidden="true">等</span>
-          <span class="selected-preview-waits" aria-hidden="true">
-            <span
-              v-for="wait in selectedDiscardListeningRoute.waits"
-              :key="`selected-wait-${wait.card.id}`"
-              class="selected-preview-wait"
-              :class="{ exhausted: wait.visibleRemaining === 0 }"
-              :data-card-id="wait.card.id"
-              :data-visible-remaining="wait.visibleRemaining"
-              data-testid="listening-wait"
-            >
-              <CardComp :card="wait.card" size="xs" mode="large" />
-              <span class="wait-count-badge" data-testid="listening-wait-count">{{ wait.visibleRemaining }}张</span>
-            </span>
-          </span>
-        </template>
+    <section v-if="listeningDetailsOpen && listeningDetailWaits.length" id="listening-details" ref="listeningDetailsRef"
+      class="listening-details" role="region" :aria-label="listeningDetailTitle" data-testid="listening-details"
+      tabindex="0" @pointerdown="restartListeningTimer" @scroll.capture.passive="restartListeningTimer"
+      @focusin="pauseListeningTimer" @focusout="() => nextTick(restartListeningTimer)">
+      <header><strong>{{ listeningDetailTitle }}</strong><button type="button" aria-label="关闭听牌详情" @click="closeListeningDetails(true)">×</button></header>
+      <div class="listening-details-cards" tabindex="0">
+        <span v-for="wait in listeningDetailWaits" :key="wait.card.id" class="current-listening-card" :class="{ exhausted: wait.visibleRemaining === 0 }"
+          :data-visible-remaining="wait.visibleRemaining" :data-card-id="wait.card.id" data-testid="listening-wait">
+          <CardComp :card="wait.card" size="xs" mode="large" />
+          <span class="wait-count-badge" data-testid="listening-wait-count">{{ wait.visibleRemaining }}张</span>
+        </span>
       </div>
+    </section>
+
+    <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div
         class="self-hand-panel"
         :class="{ 'has-toolbar': handLayout === 'paged' && handHasOverflow }"
       >
         <button
-          v-if="currentListeningWaits.length"
+          v-if="listeningDetailWaits.length"
           ref="listeningToggleRef"
           class="listening-toggle"
           type="button"
@@ -657,28 +627,8 @@
           :aria-expanded="listeningDetailsOpen"
           aria-controls="listening-details"
           aria-label="查看听牌详情"
-          @click="listeningDetailsOpen = !listeningDetailsOpen"
+          @click="toggleListeningDetails"
         >听</button>
-        <div
-          v-if="listeningDetailsOpen && currentListeningWaits.length"
-          id="listening-details"
-          ref="listeningDetailsRef"
-          class="listening-popover current-listening-waits"
-          role="dialog"
-          aria-label="听牌详情"
-        >
-          <span class="current-listening-label" aria-hidden="true">听</span>
-          <span
-            v-for="wait in currentListeningWaits"
-            :key="`popover-wait-${wait.card.id}`"
-            class="current-listening-card"
-            :class="{ exhausted: wait.visibleRemaining === 0 }"
-            :data-visible-remaining="wait.visibleRemaining"
-          >
-            <CardComp :card="wait.card" size="xs" mode="large" />
-            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
-          </span>
-        </div>
         <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-toolbar">
           <div class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
@@ -787,7 +737,7 @@
         :style="flight.style" :data-transition-kind="flight.kind" :data-transition-card-id="flight.card.id"
         :data-transition-stage="flight.stage" :data-transition-to="flight.destinationZone" aria-hidden="true">
         <div class="table-flight-turn" :style="{ transform: `rotateY(${flight.rotation}deg)` }">
-          <div v-if="flight.back" class="card-back"></div>
+          <CardBack v-if="flight.back" :mode="props.tableCardMode" />
           <CardComp
             v-else
             :card="flight.card"
@@ -806,7 +756,7 @@
         :class="flight.mode"
         :style="flightStyle(flight)"
       >
-        <div v-if="flight.mode === 'deal'" class="card-back"></div>
+        <CardBack v-if="flight.mode === 'deal'" :mode="ownCardMode" />
         <CardComp v-else-if="flight.card" :card="flight.card" :mode="props.tableCardMode" size="md" />
       </div>
     </div>
@@ -817,6 +767,7 @@
 import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
+import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import type {
@@ -1824,12 +1775,6 @@ const activeHints = computed(() => {
   return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
 const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
-const showInlineListeningWaits = computed(() =>
-  props.state?.phase === "playing" &&
-  currentListeningWaits.value.length > 0 &&
-  !canAct.value &&
-  !canDiscard.value,
-);
 const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
   .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
   .join("；")}`);
@@ -1848,6 +1793,26 @@ const selectedPreview = computed(() => canDiscard.value
 const selectedDiscardListeningRoute = computed(() => selectedPreview.value
   ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
   : undefined);
+const listeningDetailWaits = computed(() => selectedPreview.value ? selectedDiscardListeningRoute.value?.waits ?? [] : currentListeningWaits.value);
+const listeningDetailTitle = computed(() => selectedPreview.value ? "打出此牌后听" : "当前听牌");
+let listeningCloseTimer: ReturnType<typeof setTimeout> | null = null;
+function pauseListeningTimer() {
+  if (listeningCloseTimer) clearTimeout(listeningCloseTimer);
+  listeningCloseTimer = null;
+}
+function restartListeningTimer() {
+  pauseListeningTimer();
+  if (!listeningDetailsOpen.value || listeningDetailsRef.value?.contains(document.activeElement)) return;
+  listeningCloseTimer = setTimeout(() => closeListeningDetails(), 5000);
+}
+function toggleListeningDetails() {
+  if (listeningDetailsOpen.value) closeListeningDetails();
+  else { listeningDetailsOpen.value = true; restartListeningTimer(); }
+}
+watch(() => selectedPreview.value?.id, () => {
+  closeListeningDetails();
+  if (selectedDiscardListeningRoute.value?.waits.length) { listeningDetailsOpen.value = true; restartListeningTimer(); }
+});
 const selectedPreviewAccessibleLabel = computed(() => {
   const selected = selectedPreview.value;
   if (!selected) return "";
@@ -2125,6 +2090,7 @@ function clearChiSelection(event?: KeyboardEvent): void {
 }
 
 function closeListeningDetails(restoreFocus = false): void {
+  pauseListeningTimer();
   if (!listeningDetailsOpen.value) return;
   listeningDetailsOpen.value = false;
   if (restoreFocus) void nextTick(() => listeningToggleRef.value?.focus());
@@ -2817,6 +2783,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  pauseListeningTimer();
   document.removeEventListener("pointerdown", handleDocumentPointerDown);
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   if (handLayoutFrame !== null) cancelAnimationFrame(handLayoutFrame);
@@ -2864,9 +2831,9 @@ watch(
   () => void nextTick(updateSelfNameFit),
 );
 watch(selfIdentityRef, observeSelfNameFit);
-watch(() => props.decisionKey, () => { listeningDetailsOpen.value = false; });
-watch(currentListeningWaits, (waits) => {
-  if (!waits.length) listeningDetailsOpen.value = false;
+watch(() => props.decisionKey, () => closeListeningDetails());
+watch(listeningDetailWaits, (waits) => {
+  if (!waits.length) closeListeningDetails();
 });
 
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
@@ -4475,21 +4442,6 @@ watch(
   filter: drop-shadow(0 8px 14px rgba(var(--ui-panel-rgb, 15, 23, 42), 0.45));
 }
 
-.card-back {
-  width: 100%;
-  height: 100%;
-  border-radius: 6px;
-  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.8);
-  background:
-    linear-gradient(145deg, rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96), rgba(var(--ui-raised-rgb, 30, 41, 59), 0.95)),
-    repeating-linear-gradient(
-      -40deg,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 0px,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 8px
-    );
-}
 
 .deal-overlay {
   position: absolute;
@@ -5777,4 +5729,10 @@ watch(
     min-height: 40px;
   }
 }
+
+.listening-details { grid-row: 1; grid-column: 1; align-self: end; justify-self: end; position: relative; z-index: 20; width: min(32%, 24rem); max-height: min(100%, 7rem); min-height: 0; box-sizing: border-box; margin: .25rem; padding: .3rem; border: 1px solid var(--ui-border, #64748b); border-radius: .6rem; background: var(--ui-panel, #0f172a); color: var(--ui-text, #f8fafc); display: flex; flex-direction: column; box-shadow: 0 3px 12px #0003; }
+.listening-details header { display: flex; align-items: center; justify-content: space-between; gap: .25rem; font-size: 13px; }
+.listening-details header button { background: transparent; border: 0; color: inherit; min-width: 28px; min-height: 28px; }
+.listening-details-cards { display: flex; flex-wrap: wrap; gap: .5rem .3rem; padding: .45rem .15rem .15rem; overflow: auto; min-height: 0; max-height: 5.3rem; }
+.listening-details .current-listening-card :deep(.card) { width: 1.6rem; height: 2.2rem; font-size: .85rem; }
 </style>

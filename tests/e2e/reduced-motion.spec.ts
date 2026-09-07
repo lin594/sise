@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
@@ -13,6 +14,7 @@ async function enterGame(page: Page): Promise<void> {
 
 async function recordNextHandScrollBehavior(page: Page): Promise<void> {
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "hand-layout-paged");
   await page.getByTestId("hand-layout-paged").click();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("hand-scroll-next")).toBeEnabled();
@@ -33,6 +35,7 @@ test("the game motion preference is immediate, persistent, and still defers to t
   const layout = page.locator("main.layout");
   const settingsButton = page.getByTestId("game-settings");
   await settingsButton.click();
+  await revealSetting(page, "reduce-motion");
   const setting = page.getByTestId("reduce-motion");
   await setting.scrollIntoViewIfNeeded();
   await expect(setting).toBeVisible();
@@ -47,6 +50,7 @@ test("the game motion preference is immediate, persistent, and still defers to t
     JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").reduceMotion,
   )).toBe(true);
 
+  await revealSetting(page, "settings-rules");
   const explicitTransitionSeconds = await page.getByTestId("settings-rules").evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).transitionDuration) || 0,
   );

@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
@@ -40,9 +41,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await finishStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveCount(0);
     await page.getByTestId('game-settings').click();
+    await revealSetting(page, 'hand-layout-paged');
     await page.getByTestId('hand-layout-paged').click();
+    await revealSetting(page, 'hand-layout-paged');
     await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked', 'true');
+    await revealSetting(page, 'hand-layout-single');
     await page.getByTestId('hand-layout-single').click();
+    await revealSetting(page, 'settings-rules');
     await page.getByTestId('settings-rules').click();
     await expect(page.getByTestId('rules-panel')).toBeVisible();
     await expect(page.getByTestId('settings-panel')).toHaveCount(0);
@@ -82,21 +87,26 @@ test('listening marks stay in the hand and only discard selection opens a previe
   await expect(discardMark).toHaveAttribute('data-listening-context', 'discard');
   await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveAttribute('aria-label', /打出后可听牌/);
   await page.getByTestId('hand-card-post-yellow-shi').click();
-  const preview = page.getByTestId('selected-card-preview');
+  const preview = page.getByTestId('listening-details');
   await expect(preview).toBeVisible();
-  await expect(preview).toHaveAttribute('aria-label', /打出后等待/);
-  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+  await expect(preview).toHaveAttribute('aria-label', '打出此牌后听');
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(0);
   await expect(preview.getByTestId('listening-wait-count').first()).toHaveText(/^\d张$/);
-  await expect(preview).toHaveAttribute('aria-label', /可见余量\d张/);
+  await expect(page.getByTestId('discard-confirm')).toBeInViewport({ ratio: 1 });
 
   const ordinaryDiscard = page.locator('.hand-card:not(.deal-concealed):not(:has([data-testid="listening-mark"]))').first();
   await ordinaryDiscard.click();
-  await expect(preview.locator('[role="img"]')).toHaveCount(1);
+  await expect(preview).toHaveCount(0);
   await expect(page.getByText('当前选择暂无听牌路线', { exact: true })).toHaveCount(0);
   await expect(page.getByText('当前没有打出一张即可听牌的路线', { exact: true })).toHaveCount(0);
   await page.getByTestId('hand-card-post-yellow-shi').click();
-  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath('listening.png') });
+  await expect(preview).toHaveCount(0, { timeout: 6500 });
+  await page.getByTestId('listening-toggle').click();
+  await expect(preview).toBeVisible();
+  await page.getByRole('button', { name: '关闭听牌详情' }).click();
+  await expect(page.getByTestId('listening-toggle')).toBeFocused();
 
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
@@ -108,7 +118,7 @@ test('listening marks stay in the hand and only discard selection opens a previe
   });
   await expect(page.getByTestId('listening-mark')).toHaveCount(0);
   await expect(page.getByTestId('listening-summary')).toHaveCount(0);
-  await expect(preview.locator('[role="img"]')).toHaveCount(1);
+  await expect(preview).toHaveCount(0);
   await expect(page.getByTestId('discard-confirm')).toBeEnabled();
 });
 
@@ -268,15 +278,18 @@ test('21-card single row adapts to both card styles and layout preference surviv
   });
   for (const style of ['large', 'long']) {
     await page.getByTestId('game-settings').click();
+    await revealSetting(page, `card-mode-own-${style}`);
     await page.getByTestId(`card-mode-own-${style}`).click();
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     await assertHandFits(page);
   }
   await page.getByTestId('game-settings').click();
+  await revealSetting(page, 'hand-layout-paged');
   await page.getByTestId('hand-layout-paged').click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sise_game_display_preferences_v2')!).handLayout)).toBe('paged');
   await page.reload();
   await expect(page.getByTestId('game-settings')).toBeVisible();
   await page.getByTestId('game-settings').click();
+  await revealSetting(page, 'hand-layout-paged');
   await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked', 'true');
 });

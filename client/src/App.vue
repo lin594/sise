@@ -70,6 +70,7 @@
       <GameTools
         ref="gameToolsRef"
         :in-room="showGameTools"
+        :playing-context="state?.phase === 'playing' || state?.phase === 'declaring'"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
         :decision-untimed="decisionTimer.untimed"
@@ -3718,7 +3719,8 @@ watch(
 }
 
 .brand-suits i:nth-child(4) {
-  background: var(--ui-text, #f8fafc);
+  background: #fffdf4;
+  border: 1px solid #64748b;
 }
 
 .top h1 {

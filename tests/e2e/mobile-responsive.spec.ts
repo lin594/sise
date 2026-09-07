@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
 
@@ -889,6 +890,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
 
     await page.keyboard.press("Shift+Tab");
+    await revealSetting(page, "settings-rules");
     const rulesEntry = page.getByTestId("settings-rules");
     await expect(rulesEntry).toBeFocused();
     const bottomGeometry = await settingsPanel.evaluate((panel) => {
@@ -1027,6 +1029,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(confirmDeclaration).toBeFocused();
     await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await page.getByTestId("game-settings").click();
+    await revealSetting(page, "hand-layout-paged");
     await page.getByTestId("hand-layout-paged").click();
     await page.keyboard.press("Escape");
     await expect(page.locator(".cards.hand")).not.toHaveClass(/single-line/);
@@ -1293,6 +1296,7 @@ test.describe("compact landscape gameplay", () => {
     const handColorSeals = page.locator(".hand .card .color-seal");
     await expect(handColorSeals.first()).toBeHidden();
     await page.getByTestId("game-settings").click();
+    await revealSetting(page, "card-color-assist");
     const colorAssist = page.getByTestId("card-color-assist");
     await expect(colorAssist).toHaveAttribute("aria-checked", "false");
     await colorAssist.click();
@@ -1784,6 +1788,7 @@ test.describe("compact landscape gameplay", () => {
 
     await page.setViewportSize({ width: 667, height: 375 });
     await page.getByTestId("game-settings").click();
+    await revealSetting(page, "card-mode-table-large");
     await page.getByTestId("card-mode-table-large").click();
     await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(page.getByTestId("settings-panel")).toHaveCount(0);
@@ -1996,10 +2001,15 @@ test.describe("compact landscape gameplay", () => {
     expect(settingsGeometry.minimumOptionFontSize).toBeGreaterThanOrEqual(13);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-settings.png") });
 
+    await revealSetting(page, "card-mode-own-adaptive");
     await expect(page.getByTestId("card-mode-own-adaptive")).toHaveClass(/active/);
+    await revealSetting(page, "card-mode-table-adaptive");
     await expect(page.getByTestId("card-mode-table-adaptive")).toHaveClass(/active/);
+    await revealSetting(page, "seat-direction-counterclockwise");
     await expect(page.getByTestId("seat-direction-counterclockwise")).toHaveClass(/active/);
+    await revealSetting(page, "turn-alert-sound-vibration");
     await expect(page.getByTestId("turn-alert-sound-vibration")).toHaveClass(/active/);
+    await revealSetting(page, "keep-screen-awake");
     const keepScreenAwake = page.getByTestId("keep-screen-awake");
     await expect(keepScreenAwake).toHaveAttribute("aria-checked", "true");
     const initialWakeLockRequests = await page.evaluate(() =>
@@ -2018,8 +2028,11 @@ test.describe("compact landscape gameplay", () => {
       right: await page.getByTestId("player-right").getAttribute("data-player-id"),
       top: await page.getByTestId("player-top").getAttribute("data-player-id"),
     };
+    await revealSetting(page, "card-mode-own-long");
     await page.getByTestId("card-mode-own-long").click();
+    await revealSetting(page, "hand-layout-paged");
     await page.getByTestId("hand-layout-paged").click();
+    await revealSetting(page, "hand-layout-paged");
     await expect(page.getByTestId("hand-layout-paged")).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(".cards.hand")).not.toHaveClass(/single-line/);
     await expect.poll(() => page.locator(".cards.hand").evaluate((hand) =>
@@ -2037,11 +2050,16 @@ test.describe("compact landscape gameplay", () => {
     expect(longDeclarationCardGeometry.width).toBeGreaterThanOrEqual(28);
     expect(longDeclarationCardGeometry.height).toBeGreaterThanOrEqual(52);
     expect(longDeclarationCardGeometry.glyphFontSize).toBeGreaterThanOrEqual(16);
+    await revealSetting(page, "card-mode-table-long");
     await page.getByTestId("card-mode-table-long").click();
     await expect(page.getByTestId("dealer-card").locator("[data-card-mode='long']")).toBeVisible();
+    await revealSetting(page, "seat-direction-clockwise");
     await page.getByTestId("seat-direction-clockwise").click();
+    await revealSetting(page, "turn-alert-sound");
     await page.getByTestId("turn-alert-sound").click();
+    await revealSetting(page, "turn-alert-sound");
     await expect(page.getByTestId("turn-alert-sound")).toHaveClass(/active/);
+    await revealSetting(page, "turn-alert-sound-vibration");
     await page.getByTestId("turn-alert-sound-vibration").click();
     await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.right!);
     await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.left!);
@@ -2054,10 +2072,12 @@ test.describe("compact landscape gameplay", () => {
       keepScreenAwake: true,
     });
     await page.screenshot({ path: testInfo.outputPath("iphone-se-clockwise.png") });
+    await revealSetting(page, "seat-direction-counterclockwise");
     await page.getByTestId("seat-direction-counterclockwise").click();
     await expect(page.getByTestId("player-left")).toHaveAttribute("data-player-id", initialSeatIds.left!);
     await expect(page.getByTestId("player-right")).toHaveAttribute("data-player-id", initialSeatIds.right!);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-counterclockwise.png") });
+    await revealSetting(page, "settings-rules");
     await page.getByTestId("settings-rules").click();
     const rulesDialog = page.getByRole("dialog", { name: "四色牌规则" });
     await expect(rulesDialog).toBeVisible();
@@ -2068,6 +2088,7 @@ test.describe("compact landscape gameplay", () => {
 
     await gameSettings.click();
     await expect(settingsPanel).toBeVisible();
+    await revealSetting(page, "settings-rules");
     await page.getByTestId("settings-rules").click();
     await expect(rulesDialog).toBeVisible();
     await expect.poll(async () => {
@@ -2098,6 +2119,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await gameSettings.click();
     await expect(settingsPanel).toBeVisible();
+    await revealSetting(page, "card-mode-own-large");
     await page.getByTestId("card-mode-own-large").click();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await page.getByTestId("settings-return-to-decision").click();
@@ -2129,6 +2151,7 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     await page.getByTestId("game-settings").click();
+    await revealSetting(page, "hand-layout-paged");
     await page.getByTestId("hand-layout-paged").click();
     await page.keyboard.press("Escape");
     const declarationHand = page.locator(".cards.hand");
