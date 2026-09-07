@@ -3075,23 +3075,6 @@ else if (__VLS_ctx.globalNotice) {
     });
     (__VLS_ctx.globalNotice);
 }
-if (__VLS_ctx.showSmallScreenRecommendation) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
-        ...{ class: "small-screen-recommendation" },
-        'data-testid': "small-screen-recommendation",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.acceptCompactLayout) },
-        type: "button",
-        'data-testid': "recommend-compact",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-        ...{ onClick: (__VLS_ctx.dismissLayoutRecommendation) },
-        type: "button",
-        'data-testid': "dismiss-compact-recommendation",
-    });
-}
 if (__VLS_ctx.showEntry) {
     /** @type {[typeof LoginPage, ]} */ ;
     // @ts-ignore
@@ -3145,7 +3128,7 @@ if (__VLS_ctx.showEntry) {
     var __VLS_25;
 }
 else if (__VLS_ctx.showModeLobby) {
-    /** @type {[typeof LobbyPage, ]} */ ;
+    /** @type {[typeof LobbyPage, typeof LobbyPage, ]} */ ;
     // @ts-ignore
     const __VLS_33 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onStart': {} },
@@ -3306,6 +3289,27 @@ else if (__VLS_ctx.showModeLobby) {
     };
     /** @type {typeof __VLS_ctx.lobbyPageRef} */ ;
     var __VLS_55 = {};
+    __VLS_35.slots.default;
+    {
+        const { recommendation: __VLS_thisSlot } = __VLS_35.slots;
+        if (__VLS_ctx.showSmallScreenRecommendation) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
+                ...{ class: "small-screen-recommendation" },
+                'data-testid': "small-screen-recommendation",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (__VLS_ctx.acceptCompactLayout) },
+                type: "button",
+                'data-testid': "recommend-compact",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (__VLS_ctx.dismissLayoutRecommendation) },
+                type: "button",
+                'data-testid': "dismiss-compact-recommendation",
+            });
+        }
+    }
     var __VLS_35;
 }
 else if (__VLS_ctx.showSyncingScreen) {

@@ -1,6 +1,15 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
 
+// Keep the established geometry/color baseline explicit; appearance.spec covers all new combinations.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const key = "sise_game_display_preferences_v2";
+    const stored = JSON.parse(localStorage.getItem(key) || "{}");
+    localStorage.setItem(key, JSON.stringify({ skin: "cyber-minimal", tableLayout: "compact", ...stored }));
+  });
+});
+
 async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
   const text = (await locator.textContent())?.trim() ?? "";
   const match = text.match(/^(\d+)–(\d+) \/ (\d+)$/);
