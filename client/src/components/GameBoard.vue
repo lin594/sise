@@ -4556,8 +4556,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   overflow: hidden;
   border: 2px solid #fecaca;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(var(--ui-panel-rgb, 255, 255, 255), 0.18), transparent 30% 70%, rgba(var(--ui-panel-rgb, 69, 10, 10), 0.24)),
-    var(--ui-raised, #dc2626);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30% 70%, rgba(69, 10, 10, 0.24)),
+    #dc2626;
   box-shadow:
     inset 0 0 0 3px rgba(127, 29, 29, 0.72),
     0 8px 18px rgba(var(--ui-page-rgb, 2, 6, 23), 0.52),

@@ -83,7 +83,7 @@ html[data-skin] :is(.settings-panel, .history-panel, .phrase-panel, .rules-panel
 html[data-skin] :is(.rules-head, .rules-content, .rules-section, .rules-summary) { color: var(--ui-text); }
 html[data-skin] :is(.tool-button.exit, .danger) { color: var(--ui-danger-text); }
 html[data-skin] :is(button, input, select, textarea):focus-visible { outline: 3px solid var(--ui-accent-text); outline-offset: 2px; }
-html[data-skin] button:disabled { opacity: .7; }
+html[data-skin] button:disabled:not(.hand-card) { opacity: .7; }
 html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active small { color: inherit; }
 
 html[data-skin="cyber-minimal"] { --table-felt: #1f3448; --table-wood: #24303b; }
