@@ -84,7 +84,7 @@ test("a passive human response keeps the privacy window without exposing a count
 
     await Promise.all([
       expect(host.locator("main.layout")).toHaveAttribute("data-decision-attention", "none"),
-      expect(host.getByTestId("pending-card").locator(".response-caption")).toHaveText("待响"),
+      expect(host.getByTestId("pending-card").locator(".response-caption")).toHaveCount(0),
       expect(host.getByTestId("decision-countdown")).toHaveCount(0),
       expect(host.locator(".action-dock .btn")).toHaveCount(0),
       expect(host.getByTestId("action-guidance")).toHaveCount(0),
@@ -93,7 +93,7 @@ test("a passive human response keeps the privacy window without exposing a count
       expect(host.locator(".center-pointer.pointer-down")).toBeVisible(),
       expect(host).not.toHaveTitle(/轮到你/),
       expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "牌局设置"),
-      expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveText("待响"),
+      expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveCount(0),
       expect(guest.getByTestId("decision-countdown")).toHaveCount(0),
     ]);
 
