@@ -219,7 +219,7 @@ test("keeps installation discoverable in game settings without occupying the tab
   await page.getByTestId("nickname-input").fill("桌面应用测试");
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("game-settings")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
 
   await page.getByTestId("game-settings").click();

@@ -37,7 +37,7 @@
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '全局设置'"
+        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : inRoom ? '牌局设置' : '全局设置'"
         title="全局设置"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
