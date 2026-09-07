@@ -2,6 +2,7 @@ import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch 
 import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
+import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey, projectResponseCardPlacement, } from "@/utils/gameFlowPresentation";
 const props = defineProps();
@@ -815,9 +816,19 @@ const latestSeatAction = computed(() => {
     }
     return { actorId: actor, label };
 });
+const publicCollectiveSeconds = computed(() => {
+    if (props.state?.phase !== "playing" || props.state?.responsePhase !== "collective" || Number(props.state?.responseEndsAt ?? 0) <= 0)
+        return null;
+    const endsAt = Number(props.decisionTimerEndsAt || props.state.responseEndsAt);
+    const visibleEnd = visibleDecisionEndsAt("collective", endsAt, Number(props.decisionTimerTotalMs ?? 0));
+    const time = nowMs.value + Number(props.state.presentationClockOffsetMs ?? 0);
+    return Math.max(0, Math.min(3, Math.ceil((visibleEnd - time) / 1000)));
+});
 const fixedClockText = computed(() => {
     if (effectiveInteractionPausedMessage.value || !['playing', 'declaring'].includes(props.state?.phase))
         return '—';
+    if (publicCollectiveSeconds.value !== null)
+        return `${publicCollectiveSeconds.value}秒`;
     if (props.decisionUntimed)
         return '不限时';
     const deadline = Number(props.decisionTimerEndsAt ?? 0);
@@ -864,6 +875,8 @@ const selectedPreviewAccessibleLabel = computed(() => {
         .join("；")}`;
 });
 const seatCountdownSeconds = computed(() => {
+    if (publicCollectiveSeconds.value !== null)
+        return publicCollectiveSeconds.value;
     if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
         Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
         return null;
@@ -882,13 +895,13 @@ const activeDecisionEndsAt = computed(() => {
     return Number(props.state?.responseEndsAt ?? 0);
 });
 const hasMeaningfulCollectiveAction = computed(() => (props.actions ?? []).some((action) => (action.action === "hu" || action.action === "kai" || action.action === "peng") && action.enabled));
-const showDecisionClock = computed(() => props.state?.phase === "declaring"
+const showDecisionClock = computed(() => publicCollectiveSeconds.value !== null || (props.state?.phase === "declaring"
     ? !Boolean(selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done") &&
         (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)
     : props.state?.phase === "playing" &&
         (canDiscard.value || canAct.value) &&
         (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
-        (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null));
+        (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)));
 const flowStatusText = computed(() => {
     if (props.state?.phase === "declaring") {
         return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
@@ -899,7 +912,7 @@ const flowStatusText = computed(() => {
         return "正在提交";
     }
     if (props.state?.phase === "playing" && props.state?.responsePhase === "collective") {
-        return canAct.value ? "" : "等待其他玩家响应";
+        return canAct.value ? "" : publicCollectiveSeconds.value === 0 ? "等待其他玩家操作" : "等待其他玩家响应";
     }
     return "";
 });

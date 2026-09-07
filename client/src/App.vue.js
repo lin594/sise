@@ -17,6 +17,7 @@ import { useGuestProfile } from "@/composables/useGuestProfile";
 import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
+import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
@@ -759,12 +760,14 @@ const settingsDecisionSecondsLeft = computed(() => {
     if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
         return 0;
     }
-    const endsAt = Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0);
+    const endsAt = visibleDecisionEndsAt(state.value?.responsePhase ?? "", Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0), decisionTimer.value.totalMs);
     return endsAt > 0 ? Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000)) : 0;
 });
 const settingsDecisionTimeText = computed(() => decisionTimer.value.untimed
     ? "练习局不限时，查看规则期间牌局仍会继续"
-    : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`);
+    : state.value?.responsePhase === "collective" && settingsDecisionSecondsLeft.value === 0
+        ? "公共倒计时已结束，仍可响应，请尽快操作"
+        : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`);
 function openRules(trigger) {
     const explicitTarget = trigger instanceof HTMLElement
         ? trigger
