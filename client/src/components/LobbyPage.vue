@@ -838,7 +838,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.7rem 0.85rem;
   border: 1px solid rgba(217, 170, 45, 0.5);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(113, 63, 18, 0.45), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
+  background: linear-gradient(135deg, rgba(var(--ui-panel-rgb, 113, 63, 18), 0.45), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
 }
 
 .mode-share-card > div {
@@ -869,7 +869,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.48rem 0.72rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.5);
   border-radius: 0.72rem;
-  background: rgba(7, 89, 133, 0.34);
+  background: rgba(var(--ui-panel-rgb, 7, 89, 133), 0.34);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -884,7 +884,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .guest-profile-summary:hover,
 .guest-profile-summary:focus-visible {
   border-color: var(--ui-accent, #7dd3fc);
-  background: rgba(3, 105, 161, 0.5);
+  background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.5);
 }
 
 .guest-profile-summary:focus-visible {
@@ -929,14 +929,14 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .show-qr-button {
   border-color: rgba(var(--ui-accent-rgb, 125, 211, 252), 0.72);
-  background: #075985;
-  color: #f0f9ff;
+  background: var(--ui-raised, #075985);
+  color: var(--ui-text, #f0f9ff);
   font-weight: 850;
 }
 
 .lobby-kicker {
   margin: 0;
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -988,7 +988,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   justify-content: space-between;
   gap: 1rem;
   border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.55);
-  background: linear-gradient(135deg, rgba(7, 89, 133, 0.72), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
+  background: linear-gradient(135deg, rgba(var(--ui-panel-rgb, 7, 89, 133), 0.72), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
 }
 
 .match-status-card > div {
@@ -1027,7 +1027,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .scoring-copy p {
   margin: 0.28rem 0 0;
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-size: 0.8rem;
 }
 
@@ -1051,7 +1051,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .scoring-options button.active {
   border-color: #fbbf24;
-  background: #713f12;
+  background: var(--ui-raised, #713f12);
   color: var(--ui-gold-text, #fef3c7);
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24);
 }
@@ -1069,7 +1069,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   gap: 0.2rem 0.55rem;
   border: 1px solid rgba(251, 191, 36, 0.68);
   border-radius: 0.72rem;
-  background: rgba(113, 63, 18, 0.66);
+  background: rgba(var(--ui-panel-rgb, 113, 63, 18), 0.66);
   color: var(--ui-gold-text, #fef3c7);
 }
 
@@ -1079,7 +1079,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .scoring-mode-summary span {
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-size: 0.75rem;
 }
 
@@ -1110,8 +1110,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   white-space: nowrap;
 }
 
-.cumulative-board strong.positive { color: #86efac; }
-.cumulative-board strong.negative { color: #fca5a5; }
+.cumulative-board strong.positive { color: var(--ui-accent-text, #86efac); }
+.cumulative-board strong.negative { color: var(--ui-danger-text, #fca5a5); }
 
 .mode-card {
   display: grid;
@@ -1173,7 +1173,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .seat-head span {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 0.75rem;
 }
 
@@ -1189,15 +1189,15 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.12rem 0.38rem;
   border: 1px solid #fb7185;
   border-radius: 999px;
-  color: #fecdd3;
+  color: var(--ui-text, #fecdd3);
   font-size: 0.82rem;
   line-height: 1.25;
 }
 
 .ready-state.ready {
   border-color: #4ade80;
-  background: rgba(20, 83, 45, 0.72);
-  color: #dcfce7;
+  background: rgba(var(--ui-panel-rgb, 20, 83, 45), 0.72);
+  color: var(--ui-text, #dcfce7);
 }
 
 .seat-actions {
@@ -1211,7 +1211,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .bot-level-group > span {
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-size: 0.72rem;
   font-weight: 750;
 }
@@ -1236,8 +1236,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .bot-level-button.active {
   border-color: var(--ui-accent, #38bdf8);
-  background: #075985;
-  color: #f0f9ff;
+  background: var(--ui-raised, #075985);
+  color: var(--ui-text, #f0f9ff);
   box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.28);
 }
 
@@ -1261,7 +1261,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .primary {
-  background: #2563eb;
+  background: var(--ui-raised, #2563eb);
   color: #fff;
   font-weight: 750;
 }
@@ -1278,8 +1278,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .ready-toggle.active {
   border: 1px solid #86efac;
-  background: #14532d;
-  color: #dcfce7;
+  background: var(--ui-raised, #14532d);
+  color: var(--ui-text, #dcfce7);
 }
 
 .ghost {
@@ -1290,7 +1290,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .leave-room {
   border-color: rgba(248, 113, 113, 0.62);
-  color: #fecaca;
+  color: var(--ui-text, #fecaca);
 }
 
 .dissolve-room {
@@ -1299,8 +1299,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .danger {
-  background: #7f1d1d;
-  color: #fee2e2;
+  background: var(--ui-raised, #7f1d1d);
+  color: var(--ui-text, #fee2e2);
 }
 
 .mini {
@@ -1327,7 +1327,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .error {
   margin: 0;
-  color: #fca5a5;
+  color: var(--ui-danger-text, #fca5a5);
 }
 
 .lobby-actions {
@@ -1347,7 +1347,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .fill-bots {
   border-color: rgba(250, 204, 21, 0.72);
-  background: #3f2f0b;
+  background: var(--ui-raised, #3f2f0b);
   color: var(--ui-gold-text, #fef3c7);
   font-weight: 800;
 }
@@ -1406,14 +1406,14 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(127, 29, 29, 0.48);
-  color: #fecaca;
+  background: rgba(var(--ui-panel-rgb, 127, 29, 29), 0.48);
+  color: var(--ui-text, #fecaca);
   font-size: 1.45rem;
 }
 
 .leave-symbol.dissolve {
-  background: #991b1b;
-  color: #fff1f2;
+  background: var(--ui-raised, #991b1b);
+  color: var(--ui-text, #fff1f2);
   font-weight: 900;
 }
 
@@ -1452,7 +1452,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .waiting-leave-actions button.danger {
   border-color: #dc2626;
-  background: #b91c1c;
+  background: var(--ui-raised, #b91c1c);
 }
 
 .guest-profile-dialog {
@@ -1474,7 +1474,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #075985;
+  background: var(--ui-raised, #075985);
   color: var(--ui-gold-text, #fef08a);
   font-size: 0.9rem;
   font-weight: 900;
@@ -1516,7 +1516,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   gap: 0.08rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.42);
   border-radius: 0.7rem;
-  background: rgba(7, 89, 133, 0.28);
+  background: rgba(var(--ui-panel-rgb, 7, 89, 133), 0.28);
   text-align: center;
 }
 
@@ -1548,7 +1548,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   margin-top: 0.6rem;
   border: 1px solid var(--ui-accent, #38bdf8);
   border-radius: 0.72rem;
-  background: #0369a1;
+  background: var(--ui-raised, #0369a1);
   color: #fff;
   font-size: 0.95rem;
   font-weight: 850;

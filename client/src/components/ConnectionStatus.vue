@@ -112,17 +112,17 @@ const detail = computed(() => {
   height: 0.65rem;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: #fbbf24;
+  background: var(--ui-raised, #fbbf24);
   box-shadow: 0 0 0 0.2rem rgba(251, 191, 36, 0.18);
 }
 
 .good .status-dot {
-  background: #4ade80;
+  background: var(--ui-raised, #4ade80);
   box-shadow: 0 0 0 0.2rem rgba(74, 222, 128, 0.17);
 }
 
 .danger .status-dot {
-  background: #fb7185;
+  background: var(--ui-raised, #fb7185);
   box-shadow: 0 0 0 0.2rem rgba(251, 113, 133, 0.18);
 }
 
@@ -160,16 +160,16 @@ button {
   padding: 0.25rem 0.55rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.62);
   border-radius: 0.52rem;
-  background: #075985;
-  color: #f0f9ff;
+  background: var(--ui-raised, #075985);
+  color: var(--ui-text, #f0f9ff);
   font-size: max(0.875rem, 14px);
   font-weight: 800;
 }
 
 button.leave-status {
   border-color: rgba(253, 230, 138, 0.78);
-  background: #92400e;
-  color: #fff7ed;
+  background: var(--ui-raised, #92400e);
+  color: var(--ui-text, #fff7ed);
 }
 
 button:focus-visible {

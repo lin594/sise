@@ -186,7 +186,7 @@ onMounted(async () => {
   place-items: center;
   padding: 0.35rem;
   border-radius: 0.85rem;
-  background: #ffffff;
+  background: var(--ui-raised, #ffffff);
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
 }
 
@@ -208,7 +208,7 @@ p {
 }
 
 .qr-kicker {
-  color: #facc15;
+  color: var(--ui-gold-text, #facc15);
   font-size: 1rem;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -229,7 +229,7 @@ h2 {
 
 .privacy-note {
   margin-top: 0.65rem;
-  color: #bbf7d0;
+  color: var(--ui-text, #bbf7d0);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -241,8 +241,8 @@ h2 {
   padding: 0.65rem 0.8rem;
   border: 1px solid #0284c7;
   border-radius: 0.75rem;
-  background: #0369a1;
-  color: #ffffff;
+  background: var(--ui-raised, #0369a1);
+  color: var(--ui-text, #ffffff);
   font-size: 1.05rem;
   font-weight: 900;
   cursor: pointer;
@@ -260,7 +260,7 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #075985;
+  background: var(--ui-raised, #075985);
   color: var(--ui-accent-text, #e0f2fe);
   font-size: 2.5rem;
   font-weight: 900;
@@ -275,8 +275,8 @@ h2 {
   resize: none;
   border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 0.7rem;
-  background: var(--ui-text, #f8fafc);
-  color: var(--ui-panel, #0f172a);
+  background: var(--ui-panel, #f8fafc);
+  color: var(--ui-text, #0f172a);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px;
   line-height: 1.4;

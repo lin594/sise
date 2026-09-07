@@ -104,7 +104,7 @@ function onInput(event: Event) {
 
 .entry-kicker {
   margin: 0;
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: max(0.8125rem, 13px);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -143,7 +143,7 @@ function onInput(event: Event) {
 }
 
 .entry-field span {
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-size: 0.94rem;
   font-weight: 600;
 }
@@ -199,7 +199,7 @@ function onInput(event: Event) {
 }
 
 .primary {
-  background: #2563eb;
+  background: var(--ui-raised, #2563eb);
   color: #fff;
 }
 
@@ -216,7 +216,7 @@ function onInput(event: Event) {
 
 .quick-name {
   border-color: var(--ui-accent, #0ea5e9);
-  background: rgba(3, 105, 161, 0.28);
+  background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.28);
   color: var(--ui-accent-text, #e0f2fe);
 }
 

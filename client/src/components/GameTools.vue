@@ -1045,12 +1045,12 @@ onBeforeUnmount(() => {
 
 .tool-button.exit:hover {
   border-color: rgba(248, 113, 113, 0.82);
-  color: #fecaca;
+  color: var(--ui-text, #fecaca);
 }
 
 .tool-button.auto-play.active {
   border-color: #fbbf24;
-  background: #713f12;
+  background: var(--ui-raised, #713f12);
   color: var(--ui-gold-text, #fef3c7);
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.22), 0 5px 16px rgba(var(--ui-page-rgb, 2, 6, 23), 0.34);
 }
@@ -1178,7 +1178,7 @@ onBeforeUnmount(() => {
   padding: 0.55rem 0.65rem;
   border: 1px solid rgba(251, 191, 36, 0.62);
   border-radius: 0.75rem;
-  background: #30220b;
+  background: var(--ui-raised, #30220b);
   box-shadow: 0 5px 14px rgba(var(--ui-page-rgb, 2, 6, 23), 0.28);
   display: flex;
   align-items: center;
@@ -1209,8 +1209,8 @@ onBeforeUnmount(() => {
   padding: 0.35rem 0.62rem;
   border: 1px solid #fbbf24;
   border-radius: 0.65rem;
-  background: #b45309;
-  color: #fff7ed;
+  background: var(--ui-raised, #b45309);
+  color: var(--ui-text, #fff7ed);
   font-size: max(0.86rem, 14px);
   font-weight: 850;
 }
@@ -1224,7 +1224,7 @@ onBeforeUnmount(() => {
   padding: 0.75rem 0.5rem 0.35rem;
   display: grid;
   place-items: center;
-  background: linear-gradient(180deg, rgba(8, 15, 29, 0), var(--ui-page, #080f1d) 38%);
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 8, 15, 29), 0), var(--ui-page, #080f1d) 38%);
   color: var(--ui-gold-text, #fde68a);
   font-size: max(0.78rem, 13px);
   font-weight: 850;
@@ -1257,7 +1257,7 @@ onBeforeUnmount(() => {
   padding: 0.45rem 0.55rem;
   border: 1px solid rgba(var(--ui-border-rgb, 71, 85, 105), 0.72);
   border-radius: 0.72rem;
-  background: #111b2d;
+  background: var(--ui-raised, #111b2d);
   display: grid;
   grid-template-columns: 4.9rem minmax(0, 1fr);
   align-items: center;
@@ -1309,7 +1309,7 @@ onBeforeUnmount(() => {
 }
 
 .history-empty > span {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1.65rem;
 }
 
@@ -1404,17 +1404,17 @@ onBeforeUnmount(() => {
 }
 
 .switch-state.active {
-  background: #047857;
-  color: #ecfdf5;
+  background: var(--ui-raised, #047857);
+  color: var(--ui-text, #ecfdf5);
 }
 
 .install-app-setting {
   border-color: rgba(251, 191, 36, 0.66);
-  background: rgba(120, 53, 15, 0.26);
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.26);
 }
 
 .install-app-setting .install-state {
-  background: #92400e;
+  background: var(--ui-raised, #92400e);
   color: var(--ui-gold-text, #fef3c7);
 }
 
@@ -1429,14 +1429,14 @@ onBeforeUnmount(() => {
 }
 
 .alert-options button > span:first-child {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1rem;
   line-height: 1;
 }
 
 .alert-options button.active {
   border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
-  background: rgba(8, 47, 73, 0.78);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
 }
 
 .mode-options button {
@@ -1452,7 +1452,7 @@ onBeforeUnmount(() => {
 
 .mode-options button.active {
   border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
-  background: rgba(8, 47, 73, 0.78);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
   box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.2) inset;
 }
 
@@ -1474,7 +1474,7 @@ onBeforeUnmount(() => {
 }
 
 .direction-options button > span:first-child {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1.3rem;
   line-height: 1;
 }
@@ -1490,7 +1490,7 @@ onBeforeUnmount(() => {
 
 .direction-options button.active {
   border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
-  background: rgba(8, 47, 73, 0.78);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
 }
 
 .mode-sample {
@@ -1572,8 +1572,8 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(127, 29, 29, 0.48);
-  color: #fecaca;
+  background: rgba(var(--ui-panel-rgb, 127, 29, 29), 0.48);
+  color: var(--ui-text, #fecaca);
   font-size: 1.45rem;
 }
 
@@ -1612,18 +1612,18 @@ onBeforeUnmount(() => {
 
 .exit-actions button.danger {
   border-color: #dc2626;
-  background: #b91c1c;
+  background: var(--ui-raised, #b91c1c);
 }
 
 .auto-play-symbol {
-  background: rgba(120, 53, 15, 0.58);
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.58);
   color: var(--ui-gold-text, #fde68a);
   font-weight: 900;
 }
 
 .exit-actions button.auto-play-accept {
   border-color: #d97706;
-  background: #a16207;
+  background: var(--ui-raised, #a16207);
 }
 
 @media (max-width: 960px), (max-height: 500px) {
