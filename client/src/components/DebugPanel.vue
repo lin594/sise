@@ -95,13 +95,13 @@ function labelOf(key: string): string {
 
 .result.ok {
   border: 1px solid #166534;
-  background: #052e16;
-  color: #bbf7d0;
+  background: var(--ui-raised, #052e16);
+  color: var(--ui-text, #bbf7d0);
 }
 
 .result.fail {
   border: 1px solid #991b1b;
-  background: #450a0a;
-  color: #fecaca;
+  background: var(--ui-raised, #450a0a);
+  color: var(--ui-text, #fecaca);
 }
 </style>

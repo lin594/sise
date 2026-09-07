@@ -128,7 +128,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #075985;
+  background: var(--ui-raised, #075985);
   color: var(--ui-accent-text, #e0f2fe);
   font-size: 1.15rem;
   font-weight: 900;
@@ -159,8 +159,8 @@ h2 {
   resize: none;
   border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 0.75rem;
-  background: var(--ui-text, #f8fafc);
-  color: var(--ui-ink, #0f172a);
+  background: var(--ui-panel, #f8fafc);
+  color: var(--ui-text, #0f172a);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px;
   line-height: 1.45;
@@ -174,7 +174,7 @@ h2 {
 
 .selection-hint {
   margin-top: 0.45rem;
-  color: #bbf7d0;
+  color: var(--ui-text, #bbf7d0);
   font-size: 0.85rem;
   font-weight: 750;
 }
@@ -199,7 +199,7 @@ h2 {
 
 .invite-copy-actions button.primary {
   border-color: #0284c7;
-  background: #0369a1;
+  background: var(--ui-raised, #0369a1);
 }
 
 .invite-copy-actions button:focus-visible {

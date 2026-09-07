@@ -583,25 +583,6 @@
           @submit="onSubmitAction"
         />
         <span
-          v-if="showInlineListeningWaits"
-          class="current-listening-waits"
-          role="status"
-          :aria-label="currentListeningAccessibleLabel"
-          data-testid="current-listening-waits"
-        >
-          <span class="current-listening-label" aria-hidden="true">听</span>
-          <span
-            v-for="wait in currentListeningWaits"
-            :key="`current-wait-${wait.card.id}`"
-            class="current-listening-card"
-            :class="{ exhausted: wait.visibleRemaining === 0 }"
-            :data-visible-remaining="wait.visibleRemaining"
-          >
-            <CardComp :card="wait.card" size="xs" mode="large" />
-            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
-          </span>
-        </span>
-        <span
           v-if="showDecisionClock"
           class="fixed-clock"
           :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }"
@@ -620,38 +601,27 @@
       >{{ flowStatusText }}</div>
     </Transition>
 
-    <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
-      <div
-        v-if="selectedPreview"
-        class="selected-card-preview"
-        data-testid="selected-card-preview"
-        :aria-label="selectedPreviewAccessibleLabel"
-      >
-        <CardComp :card="selectedPreview" size="xl" :mode="ownCardMode" />
-        <template v-if="selectedDiscardListeningRoute?.waits.length">
-          <span class="selected-preview-wait-label" aria-hidden="true">等</span>
-          <span class="selected-preview-waits" aria-hidden="true">
-            <span
-              v-for="wait in selectedDiscardListeningRoute.waits"
-              :key="`selected-wait-${wait.card.id}`"
-              class="selected-preview-wait"
-              :class="{ exhausted: wait.visibleRemaining === 0 }"
-              :data-card-id="wait.card.id"
-              :data-visible-remaining="wait.visibleRemaining"
-              data-testid="listening-wait"
-            >
-              <CardComp :card="wait.card" size="xs" mode="large" />
-              <span class="wait-count-badge" data-testid="listening-wait-count">{{ wait.visibleRemaining }}张</span>
-            </span>
-          </span>
-        </template>
+    <section v-if="listeningDetailsOpen && listeningDetailWaits.length" id="listening-details" ref="listeningDetailsRef"
+      class="listening-details" role="region" :aria-label="listeningDetailTitle" data-testid="listening-details"
+      tabindex="0" @pointerdown="restartListeningTimer" @scroll.capture.passive="restartListeningTimer"
+      @focusin="pauseListeningTimer" @focusout="() => nextTick(restartListeningTimer)">
+      <header><strong>{{ listeningDetailTitle }}</strong><button type="button" aria-label="关闭听牌详情" @click="closeListeningDetails(true)">×</button></header>
+      <div class="listening-details-cards" tabindex="0">
+        <span v-for="wait in listeningDetailWaits" :key="wait.card.id" class="current-listening-card" :class="{ exhausted: wait.visibleRemaining === 0 }"
+          :data-visible-remaining="wait.visibleRemaining" :data-card-id="wait.card.id" data-testid="listening-wait">
+          <CardComp :card="wait.card" size="xs" mode="large" />
+          <span class="wait-count-badge" data-testid="listening-wait-count">{{ wait.visibleRemaining }}张</span>
+        </span>
       </div>
+    </section>
+
+    <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div
         class="self-hand-panel"
         :class="{ 'has-toolbar': handLayout === 'paged' && handHasOverflow }"
       >
         <button
-          v-if="currentListeningWaits.length"
+          v-if="listeningDetailWaits.length"
           ref="listeningToggleRef"
           class="listening-toggle"
           type="button"
@@ -659,28 +629,8 @@
           :aria-expanded="listeningDetailsOpen"
           aria-controls="listening-details"
           aria-label="查看听牌详情"
-          @click="listeningDetailsOpen = !listeningDetailsOpen"
+          @click="toggleListeningDetails"
         >听</button>
-        <div
-          v-if="listeningDetailsOpen && currentListeningWaits.length"
-          id="listening-details"
-          ref="listeningDetailsRef"
-          class="listening-popover current-listening-waits"
-          role="dialog"
-          aria-label="听牌详情"
-        >
-          <span class="current-listening-label" aria-hidden="true">听</span>
-          <span
-            v-for="wait in currentListeningWaits"
-            :key="`popover-wait-${wait.card.id}`"
-            class="current-listening-card"
-            :class="{ exhausted: wait.visibleRemaining === 0 }"
-            :data-visible-remaining="wait.visibleRemaining"
-          >
-            <CardComp :card="wait.card" size="xs" mode="large" />
-            <span class="wait-count-badge" aria-hidden="true">{{ wait.visibleRemaining }}张</span>
-          </span>
-        </div>
         <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-toolbar">
           <div class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
@@ -789,7 +739,7 @@
         :style="flight.style" :data-transition-kind="flight.kind" :data-transition-card-id="flight.card.id"
         :data-transition-stage="flight.stage" :data-transition-to="flight.destinationZone" aria-hidden="true">
         <div class="table-flight-turn" :style="{ transform: `rotateY(${flight.rotation}deg)` }">
-          <div v-if="flight.back" class="card-back"></div>
+          <CardBack v-if="flight.back" :mode="props.tableCardMode" />
           <CardComp
             v-else
             :card="flight.card"
@@ -808,7 +758,7 @@
         :class="flight.mode"
         :style="flightStyle(flight)"
       >
-        <div v-if="flight.mode === 'deal'" class="card-back"></div>
+        <CardBack v-if="flight.mode === 'deal'" :mode="ownCardMode" />
         <CardComp v-else-if="flight.card" :card="flight.card" :mode="props.tableCardMode" size="md" />
       </div>
     </div>
@@ -819,6 +769,7 @@
 import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
+import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import type {
@@ -1828,12 +1779,6 @@ const activeHints = computed(() => {
   return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
 const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
-const showInlineListeningWaits = computed(() =>
-  props.state?.phase === "playing" &&
-  currentListeningWaits.value.length > 0 &&
-  !canAct.value &&
-  !canDiscard.value,
-);
 const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
   .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
   .join("；")}`);
@@ -1852,6 +1797,26 @@ const selectedPreview = computed(() => canDiscard.value
 const selectedDiscardListeningRoute = computed(() => selectedPreview.value
   ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
   : undefined);
+const listeningDetailWaits = computed(() => selectedPreview.value ? selectedDiscardListeningRoute.value?.waits ?? [] : currentListeningWaits.value);
+const listeningDetailTitle = computed(() => selectedPreview.value ? "打出此牌后听" : "当前听牌");
+let listeningCloseTimer: ReturnType<typeof setTimeout> | null = null;
+function pauseListeningTimer() {
+  if (listeningCloseTimer) clearTimeout(listeningCloseTimer);
+  listeningCloseTimer = null;
+}
+function restartListeningTimer() {
+  pauseListeningTimer();
+  if (!listeningDetailsOpen.value || listeningDetailsRef.value?.contains(document.activeElement)) return;
+  listeningCloseTimer = setTimeout(() => closeListeningDetails(), 5000);
+}
+function toggleListeningDetails() {
+  if (listeningDetailsOpen.value) closeListeningDetails();
+  else { listeningDetailsOpen.value = true; restartListeningTimer(); }
+}
+watch(() => selectedPreview.value?.id, () => {
+  closeListeningDetails();
+  if (selectedDiscardListeningRoute.value?.waits.length) { listeningDetailsOpen.value = true; restartListeningTimer(); }
+});
 const selectedPreviewAccessibleLabel = computed(() => {
   const selected = selectedPreview.value;
   if (!selected) return "";
@@ -2129,6 +2094,7 @@ function clearChiSelection(event?: KeyboardEvent): void {
 }
 
 function closeListeningDetails(restoreFocus = false): void {
+  pauseListeningTimer();
   if (!listeningDetailsOpen.value) return;
   listeningDetailsOpen.value = false;
   if (restoreFocus) void nextTick(() => listeningToggleRef.value?.focus());
@@ -2821,6 +2787,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  pauseListeningTimer();
   document.removeEventListener("pointerdown", handleDocumentPointerDown);
   if (presentationFrame !== null) cancelAnimationFrame(presentationFrame);
   if (handLayoutFrame !== null) cancelAnimationFrame(handLayoutFrame);
@@ -2868,9 +2835,9 @@ watch(
   () => void nextTick(updateSelfNameFit),
 );
 watch(selfIdentityRef, observeSelfNameFit);
-watch(() => props.decisionKey, () => { listeningDetailsOpen.value = false; });
-watch(currentListeningWaits, (waits) => {
-  if (!waits.length) listeningDetailsOpen.value = false;
+watch(() => props.decisionKey, () => closeListeningDetails());
+watch(listeningDetailWaits, (waits) => {
+  if (!waits.length) closeListeningDetails();
 });
 
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
@@ -3149,8 +3116,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   margin: 0 auto;
   border-radius: clamp(0.5rem, 1.5vh, 1rem);
   border: 1px solid var(--ui-raised, #1e293b);
-  background:
-    radial-gradient(120% 90% at 50% 50%, rgba(6, 78, 59, 0.9), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96) 70%),
+  background: radial-gradient(120% 90% at 50% 50%, rgba(var(--ui-panel-rgb, 6, 78, 59), 0.9), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96) 70%),
     linear-gradient(160deg, var(--ui-panel, #0b1220) 0%, var(--ui-page, #020617) 100%);
   overflow: hidden;
   display: grid;
@@ -3171,7 +3137,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.2rem 0.55rem;
   border-radius: 0.7rem;
   border: 2px solid rgba(var(--ui-panel-rgb, 15, 23, 42), 0.42);
-  color: var(--ui-ink, #111827);
+  color: var(--ui-text, #111827);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3352,7 +3318,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.06rem 0.32rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.74);
   border-radius: 999px;
-  background: rgba(3, 105, 161, 0.42);
+  background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.42);
   color: var(--ui-accent-text, #e0f2fe);
   display: inline-grid;
   place-items: center;
@@ -3369,7 +3335,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.06rem 0.22rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.58);
   border-radius: 999px;
-  background: rgba(3, 105, 161, 0.24);
+  background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.24);
   color: var(--ui-accent-text, #e0f2fe);
   display: inline-grid;
   place-items: center;
@@ -3388,8 +3354,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   display: inline-grid;
   place-items: center;
   border: 1px solid rgba(245, 158, 11, 0.95);
-  background: linear-gradient(145deg, #fbbf24, #b45309);
-  color: #451a03;
+  background: linear-gradient(145deg, var(--ui-raised, #fbbf24), var(--ui-raised, #b45309));
+  color: var(--ui-danger-text, #451a03);
   font-size: max(0.8125rem, 13px);
   font-weight: 900;
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.32);
@@ -3422,7 +3388,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   border-radius: 0.45rem;
   display: inline-grid;
   place-items: center;
-  color: var(--ui-ink, #111827);
+  color: var(--ui-text, #111827);
   font-size: clamp(0.72rem, 1.65vh, 0.95rem);
   font-weight: 900;
 }
@@ -3451,8 +3417,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .tag.turn {
   border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
-  color: #bbf7d0;
+  background: rgba(var(--ui-panel-rgb, 34, 197, 94), 0.15);
+  color: var(--ui-text, #bbf7d0);
   font-size: max(0.8125rem, 13px);
   line-height: 1.2;
 }
@@ -3460,8 +3426,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .turn-countdown {
   border-radius: 999px;
   border: 1px solid rgba(16, 185, 129, 0.75);
-  background: rgba(6, 78, 59, 0.28);
-  color: #a7f3d0;
+  background: rgba(var(--ui-panel-rgb, 6, 78, 59), 0.28);
+  color: var(--ui-accent-text, #a7f3d0);
   padding: 1px 7px;
   font-size: clamp(0.62rem, 1.2vh, 0.75rem);
   line-height: 1.2;
@@ -3483,7 +3449,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #22c55e, #84cc16);
+  background: linear-gradient(90deg, var(--ui-raised, #22c55e), var(--ui-raised, #84cc16));
   transition: width 0.35s linear;
 }
 
@@ -3493,7 +3459,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .tag.dealer {
   border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.16);
+  background: rgba(var(--ui-panel-rgb, 245, 158, 11), 0.16);
   color: var(--ui-gold-text, #fde68a);
 }
 
@@ -3560,7 +3526,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   inset: -4px;
   border-radius: 0.62rem;
   padding: 3px;
-  background: linear-gradient(135deg, #f43f5e, #f59e0b, #22c55e, var(--ui-accent, #38bdf8), #a855f7);
+  background: linear-gradient(135deg, var(--ui-raised, #f43f5e), var(--ui-raised, #f59e0b), var(--ui-raised, #22c55e), var(--ui-accent, #38bdf8), var(--ui-raised, #a855f7));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -3612,12 +3578,12 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .group-block.fish {
   border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.7);
-  background: rgba(8, 47, 73, 0.42);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.42);
 }
 
 .group-block.public {
   border-color: rgba(250, 204, 21, 0.72);
-  background: rgba(113, 63, 18, 0.32);
+  background: rgba(var(--ui-panel-rgb, 113, 63, 18), 0.32);
 }
 
 .group-badge {
@@ -3750,7 +3716,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .stack-count {
   margin-left: 6px;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-weight: 700;
 }
 
@@ -3855,7 +3821,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .center-seat.action .center-seat-action {
   border-style: solid;
   border-color: rgba(251, 191, 36, 0.88);
-  background: rgba(120, 53, 15, 0.34);
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.34);
   color: var(--ui-gold-text, #fef3c7);
   box-shadow: 0 0 16px rgba(245, 158, 11, 0.18);
 }
@@ -3863,7 +3829,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .center-seat.responding .center-seat-action,
 .center-seat.active .center-seat-action {
   border-color: rgba(34, 197, 94, 0.88);
-  color: #dcfce7;
+  color: var(--ui-text, #dcfce7);
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.24) inset, 0 0 16px rgba(34, 197, 94, 0.16);
 }
 
@@ -3919,7 +3885,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   transform: translate(-50%, 55%);
   border-radius: 999px;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.42);
-  background: rgba(8, 47, 73, 0.88);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.88);
   color: var(--ui-accent-text, #e0f2fe);
   padding: 0.05rem 0.38rem;
   font-size: max(0.8125rem, 13px);
@@ -4016,7 +3982,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   width: 4px;
   height: 16px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.98);
+  background: rgba(var(--ui-panel-rgb, 34, 197, 94), 0.98);
   top: 14px;
 }
 
@@ -4056,7 +4022,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .empty {
   margin: 0;
-  color: #64748b;
+  color: var(--ui-muted, #64748b);
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 
@@ -4077,7 +4043,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .self-zone.active {
   border-color: #22c55e;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35) inset;
-  background: linear-gradient(180deg, rgba(8, 26, 19, 0.9), rgba(var(--ui-panel-rgb, 11, 18, 32), 0.95));
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 8, 26, 19), 0.9), rgba(var(--ui-panel-rgb, 11, 18, 32), 0.95));
 }
 
 .self-zone.dealer {
@@ -4207,8 +4173,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0 0.5rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.68);
   border-radius: 0.5rem;
-  background: #075985;
-  color: #f0f9ff;
+  background: var(--ui-raised, #075985);
+  color: var(--ui-text, #f0f9ff);
   display: inline-grid;
   place-items: center;
   font-size: 0.86rem;
@@ -4224,7 +4190,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .hand-scroll-tools button:disabled {
   border-color: var(--ui-ink, #334155);
   background: var(--ui-raised, #1e293b);
-  color: #64748b;
+  color: var(--ui-muted, #64748b);
   opacity: 0.72;
 }
 
@@ -4269,23 +4235,23 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 }
 
 .tone-red {
-  background: #e53935;
+  background: var(--ui-raised, #e53935);
 }
 
 .tone-yellow {
-  background: #ffd700;
+  background: var(--ui-raised, #ffd700);
 }
 
 .tone-green {
-  background: #43a047;
+  background: var(--ui-raised, #43a047);
 }
 
 .tone-white {
-  background: #ffffff;
+  background: var(--ui-raised, #ffffff);
 }
 
 .tone-gold {
-  background: #c41e1e;
+  background: var(--ui-raised, #c41e1e);
 }
 
 .hand {
@@ -4422,8 +4388,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   display: grid;
   place-items: center;
   border: 2px solid var(--ui-gold-text, #fef3c7);
-  background: #92400e;
-  color: #fffbeb;
+  background: var(--ui-raised, #92400e);
+  color: var(--ui-text, #fffbeb);
   font-size: 11px;
   font-weight: 900;
   line-height: 1;
@@ -4492,21 +4458,6 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   filter: drop-shadow(0 8px 14px rgba(var(--ui-panel-rgb, 15, 23, 42), 0.45));
 }
 
-.card-back {
-  width: 100%;
-  height: 100%;
-  border-radius: 6px;
-  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.8);
-  background:
-    linear-gradient(145deg, rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96), rgba(var(--ui-raised-rgb, 30, 41, 59), 0.95)),
-    repeating-linear-gradient(
-      -40deg,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 0px,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 8px
-    );
-}
 
 .deal-overlay {
   position: absolute;
@@ -4530,7 +4481,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   display: grid;
   place-items: center;
   padding: clamp(0.4rem, 1.2vh, 0.8rem);
-  background: radial-gradient(circle at center, rgba(120, 53, 15, 0.28), rgba(var(--ui-page-rgb, 2, 6, 23), 0.76) 72%);
+  background: radial-gradient(circle at center, rgba(var(--ui-panel-rgb, 120, 53, 15), 0.28), rgba(var(--ui-page-rgb, 2, 6, 23), 0.76) 72%);
   pointer-events: none;
 }
 
@@ -4541,7 +4492,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   min-height: clamp(8rem, 26vh, 11.5rem);
   border: 2px solid rgba(251, 191, 36, 0.92);
   border-radius: clamp(1rem, 2.8vh, 1.6rem);
-  background: linear-gradient(160deg, rgba(var(--ui-raised-rgb, 30, 41, 59), 0.98), rgba(7, 15, 29, 0.98));
+  background: linear-gradient(160deg, rgba(var(--ui-raised-rgb, 30, 41, 59), 0.98), rgba(var(--ui-panel-rgb, 7, 15, 29), 0.98));
   box-shadow:
     0 0 0 4px rgba(120, 53, 15, 0.34),
     0 0 36px rgba(251, 191, 36, 0.38),
@@ -4578,7 +4529,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 }
 
 .dealer-reveal-label {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: clamp(0.82rem, 1.9vh, 1rem);
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -4599,9 +4550,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   overflow: hidden;
   border: 2px solid #fecaca;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30% 70%, rgba(69, 10, 10, 0.24)),
-    #dc2626;
+  background: linear-gradient(90deg, rgba(var(--ui-panel-rgb, 255, 255, 255), 0.18), transparent 30% 70%, rgba(var(--ui-panel-rgb, 69, 10, 10), 0.24)),
+    var(--ui-raised, #dc2626);
   box-shadow:
     inset 0 0 0 3px rgba(127, 29, 29, 0.72),
     0 8px 18px rgba(var(--ui-page-rgb, 2, 6, 23), 0.52),
@@ -4614,7 +4564,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   width: 0.32rem;
   height: 0.32rem;
   border-radius: 50%;
-  background: rgba(254, 202, 202, 0.82);
+  background: rgba(var(--ui-panel-rgb, 254, 202, 202), 0.82);
   transform: translateX(-50%);
 }
 
@@ -4636,7 +4586,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 }
 
 .dealer-reveal-card-name {
-  color: #fff7ed;
+  color: var(--ui-text, #fff7ed);
   font-size: clamp(1rem, 2.4vh, 1.3rem);
   line-height: 1.1;
 }
@@ -5134,8 +5084,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   .tag.status.temporary-control {
     display: inline-flex;
     border-color: rgba(251, 113, 133, 0.82);
-    background: rgba(127, 29, 29, 0.78);
-    color: #fff1f2;
+    background: rgba(var(--ui-panel-rgb, 127, 29, 29), 0.78);
+    color: var(--ui-text, #fff1f2);
     font-weight: 800;
   }
 
@@ -5341,7 +5291,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   border: 1px solid rgba(245, 158, 11, 0.48);
   border-radius: 0.48rem;
   background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96);
-  color: #fcd34d;
+  color: var(--ui-gold-text, #fcd34d);
   display: inline-grid;
   place-items: center;
   text-align: center;
@@ -5353,8 +5303,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .fixed-clock.urgent {
   border-color: #fb7185;
-  background: #9f1239;
-  color: #fff1f2;
+  background: var(--ui-raised, #9f1239);
+  color: var(--ui-text, #fff1f2);
 }
 
 .self-hand-card {
@@ -5408,8 +5358,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.36rem 0.68rem;
   border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 0.7rem;
-  background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-ink, #0f172a);
+  background: rgba(var(--ui-panel-rgb, 248, 250, 252), 0.98);
+  color: var(--ui-text, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.46);
   font-size: max(0.8125rem, 13px);
   font-weight: 800;
@@ -5464,7 +5414,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   z-index: 2;
   padding: 1px 3px;
   border-radius: 3px;
-  background: #0f766e;
+  background: var(--ui-raised, #0f766e);
   color: white;
   font-size: 11px;
 }
@@ -5490,7 +5440,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 }
 
 .selected-preview-wait-label {
-  color: #a7f3d0;
+  color: var(--ui-accent-text, #a7f3d0);
   font-size: 12px;
   font-weight: 800;
 }
@@ -5562,7 +5512,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .current-listening-label {
   flex: 0 0 auto;
-  color: #a7f3d0;
+  color: var(--ui-accent-text, #a7f3d0);
   font-weight: 900;
 }
 
@@ -5582,8 +5532,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.15rem 0.42rem;
   border: 1px solid rgba(52, 211, 153, 0.78);
   border-radius: 0.48rem;
-  background: rgba(6, 78, 59, 0.94);
-  color: #ecfdf5;
+  background: rgba(var(--ui-panel-rgb, 6, 78, 59), 0.94);
+  color: var(--ui-text, #ecfdf5);
   font-weight: 900;
 }
 
@@ -5654,13 +5604,13 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .group-score-badge.positive {
   color: var(--ui-gold-text, #fde68a);
   border-color: rgba(245, 158, 11, 0.62);
-  background: rgba(120, 53, 15, 0.34);
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.34);
 }
 
 .kan-count-badge {
   border: 1px solid rgba(167, 139, 250, 0.58);
-  color: #ddd6fe;
-  background: rgba(76, 29, 149, 0.26);
+  color: var(--ui-text, #ddd6fe);
+  background: rgba(var(--ui-panel-rgb, 76, 29, 149), 0.26);
 }
 
 .quick-phrase-toast {
@@ -5674,8 +5624,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.38rem 0.62rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.78);
   border-radius: 0.78rem;
-  background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-ink, #0f172a);
+  background: rgba(var(--ui-panel-rgb, 248, 250, 252), 0.98);
+  color: var(--ui-text, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.48);
   display: flex;
   align-items: baseline;
@@ -5688,7 +5638,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 
 .quick-phrase-toast strong {
   flex: 0 0 auto;
-  color: #0369a1;
+  color: var(--ui-accent-text, #0369a1);
 }
 
 .quick-phrase-toast span {
@@ -5709,8 +5659,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   padding: 0.42rem 0.72rem;
   border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 0.72rem;
-  background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-ink, #0f172a);
+  background: rgba(var(--ui-panel-rgb, 248, 250, 252), 0.98);
+  color: var(--ui-text, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.46);
   font-size: max(0.8125rem, 13px);
   font-weight: 800;
@@ -5822,4 +5772,10 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   }
   .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: 1px; padding: 1px; }
 }
+
+.listening-details { grid-row: 1; grid-column: 1; align-self: end; justify-self: end; position: relative; z-index: 20; width: min(32%, 24rem); max-height: min(100%, 7rem); min-height: 0; box-sizing: border-box; margin: .25rem; padding: .3rem; border: 1px solid var(--ui-border, #64748b); border-radius: .6rem; background: var(--ui-panel, #0f172a); color: var(--ui-text, #f8fafc); display: flex; flex-direction: column; box-shadow: 0 3px 12px #0003; }
+.listening-details header { display: flex; align-items: center; justify-content: space-between; gap: .25rem; font-size: 13px; }
+.listening-details header button { background: transparent; border: 0; color: inherit; min-width: 28px; min-height: 28px; }
+.listening-details-cards { display: flex; flex-wrap: wrap; gap: .5rem .3rem; padding: .45rem .15rem .15rem; overflow: auto; min-height: 0; max-height: 5.3rem; }
+.listening-details .current-listening-card :deep(.card) { width: 1.6rem; height: 2.2rem; font-size: .85rem; }
 </style>

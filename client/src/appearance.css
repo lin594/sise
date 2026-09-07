@@ -2,15 +2,10 @@
   --card-back: linear-gradient(110deg, #ee6961, #b6242c 55%, #781d27);
   --long-card-radius: 50% / 18%;
 }
-html .card-back, html .pending-fish-back, html .deck-layer {
-  background: var(--card-back);
-  border-radius: var(--long-card-radius);
-  border-color: #f7b0a0;
-}
 
 [data-skin="licheng-water"] {
   --ui-page: #dce3d0; --ui-panel: #f2eedf; --ui-raised: #e3e5d2;
-  --ui-ink: #213e34; --ui-text: #213e34; --ui-muted: #506957; --ui-border: #96aa8f;
+  --ui-text: #213e34; --ui-muted: #405746; --ui-border: #96aa8f;
   --ui-accent: #28654f; --ui-accent-text: #235d49; --ui-gold-text: #76501e;
   --ui-page-rgb: 220,227,208; --ui-panel-rgb: 242,238,223; --ui-raised-rgb: 227,229,210;
   --ui-border-rgb: 150,170,143; --ui-muted-rgb: 80,105,87; --ui-accent-rgb: 40,101,79;
@@ -19,7 +14,7 @@ html .card-back, html .pending-fish-back, html .deck-layer {
 }
 [data-skin="puxian-house"] {
   --ui-page: #e2c9aa; --ui-panel: #f7ead7; --ui-raised: #ead7bd;
-  --ui-ink: #503326; --ui-text: #503326; --ui-muted: #775444; --ui-border: #b99977;
+  --ui-text: #503326; --ui-muted: #614431; --ui-border: #b99977;
   --ui-accent: #943e2f; --ui-accent-text: #883525; --ui-gold-text: #744713;
   --ui-page-rgb: 226,201,170; --ui-panel-rgb: 247,234,215; --ui-raised-rgb: 234,215,189;
   --ui-border-rgb: 185,153,119; --ui-muted-rgb: 119,84,68; --ui-accent-rgb: 148,62,47;
@@ -28,7 +23,7 @@ html .card-back, html .pending-fish-back, html .deck-layer {
 }
 [data-skin="meizhou-sea"] {
   --ui-page: #cbdfe0; --ui-panel: #edf3ec; --ui-raised: #d8e7e4;
-  --ui-ink: #203e4a; --ui-text: #203e4a; --ui-muted: #4b6871; --ui-border: #89abb0;
+  --ui-text: #203e4a; --ui-muted: #3d5961; --ui-border: #89abb0;
   --ui-accent: #256b82; --ui-accent-text: #235c70; --ui-gold-text: #72541f;
   --ui-page-rgb: 203,223,224; --ui-panel-rgb: 237,243,236; --ui-raised-rgb: 216,231,228;
   --ui-border-rgb: 137,171,176; --ui-muted-rgb: 75,104,113; --ui-accent-rgb: 37,107,130;
@@ -69,3 +64,24 @@ html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-o
 }
 html[data-skin]:not([data-skin="cyber-minimal"]) :is(.primary, .start-btn, .login-submit) { background: var(--ui-accent); color: #fff9eb; }
 html[data-skin]:not([data-skin="cyber-minimal"]) :is(.entry-kicker, .nickname-label) { color: var(--ui-accent-text); }
+
+/* Every application surface follows the selected skin, including native controls. */
+html[data-skin="cyber-minimal"] {
+  color-scheme: dark;
+  --ui-page: #080f1d; --ui-panel: #111e30; --ui-raised: #203149;
+  --ui-text: #f1f5f9; --ui-muted: #c1cddd; --ui-border: #8494aa;
+  --ui-accent: #126481; --ui-accent-text: #a5e4fc; --ui-gold-text: #fde68a; --ui-danger-text: #fecaca;
+  --ui-page-rgb: 8,15,29; --ui-panel-rgb: 17,30,48; --ui-raised-rgb: 32,49,73;
+  --ui-border-rgb: 132,148,170; --ui-muted-rgb: 193,205,221; --ui-accent-rgb: 18,100,129;
+}
+html[data-skin="licheng-water"] { --ui-danger-text: #992b28; --ui-border: #66795f; }
+html[data-skin="puxian-house"] { --ui-danger-text: #962b25; --ui-border: #866347; }
+html[data-skin="meizhou-sea"] { --ui-danger-text: #942d35; --ui-border: #557b83; }
+html[data-skin] :is(input, select, textarea, button) { accent-color: var(--ui-accent); }
+html[data-skin] :is(.primary, .btn.enabled, .start-btn, .login-submit) { background: var(--ui-accent); color: #fffdf4; }
+html[data-skin] :is(.settings-panel, .history-panel, .phrase-panel, .rules-panel, .hu-panel) { background: var(--ui-panel); color: var(--ui-text); }
+html[data-skin] :is(.rules-head, .rules-content, .rules-section, .rules-summary) { color: var(--ui-text); }
+html[data-skin] :is(.tool-button.exit, .danger) { color: var(--ui-danger-text); }
+html[data-skin] :is(button, input, select, textarea):focus-visible { outline: 3px solid var(--ui-accent-text); outline-offset: 2px; }
+html[data-skin] button:disabled { opacity: .7; }
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active small { color: inherit; }

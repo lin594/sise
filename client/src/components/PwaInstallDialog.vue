@@ -107,7 +107,7 @@ p {
 }
 
 .install-kicker {
-  color: #facc15;
+  color: var(--ui-gold-text, #facc15);
   font-size: 0.85rem;
   font-weight: 850;
   letter-spacing: 0.06em;
@@ -148,7 +148,7 @@ li > span {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #92400e;
+  background: var(--ui-raised, #92400e);
   color: var(--ui-gold-text, #fef3c7);
   font-weight: 900;
 }
@@ -159,8 +159,8 @@ li > span {
   margin-top: 0.75rem;
   border: 1px solid #d97706;
   border-radius: 0.75rem;
-  background: #b45309;
-  color: #fff7ed;
+  background: var(--ui-raised, #b45309);
+  color: var(--ui-text, #fff7ed);
   font-size: 1rem;
   font-weight: 900;
 }

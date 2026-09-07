@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
@@ -46,6 +47,7 @@ async function start(page: Page, scenario: string) {
 
 async function selectTableCardMode(page: Page, mode: "large" | "long") {
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, `card-mode-table-${mode}`);
   await page.getByTestId(`card-mode-table-${mode}`).click();
   await page.getByRole("button", { name: "关闭设置" }).click();
   await expect(page.getByTestId("pending-card").locator(`[data-card-mode="${mode}"]`)).toBeVisible();
