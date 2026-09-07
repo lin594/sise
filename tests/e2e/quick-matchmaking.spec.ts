@@ -177,9 +177,14 @@ test("quick-match players rematch independently without pulling others from sett
     const oldRoomId = await first.evaluate(() => localStorage.getItem("four_room_id"));
     expect(oldRoomId).toBeTruthy();
 
-    await startLobbyAction(first);
+    // Concurrent entry can make either player the room owner.
+    await expect.poll(async () =>
+      await first.getByTestId("lobby-start").isVisible() || await second.getByTestId("lobby-start").isVisible(),
+    ).toBe(true);
+    const owner = await first.getByTestId("lobby-start").isVisible() ? first : second;
+    await owner.getByTestId("lobby-start").click();
     await expect(first.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
-    await applyDebugScenario(first, "settlement_hu");
+    await applyDebugScenario(owner, "settlement_hu");
     await expect(first.getByTestId("settlement-panel")).toBeVisible();
     await expect(second.getByTestId("settlement-panel")).toBeVisible();
     await expect(first.getByTestId("quick-rematch")).toHaveText("再来一局（重新配桌）");
