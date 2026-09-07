@@ -809,7 +809,7 @@ function closeRules(restoreFocus = true) {
     void nextTick(() => {
         const resolveTarget = () => returnTarget?.isConnected && !returnToGameSettings
             ? returnTarget
-            : document.querySelector("[data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='open-rules']:not(:disabled), [data-testid='login-submit'], .reset-btn");
+            : document.querySelector("[data-testid='lobby-rules']:not(:disabled), [data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='open-rules']:not(:disabled), [data-testid='login-submit'], .reset-btn");
         const restore = () => resolveTarget()?.focus({ preventScroll: true });
         restore();
         window.requestAnimationFrame(restore);

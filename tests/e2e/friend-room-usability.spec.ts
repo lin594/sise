@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { finishDeclarationIfNeeded, stageDeclarationForTest, waitForDeclarationOrPlaying } from './helpers/game';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
   await page.getByTestId('random-nickname').click();
