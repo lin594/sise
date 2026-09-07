@@ -47,6 +47,8 @@ test("all skins and layouts keep a playable table inside representative viewport
   await page.goto("/?new=1&e2eDebug=1");
   await startLobbyAction(page);
   await expect(page.getByTestId("game-board")).toBeVisible();
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("chi_local_upper"));
+  await expect(page.getByTestId("hand-card-d1")).toBeVisible();
   for (const skin of ["cyber-minimal", "licheng-water", "puxian-house", "meizhou-sea"]) {
     for (const layout of ["compact", "classic"]) {
       await page.getByTestId("game-settings").click();
@@ -63,6 +65,9 @@ test("all skins and layouts keep a playable table inside representative viewport
           return r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
         })).toBe(true);
         await expect(page.getByTestId("small-screen-recommendation")).toHaveCount(0);
+        for (const target of [page.getByTestId("hand-card-d1"), page.getByTestId("action-chi")]) {
+          await expect(target).toBeInViewport({ ratio: 1 });
+        }
         if (width === 1440 || width === 568) await page.screenshot({ path: testInfo.outputPath(`${skin}-${layout}-${width}.png`) });
       }
     }

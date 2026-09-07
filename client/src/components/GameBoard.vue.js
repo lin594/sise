@@ -2129,6 +2129,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['center']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-board']} */ ;

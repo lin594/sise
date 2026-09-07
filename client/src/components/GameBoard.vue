@@ -3124,12 +3124,18 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   contain: strict;
 }
 .table-flight-turn { width: 100%; height: 100%; }
-.table-flight-turn > :deep(.card), .table-flight-turn > .card-back {
-  width: 100%;
+.table-flight-turn > :deep(.card), .table-flight-turn > .card-back { width: 100%; height: 100%; box-sizing: border-box; }
+
+.board {
+  flex: 1;
+  min-height: 0;
   height: 100%;
-  border-radius: var(--long-card-radius);
-  border: 1px solid #f7b0a0;
-  background: var(--card-back);
+  display: grid;
+  grid-template-columns: minmax(10rem, 23%) minmax(0, 1fr) clamp(12rem, 22vw, 18rem);
+  grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
+  gap: clamp(0.3rem, 0.9vh, 0.5rem);
+  overflow: hidden;
+  overflow: clip;
 }
 
 .table {
@@ -4486,17 +4492,9 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .card-back {
   width: 100%;
   height: 100%;
-  border-radius: 6px;
-  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.8);
-  background:
-    linear-gradient(145deg, rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96), rgba(var(--ui-raised-rgb, 30, 41, 59), 0.95)),
-    repeating-linear-gradient(
-      -40deg,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 0px,
-      rgba(var(--ui-border-rgb, 71, 85, 105), 0.75) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 4px,
-      rgba(var(--ui-raised-rgb, 30, 41, 59), 0.85) 8px
-    );
+  border-radius: var(--long-card-radius);
+  border: 1px solid #f7b0a0;
+  background: var(--card-back);
 }
 
 .deal-overlay {
