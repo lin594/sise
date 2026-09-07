@@ -85,11 +85,11 @@ function onInput(event: Event) {
 
 <style scoped>
 .entry-shell {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 18px;
   padding: clamp(0.9rem, 2vh, 1.3rem);
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   gap: 1rem;
   min-height: 0;
@@ -118,13 +118,13 @@ function onInput(event: Event) {
 
 .entry-desc {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   max-width: 60ch;
   line-height: 1.65;
 }
 
 .entry-desc.storage-limited {
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   font-weight: 700;
 }
 
@@ -133,8 +133,8 @@ function onInput(event: Event) {
   gap: 0.85rem;
   padding: 1rem;
   border-radius: 16px;
-  border: 1px solid #334155;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.92));
+  border: 1px solid var(--ui-raised, #334155);
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 15, 23, 42), 0.98), rgba(var(--ui-raised-rgb, 30, 41, 59), 0.92));
 }
 
 .entry-field {
@@ -153,16 +153,16 @@ function onInput(event: Event) {
   min-height: 3.1rem;
   border-radius: 12px;
   border: 1px solid #475569;
-  background: #020617;
-  color: #f8fafc;
+  background: var(--ui-page, #020617);
+  color: var(--ui-text, #f8fafc);
   padding: 0.7rem 0.85rem;
   font-size: 1.125rem;
 }
 
 .entry-input:focus {
   outline: none;
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+  border-color: var(--ui-accent, #38bdf8);
+  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.18);
 }
 
 .history-chips {
@@ -172,9 +172,9 @@ function onInput(event: Event) {
 }
 
 .history-chip {
-  border: 1px solid #334155;
-  background: #172033;
-  color: #cbd5e1;
+  border: 1px solid var(--ui-raised, #334155);
+  background: var(--ui-panel, #172033);
+  color: var(--ui-muted, #cbd5e1);
   border-radius: 999px;
   padding: 0.35rem 0.75rem;
   cursor: pointer;
@@ -209,15 +209,15 @@ function onInput(event: Event) {
 }
 
 .ghost {
-  background: #1f2937;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: var(--ui-panel, #1f2937);
+  color: var(--ui-text, #e2e8f0);
+  border: 1px solid var(--ui-raised, #334155);
 }
 
 .quick-name {
-  border-color: #0ea5e9;
+  border-color: var(--ui-accent, #0ea5e9);
   background: rgba(3, 105, 161, 0.28);
-  color: #e0f2fe;
+  color: var(--ui-accent-text, #e0f2fe);
 }
 
 @media (max-width: 960px), (max-height: 500px) {

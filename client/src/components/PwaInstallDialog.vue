@@ -70,7 +70,7 @@ onMounted(() => {
   place-items: center;
   padding: max(0.7rem, var(--safe-top, 0px)) max(0.7rem, var(--safe-right, 0px))
     max(0.7rem, var(--safe-bottom, 0px)) max(0.7rem, var(--safe-left, 0px));
-  background: rgba(2, 6, 23, 0.84);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.84);
 }
 
 .install-dialog {
@@ -84,9 +84,9 @@ onMounted(() => {
   padding: clamp(0.85rem, 2.5vh, 1.2rem);
   border: 2px solid rgba(251, 191, 36, 0.72);
   border-radius: 1rem;
-  background: linear-gradient(155deg, #172033, #020617);
-  color: #f8fafc;
-  box-shadow: 0 22px 54px rgba(2, 6, 23, 0.72);
+  background: linear-gradient(155deg, var(--ui-panel, #172033), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
+  box-shadow: 0 22px 54px rgba(var(--ui-page-rgb, 2, 6, 23), 0.72);
 }
 
 .install-dialog > img {
@@ -120,7 +120,7 @@ h2 {
 
 #pwa-install-description {
   margin-top: 0.42rem;
-  color: #dbeafe;
+  color: var(--ui-accent-text, #dbeafe);
   font-size: max(0.92rem, 15px);
   line-height: 1.5;
 }
@@ -139,7 +139,7 @@ li {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.3rem;
-  color: #f8fafc;
+  color: var(--ui-text, #f8fafc);
 }
 
 li > span {
@@ -149,7 +149,7 @@ li > span {
   place-items: center;
   border-radius: 50%;
   background: #92400e;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   font-weight: 900;
 }
 
@@ -167,7 +167,7 @@ li > span {
 
 .install-copy button:focus-visible,
 .install-dialog:focus-visible {
-  outline: 3px solid #7dd3fc;
+  outline: 3px solid var(--ui-accent, #7dd3fc);
   outline-offset: 2px;
 }
 

@@ -637,12 +637,12 @@ onBeforeUnmount(() => {
     max(0.35rem, var(--safe-bottom)) max(0.35rem, var(--safe-left));
   background:
     radial-gradient(circle at 20% 10%, rgba(20, 184, 166, 0.16), transparent 32%),
-    rgba(2, 6, 23, 0.76);
+    rgba(var(--ui-page-rgb, 2, 6, 23), 0.76);
   backdrop-filter: blur(5px);
 }
 
 .declare-panel {
-  --ink: #172033;
+  --ink: var(--ui-panel, #172033);
   --muted: #64748b;
   --line: #d7dee8;
   --paper: #fffdf7;
@@ -657,9 +657,9 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 20px;
   background:
-    linear-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 1px) 0 0 / 100% 28px,
+    linear-gradient(rgba(var(--ui-panel-rgb, 15, 23, 42), 0.025) 1px, transparent 1px) 0 0 / 100% 28px,
     linear-gradient(145deg, #fffefa, #f7f3e9);
-  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.48);
+  box-shadow: 0 28px 80px rgba(var(--ui-page-rgb, 2, 6, 23), 0.48);
   padding: clamp(0.8rem, 2vh, 1.15rem);
   display: grid;
   gap: 0.7rem;
@@ -775,7 +775,7 @@ onBeforeUnmount(() => {
   height: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e2e8f0;
+  background: var(--ui-text, #e2e8f0);
 }
 
 .declare-progress-fill {
@@ -874,8 +874,8 @@ onBeforeUnmount(() => {
 }
 
 .declare-hand-scroll-tools button:disabled {
-  border-color: #cbd5e1;
-  background: #e2e8f0;
+  border-color: var(--ui-muted, #cbd5e1);
+  background: var(--ui-text, #e2e8f0);
   color: #64748b;
   opacity: 0.78;
 }
@@ -884,10 +884,10 @@ onBeforeUnmount(() => {
   min-width: 4.7rem;
   height: 2.25rem;
   padding: 0 0.42rem;
-  border: 1px solid #94a3b8;
+  border: 1px solid var(--ui-muted, #94a3b8);
   border-radius: 999px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--ui-text, #f8fafc);
+  color: var(--ui-panel, #0f172a);
   display: inline-grid;
   place-items: center;
   font-size: 0.82rem;
@@ -978,7 +978,7 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   overflow: hidden;
   color: var(--ink);
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 12px;
   background: rgba(248, 250, 252, 0.92);
   text-align: left;
@@ -1034,7 +1034,7 @@ onBeforeUnmount(() => {
   width: 1.2rem;
   height: 1.2rem;
   color: transparent;
-  border: 1px solid #94a3b8;
+  border: 1px solid var(--ui-muted, #94a3b8);
   border-radius: 50%;
   transform: translateY(-50%);
 }
@@ -1051,7 +1051,7 @@ onBeforeUnmount(() => {
   place-content: center;
   gap: 0.1rem;
   color: var(--muted);
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--ui-muted, #cbd5e1);
   border-radius: 12px;
   text-align: center;
 }
@@ -1142,7 +1142,7 @@ onBeforeUnmount(() => {
 .loading-mark {
   width: 1rem;
   height: 1rem;
-  border: 2px solid #cbd5e1;
+  border: 2px solid var(--ui-muted, #cbd5e1);
   border-top-color: var(--fish);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -1214,8 +1214,8 @@ onBeforeUnmount(() => {
 .reset-recommendation {
   min-height: 42px;
   padding: 0.35rem 0.75rem;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  color: var(--ui-raised, #334155);
+  border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
   font-weight: 700;
@@ -1244,8 +1244,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  color: var(--ui-raised, #334155);
+  border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.72);
   font-size: 0.9rem;
@@ -1495,9 +1495,9 @@ button:focus-visible {
 
 /* 嵌入模式就是下方动态按钮区本身：候选和确认按钮必须同排可见，不能再套一层弹窗。 */
 .declare-mask.embedded .declare-panel {
-  --ink: #e2e8f0;
-  --muted: #94a3b8;
-  --line: #334155;
+  --ink: var(--ui-text, #e2e8f0);
+  --muted: var(--ui-muted, #94a3b8);
+  --line: var(--ui-raised, #334155);
   --paper: transparent;
   width: 100%;
   max-width: none;
@@ -1592,8 +1592,8 @@ button:focus-visible {
   justify-content: flex-start;
   padding-right: 2rem;
   border-color: #475569;
-  background: #172033;
-  color: #e2e8f0;
+  background: var(--ui-panel, #172033);
+  color: var(--ui-text, #e2e8f0);
 }
 
 .declare-mask.embedded .fish-option.selected {

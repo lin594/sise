@@ -96,10 +96,10 @@ const detail = computed(() => {
   min-height: 2rem;
   margin-inline: auto;
   padding: 0.25rem 0.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.42);
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.42);
   border-radius: 0.7rem;
-  background: rgba(15, 23, 42, 0.9);
-  color: #f8fafc;
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.9);
+  color: var(--ui-text, #f8fafc);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,7 +145,7 @@ const detail = computed(() => {
 }
 
 .status-copy small {
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: clamp(0.7rem, 1.3vh, 0.76rem);
 }
 
@@ -158,7 +158,7 @@ button {
   min-height: max(2.25rem, 36px);
   flex: 0 0 auto;
   padding: 0.25rem 0.55rem;
-  border: 1px solid rgba(125, 211, 252, 0.62);
+  border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.62);
   border-radius: 0.52rem;
   background: #075985;
   color: #f0f9ff;
@@ -173,7 +173,7 @@ button.leave-status {
 }
 
 button:focus-visible {
-  outline: 3px solid #7dd3fc;
+  outline: 3px solid var(--ui-accent, #7dd3fc);
   outline-offset: 2px;
 }
 

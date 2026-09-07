@@ -792,11 +792,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 <style scoped>
 .lobby {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 12px;
   padding: 14px;
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 1rem;
@@ -838,7 +838,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.7rem 0.85rem;
   border: 1px solid rgba(217, 170, 45, 0.5);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(113, 63, 18, 0.45), rgba(15, 23, 42, 0.96));
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.45), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
 }
 
 .mode-share-card > div {
@@ -846,7 +846,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-share-card strong {
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
 }
 
 .lobby-head > div:first-child {
@@ -867,7 +867,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   min-width: 11.5rem;
   min-height: 40px;
   padding: 0.48rem 0.72rem;
-  border: 1px solid rgba(56, 189, 248, 0.5);
+  border: 1px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.5);
   border-radius: 0.72rem;
   background: rgba(7, 89, 133, 0.34);
   display: grid;
@@ -875,7 +875,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   align-items: center;
   column-gap: 0.55rem;
   gap: 0.1rem;
-  color: #e0f2fe;
+  color: var(--ui-accent-text, #e0f2fe);
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -883,7 +883,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary:hover,
 .guest-profile-summary:focus-visible {
-  border-color: #7dd3fc;
+  border-color: var(--ui-accent, #7dd3fc);
   background: rgba(3, 105, 161, 0.5);
 }
 
@@ -898,7 +898,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .guest-profile-summary-copy strong {
-  color: #fef08a;
+  color: var(--ui-gold-text, #fef08a);
   font-size: max(0.875rem, 14px);
 }
 
@@ -910,7 +910,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary-view {
   align-self: center;
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   font-size: max(0.875rem, 14px);
   font-weight: 850;
   white-space: nowrap;
@@ -928,7 +928,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .show-qr-button {
-  border-color: rgba(125, 211, 252, 0.72);
+  border-color: rgba(var(--ui-accent-rgb, 125, 211, 252), 0.72);
   background: #075985;
   color: #f0f9ff;
   font-weight: 850;
@@ -951,7 +951,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .lobby-rule-tip,
 .invite-card p {
   margin: 0.35rem 0 0;
-  color: #93c5fd;
+  color: var(--ui-accent, #93c5fd);
   font-size: 0.84rem;
 }
 
@@ -975,10 +975,10 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .invite-card,
 .match-status-card,
 .scoring-card {
-  border: 1px solid #334155;
+  border: 1px solid var(--ui-raised, #334155);
   border-radius: 14px;
-  background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
-  color: #e2e8f0;
+  background: linear-gradient(180deg, var(--ui-panel, #172033) 0%, var(--ui-panel, #0f172a) 100%);
+  color: var(--ui-text, #e2e8f0);
   padding: 0.9rem;
 }
 
@@ -987,8 +987,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-color: rgba(56, 189, 248, 0.55);
-  background: linear-gradient(135deg, rgba(7, 89, 133, 0.72), rgba(15, 23, 42, 0.96));
+  border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.55);
+  background: linear-gradient(135deg, rgba(7, 89, 133, 0.72), rgba(var(--ui-panel-rgb, 15, 23, 42), 0.96));
 }
 
 .match-status-card > div {
@@ -997,12 +997,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .match-status-card strong {
-  color: #fef08a;
+  color: var(--ui-gold-text, #fef08a);
   font-size: 1.1rem;
 }
 
 .match-status-card span {
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   font-size: 0.82rem;
 }
 
@@ -1014,7 +1014,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .match-waiting-note {
   margin: 0;
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   font-weight: 750;
 }
 
@@ -1042,8 +1042,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.42rem 0.55rem;
   border: 1px solid #475569;
   border-radius: 0.72rem;
-  background: #111827;
-  color: #e2e8f0;
+  background: var(--ui-panel, #111827);
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   gap: 0.08rem;
   text-align: left;
@@ -1052,7 +1052,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .scoring-options button.active {
   border-color: #fbbf24;
   background: #713f12;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.24);
 }
 
@@ -1070,11 +1070,11 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   border: 1px solid rgba(251, 191, 36, 0.68);
   border-radius: 0.72rem;
   background: rgba(113, 63, 18, 0.66);
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
 }
 
 .scoring-mode-summary small {
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   font-size: 0.75rem;
 }
 
@@ -1097,7 +1097,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   min-width: 0;
   padding: 0.38rem 0.5rem;
   border-radius: 0.6rem;
-  background: rgba(15, 23, 42, 0.82);
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.82);
   display: flex;
   justify-content: space-between;
   gap: 0.4rem;
@@ -1122,8 +1122,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .mode-card.active,
 .seat-card.mine {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+  border-color: var(--ui-accent, #38bdf8);
+  box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.3);
 }
 
 .mode-card.disabled {
@@ -1143,7 +1143,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-head span {
-  color: #93c5fd;
+  color: var(--ui-accent, #93c5fd);
   font-size: 0.8rem;
   font-weight: 750;
   white-space: nowrap;
@@ -1156,7 +1156,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-card p {
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -1182,7 +1182,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.38rem;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
 }
 
 .ready-state {
@@ -1228,17 +1228,17 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   padding: 0.4rem 0.25rem;
   border: 1px solid #475569;
   border-radius: 9px;
-  background: #172033;
-  color: #e2e8f0;
+  background: var(--ui-panel, #172033);
+  color: var(--ui-text, #e2e8f0);
   font-weight: 800;
   cursor: pointer;
 }
 
 .bot-level-button.active {
-  border-color: #38bdf8;
+  border-color: var(--ui-accent, #38bdf8);
   background: #075985;
   color: #f0f9ff;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.28);
+  box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.28);
 }
 
 .bot-level-button:focus-visible,
@@ -1283,9 +1283,9 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .ghost {
-  background: #1f2937;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: var(--ui-panel, #1f2937);
+  color: var(--ui-text, #e2e8f0);
+  border: 1px solid var(--ui-raised, #334155);
 }
 
 .leave-room {
@@ -1310,7 +1310,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .start-hint {
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.875rem;
   font-weight: 650;
   line-height: 1.25;
@@ -1318,7 +1318,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .seat-claim-status {
   margin: 0;
-  color: #fef08a;
+  color: var(--ui-gold-text, #fef08a);
   font-size: 0.9rem;
   font-weight: 800;
   line-height: 1.35;
@@ -1334,8 +1334,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   min-width: 0;
   padding-top: 0.7rem;
   padding-bottom: max(0.1rem, env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(71, 85, 105, 0.72);
-  background: #0b1220;
+  border-top: 1px solid rgba(var(--ui-border-rgb, 71, 85, 105), 0.72);
+  background: var(--ui-panel, #0b1220);
 }
 
 .lobby-primary-actions {
@@ -1348,7 +1348,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .fill-bots {
   border-color: rgba(250, 204, 21, 0.72);
   background: #3f2f0b;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   font-weight: 800;
 }
 
@@ -1378,7 +1378,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   display: grid;
   place-items: center;
   padding: 0.7rem;
-  background: rgba(2, 6, 23, 0.76);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.76);
 }
 
 .waiting-leave-dialog {
@@ -1387,15 +1387,15 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   overflow: auto;
   padding: 1.1rem;
   border-radius: 1.15rem;
-  border: 1px solid rgba(148, 163, 184, 0.46);
-  background: linear-gradient(160deg, #111827, #020617);
-  color: #f8fafc;
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.46);
+  background: linear-gradient(160deg, var(--ui-panel, #111827), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
   text-align: center;
-  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.58);
+  box-shadow: 0 20px 48px rgba(var(--ui-page-rgb, 2, 6, 23), 0.58);
 }
 
 .waiting-leave-dialog:focus-visible {
-  outline: 3px solid #7dd3fc;
+  outline: 3px solid var(--ui-accent, #7dd3fc);
   outline-offset: 2px;
 }
 
@@ -1428,7 +1428,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .waiting-leave-dialog p {
   margin-top: 0.45rem;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.9rem;
   line-height: 1.55;
 }
@@ -1444,8 +1444,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   min-height: 48px;
   border-radius: 0.72rem;
   border: 1px solid #475569;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-size: 0.92rem;
   font-weight: 750;
 }
@@ -1475,7 +1475,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   place-items: center;
   border-radius: 50%;
   background: #075985;
-  color: #fef08a;
+  color: var(--ui-gold-text, #fef08a);
   font-size: 0.9rem;
   font-weight: 900;
 }
@@ -1486,7 +1486,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .guest-profile-dialog-head small {
-  color: #7dd3fc;
+  color: var(--ui-accent, #7dd3fc);
   font-size: 0.82rem;
   font-weight: 750;
 }
@@ -1497,7 +1497,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-dialog .guest-profile-name {
   margin-top: 0.5rem;
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   font-size: 0.9rem;
 }
 
@@ -1514,14 +1514,14 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   display: grid;
   justify-items: center;
   gap: 0.08rem;
-  border: 1px solid rgba(56, 189, 248, 0.42);
+  border: 1px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.42);
   border-radius: 0.7rem;
   background: rgba(7, 89, 133, 0.28);
   text-align: center;
 }
 
 .guest-profile-stats span {
-  color: #fef08a;
+  color: var(--ui-gold-text, #fef08a);
   font-size: 1.3rem;
   font-weight: 900;
   line-height: 1;
@@ -1529,7 +1529,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .guest-profile-stats small {
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   font-size: 0.78rem;
   font-weight: 750;
   white-space: nowrap;
@@ -1537,7 +1537,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-dialog .guest-profile-explanation {
   margin-top: 0.55rem;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.84rem;
   line-height: 1.4;
 }
@@ -1546,7 +1546,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   width: 100%;
   min-height: 44px;
   margin-top: 0.6rem;
-  border: 1px solid #38bdf8;
+  border: 1px solid var(--ui-accent, #38bdf8);
   border-radius: 0.72rem;
   background: #0369a1;
   color: #fff;

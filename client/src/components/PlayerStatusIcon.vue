@@ -58,11 +58,11 @@ const label = computed(() => ({
   place-items: center;
   border: 1px solid #475569;
   border-radius: 0.45rem;
-  color: #cbd5e1;
-  background: rgba(15, 23, 42, 0.82);
+  color: var(--ui-muted, #cbd5e1);
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.82);
 }
 .player-status-icon svg { width: 1.05rem; height: 1.05rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.status-computer { color: #7dd3fc; border-color: rgba(56, 189, 248, 0.58); }
+.status-computer { color: var(--ui-accent, #7dd3fc); border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.58); }
 .status-autoplay { color: #fcd34d; border-color: rgba(245, 158, 11, 0.64); }
 .status-takeover, .status-offline { color: #fda4af; border-color: rgba(251, 113, 133, 0.64); }
 </style>

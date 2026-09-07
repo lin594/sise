@@ -148,7 +148,7 @@ onMounted(async () => {
   place-items: center;
   padding: max(0.7rem, var(--safe-top, 0px)) max(0.7rem, var(--safe-right, 0px))
     max(0.7rem, var(--safe-bottom, 0px)) max(0.7rem, var(--safe-left, 0px));
-  background: rgba(2, 6, 23, 0.84);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.84);
 }
 
 .invite-qr-dialog {
@@ -161,11 +161,11 @@ onMounted(async () => {
   gap: clamp(0.9rem, 3vw, 1.5rem);
   align-items: center;
   padding: clamp(0.85rem, 2.5vh, 1.25rem);
-  border: 2px solid #7dd3fc;
+  border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 1rem;
-  background: linear-gradient(155deg, #172033, #020617);
-  color: #f8fafc;
-  box-shadow: 0 22px 54px rgba(2, 6, 23, 0.7);
+  background: linear-gradient(155deg, var(--ui-panel, #172033), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
+  box-shadow: 0 22px 54px rgba(var(--ui-page-rgb, 2, 6, 23), 0.7);
 }
 
 .invite-qr-dialog:focus-visible {
@@ -221,7 +221,7 @@ h2 {
 
 #invite-qr-description {
   margin-top: 0.55rem;
-  color: #dbeafe;
+  color: var(--ui-accent-text, #dbeafe);
   font-size: max(1rem, 16px);
   font-weight: 700;
   line-height: 1.55;
@@ -261,7 +261,7 @@ h2 {
   place-items: center;
   border-radius: 50%;
   background: #075985;
-  color: #e0f2fe;
+  color: var(--ui-accent-text, #e0f2fe);
   font-size: 2.5rem;
   font-weight: 900;
 }
@@ -273,10 +273,10 @@ h2 {
   margin-top: 0.65rem;
   padding: 0.65rem;
   resize: none;
-  border: 2px solid #7dd3fc;
+  border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 0.7rem;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--ui-text, #f8fafc);
+  color: var(--ui-panel, #0f172a);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px;
   line-height: 1.4;

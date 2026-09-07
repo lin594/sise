@@ -105,7 +105,7 @@ onMounted(() => {
   place-items: center;
   padding: max(0.7rem, var(--safe-top, 0px)) max(0.7rem, var(--safe-right, 0px))
     max(0.7rem, var(--safe-bottom, 0px)) max(0.7rem, var(--safe-left, 0px));
-  background: rgba(2, 6, 23, 0.82);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.82);
 }
 
 .invite-copy-dialog {
@@ -113,12 +113,12 @@ onMounted(() => {
   max-height: calc(100% - 0.4rem);
   overflow: auto;
   padding: clamp(0.85rem, 2.5vh, 1.2rem);
-  border: 1px solid rgba(125, 211, 252, 0.6);
+  border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.6);
   border-radius: 1rem;
-  background: linear-gradient(155deg, #172033, #020617);
-  color: #f8fafc;
+  background: linear-gradient(155deg, var(--ui-panel, #172033), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
   text-align: center;
-  box-shadow: 0 22px 54px rgba(2, 6, 23, 0.68);
+  box-shadow: 0 22px 54px rgba(var(--ui-page-rgb, 2, 6, 23), 0.68);
 }
 
 .invite-copy-symbol {
@@ -129,7 +129,7 @@ onMounted(() => {
   place-items: center;
   border-radius: 50%;
   background: #075985;
-  color: #e0f2fe;
+  color: var(--ui-accent-text, #e0f2fe);
   font-size: 1.15rem;
   font-weight: 900;
 }
@@ -145,7 +145,7 @@ h2 {
 
 #invite-copy-description {
   margin-top: 0.45rem;
-  color: #dbeafe;
+  color: var(--ui-accent-text, #dbeafe);
   font-size: max(0.9rem, 16px);
   line-height: 1.5;
 }
@@ -157,10 +157,10 @@ h2 {
   margin-top: 0.75rem;
   padding: 0.7rem;
   resize: none;
-  border: 2px solid #7dd3fc;
+  border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 0.75rem;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--ui-text, #f8fafc);
+  color: var(--ui-panel, #0f172a);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px;
   line-height: 1.45;
@@ -191,8 +191,8 @@ h2 {
   padding: 0.55rem 0.7rem;
   border: 1px solid #64748b;
   border-radius: 0.75rem;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-size: 1rem;
   font-weight: 800;
 }
