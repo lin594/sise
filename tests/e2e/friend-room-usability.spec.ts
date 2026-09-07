@@ -292,3 +292,35 @@ test('21-card single row adapts to both card styles and layout preference surviv
   await revealSetting(page, 'hand-layout-paged');
   await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked', 'true');
 });
+
+test('many listening candidates scroll without covering discard and stay open during keyboard focus', async ({page}, info) => {
+  await page.setViewportSize({width:568,height:320});
+  await login(page);
+  await startLobbyAction(page);
+  await expect(page.getByTestId('game-board')).toBeVisible();
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
+  await page.getByTestId('action-chi').click();
+  await expect(page.getByTestId('discard-confirm')).toBeVisible();
+  await page.evaluate(() => {
+    const bridge=(window as any).__siseLocalTest, state=bridge.getRoomState();
+    const revision=state.stateRevision+1;
+    const waits=['red','yellow','green','white'].flatMap(color => ['jiang','shi','xiang','ju','ma','pao','zu'].map(type=>({card:{id:`wait-${color}-${type}`,color,type},visibleRemaining:color==='white'?0:2})));
+    bridge.applyRoomSnapshot({stateRevision:revision,listeningHints:{stateRevision:revision,decisionKey:bridge.getDecisionTimer().decisionKey,currentWaits:[],discards:[{discardCardId:'post-yellow-shi',waits}],chi:[]}},'explicit');
+  });
+  await page.getByTestId('hand-card-post-yellow-shi').click();
+  const details=page.getByTestId('listening-details');
+  await expect(details).toBeVisible();
+  await expect(details.locator('[role="img"]')).toHaveCount(28);
+  expect(await details.locator('.listening-details-cards').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+  const unobstructed=await page.getByTestId('discard-confirm').evaluate(el => {
+    const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
+  });
+  expect(unobstructed).toBe(true);
+  await details.locator('.listening-details-cards').focus();
+  await page.waitForTimeout(5500);
+  await expect(details).toBeVisible();
+  await page.screenshot({path:info.outputPath('many-listening-candidates.png')});
+  await page.getByTestId('discard-confirm').click();
+  await expect(details).toHaveCount(0);
+  await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveCount(0);
+});
