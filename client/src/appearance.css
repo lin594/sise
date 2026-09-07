@@ -10,7 +10,7 @@ html .card-back, html .pending-fish-back, html .deck-layer {
 
 [data-skin="licheng-water"] {
   --ui-page: #dce3d0; --ui-panel: #f2eedf; --ui-raised: #e3e5d2;
-  --ui-text: #213e34; --ui-muted: #506957; --ui-border: #96aa8f;
+  --ui-ink: #213e34; --ui-text: #213e34; --ui-muted: #506957; --ui-border: #96aa8f;
   --ui-accent: #28654f; --ui-accent-text: #235d49; --ui-gold-text: #76501e;
   --ui-page-rgb: 220,227,208; --ui-panel-rgb: 242,238,223; --ui-raised-rgb: 227,229,210;
   --ui-border-rgb: 150,170,143; --ui-muted-rgb: 80,105,87; --ui-accent-rgb: 40,101,79;
@@ -19,7 +19,7 @@ html .card-back, html .pending-fish-back, html .deck-layer {
 }
 [data-skin="puxian-house"] {
   --ui-page: #e2c9aa; --ui-panel: #f7ead7; --ui-raised: #ead7bd;
-  --ui-text: #503326; --ui-muted: #775444; --ui-border: #b99977;
+  --ui-ink: #503326; --ui-text: #503326; --ui-muted: #775444; --ui-border: #b99977;
   --ui-accent: #943e2f; --ui-accent-text: #883525; --ui-gold-text: #744713;
   --ui-page-rgb: 226,201,170; --ui-panel-rgb: 247,234,215; --ui-raised-rgb: 234,215,189;
   --ui-border-rgb: 185,153,119; --ui-muted-rgb: 119,84,68; --ui-accent-rgb: 148,62,47;
@@ -28,7 +28,7 @@ html .card-back, html .pending-fish-back, html .deck-layer {
 }
 [data-skin="meizhou-sea"] {
   --ui-page: #cbdfe0; --ui-panel: #edf3ec; --ui-raised: #d8e7e4;
-  --ui-text: #203e4a; --ui-muted: #4b6871; --ui-border: #89abb0;
+  --ui-ink: #203e4a; --ui-text: #203e4a; --ui-muted: #4b6871; --ui-border: #89abb0;
   --ui-accent: #256b82; --ui-accent-text: #235c70; --ui-gold-text: #72541f;
   --ui-page-rgb: 203,223,224; --ui-panel-rgb: 237,243,236; --ui-raised-rgb: 216,231,228;
   --ui-border-rgb: 137,171,176; --ui-muted-rgb: 75,104,113; --ui-accent-rgb: 37,107,130;

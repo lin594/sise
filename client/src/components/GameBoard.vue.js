@@ -1954,6 +1954,18 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
         target?.focus({ preventScroll: true });
     });
 }, { immediate: true });
+// Geometry changes wait for all visible card transactions, including opening deals.
+const appliedTableLayout = ref(props.tableLayout ?? "classic");
+watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)], async ([layout, dealCount, moveCount, revealing]) => {
+    if (dealCount || moveCount || revealing || appliedTableLayout.value === layout)
+        return;
+    appliedTableLayout.value = layout ?? "classic";
+    lastCardRects.clear();
+    tableFlightSources.clear();
+    tableFlightDestinations.clear();
+    await nextTick();
+    scheduleHandLayoutUpdate();
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -2347,6 +2359,28 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2358,6 +2392,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
         }) },
     'data-testid': "game-board",
+    'data-table-layout': (__VLS_ctx.appliedTableLayout),
+    'data-layout-pending': (__VLS_ctx.appliedTableLayout !== props.tableLayout),
     'data-response-phase': (props.responsePhase ?? ''),
     'data-response-placement': (__VLS_ctx.responseCardPlacement),
 });
@@ -4161,6 +4197,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             handCardAccessibleLabel: handCardAccessibleLabel,
             setSeatRef: setSeatRef,
             flightStyle: flightStyle,
+            appliedTableLayout: appliedTableLayout,
         };
     },
     __typeEmits: {},

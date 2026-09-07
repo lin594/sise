@@ -7,6 +7,7 @@ export const skins: { id: SkinId; name: string; description: string }[] = [
 ];
 export const tableLayouts: { id: TableLayoutId; name: string; description: string }[] = [
   { id: "compact", name: "紧凑布局", description: "紧凑分区，适合小屏" },
+  { id: "classic", name: "经典布局", description: "围桌而坐，中央开阔" },
 ];
-export const normalizeSkin = (value: unknown): SkinId => skins.find(item => item.id === value)?.id ?? "cyber-minimal";
-export const normalizeTableLayout = (value: unknown): TableLayoutId => tableLayouts.find(item => item.id === value)?.id ?? "compact";
+export const normalizeSkin = (value: unknown): SkinId => skins.find(item => item.id === value)?.id ?? "licheng-water";
+export const normalizeTableLayout = (value: unknown): TableLayoutId => tableLayouts.find(item => item.id === value)?.id ?? "classic";

@@ -1476,7 +1476,7 @@ onBeforeUnmount(() => {
 
 .mode-sample.adaptive {
   background: linear-gradient(135deg, #facc15 0 48%, #fff7ed 48% 100%);
-  color: var(--ui-panel, #172033);
+  color: var(--ui-ink, #172033);
   border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.65);
 }
 

@@ -7,6 +7,8 @@
       'board-declaring': state?.phase === 'declaring',
     }"
     data-testid="game-board"
+    :data-table-layout="appliedTableLayout"
+    :data-layout-pending="appliedTableLayout !== props.tableLayout"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
     @keydown.esc="handleBoardEscape"
@@ -827,6 +829,7 @@ import type {
   Card,
   PlayerState,
   RenderedCardMode,
+  TableLayoutId,
   SeatDirection,
   TableTransition,
   TableLocation,
@@ -884,6 +887,7 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  tableLayout?: TableLayoutId;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
   acceptedStateRevision?: number;
@@ -3092,6 +3096,19 @@ watch(
   },
   { immediate: true },
 );
+// Geometry changes wait for all visible card transactions, including opening deals.
+const appliedTableLayout = ref<TableLayoutId>(props.tableLayout ?? "classic");
+watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)] as const,
+  async ([layout, dealCount, moveCount, revealing]) => {
+    if (dealCount || moveCount || revealing || appliedTableLayout.value === layout) return;
+    appliedTableLayout.value = layout ?? "classic";
+    lastCardRects.clear();
+    tableFlightSources.clear();
+    tableFlightDestinations.clear();
+    await nextTick();
+    scheduleHandLayoutUpdate();
+  },
+);
 </script>
 
 <style scoped>
@@ -3154,7 +3171,7 @@ watch(
   padding: 0.2rem 0.55rem;
   border-radius: 0.7rem;
   border: 2px solid rgba(var(--ui-panel-rgb, 15, 23, 42), 0.42);
-  color: var(--ui-panel, #111827);
+  color: var(--ui-ink, #111827);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3405,7 +3422,7 @@ watch(
   border-radius: 0.45rem;
   display: inline-grid;
   place-items: center;
-  color: var(--ui-panel, #111827);
+  color: var(--ui-ink, #111827);
   font-size: clamp(0.72rem, 1.65vh, 0.95rem);
   font-weight: 900;
 }
@@ -3471,7 +3488,7 @@ watch(
 }
 
 .tag.status {
-  border-color: var(--ui-raised, #334155);
+  border-color: var(--ui-ink, #334155);
 }
 
 .tag.dealer {
@@ -4205,7 +4222,7 @@ watch(
 }
 
 .hand-scroll-tools button:disabled {
-  border-color: var(--ui-raised, #334155);
+  border-color: var(--ui-ink, #334155);
   background: var(--ui-raised, #1e293b);
   color: #64748b;
   opacity: 0.72;
@@ -5392,7 +5409,7 @@ watch(
   border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 0.7rem;
   background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.46);
   font-size: max(0.8125rem, 13px);
   font-weight: 800;
@@ -5658,7 +5675,7 @@ watch(
   border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.78);
   border-radius: 0.78rem;
   background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.48);
   display: flex;
   align-items: baseline;
@@ -5693,7 +5710,7 @@ watch(
   border: 1px solid rgba(203, 213, 225, 0.9);
   border-radius: 0.72rem;
   background: rgba(248, 250, 252, 0.98);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   box-shadow: 0 8px 22px rgba(var(--ui-page-rgb, 2, 6, 23), 0.46);
   font-size: max(0.8125rem, 13px);
   font-weight: 800;
@@ -5776,5 +5793,33 @@ watch(
     min-width: 2.5rem;
     min-height: 40px;
   }
+}
+
+/* Layout owns geometry only. Theme materials are inherited from appearance.css. */
+.board[data-table-layout="classic"] .table {
+  grid-template-columns: minmax(0, 20%) minmax(0, 16%) minmax(0, 28%) minmax(0, 16%) minmax(0, 20%);
+  grid-template-areas:
+    "left flowtl top flowtr right"
+    "left center center center right"
+    "flowbl flowbl selfgroups flowbr flowbr";
+  grid-template-rows: minmax(0, .9fr) minmax(4.4rem, 1.1fr) minmax(0, .8fr);
+  column-gap: 0;
+  padding: clamp(.35rem, 1.2vh, .8rem);
+  border-radius: clamp(.8rem, 3vh, 2rem);
+}
+.board[data-table-layout="classic"] :is(.player-left, .player-right) {
+  align-self: center; height: auto; max-height: 100%; min-height: 0; margin-inline: .15rem; width: calc(100% - .3rem);
+}
+.board[data-table-layout="classic"] .player-top { min-height: 0; }
+.board[data-table-layout="classic"] .center { margin-inline: .3rem; width: calc(100% - .6rem); }
+.board[data-table-layout="classic"] .flow-card { align-self: center; max-height: 100%; }
+.board[data-table-layout="classic"] .player-card .seat-identity-meta { flex-wrap: wrap; }
+.board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: .25rem; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="classic"] .table {
+    grid-template-columns: minmax(0, 22%) minmax(0, 14%) minmax(0, 28%) minmax(0, 14%) minmax(0, 22%);
+    padding: 2px; border-radius: .8rem; row-gap: 1px;
+  }
+  .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: 1px; padding: 1px; }
 }
 </style>

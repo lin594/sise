@@ -160,7 +160,7 @@ h2 {
   border: 2px solid var(--ui-accent, #7dd3fc);
   border-radius: 0.75rem;
   background: var(--ui-text, #f8fafc);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 16px;
   line-height: 1.45;

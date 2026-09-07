@@ -14,6 +14,7 @@
       'reduce-motion': displayPreferences.reduceMotion,
       'show-card-color-assist': displayPreferences.showCardColorAssist,
     }"
+    :data-table-layout="displayPreferences.tableLayout"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
     :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
@@ -118,6 +119,12 @@
       data-testid="global-notice"
     >{{ globalNotice }}</p>
 
+    <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
+      <span>屏幕较小，紧凑布局能留出更多操作空间</span>
+      <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
+      <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
+    </aside>
+
     <LoginPage
       v-if="showEntry"
       :nickname="entryName"
@@ -214,6 +221,7 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
+        :table-layout="displayPreferences.tableLayout"
         :hand-layout="displayPreferences.handLayout"
         :listening-hints="listeningHints"
         :accepted-state-revision="acceptedStateRevision"
@@ -1535,6 +1543,21 @@ const {
   viewportWidth,
 } = useResponsiveViewport();
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
+const showSmallScreenRecommendation = computed(() =>
+  isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
+  && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
+  && !isConnectingWithoutState.value && !isEnded.value,
+);
+function dismissLayoutRecommendation() {
+  layoutRecommendationDismissed.value = true;
+  writeStoredValue("sise_compact_recommendation_dismissed_v1", "1");
+}
+function acceptCompactLayout() {
+  displayPreferences.value.tableLayout = "compact";
+  dismissLayoutRecommendation();
+}
+
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
   if (mode !== "adaptive") {
@@ -4092,7 +4115,7 @@ watch(
   background:
     radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), transparent 30%),
     linear-gradient(180deg, #fffdf7 0%, var(--ui-text, #f8fafc) 100%);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   box-shadow: 0 24px 70px rgba(var(--ui-panel-rgb, 15, 23, 42), 0.42);
   padding: clamp(1rem, 2.4vh, 1.35rem);
   display: grid;
@@ -4181,7 +4204,7 @@ watch(
   padding-left: 1.15rem;
   display: grid;
   gap: 0.38rem;
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
   font-size: clamp(0.78rem, 1.6vh, 0.92rem);
   line-height: 1.55;
 }
@@ -4207,7 +4230,7 @@ watch(
 
 .hu-panel {
   background: var(--ui-text, #f8fafc);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   padding: clamp(0.9rem, 2vh, 1.2rem) clamp(1rem, 2.4vw, 1.4rem);
   border-radius: 12px;
   min-width: 300px;
@@ -4265,7 +4288,7 @@ watch(
 }
 
 .settlement-loading span {
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
 }
 
 .round-overview {
@@ -4310,7 +4333,7 @@ watch(
 }
 
 .round-overview b.neutral {
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
 }
 
 .settlement {
@@ -4434,7 +4457,7 @@ watch(
 }
 
 .cumulative-total.neutral {
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
 }
 
 .settlement-name {
@@ -4464,7 +4487,7 @@ watch(
   display: block;
   margin: 0;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
 }
 
 .settlement-toggle-label {
@@ -4516,7 +4539,7 @@ watch(
 .zone-title {
   margin: 0 0 6px;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
   font-weight: 600;
 }
 
@@ -4589,7 +4612,7 @@ watch(
 
 .score-formula p {
   margin: 0;
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   font-weight: 700;
 }
 
@@ -4599,7 +4622,7 @@ watch(
 }
 
 .score-formula li {
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 
@@ -4610,7 +4633,7 @@ watch(
 
 .score-breakdown li {
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
 }
 
 .score-total {
@@ -4629,7 +4652,7 @@ watch(
 }
 
 .score-total.neutral {
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
 }
 
 .end-actions {
@@ -5126,4 +5149,7 @@ watch(
 .layout.compact-viewport .rules-head { padding: 0; }
 .layout.compact-viewport .rules-kicker { display: none; }
 .layout.compact-viewport .rules-decision-reminder { min-height: 0; padding: 5px 8px; }
+.small-screen-recommendation { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; padding: .4rem .65rem; background: var(--ui-panel, #0f172a); border: 1px solid var(--ui-border, #475569); border-radius: .6rem; font-size: 13px; }
+.small-screen-recommendation span { flex: 1 1 15rem; }
+.small-screen-recommendation button { min-height: 36px; background: var(--ui-raised, #1e293b); color: inherit; border: 1px solid var(--ui-border, #475569); border-radius: .4rem; padding: .3rem .5rem; cursor: pointer; }
 </style>

@@ -887,7 +887,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ui-muted, #94a3b8);
   border-radius: 999px;
   background: var(--ui-text, #f8fafc);
-  color: var(--ui-panel, #0f172a);
+  color: var(--ui-ink, #0f172a);
   display: inline-grid;
   place-items: center;
   font-size: 0.82rem;
@@ -1214,7 +1214,7 @@ onBeforeUnmount(() => {
 .reset-recommendation {
   min-height: 42px;
   padding: 0.35rem 0.75rem;
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
   border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
@@ -1244,7 +1244,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  color: var(--ui-raised, #334155);
+  color: var(--ui-ink, #334155);
   border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.72);
