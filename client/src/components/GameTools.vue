@@ -2,6 +2,7 @@
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
       <button
+        v-if="inRoom"
         ref="historyButtonRef"
         class="tool-button history"
         type="button"
@@ -19,6 +20,7 @@
         <span>记录</span>
       </button>
       <button
+        v-if="inRoom"
         class="tool-button interaction"
         type="button"
         :aria-label="quickPhrases.length === 0 ? '快捷互动，暂无音效' : props.quickPhraseBusy ? '快捷互动，上一条语音播放中' : '快捷互动'"
@@ -35,8 +37,8 @@
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '牌局设置'"
-        title="牌局设置"
+        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '全局设置'"
+        title="全局设置"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -49,6 +51,7 @@
         <span>设置</span>
       </button>
       <button
+        v-if="inRoom"
         ref="autoPlayButtonRef"
         class="tool-button auto-play"
         :class="{ active: props.autoPlay }"
@@ -67,6 +70,7 @@
         <span>{{ props.autoPlay ? "取消托管" : "托管" }}</span>
       </button>
       <button
+        v-if="inRoom"
         ref="exitButtonRef"
         class="tool-button exit"
         type="button"
@@ -165,8 +169,8 @@
       >
         <header>
           <div>
-            <small>牌局设置</small>
-            <strong id="settings-panel-title">牌面显示</strong>
+            <small>全局设置</small>
+            <strong id="settings-panel-title">外观与偏好</strong>
           </div>
           <button type="button" aria-label="关闭设置" @click="closeSettings()">×</button>
         </header>
@@ -185,6 +189,7 @@
             返回出牌
           </button>
         </div>
+        <AppearanceSettings :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
           <div class="mode-options" role="radiogroup" aria-label="手牌排列">
@@ -403,8 +408,8 @@
       </section>
     </Transition>
 
-    <Teleport to=".layout">
-      <div v-if="confirmingAutoPlay" class="exit-confirm-mask" @click.self="cancelAutoPlay">
+    <Teleport v-if="confirmingAutoPlay" to=".layout">
+      <div class="exit-confirm-mask" @click.self="cancelAutoPlay">
         <section
           ref="autoPlayDialogRef"
           class="exit-confirm auto-play-confirm"
@@ -427,8 +432,8 @@
       </div>
     </Teleport>
 
-    <Teleport to=".layout">
-      <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="cancelExit">
+    <Teleport v-if="confirmingExit" to=".layout">
+      <div class="exit-confirm-mask" @click.self="cancelExit">
         <section
           ref="exitDialogRef"
           class="exit-confirm"
@@ -455,6 +460,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import AppearanceSettings from "./AppearanceSettings.vue";
 import { quickPhrases } from "@/generated/quickPhrases";
 import type {
   CardDisplayMode,
@@ -468,6 +474,7 @@ import type {
 const props = withDefaults(
   defineProps<{
     modelValue: GameDisplayPreferences;
+    inRoom?: boolean;
     decisionActive?: boolean;
     decisionUntimed?: boolean;
     decisionSecondsLeft?: number;
@@ -483,6 +490,7 @@ const props = withDefaults(
     quickPhraseBusy?: boolean;
   }>(),
   {
+    inRoom: true,
     decisionActive: false,
     decisionUntimed: false,
     decisionSecondsLeft: 0,

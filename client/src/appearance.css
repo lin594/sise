@@ -1,0 +1,9 @@
+:root {
+  --card-back: linear-gradient(110deg, #ee6961, #b6242c 55%, #781d27);
+  --long-card-radius: 50% / 18%;
+}
+html .card-back, html .pending-fish-back, html .deck-layer {
+  background: var(--card-back);
+  border-radius: var(--long-card-radius);
+  border-color: #f7b0a0;
+}

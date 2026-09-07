@@ -19,6 +19,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { normalizeSkin, normalizeTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
@@ -80,6 +81,8 @@ function readDisplayPreferences() {
         if (stored) {
             const parsed = JSON.parse(stored);
             return {
+                skin: normalizeSkin(parsed.skin),
+                tableLayout: normalizeTableLayout(parsed.tableLayout),
                 handLayout: parsed.handLayout === "paged" ? "paged" : "single",
                 ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
                 tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
@@ -97,6 +100,8 @@ function readDisplayPreferences() {
     }
     const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
     return {
+        skin: normalizeSkin(null),
+        tableLayout: normalizeTableLayout(null),
         handLayout: "single",
         ownCards: "adaptive",
         tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
@@ -693,6 +698,7 @@ const isPendingSpecialCard = computed(() => {
 });
 const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, } = useResponsiveViewport();
 const displayPreferences = ref(readDisplayPreferences());
+watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode) {
     if (mode !== "adaptive") {
         return mode;
@@ -2931,85 +2937,85 @@ if (!__VLS_ctx.showGameTools && __VLS_ctx.canOfferPwaInstall) {
         ...{ class: "install-label-short" },
     });
 }
-if (__VLS_ctx.showGameTools) {
-    /** @type {[typeof GameTools, ]} */ ;
-    // @ts-ignore
-    const __VLS_8 = __VLS_asFunctionalComponent(GameTools, new GameTools({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onInstallApp': {} },
-        ...{ 'onReturnToDecision': {} },
-        ...{ 'onSetAutoPlay': {} },
-        ...{ 'onQuickPhrase': {} },
-        ...{ 'onSetQuickPhraseMuted': {} },
-        ...{ 'onExit': {} },
-        ref: "gameToolsRef",
-        modelValue: (__VLS_ctx.displayPreferences),
-        decisionActive: (__VLS_ctx.settingsDecisionActive),
-        decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
-        decisionSecondsLeft: (__VLS_ctx.settingsDecisionSecondsLeft),
-        actionLogs: (__VLS_ctx.actionLogs),
-        players: (__VLS_ctx.players),
-        mySeatId: (__VLS_ctx.mySeatId),
-        autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
-        autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
-        spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
-        screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
-        installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
-        quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
-        quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
-    }));
-    const __VLS_9 = __VLS_8({
-        ...{ 'onOpenRules': {} },
-        ...{ 'onInstallApp': {} },
-        ...{ 'onReturnToDecision': {} },
-        ...{ 'onSetAutoPlay': {} },
-        ...{ 'onQuickPhrase': {} },
-        ...{ 'onSetQuickPhraseMuted': {} },
-        ...{ 'onExit': {} },
-        ref: "gameToolsRef",
-        modelValue: (__VLS_ctx.displayPreferences),
-        decisionActive: (__VLS_ctx.settingsDecisionActive),
-        decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
-        decisionSecondsLeft: (__VLS_ctx.settingsDecisionSecondsLeft),
-        actionLogs: (__VLS_ctx.actionLogs),
-        players: (__VLS_ctx.players),
-        mySeatId: (__VLS_ctx.mySeatId),
-        autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
-        autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
-        spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
-        screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
-        installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
-        quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
-        quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
-    let __VLS_11;
-    let __VLS_12;
-    let __VLS_13;
-    const __VLS_14 = {
-        onOpenRules: (__VLS_ctx.openRules)
-    };
-    const __VLS_15 = {
-        onInstallApp: (__VLS_ctx.requestPwaInstall)
-    };
-    const __VLS_16 = {
-        onReturnToDecision: (__VLS_ctx.returnToDecision)
-    };
-    const __VLS_17 = {
-        onSetAutoPlay: (__VLS_ctx.setAutoPlay)
-    };
-    const __VLS_18 = {
-        onQuickPhrase: (__VLS_ctx.sendQuickPhrase)
-    };
-    const __VLS_19 = {
-        onSetQuickPhraseMuted: (__VLS_ctx.setQuickPhraseMuted)
-    };
-    const __VLS_20 = {
-        onExit: (__VLS_ctx.handleLeaveRoom)
-    };
-    /** @type {typeof __VLS_ctx.gameToolsRef} */ ;
-    var __VLS_21 = {};
-    var __VLS_10;
-}
+/** @type {[typeof GameTools, ]} */ ;
+// @ts-ignore
+const __VLS_8 = __VLS_asFunctionalComponent(GameTools, new GameTools({
+    ...{ 'onOpenRules': {} },
+    ...{ 'onInstallApp': {} },
+    ...{ 'onReturnToDecision': {} },
+    ...{ 'onSetAutoPlay': {} },
+    ...{ 'onQuickPhrase': {} },
+    ...{ 'onSetQuickPhraseMuted': {} },
+    ...{ 'onExit': {} },
+    ref: "gameToolsRef",
+    inRoom: (__VLS_ctx.showGameTools),
+    modelValue: (__VLS_ctx.displayPreferences),
+    decisionActive: (__VLS_ctx.settingsDecisionActive),
+    decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
+    decisionSecondsLeft: (__VLS_ctx.settingsDecisionSecondsLeft),
+    actionLogs: (__VLS_ctx.actionLogs),
+    players: (__VLS_ctx.players),
+    mySeatId: (__VLS_ctx.mySeatId),
+    autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+    autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+    spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
+    screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
+    installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
+    quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
+    quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
+}));
+const __VLS_9 = __VLS_8({
+    ...{ 'onOpenRules': {} },
+    ...{ 'onInstallApp': {} },
+    ...{ 'onReturnToDecision': {} },
+    ...{ 'onSetAutoPlay': {} },
+    ...{ 'onQuickPhrase': {} },
+    ...{ 'onSetQuickPhraseMuted': {} },
+    ...{ 'onExit': {} },
+    ref: "gameToolsRef",
+    inRoom: (__VLS_ctx.showGameTools),
+    modelValue: (__VLS_ctx.displayPreferences),
+    decisionActive: (__VLS_ctx.settingsDecisionActive),
+    decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
+    decisionSecondsLeft: (__VLS_ctx.settingsDecisionSecondsLeft),
+    actionLogs: (__VLS_ctx.actionLogs),
+    players: (__VLS_ctx.players),
+    mySeatId: (__VLS_ctx.mySeatId),
+    autoPlay: (Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+    autoPlayPending: (__VLS_ctx.isEnded && !Boolean(__VLS_ctx.mePlayer?.isAutoPlay)),
+    spokenTurnGuidanceSupported: (__VLS_ctx.spokenTurnGuidanceSupported),
+    screenWakeLockSupported: (__VLS_ctx.screenWakeLockSupported),
+    installAppAvailable: (__VLS_ctx.canOfferPwaInstall),
+    quickPhraseMuted: (__VLS_ctx.quickPhraseMuted),
+    quickPhraseBusy: (Boolean(__VLS_ctx.quickPhrase)),
+}, ...__VLS_functionalComponentArgsRest(__VLS_8));
+let __VLS_11;
+let __VLS_12;
+let __VLS_13;
+const __VLS_14 = {
+    onOpenRules: (__VLS_ctx.openRules)
+};
+const __VLS_15 = {
+    onInstallApp: (__VLS_ctx.requestPwaInstall)
+};
+const __VLS_16 = {
+    onReturnToDecision: (__VLS_ctx.returnToDecision)
+};
+const __VLS_17 = {
+    onSetAutoPlay: (__VLS_ctx.setAutoPlay)
+};
+const __VLS_18 = {
+    onQuickPhrase: (__VLS_ctx.sendQuickPhrase)
+};
+const __VLS_19 = {
+    onSetQuickPhraseMuted: (__VLS_ctx.setQuickPhraseMuted)
+};
+const __VLS_20 = {
+    onExit: (__VLS_ctx.handleLeaveRoom)
+};
+/** @type {typeof __VLS_ctx.gameToolsRef} */ ;
+var __VLS_21 = {};
+var __VLS_10;
 if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "meta" },

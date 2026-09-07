@@ -69,7 +69,7 @@
       </button>
       <GameTools
         ref="gameToolsRef"
-        v-if="showGameTools"
+        :in-room="showGameTools"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
         :decision-untimed="decisionTimer.untimed"
@@ -681,6 +681,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { normalizeSkin, normalizeTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
   ActionRequest,
@@ -774,6 +775,8 @@ function readDisplayPreferences(): GameDisplayPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
+        skin: normalizeSkin(parsed.skin),
+        tableLayout: normalizeTableLayout(parsed.tableLayout),
         handLayout: parsed.handLayout === "paged" ? "paged" : "single",
         ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
         tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
@@ -791,6 +794,8 @@ function readDisplayPreferences(): GameDisplayPreferences {
 
   const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
+    skin: normalizeSkin(null),
+    tableLayout: normalizeTableLayout(null),
     handLayout: "single",
     ownCards: "adaptive",
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
@@ -1530,6 +1535,7 @@ const {
   viewportWidth,
 } = useResponsiveViewport();
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
   if (mode !== "adaptive") {
     return mode;
