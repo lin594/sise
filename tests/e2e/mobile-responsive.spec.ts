@@ -890,13 +890,12 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
 
     await page.keyboard.press("Shift+Tab");
-    await revealSetting(page, "settings-rules");
     const rulesEntry = page.getByTestId("settings-rules");
     await expect(rulesEntry).toBeFocused();
     const bottomGeometry = await settingsPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();
       const rules = panel.querySelector<HTMLElement>("[data-testid='settings-rules']")!;
-      const wakeLock = panel.querySelector<HTMLElement>("[data-testid='keep-screen-awake']")!;
+      const allSettings = panel.querySelector<HTMLElement>("[data-testid='settings-all']")!;
       const isInside = (element: HTMLElement) => {
         const rect = element.getBoundingClientRect();
         return (
@@ -909,12 +908,12 @@ test.describe("phone portrait landscape canvas", () => {
       return {
         scrollTop: panel.scrollTop,
         rulesInsidePanel: isInside(rules),
-        wakeLockInsidePanel: isInside(wakeLock),
+        allSettingsInsidePanel: isInside(allSettings),
       };
     });
     expect(bottomGeometry.scrollTop).toBeGreaterThan(0);
     expect(bottomGeometry.rulesInsidePanel).toBe(true);
-    expect(bottomGeometry.wakeLockInsidePanel).toBe(true);
+    expect(bottomGeometry.allSettingsInsidePanel).toBe(true);
     await expect(settingsScrollHint).toHaveClass(/hidden/);
     await expect(settingsScrollHint).toHaveCSS("opacity", "0");
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-bottom-320x568.png") });

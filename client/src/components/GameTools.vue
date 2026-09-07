@@ -163,7 +163,7 @@
         aria-modal="true"
         aria-labelledby="settings-panel-title"
         tabindex="-1"
-        @keydown.esc.stop.prevent="backSettings()"
+        @keydown.esc.stop.prevent="closeSettings()"
         @keydown.tab="trapSettingsFocus"
         @scroll.passive="updateSettingsScrollState"
       >
@@ -407,10 +407,10 @@
           </span>
           <span class="switch-state install-state">安装</span>
         </button>
+        <button v-if="settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-all" @click="openSettingsPage('home')">全部设置 <span aria-hidden="true">›</span></button>
         <button v-if="settingsPage === 'home' || settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
-        <button v-if="settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-all" @click="openSettingsPage('home')">全部设置 <span aria-hidden="true">›</span></button>
         <p
           class="settings-scroll-hint"
           :class="{ hidden: !settingsCanScrollForward }"
@@ -1675,4 +1675,6 @@ onBeforeUnmount(() => {
 .settings-categories button > span { grid-column: 2; grid-row: 1 / 3; align-self: center; }
 .settings-panel > header { position: sticky; top: -.8rem; z-index: 3; padding-block: .4rem; background: var(--ui-page, #080f1d); }
 .settings-panel > header > div { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+
+.settings-panel header button[data-testid="settings-back"] { width: auto; padding-inline: .5rem; white-space: nowrap; border-radius: .45rem; font-size: 14px; }
 </style>

@@ -40,7 +40,7 @@ test("settings use categories outside play and restore navigation focus", async 
   await expect(page.getByTestId('card-mode-own-long')).toHaveCount(0);
   await page.getByTestId('settings-category-table').click();
   await expect(page.getByTestId('hand-layout-paged')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByTestId('settings-back').click();
   await expect(page.getByTestId('settings-category-table')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('game-settings')).toBeFocused();

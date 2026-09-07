@@ -10,6 +10,6 @@ export async function revealSetting(page: Page, testId: string) {
   if (!await page.getByTestId(`settings-category-${category}`).isVisible()) {
     await page.getByTestId("settings-back").click();
   }
-  if (testId !== "settings-rules") await page.getByTestId(`settings-category-${category}`).click();
+  if (testId !== "settings-rules" && testId !== "settings-install-app") await page.getByTestId(`settings-category-${category}`).click();
   await expect(control).toBeVisible();
 }

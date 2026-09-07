@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -223,6 +224,7 @@ test("keeps installation discoverable in game settings without occupying the tab
   await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
 
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "settings-install-app");
   const settingsInstall = page.getByTestId("settings-install-app");
   await expect(settingsInstall).toBeVisible();
   await settingsInstall.click();
