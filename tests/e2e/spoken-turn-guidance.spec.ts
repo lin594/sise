@@ -1,13 +1,12 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
 async function enterDeclaration(page: Page, path = "/?e2eDebug=1"): Promise<void> {
   await page.goto(path);
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   if (path.includes("e2eDebug=1")) {
     await page.evaluate(() => {

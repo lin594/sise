@@ -1,3 +1,4 @@
+import { startLobbyAction } from "./helpers/game";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 type ViewportCase = {
@@ -177,13 +178,14 @@ test.describe("mobile responsive release gate", () => {
   test("keeps critical play and deterministic settlement geometry inside every representative viewport", async ({ page }, testInfo) => {
     test.setTimeout(180_000);
     await page.goto("/?e2eDebug=1");
-    await expectPageContained(page, ["main.layout", ".entry-shell"]);
+    await expectPageContained(page, ["main.layout", ".lobby"]);
+    await page.getByTestId("change-entry-name").click();
     await page.getByTestId("nickname-input").fill("这是一段非常长的四色牌昵称");
     await page.getByTestId("login-submit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     await expectPageContained(page, ["main.layout", ".lobby"]);
 
-    await page.getByTestId("lobby-start").click();
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await applyDebugScenario(page, "staged_declaration");
     const hasDeclaration = await expectOpeningHandGate(page);

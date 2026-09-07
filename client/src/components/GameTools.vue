@@ -37,8 +37,8 @@
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '全局设置'"
-        title="全局设置"
+        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : inRoom ? '牌局设置' : '全局设置'"
+        :title="inRoom ? '牌局设置' : '全局设置'"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -1627,4 +1627,6 @@ onBeforeUnmount(() => {
     padding: 0.8rem;
   }
 }
+.settings-panel > header { position: sticky; top: -.8rem; z-index: 3; padding-block: .4rem; background: var(--ui-page, #080f1d); }
+.settings-panel :is(button, input) { scroll-margin-top: 4rem; scroll-margin-bottom: 1rem; }
 </style>

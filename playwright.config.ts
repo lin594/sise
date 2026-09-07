@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       name: "webkit-responsive",
-      testMatch: /(?:responsive-release|quick-phrase)\.spec\.ts/,
+      testMatch: /(?:responsive-release|quick-phrase|appearance)\.spec\.ts/,
       use: {
         browserName: "webkit",
       },

@@ -1,12 +1,12 @@
+import { startLobbyAction } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
 test("newer room revisions win and same revisions only enrich private state", async ({ page }) => {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await expect.poll(async () => {
     const layoutClass = await page.locator("main.layout").getAttribute("class");
     if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";

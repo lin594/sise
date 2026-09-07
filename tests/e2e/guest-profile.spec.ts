@@ -1,3 +1,4 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
@@ -25,9 +26,7 @@ test("a passwordless local profile stays private and updates after settlement", 
   test.setTimeout(90_000);
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("档案牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", "档案牌友");
 
   const summary = page.getByTestId("guest-profile-summary");
   await expect(summary).toBeVisible();
@@ -106,7 +105,7 @@ test("a passwordless local profile stays private and updates after settlement", 
   await expect(summary).toBeFocused();
   await page.setViewportSize({ width: 568, height: 320 });
 
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await applySettlementScenario(page);
   await expect(page.getByTestId("settlement-panel")).toBeVisible();
@@ -128,7 +127,6 @@ test("a passwordless local profile stays private and updates after settlement", 
   expect(requestUrls.some((url) => url.includes(profileToken ?? "gp_"))).toBe(false);
 
   await page.reload();
-  await page.getByTestId("login-submit").click();
   await expect(summary).toContainText("已玩 1 局");
   await expect(summary).toContainText("胡 1 局");
 });

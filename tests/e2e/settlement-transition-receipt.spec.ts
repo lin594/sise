@@ -1,5 +1,5 @@
+import { openGameAs, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type HeldSocketMessages = {
   count: () => number;
@@ -7,11 +7,8 @@ type HeldSocketMessages = {
 };
 
 async function reachPracticeSettlement(page: Page): Promise<void> {
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("结算房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", "结算房主");
   await page.getByTestId("mode-practice_bots").click();
-  await page.getByTestId("lobby-start").click();
   await finishDeclarationIfNeeded(page);
   await page.evaluate(() => {
     const bridge = (window as Window & {

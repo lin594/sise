@@ -1,10 +1,9 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 async function enterModeLobby(page: Page): Promise<void> {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
+
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -34,7 +33,7 @@ test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true
 
 test("browser back closes a game layer before offering a safe room exit", async ({ page }) => {
   await enterModeLobby(page);
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
 
   const roomIdentity = await page.evaluate(() => ({
@@ -70,7 +69,6 @@ test("browser back closes a game layer before offering a safe room exit", async 
 test("the visible waiting-room exit also releases browser history protection", async ({ page }) => {
   await enterModeLobby(page);
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("leave-waiting-room")).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => page.evaluate(() => Boolean(window.history.state?.__siseRoomGuard))).toBe(true);
 

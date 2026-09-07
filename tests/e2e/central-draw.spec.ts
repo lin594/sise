@@ -1,5 +1,5 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -30,9 +30,8 @@ type MeldHandoff = {
 
 async function start(page: Page, scenario: string) {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
   await page.evaluate((name) => {
     (window as any).__drawStages = [];

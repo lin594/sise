@@ -1,8 +1,8 @@
+import { startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
-  await page.getByTestId('random-nickname').click();
-  await page.getByTestId('login-submit').click();
+
 }
 async function useStagedDeclaration(page: Page) {
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
@@ -14,8 +14,8 @@ async function useStagedDeclaration(page: Page) {
 async function finishStagedDeclaration(page: Page) {
   await expect.poll(async () => {
     const confirm = page.getByTestId('confirm-declaration');
-    if (!await confirm.isVisible().catch(() => false)) return 'playing';
-    if (await confirm.isEnabled()) await confirm.click();
+    if (await page.locator('main.layout').evaluate(el => el.classList.contains('playing'))) return 'playing';
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled()) await confirm.click();
     return 'declaring';
   }, { timeout: 20_000 }).toBe('playing');
 }
@@ -30,7 +30,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
   test(`single row and embedded declaration ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     await login(page);
-    await page.getByTestId('lobby-start').click();
+    await startLobbyAction(page);
     await useStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveClass(/embedded/);
     await expect(page.locator('.hand-preview')).toHaveCount(0);
@@ -55,7 +55,6 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
 test('friend waiting room rules entry opens the shared guide', async ({ page }) => {
   await login(page);
   await page.getByTestId('mode-friends').click();
-  await page.getByTestId('lobby-start').click();
   await page.getByTestId('lobby-rules').click();
   await expect(page.getByTestId('rules-panel')).toBeVisible();
   await expect(page.getByText('现在怎么操作', { exact: true })).toBeVisible();
@@ -65,7 +64,7 @@ test('friend waiting room rules entry opens the shared guide', async ({ page }) 
 test('listening marks stay in the hand and only discard selection opens a preview', async ({ page }, info) => {
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
   await expect(page.getByTestId('hand-card-unique-red-jiang')).toHaveAttribute('aria-pressed', 'true');
@@ -142,7 +141,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
       });
     }, 8);
   });
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await expect.poll(async () => {
     if (await page.getByTestId('confirm-declaration').isVisible().catch(() => false)) return 'ready';
     return await page.locator('main.layout').evaluate((node) => node.classList.contains('playing')) ? 'ready' : 'waiting';
@@ -172,7 +171,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await useStagedDeclaration(page);
 
   const allSamples: Array<{
@@ -254,7 +253,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
 test('21-card single row adapts to both card styles and layout preference survives refresh', async ({ page }) => {
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await useStagedDeclaration(page);
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;

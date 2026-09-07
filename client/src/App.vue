@@ -98,15 +98,14 @@
         :class="{ 'front-lobby-meta': showModeLobby }"
         v-if="!hasLobbySession && !isConnectingWithoutState"
       >
-        <span v-if="showModeLobby" class="front-lobby-identity">昵称：<strong>{{ entryName }}</strong></span>
         <button
           v-if="showModeLobby"
           class="ghost reset-btn change-name"
           type="button"
           data-testid="change-entry-name"
           :disabled="enteringLobby"
-          @click="returnToEntry"
-        >修改昵称</button>
+          @click="openNicknameDialog"
+        ><strong>{{ entryName }}</strong><span> · 修改昵称</span></button>
         <button class="ghost reset-btn" type="button" data-testid="open-rules" @click="openRules">查看规则</button>
       </div>
     </header>
@@ -119,25 +118,7 @@
       data-testid="global-notice"
     >{{ globalNotice }}</p>
 
-    <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
-      <span>屏幕较小，紧凑布局能留出更多操作空间</span>
-      <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
-      <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
-    </aside>
-
-    <LoginPage
-      v-if="showEntry"
-      :nickname="entryName"
-      :entering="enteringLobby"
-      :primary-label="entryPrimaryLabel"
-      :friend-invite="hasFriendInvite"
-      :history-names="nicknameHistory"
-      :storage-persistent="browserStoragePersistent"
-      @update:nickname="entryName = $event"
-      @submit="enterLobby"
-      @randomize="randomizeNickname"
-      @select-history="entryName = $event"
-    />
+    <section v-if="showEntry" class="sync-shell" role="status">正在进入大厅…</section>
 
     <LobbyPage
       ref="lobbyPageRef"
@@ -171,7 +152,7 @@
       :seat-claim-pending="seatClaimPending"
       :ready-pending="lobbyReadyPending"
       @start="startSelectedMode"
-      @select-mode="selectedLobbyMode = $event as LobbyModeId"
+      @select-mode="startLobbyMode"
       @copy-invite="copyInviteLink"
       @share-invite="shareInviteLink"
       @show-invite-qr="showInviteQr"
@@ -186,7 +167,15 @@
       @set-scoring-mode="setScoringMode"
       @open-rules="openRules"
       @set-lobby-ready="requestLobbyReady"
-    />
+    >
+      <template #recommendation>
+        <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
+          <span>屏幕较小，紧凑布局能留出更多操作空间</span>
+          <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
+          <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
+        </aside>
+      </template>
+    </LobbyPage>
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
       <div class="sync-card" data-testid="resume-session-screen">
@@ -627,6 +616,9 @@
       </section>
     </div>
 
+    <NicknameDialog v-if="nicknameDialogOpen" :nickname="entryName" :history="nicknameHistory"
+      @save="saveNickname" @close="closeNicknameDialog" @randomize="nicknameDraftRandom = generateRandomNickname()" :random-name="nicknameDraftRandom" />
+
     <div v-if="showRules" class="rules-mask" @click.self="closeRules()">
       <div
         ref="rulesPanelRef"
@@ -678,7 +670,7 @@ import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
 import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
-import LoginPage from "@/components/LoginPage.vue";
+import NicknameDialog from "@/components/NicknameDialog.vue";
 import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
 import { usePwaInstall, type PwaInstallGuide } from "@/composables/usePwaInstall";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -962,7 +954,6 @@ const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const storedEntryNameAtBoot = readStoredValue(ENTRY_NAME_KEY).trim();
 const nicknameHistoryAtBoot = readNicknameHistory();
-const confirmedInviteNameAtBoot = storedEntryNameAtBoot || nicknameHistoryAtBoot[0] || "";
 const entryName = ref(storedEntryNameAtBoot);
 const nicknameHistory = ref<string[]>(nicknameHistoryAtBoot);
 const entryInviteRoomId = ref(new URLSearchParams(window.location.search).get("roomId")?.trim() || "");
@@ -1076,10 +1067,8 @@ async function bootstrapRoomEntry(): Promise<void> {
     await resumeStoredRoomSession();
     return;
   }
-  if (entryInviteRoomId.value && confirmedInviteNameAtBoot) {
-    entryName.value = confirmedInviteNameAtBoot;
-    await enterLobby();
-  }
+  entryName.value = entryName.value.trim() || nicknameHistory.value[0] || generateRandomNickname();
+  await enterLobby();
 }
 
 async function returnToModeSelectionFromRoom(): Promise<void> {
@@ -1387,7 +1376,6 @@ const lobbyStartHint = computed(() => {
   return "四席已就绪，请点开始好友对局";
 });
 const hasFriendInvite = computed(() => Boolean(entryInviteRoomId.value));
-const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
 const matchSecondsLeft = computed(() => {
   const startsAt = Number(state.value?.matchStartsAt ?? 0);
@@ -1810,7 +1798,7 @@ async function rematchQuickTable(): Promise<void> {
   }
   quickRematchPending.value = true;
   globalError.value = "";
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   try {
     await leaveRoom();
     const ok = await connect({
@@ -2065,6 +2053,10 @@ function closeTopmostRoomLayerForBack(): boolean {
   }
   if (confirmingReturnLobby.value) {
     cancelReturnLobby();
+    return true;
+  }
+  if (nicknameDialogOpen.value) {
+    void closeNicknameDialog();
     return true;
   }
   if (gameToolsRef.value?.handleNavigationBack()) {
@@ -2538,9 +2530,6 @@ onMounted(() => {
   window.addEventListener("popstate", handleRoomNavigationPopState);
   armRoomNavigationGuard();
   installLocalTestBridge();
-  if (!entryName.value) {
-    entryName.value = nicknameHistory.value[0] || generateRandomNickname();
-  }
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -3177,7 +3166,7 @@ async function enterLobby() {
   if (enteringLobby.value || enteredFrontLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   globalError.value = "";
   writeStoredValue(ENTRY_NAME_KEY, nickname);
@@ -3226,18 +3215,33 @@ async function enterLobby() {
   }
 }
 
-function randomizeNickname() {
-  entryName.value = generateRandomNickname();
+const nicknameDialogOpen = ref(false);
+const nicknameDraftRandom = ref("");
+let nicknameReturnFocus: HTMLElement | null = null;
+async function openNicknameDialog() {
+  if (hasLobbySession.value || enteringLobby.value) return;
+  nicknameReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  nicknameDialogOpen.value = true;
 }
-
-async function returnToEntry() {
-  if (hasLobbySession.value || enteringLobby.value) {
-    return;
-  }
-  globalError.value = "";
-  enteredFrontLobby.value = false;
+async function closeNicknameDialog() {
+  nicknameDialogOpen.value = false;
   await nextTick();
-  document.querySelector<HTMLInputElement>("[data-testid='nickname-input']")?.focus();
+  nicknameReturnFocus?.focus();
+}
+function saveNickname(value: string) {
+  const nickname = value.trim().slice(0, 16);
+  if (!nickname) return;
+  entryName.value = nickname;
+  writeStoredValue(ENTRY_NAME_KEY, nickname);
+  nicknameHistory.value = [nickname, ...nicknameHistory.value.filter(name => name !== nickname)].slice(0, 8);
+  writeNicknameHistory(nicknameHistory.value);
+  void updateGuestProfileNickname(nickname);
+  void closeNicknameDialog();
+}
+function startLobbyMode(mode: string) {
+  if (enteringLobby.value || hasLobbySession.value) return;
+  selectedLobbyMode.value = mode as LobbyModeId;
+  startSelectedMode();
 }
 
 function startSelectedMode() {
@@ -3263,7 +3267,7 @@ async function startQuickMatchLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   startingRoomMode.value = "quick_match";
   enteringLobby.value = true;
@@ -3295,7 +3299,7 @@ async function startPracticeLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   startingRoomMode.value = "practice";
   enteringLobby.value = true;
@@ -3336,7 +3340,7 @@ async function startFriendLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   startingRoomMode.value = "friends";
   enteringLobby.value = true;
   try {

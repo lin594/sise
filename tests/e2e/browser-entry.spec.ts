@@ -1,3 +1,4 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -118,8 +119,7 @@ test("shares the public game card from mode selection", async ({ page }, testInf
     });
   });
   await page.goto("/");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
+
 
   const shareButton = page.getByTestId("share-game");
   await expect(shareButton).toHaveText("分享四色牌");
@@ -215,11 +215,9 @@ test("restores the install entry when installed-app detection does not answer", 
 test("keeps installation discoverable in game settings without occupying the table header", async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("桌面应用测试");
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
-  await expect(page.getByTestId("game-settings")).toBeVisible({ timeout: 20_000 });
+  await openGameAs(page, "/?e2eDebug=1", "桌面应用测试");
+  await startLobbyAction(page);
+  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("pwa-install-entry")).toHaveCount(0);
 
   await page.getByTestId("game-settings").click();

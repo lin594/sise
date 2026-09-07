@@ -62,7 +62,7 @@ html[data-skin]:not([data-skin="cyber-minimal"]) .card.response-card { outline: 
 @media (max-width: 700px), (max-height: 450px) {
   html[data-skin]:not([data-skin="cyber-minimal"]) .table { background: radial-gradient(ellipse at center, var(--ui-table-center), var(--ui-table)); }
 }
-html .skin-preview { background-image: var(--skin-art, none); background-size: cover; background-position: center; }
+html .appearance-settings .skin-preview { background-image: var(--skin-art, none); background-size: cover; background-position: center; }
 .skin-preview[data-skin="cyber-minimal"] { --ui-table: #14332d; --skin-art: none; }
 html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active {
   background: var(--ui-accent); color: #fff9eb;

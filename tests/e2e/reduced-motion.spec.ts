@@ -1,13 +1,12 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
 async function enterGame(page: Page): Promise<void> {
   await page.goto("/");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
 }
 

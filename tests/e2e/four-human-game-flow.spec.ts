@@ -1,5 +1,5 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type PresentationEvent = {
   name: "dealer-back" | "dealer-face" | "deal" | "declaration";
@@ -34,9 +34,7 @@ async function closeFourPages(table: FourPlayerTable): Promise<void> {
 }
 
 async function enterModeLobby(page: Page, name: string): Promise<void> {
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill(name);
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", name);
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -144,14 +142,11 @@ async function seatFourFriends(pages: Page[]): Promise<void> {
   const [host, ...guests] = pages;
   await enterModeLobby(host!, PLAYER_NAMES[0]!);
   await host!.getByTestId("mode-friends").click();
-  await host!.getByTestId("lobby-start").click();
   await expect(host!.getByTestId("seat-grid")).toBeVisible();
   const invitation = host!.url();
 
   await Promise.all(guests.map(async (guest, index) => {
-    await guest.goto(invitation);
-    await guest.getByTestId("nickname-input").fill(PLAYER_NAMES[index + 1]!);
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, invitation, PLAYER_NAMES[index + 1]!);
     await guest.getByTestId(`claim-seat-${index + 1}`).click();
     await expect(guest.getByTestId(`seat-${index + 1}`)).toContainText("你");
     await guest.getByTestId("lobby-ready").click();
@@ -164,9 +159,6 @@ async function joinFourPlayerQuickMatch(pages: Page[]): Promise<void> {
   await Promise.all(pages.map((page, index) => enterModeLobby(page, PLAYER_NAMES[index]!)));
   await Promise.all(pages.map(observeRoundPresentation));
   await Promise.all(pages.map((page) => page.getByTestId("mode-quick_match").click()));
-  for (const page of pages) {
-    await page.getByTestId("lobby-start").click();
-  }
   await Promise.all(pages.map((page) => expect(page.getByTestId("match-human-count")).toHaveText("真人 4 / 4")));
 }
 
@@ -214,7 +206,7 @@ test("four real friends keep every crowded action reachable in the reserved acti
   try {
     await seatFourFriends(table.pages);
     await Promise.all(table.pages.map(observeRoundPresentation));
-    await host!.getByTestId("lobby-start").click();
+    await startLobbyAction(host!);
     await expectCompleteRoundPresentation(table.pages);
     await Promise.all(table.pages.map((page) => finishDeclarationIfNeeded(page)));
 

@@ -1,3 +1,4 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
@@ -21,9 +22,8 @@ test.describe("牌局断线恢复", () => {
   test("半开连接无回包时主动提示网络不稳并恢复", async ({ page }, testInfo) => {
     test.setTimeout(45_000);
     await page.goto("/");
-    await page.getByTestId("random-nickname").click();
-    await page.getByTestId("login-submit").click();
-    await page.getByTestId("lobby-start").click();
+
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
     await finishOpeningIfNeeded(page);
     await expect(page.locator("main.layout")).toHaveAttribute("data-connection-state", "connected");
@@ -57,12 +57,11 @@ test.describe("牌局断线恢复", () => {
       }
     });
     await page.goto("/");
-    await page.getByTestId("random-nickname").click();
-    await page.getByTestId("login-submit").click();
+
     await expect(page.getByText("游戏模式选择")).toBeVisible();
 
     const privateStateRequest = page.waitForRequest((request) => request.url().includes("/private-state"));
-    await page.getByTestId("lobby-start").click();
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
     const recoveryRequest = await privateStateRequest;
@@ -232,9 +231,8 @@ test.describe("牌局断线恢复", () => {
   test("刷新页面后无需重新输入昵称即可回到原座", async ({ page }) => {
     test.setTimeout(90_000);
     await page.goto("/");
-    await page.getByTestId("random-nickname").click();
-    await page.getByTestId("login-submit").click();
-    await page.getByTestId("lobby-start").click();
+
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
     await finishOpeningIfNeeded(page);
@@ -316,9 +314,7 @@ test.describe("牌局断线恢复", () => {
 
   test("失效的好友邀请提供直接出口并清除失败连接身份", async ({ page }, testInfo) => {
     const roomId = "missing-friend-room";
-    await page.goto(`/?roomId=${roomId}`);
-    await page.getByTestId("nickname-input").fill("过期邀请测试");
-    await page.getByTestId("login-submit").click();
+    await openGameAs(page, `/?roomId=${roomId}`, "过期邀请测试");
 
     const terminalScreen = page.getByTestId("resume-session-screen");
     await expect(terminalScreen).toBeVisible({ timeout: 15_000 });
@@ -336,7 +332,7 @@ test.describe("牌局断线恢复", () => {
 
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
-    await expect(page.locator(".front-lobby-identity")).toContainText("过期邀请测试");
+    await expect(page.getByTestId("change-entry-name")).toContainText("过期邀请测试");
     expect(
       await page.evaluate((failedRoomId) => ({
         guarded: Boolean(window.history.state?.__siseRoomGuard),
@@ -350,9 +346,8 @@ test.describe("牌局断线恢复", () => {
   test("新窗口接管原座位后旧窗口停止抢回", async ({ context, page }) => {
     test.setTimeout(90_000);
     await page.goto("/");
-    await page.getByTestId("random-nickname").click();
-    await page.getByTestId("login-submit").click();
-    await page.getByTestId("lobby-start").click();
+
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
     await finishOpeningIfNeeded(page);
@@ -401,9 +396,8 @@ test.describe("牌局断线恢复", () => {
   test("个人退出后忽略迟到的旧房间私有状态", async ({ page }) => {
     test.setTimeout(90_000);
     await page.goto("/");
-    await page.getByTestId("random-nickname").click();
-    await page.getByTestId("login-submit").click();
-    await page.getByTestId("lobby-start").click();
+
+    await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
 
     await finishOpeningIfNeeded(page);

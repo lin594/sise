@@ -50,3 +50,18 @@ export async function stageDeclarationForTest(page: Page, timeout = 20_000): Pro
   ).toMatchObject({ scenario: "staged_declaration", ok: true });
   await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout });
 }
+
+/** Set a known local identity before boot, including automatic invitation entry. */
+export async function openGameAs(page: Page, url: string, nickname: string): Promise<void> {
+  await page.addInitScript((name) => { if (!localStorage.getItem("sise_entry_name")) localStorage.setItem("sise_entry_name", name); }, nickname);
+  await page.goto(url);
+}
+
+/** Start the default practice directly, or use the host's existing room start action. */
+export async function startLobbyAction(page: Page): Promise<void> {
+  await expect.poll(async () =>
+    await page.getByTestId("mode-practice_bots").isVisible() || await page.getByTestId("lobby-start").isVisible(),
+  ).toBe(true);
+  if (await page.getByTestId("mode-practice_bots").isVisible()) await page.getByTestId("mode-practice_bots").click();
+  else await page.getByTestId("lobby-start").click();
+}

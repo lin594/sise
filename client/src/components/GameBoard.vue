@@ -5810,7 +5810,7 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
 .board[data-table-layout="classic"] :is(.player-left, .player-right) {
   align-self: center; height: auto; max-height: 100%; min-height: 0; margin-inline: .15rem; width: calc(100% - .3rem);
 }
-.board[data-table-layout="classic"] .player-top { min-height: 0; }
+.board[data-table-layout="classic"] .player-top { min-height: 0; height: fit-content; max-height: 100%; align-self: start; }
 .board[data-table-layout="classic"] .center { margin-inline: .3rem; width: calc(100% - .6rem); }
 .board[data-table-layout="classic"] .flow-card { align-self: center; max-height: 100%; }
 .board[data-table-layout="classic"] .player-card .seat-identity-meta { flex-wrap: wrap; }
