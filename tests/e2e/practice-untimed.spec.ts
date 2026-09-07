@@ -24,7 +24,7 @@ test("single-player practice keeps human decisions untimed", async ({ page }) =>
   const declarationConfirm = page.getByTestId("confirm-declaration");
   await expect(declarationConfirm).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByTestId("decision-countdown")).toContainText("不限时");
-  await expect(page.getByText("练习不限时", { exact: true })).toBeVisible();
+  await expect(page.getByText("练习不限时", { exact: true })).toBeHidden();
   await expect(page.getByTestId("request-more-time")).toHaveCount(0);
 
   await declarationConfirm.click();

@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test";
 import {
   getDisplayedTurnPlayerId,
   getRoundKey,
-  isQuietSelfDiscardWait,
   projectResponseCardPlacement,
 } from "../../client/src/utils/gameFlowPresentation";
 
@@ -60,19 +59,4 @@ test("upper response card placement is projected for each viewer", () => {
     responsePhase: "local_upper",
     viewerPlayerId: "receiver",
   })).toBe("hidden");
-});
-
-test("the player who discarded receives no redundant collective wait prompt", () => {
-  expect(isQuietSelfDiscardWait({
-    responsePhase: "collective",
-    responseSource: "upper",
-    originPlayerId: "self",
-    viewerPlayerId: "self",
-  })).toBe(true);
-  expect(isQuietSelfDiscardWait({
-    responsePhase: "collective",
-    responseSource: "upper",
-    originPlayerId: "self",
-    viewerPlayerId: "other",
-  })).toBe(false);
 });

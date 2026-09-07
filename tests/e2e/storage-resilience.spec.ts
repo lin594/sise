@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("storage-restricted browsers can still enter a practice game", async ({ browser }, testInfo) => {
   const context = await browser.newContext({
@@ -58,6 +59,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
 
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await finishDeclarationIfNeeded(page);
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();

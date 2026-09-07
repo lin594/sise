@@ -1,6 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
+async function finishOpening(page: import("@playwright/test").Page): Promise<void> {
+  await expect.poll(async () => {
+    if (await page.locator("main.layout").evaluate((node) => node.classList.contains("playing"))) {
+      return "playing";
+    }
+    const confirm = page.getByTestId("confirm-declaration");
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled()) {
+      await confirm.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
+}
+
 test("a passive human response keeps the privacy window without exposing a countdown or controls", async ({ browser }) => {
   test.setTimeout(90_000);
   const hostContext = await browser.newContext({ viewport: { width: 568, height: 320 } });
@@ -25,10 +38,9 @@ test("a passive human response keeps the privacy window without exposing a count
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await host.getByTestId("lobby-start").click();
 
-    await Promise.all([
-      finishDeclarationIfNeeded(host),
-      finishDeclarationIfNeeded(guest),
-    ]);
+    // 无鱼或无坎时服务端会跳过该玩家的对应步骤，两端都只推进实际存在的声明。
+    await Promise.all([finishOpening(host), finishOpening(guest)]);
+    await expect(host.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
 
     const hostSeatId = await host.getByTestId("player-self").getAttribute("data-player-id");
     expect(hostSeatId).toBeTruthy();
@@ -55,8 +67,9 @@ test("a passive human response keeps the privacy window without exposing a count
     });
     await expect.poll(() => readClock(guest), { timeout: 2_500, intervals: [20, 50, 100] }).toMatchObject({
       currentTurnPlayerId: hostSeatId,
-      activeResponderId: hostSeatId,
+      activeResponderId: "",
       responsePhase: "collective",
+      decisionTimer: { totalMs: 3_000 },
     });
     const [hostClock, guestClock] = await Promise.all([readClock(host), readClock(guest)]);
     expect(Number(guestClock.decisionTimer.totalMs)).toBeGreaterThanOrEqual(4_900);
@@ -70,7 +83,9 @@ test("a passive human response keeps the privacy window without exposing a count
       expect(host.getByTestId("decision-countdown")).toHaveCount(0),
       expect(host.locator(".action-dock .btn")).toHaveCount(0),
       expect(host.getByTestId("action-guidance")).toHaveCount(0),
-      expect(host.locator(".self-info-hint")).toHaveText("等待其他玩家操作"),
+      expect(host.getByTestId("decision-status")).toHaveText("等待其他玩家响应"),
+      expect(host.getByTestId("self-turn-outline")).toBeVisible(),
+      expect(host.locator(".center-pointer.pointer-down")).toBeVisible(),
       expect(host).not.toHaveTitle(/轮到你/),
       expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "牌局设置"),
       expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveText("待响"),
@@ -86,9 +101,14 @@ test("a passive human response keeps the privacy window without exposing a count
     await host.getByTestId("close-rules").click();
 
     await expect.poll(
-      async () => (await readClock(host)).activeResponderId,
+      async () => (await readClock(host)).responsePhase,
       { timeout: 6_000 },
-    ).not.toBe(hostSeatId);
+    ).toBe("local_upper");
+    const localClock = await readClock(host);
+    expect(localClock.activeResponderId).toBe("");
+    expect(localClock.decisionTimer.totalMs).toBe(30_000);
+    await expect(host.getByTestId("decision-status")).toHaveCount(0);
+    await expect(host.getByTestId("decision-countdown")).toContainText(/^(?:29|30)秒$/);
   } finally {
     await guestContext.close();
     await hostContext.close();

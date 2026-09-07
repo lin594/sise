@@ -45,6 +45,7 @@ async function observeRoundPresentation(page: Page): Promise<void> {
     const trackingWindow = window as Window & {
       __siseRoundPresentationEvents?: PresentationEvent[];
       __siseRoundPresentationObserver?: MutationObserver;
+      __siseLocalTest?: { getRoomState: () => { phase?: string } | null };
     };
     trackingWindow.__siseRoundPresentationEvents = [];
     const scan = () => {
@@ -63,7 +64,8 @@ async function observeRoundPresentation(page: Page): Promise<void> {
         record({ name: "dealer-face", handCount, cardLabel: dealerFace.getAttribute("aria-label") ?? "" });
       }
       if (document.querySelector(".deal-overlay")) record({ name: "deal", handCount });
-      if (document.querySelector("[data-testid='confirm-declaration']")) {
+      const phase = trackingWindow.__siseLocalTest?.getRoomState()?.phase;
+      if (events.some((event) => event.name === "deal") && (phase === "declaring" || phase === "playing")) {
         record({ name: "declaration", handCount });
       }
     };
@@ -195,7 +197,8 @@ async function expectCrowdedActionDock(page: Page): Promise<void> {
       minimumHeight: Math.min(...rects.map((rect) => rect.height)),
     };
   });
-  expect(metrics.controlCount).toBeGreaterThanOrEqual(4);
+  // 吃已移到接牌者的本地阶段；全局拥挤场景保留开、碰、抓三个并列入口。
+  expect(metrics.controlCount).toBeGreaterThanOrEqual(3);
   expect(metrics.rows).toBe(1);
   expect(metrics.noHorizontalOverflow).toBe(true);
   expect(metrics.allContained, JSON.stringify(metrics)).toBe(true);

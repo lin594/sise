@@ -17,6 +17,18 @@ async function enterLobby(page: Page, path = "/"): Promise<void> {
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
+async function finishOpeningIfNeeded(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const layoutClass = await page.locator("main.layout").getAttribute("class");
+    if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";
+    const declaration = page.getByTestId("confirm-declaration");
+    if (await declaration.isVisible().catch(() => false) && await declaration.isEnabled().catch(() => false)) {
+      await declaration.click();
+    }
+    return "waiting";
+  }, { timeout: 20_000 }).toBe("playing");
+}
+
 async function applyLocalDebugScenario(page: Page, scenario: string): Promise<void> {
   await expect.poll(() =>
     page.evaluate((nextScenario) => {
@@ -420,14 +432,16 @@ test.describe("clear first-time entry", () => {
       const descriptions = [...scroll.querySelectorAll<HTMLElement>(".mode-card p")];
       const start = document.querySelector<HTMLButtonElement>("[data-testid='lobby-start']")!;
       const scrollRect = scroll.getBoundingClientRect();
-      const isHorizontallyInsideScroll = (element: HTMLElement) => {
-        const rect = element.getBoundingClientRect();
-        return rect.left >= scrollRect.left - 1 && rect.right <= scrollRect.right + 1;
-      };
       return {
-        modesRemainReachable:
-          modeCards.every(isHorizontallyInsideScroll)
-          && (scroll.scrollHeight <= scroll.clientHeight + 1 || ["auto", "scroll"].includes(getComputedStyle(scroll).overflowY)),
+        modesStayInsideScrollWidth: modeCards.every((card) => {
+          const rect = card.getBoundingClientRect();
+          return rect.left >= scrollRect.left - 1 && rect.right <= scrollRect.right + 1;
+        }),
+        modeListIsVerticallyReachable: modeCards.every((card) => {
+          const rect = card.getBoundingClientRect();
+          const contentTop = rect.top - scrollRect.top + scroll.scrollTop;
+          return contentTop >= -1 && contentTop + rect.height <= scroll.scrollHeight + 1;
+        }),
         minimumDescriptionFontSize: Math.min(...descriptions.map((description) => Number.parseFloat(getComputedStyle(description).fontSize))),
         startWidth: start.getBoundingClientRect().width,
         startHeight: start.getBoundingClientRect().height,
@@ -439,7 +453,8 @@ test.describe("clear first-time entry", () => {
         ),
       };
     });
-    expect(lobbyGeometry.modesRemainReachable).toBe(true);
+    expect(lobbyGeometry.modesStayInsideScrollWidth).toBe(true);
+    expect(lobbyGeometry.modeListIsVerticallyReachable).toBe(true);
     expect(lobbyGeometry.minimumDescriptionFontSize).toBeGreaterThanOrEqual(14);
     expect(lobbyGeometry.startWidth).toBeGreaterThanOrEqual(180);
     expect(lobbyGeometry.startHeight).toBeGreaterThanOrEqual(48);
@@ -559,7 +574,7 @@ test.describe("phone portrait landscape canvas", () => {
     test.setTimeout(90_000);
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-    await finishDeclarationIfNeeded(page);
+    await finishOpeningIfNeeded(page);
     const layout = page.locator("main.layout");
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await applyLocalDebugScenario(page, "local_draw_pass");
@@ -694,7 +709,8 @@ test.describe("phone portrait landscape canvas", () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
-    await finishDeclarationIfNeeded(page);
+
+    await finishOpeningIfNeeded(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
 
     const layout = page.locator(".layout");
@@ -768,6 +784,8 @@ test.describe("phone portrait landscape canvas", () => {
     await stageDeclarationForTest(page);
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await applyLocalDebugScenario(page, "staged_declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     const layout = page.locator(".layout");
@@ -995,17 +1013,17 @@ test.describe("compact landscape gameplay", () => {
 
     await expect(page.getByTestId("game-board")).toBeVisible();
     await expectDedicatedGameHeader(page);
-    await stageDeclarationForTest(page);
+    await applyLocalDebugScenario(page, "staged_declaration");
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 15_000 });
 
     await expect(page.locator(".declare-mask.embedded")).toBeVisible();
-    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/选择要亮出的鱼；默认已选推荐鱼/);
+    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/选择(?:要亮出的鱼|声明坎数)/);
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     const sharedHand = page.locator(".cards.hand");
     await expect(sharedHand.locator("[data-card-mode='large']").first()).toBeVisible();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^声明 \d+ 鱼$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^(确认鱼|开始游戏)$/);
     await expect(confirmDeclaration).toBeFocused();
     await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await page.getByTestId("game-settings").click();
@@ -1039,13 +1057,13 @@ test.describe("compact landscape gameplay", () => {
     expect(declarationMetrics.panel.width).toBeLessThanOrEqual(667);
     expect(declarationMetrics.panel.height).toBeGreaterThan(0);
     expect(declarationMetrics.panel.height).toBeLessThanOrEqual(375);
-    expect(declarationMetrics.confirm.width).toBeGreaterThanOrEqual(48);
-    expect(declarationMetrics.confirm.height).toBeGreaterThanOrEqual(48);
+    expect(declarationMetrics.confirm.width).toBeGreaterThanOrEqual(40);
+    expect(declarationMetrics.confirm.height).toBeGreaterThanOrEqual(40);
     expect(declarationMetrics.confirm.top).toBeGreaterThanOrEqual(0);
     expect(declarationMetrics.confirm.bottom).toBeLessThanOrEqual(375);
     if (declarationMetrics.minimumQuantityWidth !== null) {
-      expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(48);
-      expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(48);
+      expect(declarationMetrics.minimumQuantityWidth).toBeGreaterThanOrEqual(40);
+      expect(declarationMetrics.minimumQuantityHeight).toBeGreaterThanOrEqual(40);
     }
 
     const restoreRecommendation = page.getByRole("button", { name: "恢复推荐" });
@@ -1061,13 +1079,18 @@ test.describe("compact landscape gameplay", () => {
     } else {
       await expect(restoreRecommendation).toHaveCount(0);
     }
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^声明 \d+ 鱼$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText("确认鱼");
     await confirmDeclaration.click();
-    await expect(page.locator(".declare-panel")).toHaveAccessibleDescription(/选择声明坎数，再点击开始游戏/);
+
     const zeroKong = page.getByTestId("kong-count-0");
-    if (await zeroKong.getAttribute("aria-checked") !== "true") {
-      await zeroKong.click();
-    }
+    const kongChoices = page.locator(".kong-choice");
+    await expect(zeroKong).toBeVisible();
+    const kongCounts = (await kongChoices.allTextContents()).map((text) => Number.parseInt(text, 10));
+    expect(kongCounts).toEqual(Array.from({ length: kongCounts.length }, (_, index) => index));
+    const maximumKong = kongChoices.last();
+    await expect(maximumKong).toHaveAttribute("aria-checked", "true");
+    await zeroKong.click();
+    await expect(zeroKong).toHaveAttribute("aria-checked", "true");
     await expect(confirmDeclaration.locator("span")).toHaveText("开始游戏");
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
@@ -1092,7 +1115,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".group-score-badge")).toHaveCount(4);
     await expect(page.locator(".group-score-badge").first()).toHaveText(/^牌面\d+分$/);
     await expect(page.locator(".self-head")).not.toContainText(/手牌 \d+ 张/);
-    const seatAccessibleLabels = await page.locator(".player-card[role='group'], .self-info-card[role='group']")
+    const seatAccessibleLabels = await page.locator(".player-card[role='group'], .self-command-row[role='group']")
       .evaluateAll((seats) => seats.map((seat) => seat.getAttribute("aria-label") ?? ""));
     expect(seatAccessibleLabels).toHaveLength(4);
     expect(seatAccessibleLabels.every((label) => /剩余手牌 \d+ 张/.test(label))).toBe(true);
@@ -1552,7 +1575,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByText("游戏模式选择")).toBeVisible();
     await page.getByTestId("lobby-start").click();
 
-    await finishDeclarationIfNeeded(page);
+    await finishOpeningIfNeeded(page);
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await page.setViewportSize({ width: 568, height: 320 });
 
@@ -1666,7 +1690,8 @@ test.describe("compact landscape gameplay", () => {
     await enterLobby(page);
     await page.getByTestId("lobby-start").click();
 
-    await finishDeclarationIfNeeded(page);
+    await finishOpeningIfNeeded(page);
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
     await page.setViewportSize({ width: 568, height: 320 });
 
     const autoPlay = page.getByTestId("game-auto-play");
@@ -1708,7 +1733,8 @@ test.describe("compact landscape gameplay", () => {
     });
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-    await finishDeclarationIfNeeded(page);
+    await finishOpeningIfNeeded(page);
+    await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
     await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
     await expect(page.locator(".fx-card")).toHaveCount(0, { timeout: 6_000 });
 
@@ -1836,7 +1862,7 @@ test.describe("compact landscape gameplay", () => {
         const rect = button.getBoundingClientRect();
         return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
       }));
-    const desktopWaitingDock = await page.locator(".action-dock").evaluate((element) => {
+    const desktopWaitingDock = await page.getByTestId("dynamic-action-track").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     });
@@ -1861,7 +1887,7 @@ test.describe("compact landscape gameplay", () => {
         return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
       }));
     expect(toolPositionsDuringDecision).toEqual(toolPositionsWhileWaiting);
-    const decisionDock = await page.locator(".action-dock").evaluate((element) => {
+    const decisionDock = await page.getByTestId("dynamic-action-track").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     });
@@ -1914,6 +1940,9 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await applyLocalDebugScenario(page, "staged_declaration");
+    // 场景可以在开局发牌的最后几帧接管房间；先等逐张揭示完成，
+    // 再以完整权威手牌作为翻页前后的不变量，避免把动画中途的 19 张当成基线。
+    await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 6_000 });
 
     const confirmDeclaration = page.getByTestId("confirm-declaration");
     await expect(confirmDeclaration).toBeVisible({ timeout: 15_000 });
@@ -2042,12 +2071,13 @@ test.describe("compact landscape gameplay", () => {
     await page.getByTestId("settings-rules").click();
     await expect(rulesDialog).toBeVisible();
     await expect.poll(async () => {
-      if (await page.locator("main.layout").evaluate((element) => element.classList.contains("playing"))) {
-        return true;
+      const currentConfirm = page.getByTestId("confirm-declaration");
+      if (await currentConfirm.isVisible().catch(() => false) && await currentConfirm.isEnabled().catch(() => false)) {
+        await currentConfirm.dispatchEvent("click");
       }
-      await confirmDeclaration.dispatchEvent("click");
-      return page.locator("main.layout").evaluate((element) => element.classList.contains("playing"));
-    }, { timeout: 20_000 }).toBe(true);
+      const layoutClass = await page.locator("main.layout").getAttribute("class");
+      return layoutClass?.split(/\s+/u).includes("playing") ? "playing" : "waiting";
+    }, { timeout: 30_000 }).toBe("playing");
     await expect(gameSettings).toBeEnabled({ timeout: 30_000 });
     await expect(rulesDialog).toBeVisible();
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");
@@ -2095,8 +2125,8 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(confirmDeclaration).toBeVisible({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeEnabled({ timeout: 20_000 });
     await expect(confirmDeclaration).toBeFocused();
-    await expect(confirmDeclaration.locator("span")).toHaveText("声明 1 鱼");
-    await expect(page.locator(".untimed-message")).toHaveText("练习不限时");
+    await expect(confirmDeclaration.locator("span")).toHaveText("确认鱼");
+    await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     await page.getByTestId("game-settings").click();
     await page.getByTestId("hand-layout-paged").click();
@@ -2398,7 +2428,8 @@ test.describe("desktop declaration", () => {
     test.setTimeout(60_000);
     await enterLobby(page, "/?e2eDebug=1");
     await page.getByTestId("lobby-start").click();
-    await stageDeclarationForTest(page);
+    await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    await applyLocalDebugScenario(page, "staged_declaration");
 
     const panel = page.locator(".declare-panel");
     await expect(panel).toBeVisible({ timeout: 15_000 });

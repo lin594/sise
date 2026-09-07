@@ -1,10 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-/**
- * Complete any real declaration choice, while accepting the valid fast path
- * where a hand with no fish or hidden kan enters play without rendering the
- * declaration panel.
- */
+/** 有鱼或坎时完成声明；两者都没有时接受服务端直接进入牌局的正常快路径。 */
 export async function finishDeclarationIfNeeded(page: Page, timeout = 20_000): Promise<void> {
   const layout = page.locator("main.layout");
   const confirm = page.getByTestId("confirm-declaration");

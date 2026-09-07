@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { waitForDeclarationOrPlaying } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type StartGameHold = {
   count: () => number;
@@ -72,7 +72,7 @@ test("practice auto-start stays visibly pending until the server advances", asyn
   await expect(page.locator(".start-hint")).toHaveText("开局请求已发送，请稍候");
 
   await releaseStartGameMessages(page);
-  await waitForDeclarationOrPlaying(page);
+  await finishDeclarationIfNeeded(page);
 });
 
 test("friend-room start accepts one impatient double click", async ({ page }) => {
@@ -103,7 +103,7 @@ test("friend-room start accepts one impatient double click", async ({ page }) =>
   await expect(start).toBeDisabled();
 
   await releaseStartGameMessages(page);
-  await waitForDeclarationOrPlaying(page);
+  await finishDeclarationIfNeeded(page);
 });
 
 test("quick match explains that bots and the round are being prepared", async ({ page }) => {
@@ -121,5 +121,5 @@ test("quick match explains that bots and the round are being prepared", async ({
   await expect(page.locator(".start-hint")).toHaveText("开局请求已发送，请稍候");
 
   await releaseStartGameMessages(page);
-  await waitForDeclarationOrPlaying(page);
+  await finishDeclarationIfNeeded(page);
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 async function enterModeLobby(page: Page): Promise<void> {
   await page.goto("/?e2eDebug=1");
@@ -35,7 +35,7 @@ test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true
 test("browser back closes a game layer before offering a safe room exit", async ({ page }) => {
   await enterModeLobby(page);
   await page.getByTestId("lobby-start").click();
-  await stageDeclarationForTest(page);
+  await finishDeclarationIfNeeded(page);
 
   const roomIdentity = await page.evaluate(() => ({
     roomId: window.localStorage.getItem("four_room_id"),
@@ -56,7 +56,7 @@ test("browser back closes a game layer before offering a safe room exit", async 
   await expect(page.getByRole("heading", { name: "退出当前牌局？" })).toBeVisible();
   await expect(page.getByTestId("cancel-exit")).toBeFocused();
   await page.getByTestId("cancel-exit").click();
-  await expect(page.getByTestId("confirm-declaration")).toBeVisible();
+  await expect(page.getByTestId("game-board")).toBeVisible();
   await expect(page.locator("[data-testid^='hand-card-']:not(.deal-concealed)")).toHaveCount(roomIdentity.handCards);
   expect(await page.evaluate(() => window.localStorage.getItem("four_room_id"))).toBe(roomIdentity.roomId);
 

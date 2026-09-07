@@ -3,7 +3,7 @@ import ActionPanel from "./ActionPanel.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
-import { getDisplayedTurnPlayerId, getRoundKey, isQuietSelfDiscardWait, projectResponseCardPlacement, } from "@/utils/gameFlowPresentation";
+import { getDisplayedTurnPlayerId, getRoundKey, projectResponseCardPlacement, } from "@/utils/gameFlowPresentation";
 const props = defineProps();
 const emit = defineEmits();
 const nowMs = ref(Date.now());
@@ -88,6 +88,9 @@ const selfIdentityMetaRef = ref(null);
 const selfNameRef = ref(null);
 const selfNameMeasureRef = ref(null);
 const useSelfNameFallback = ref(false);
+const listeningToggleRef = ref(null);
+const listeningDetailsRef = ref(null);
+const listeningDetailsOpen = ref(false);
 let selfNameResizeObserver = null;
 const seatRefMap = new Map();
 function updateSelfNameFit() {
@@ -657,8 +660,7 @@ const currentPlayer = computed(() => {
     }
     return props.players.find((x) => x.clientId === playerId) ?? null;
 });
-const isMyTurn = computed(() => String(props.state?.responsePhase ?? "") !== "collective" &&
-    Boolean(props.mySeatId) &&
+const isMyTurn = computed(() => Boolean(props.mySeatId) &&
     displayTurnPlayerId.value === props.mySeatId &&
     !Boolean(currentPlayer.value?.isBot || currentPlayer.value?.isAutoPlay));
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
@@ -813,20 +815,6 @@ const latestSeatAction = computed(() => {
     }
     return { actorId: actor, label };
 });
-const fixedStatusText = computed(() => {
-    if (props.state?.phase === 'declaring') {
-        if (props.declarationStatus)
-            return props.declarationStatus;
-        if (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
-            return "正在等待其他玩家声明";
-        return selfPlayer.value?.declarationStep === "fish" ? "开局确认 · 声明鱼" : "开局确认 · 声明坎";
-    }
-    if (discardingCardId.value || props.actionFeedback?.status === 'pending')
-        return '正在提交，请稍候';
-    if (canDiscard.value)
-        return '轮到你出牌 · 选牌后点“出”';
-    return props.turnHint || '等待其他玩家操作';
-});
 const fixedClockText = computed(() => {
     if (effectiveInteractionPausedMessage.value || !['playing', 'declaring'].includes(props.state?.phase))
         return '—';
@@ -841,6 +829,10 @@ const activeHints = computed(() => {
     return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
 const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
+const showInlineListeningWaits = computed(() => props.state?.phase === "playing" &&
+    currentListeningWaits.value.length > 0 &&
+    !canAct.value &&
+    !canDiscard.value);
 const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
     .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
     .join("；")}`);
@@ -876,68 +868,40 @@ const seatCountdownSeconds = computed(() => {
         Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
         return null;
     }
-    const endsAt = playDecisionEndsAt.value;
+    const endsAt = activeDecisionEndsAt.value;
     if (!endsAt || endsAt <= nowMs.value) {
         return null;
     }
     const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
     return Math.max(0, Math.min(Math.ceil(totalMs / 1000), Math.ceil((endsAt - nowMs.value) / 1000)));
 });
-const seatCountdownPercent = computed(() => {
-    if (/^DEALER\s+\S+/.test(String(props.state?.lastAction ?? "")) &&
-        Number(props.state?.responseEndsAt ?? 0) > nowMs.value) {
-        return 0;
-    }
-    const endsAt = playDecisionEndsAt.value;
-    if (!endsAt || endsAt <= nowMs.value) {
-        return 0;
-    }
-    const remain = endsAt - nowMs.value;
-    const totalMs = Math.max(OP_COUNTDOWN_MS, Number(props.decisionTimerTotalMs ?? 0));
-    const raw = (remain / totalMs) * 100;
-    return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
-});
-const playDecisionEndsAt = computed(() => {
-    if (props.decisionKey?.startsWith("play:") && Number(props.decisionTimerEndsAt ?? 0) > 0) {
+const activeDecisionEndsAt = computed(() => {
+    if (Number(props.decisionTimerEndsAt ?? 0) > 0) {
         return Number(props.decisionTimerEndsAt);
     }
     return Number(props.state?.responseEndsAt ?? 0);
 });
-const hasMeaningfulCollectiveAction = computed(() => (props.actions ?? []).some((action) => action.action !== "pass" && (action.enabled || Boolean(action.deferred))));
-const showCollectiveCountdown = computed(() => String(props.state?.responsePhase ?? "") === "collective" &&
-    String(props.state?.activeResponderId ?? "") === props.mySeatId &&
-    hasMeaningfulCollectiveAction.value &&
-    seatCountdownSeconds.value !== null);
-const showDecisionClock = computed(() => String(props.state?.phase ?? "") !== "playing" ||
-    String(props.state?.responsePhase ?? "") !== "collective" ||
-    showCollectiveCountdown.value);
-const compactCenterHint = computed(() => {
-    if (effectiveInteractionPausedMessage.value) {
-        return effectiveInteractionPausedMessage.value;
+const hasMeaningfulCollectiveAction = computed(() => (props.actions ?? []).some((action) => (action.action === "hu" || action.action === "kai" || action.action === "peng") && action.enabled));
+const showDecisionClock = computed(() => props.state?.phase === "declaring"
+    ? !Boolean(selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done") &&
+        (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)
+    : props.state?.phase === "playing" &&
+        (canDiscard.value || canAct.value) &&
+        (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
+        (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null));
+const flowStatusText = computed(() => {
+    if (props.state?.phase === "declaring") {
+        return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
+            ? "等待其他玩家声明"
+            : "";
     }
-    if (props.turnHint) {
-        return props.turnHint;
+    if (discardingCardId.value || props.actionFeedback?.status === "pending") {
+        return "正在提交";
     }
-    if (canDiscard.value) {
-        return "选择手牌后确认出牌";
+    if (props.state?.phase === "playing" && props.state?.responsePhase === "collective") {
+        return canAct.value ? "" : "等待其他玩家响应";
     }
-    if (String(props.state?.responsePhase ?? "") === "collective") {
-        if (isQuietSelfDiscardWait({
-            responsePhase: String(props.state?.responsePhase ?? ""),
-            responseSource: responseCard.value?.source,
-            originPlayerId: String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || ""),
-            viewerPlayerId: props.mySeatId,
-        }))
-            return "";
-        return canAct.value ? "全局待响：可胡/开/碰/过" : "等待三家响应";
-    }
-    if (String(props.state?.responsePhase ?? "") === "local_upper" && canAct.value) {
-        return "可吃或抓";
-    }
-    if (String(props.state?.responsePhase ?? "") === "local_draw" && canAct.value) {
-        return "可吃或过";
-    }
-    return isMyTurn.value ? "轮到你操作" : "等待对方操作";
+    return "";
 });
 const crowdedActionDock = computed(() => canAct.value && (props.actions ?? []).filter((action) => action.enabled || Boolean(action.deferred)).length >= 4);
 const centerPointerDirection = computed(() => {
@@ -983,10 +947,6 @@ const dealerRevealAccessibleText = computed(() => {
 function showDealerSeatMarker(playerId) {
     return dealerSeatMarkerReady.value && isDealer(playerId) && Boolean(dealerInfoCard.value);
 }
-function isCollectiveResponder(playerId) {
-    return String(props.state?.responsePhase ?? "") === "collective" &&
-        String(props.state?.pendingReceiverId ?? "") === playerId;
-}
 function seatActionText(playerId) {
     return latestSeatAction.value?.actorId === playerId ? latestSeatAction.value.label : "";
 }
@@ -994,9 +954,6 @@ function hasSeatAction(playerId) {
     return seatActionText(playerId).length > 0;
 }
 function isCurrentTurn(playerId) {
-    if (String(props.state?.responsePhase ?? "") === "collective") {
-        return false;
-    }
     return displayTurnPlayerId.value === playerId;
 }
 function statusText(player) {
@@ -1035,7 +992,7 @@ function playerAccessibleSummary(player, _groupCount) {
         parts.push("庄家");
     }
     if (isCurrentTurn(player.clientId)) {
-        parts.push("当前回合");
+        parts.push(props.state?.responsePhase === "collective" ? "下一操作位" : "当前回合");
     }
     return parts.join("，");
 }
@@ -1127,6 +1084,28 @@ function clearChiSelection(event) {
     blockChiAutoSelectionForCurrentTarget();
     selectedChiCardIds.value = [];
 }
+function closeListeningDetails(restoreFocus = false) {
+    if (!listeningDetailsOpen.value)
+        return;
+    listeningDetailsOpen.value = false;
+    if (restoreFocus)
+        void nextTick(() => listeningToggleRef.value?.focus());
+}
+function handleBoardEscape(event) {
+    if (listeningDetailsOpen.value) {
+        event?.preventDefault();
+        closeListeningDetails(true);
+        return;
+    }
+    clearChiSelection(event);
+}
+function handleDocumentPointerDown(event) {
+    if (!listeningDetailsOpen.value || !(event.target instanceof Node))
+        return;
+    if (listeningToggleRef.value?.contains(event.target) || listeningDetailsRef.value?.contains(event.target))
+        return;
+    closeListeningDetails();
+}
 function updateHandLayoutState() {
     const hand = selfHandRef.value;
     const viewport = handViewportRef.value;
@@ -1145,7 +1124,8 @@ function updateHandLayoutState() {
         const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
         const available = viewport?.clientWidth ?? 0;
         if (available > 0 && cards.length > 0) {
-            const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 2)));
+            // 给缩放后的子像素取整留出少量余量，避免左右两端各溢出约 1px 而被外框裁切。
+            const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 8)));
             if (Math.abs(handScale.value - nextScale) > 0.001) {
                 handScale.value = nextScale;
             }
@@ -1271,11 +1251,7 @@ function onSubmitAction(request) {
         request = { ...request, candidateId: selectedChiCandidate.value.id };
     }
     chiValidationMessage.value = "";
-    const keepsDeferredChiDraft = typeof request !== "string" &&
-        request.action === "chi" &&
-        props.responsePhase === "collective" &&
-        responseCard.value?.source !== "draw";
-    if (typeof request !== "string" && request.action === "chi" && !keepsDeferredChiDraft) {
+    if (typeof request !== "string" && request.action === "chi") {
         selectedChiCardIds.value = [];
     }
     emit("submitAction", request);
@@ -1751,11 +1727,13 @@ function triggerDealerReveal(stage, label, card, dealerId = "") {
 onMounted(() => {
     scheduleHandLayoutUpdate();
     observeSelfNameFit();
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
     countdownTimer = setInterval(() => {
         nowMs.value = Date.now();
     }, 500);
 });
 onUnmounted(() => {
+    document.removeEventListener("pointerdown", handleDocumentPointerDown);
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
     if (handLayoutFrame !== null)
@@ -1800,6 +1778,11 @@ onUnmounted(() => {
 });
 watch(() => `${selfPlayer.value?.name ?? ""}|${selfPlayer.value?.declaredKongs ?? 0}|${selfPlayer.value?.visibleGroupScore ?? 0}|${selfPlayer.value?.handCount ?? 0}`, () => void nextTick(updateSelfNameFit));
 watch(selfIdentityRef, observeSelfNameFit);
+watch(() => props.decisionKey, () => { listeningDetailsOpen.value = false; });
+watch(currentListeningWaits, (waits) => {
+    if (!waits.length)
+        listeningDetailsOpen.value = false;
+});
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
 // Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
 // mount hook incorrectly started a complete deal here and DEALER started a
@@ -2202,7 +2185,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
@@ -2233,7 +2215,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-meta']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['status']} */ ;
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
@@ -2254,8 +2235,49 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
-/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
-/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['actor-flash']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-flow-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-flow-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-enter-from']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-leave-to']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-enter-from']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-notice-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-leave-to']} */ ;
 /** @type {__VLS_StyleScopedClasses['cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['single-line']} */ ;
@@ -2265,24 +2287,23 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
 /** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
-/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['card']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
-/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['exhausted']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
@@ -2291,46 +2312,30 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-notice-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-card-pair']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
-/** @type {__VLS_StyleScopedClasses['board']} */ ;
-/** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-head']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
-/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['action-row']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['btn']} */ ;
-/** @type {__VLS_StyleScopedClasses['board']} */ ;
-/** @type {__VLS_StyleScopedClasses['board-declaring']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['board-declaring']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -2339,12 +2344,13 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
-/** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ onKeydown: (__VLS_ctx.clearChiSelection) },
+    ...{ onKeydown: (__VLS_ctx.handleBoardEscape) },
     ref: "boardRef",
     ...{ class: "board" },
     ...{ class: ({
@@ -2415,12 +2421,6 @@ if (__VLS_ctx.topPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.topPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "turn-arrow" },
-            'aria-hidden': "true",
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2487,12 +2487,7 @@ if (__VLS_ctx.topPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "tag turn" },
-        });
-    }
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId) && __VLS_ctx.seatCountdownSeconds !== null) {
+    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId) && props.responsePhase !== 'collective' && __VLS_ctx.seatCountdownSeconds !== null) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "turn-countdown" },
         });
@@ -2614,12 +2609,6 @@ if (__VLS_ctx.leftPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.leftPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "turn-arrow turn-arrow-side" },
-            'aria-hidden': "true",
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2686,12 +2675,7 @@ if (__VLS_ctx.leftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "tag turn" },
-        });
-    }
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId) && __VLS_ctx.seatCountdownSeconds !== null) {
+    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId) && props.responsePhase !== 'collective' && __VLS_ctx.seatCountdownSeconds !== null) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "turn-countdown" },
         });
@@ -2769,25 +2753,25 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 if (__VLS_ctx.topPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-top" },
-        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.topPlayer.clientId, responding: __VLS_ctx.isCollectiveResponder(__VLS_ctx.topPlayer.clientId), action: __VLS_ctx.hasSeatAction(__VLS_ctx.topPlayer.clientId) }) },
+        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.topPlayer.clientId, action: __VLS_ctx.hasSeatAction(__VLS_ctx.topPlayer.clientId) }) },
     });
-    if (__VLS_ctx.seatActionText(__VLS_ctx.topPlayer.clientId) || __VLS_ctx.isCollectiveResponder(__VLS_ctx.topPlayer.clientId)) {
+    if (__VLS_ctx.seatActionText(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "center-seat-action" },
         });
-        (__VLS_ctx.seatActionText(__VLS_ctx.topPlayer.clientId) || "待响");
+        (__VLS_ctx.seatActionText(__VLS_ctx.topPlayer.clientId));
     }
 }
 if (__VLS_ctx.leftPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-left" },
-        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.leftPlayer.clientId, responding: __VLS_ctx.isCollectiveResponder(__VLS_ctx.leftPlayer.clientId), action: __VLS_ctx.hasSeatAction(__VLS_ctx.leftPlayer.clientId) }) },
+        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.leftPlayer.clientId, action: __VLS_ctx.hasSeatAction(__VLS_ctx.leftPlayer.clientId) }) },
     });
-    if (__VLS_ctx.seatActionText(__VLS_ctx.leftPlayer.clientId) || __VLS_ctx.isCollectiveResponder(__VLS_ctx.leftPlayer.clientId)) {
+    if (__VLS_ctx.seatActionText(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "center-seat-action" },
         });
-        (__VLS_ctx.seatActionText(__VLS_ctx.leftPlayer.clientId) || "待响");
+        (__VLS_ctx.seatActionText(__VLS_ctx.leftPlayer.clientId));
     }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2838,9 +2822,7 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "response-caption" },
-        'data-testid': (__VLS_ctx.showCollectiveCountdown ? 'collective-response-countdown' : undefined),
     });
-    (__VLS_ctx.showCollectiveCountdown ? `全局响应 · ${__VLS_ctx.seatCountdownSeconds}s` : "待响");
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
     const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
@@ -2861,25 +2843,25 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-right" },
-        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.rightPlayer.clientId, responding: __VLS_ctx.isCollectiveResponder(__VLS_ctx.rightPlayer.clientId), action: __VLS_ctx.hasSeatAction(__VLS_ctx.rightPlayer.clientId) }) },
+        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.rightPlayer.clientId, action: __VLS_ctx.hasSeatAction(__VLS_ctx.rightPlayer.clientId) }) },
     });
-    if (__VLS_ctx.seatActionText(__VLS_ctx.rightPlayer.clientId) || __VLS_ctx.isCollectiveResponder(__VLS_ctx.rightPlayer.clientId)) {
+    if (__VLS_ctx.seatActionText(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "center-seat-action" },
         });
-        (__VLS_ctx.seatActionText(__VLS_ctx.rightPlayer.clientId) || "待响");
+        (__VLS_ctx.seatActionText(__VLS_ctx.rightPlayer.clientId));
     }
 }
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "center-seat center-seat-bottom" },
-        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.selfPlayer.clientId, responding: __VLS_ctx.isCollectiveResponder(__VLS_ctx.selfPlayer.clientId), action: __VLS_ctx.hasSeatAction(__VLS_ctx.selfPlayer.clientId) }) },
+        ...{ class: ({ active: __VLS_ctx.displayTurnPlayerId === __VLS_ctx.selfPlayer.clientId, action: __VLS_ctx.hasSeatAction(__VLS_ctx.selfPlayer.clientId) }) },
     });
-    if (__VLS_ctx.seatActionText(__VLS_ctx.selfPlayer.clientId) || __VLS_ctx.isCollectiveResponder(__VLS_ctx.selfPlayer.clientId)) {
+    if (__VLS_ctx.seatActionText(__VLS_ctx.selfPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "center-seat-action" },
         });
-        (__VLS_ctx.seatActionText(__VLS_ctx.selfPlayer.clientId) || "待响");
+        (__VLS_ctx.seatActionText(__VLS_ctx.selfPlayer.clientId));
     }
 }
 if (__VLS_ctx.centerPointerDirection) {
@@ -2905,12 +2887,6 @@ if (__VLS_ctx.rightPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.rightPlayer.clientId,
             }) },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "turn-arrow turn-arrow-side" },
-            'aria-hidden': "true",
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2977,12 +2953,7 @@ if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "seat-tags" },
     });
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId)) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "tag turn" },
-        });
-    }
-    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId) && __VLS_ctx.seatCountdownSeconds !== null) {
+    if (__VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId) && props.responsePhase !== 'collective' && __VLS_ctx.seatCountdownSeconds !== null) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "turn-countdown" },
         });
@@ -3324,25 +3295,21 @@ if (__VLS_ctx.dealerReveal) {
 }
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "self-info-card" },
+        ...{ class: "self-command-row" },
+        ...{ class: ({ dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         'data-testid': "player-self",
         'data-player-id': (__VLS_ctx.selfPlayer.clientId),
         role: "group",
         'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.selfPlayer, __VLS_ctx.selfGroupBlocks.length)),
-        ...{ class: ({ dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId), 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.selfPlayer.clientId }) },
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
-    if (__VLS_ctx.isMyTurn) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "turn-arrow self-turn-arrow" },
-            'aria-hidden': "true",
-        });
-    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-info-card" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "self-head" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ref: "selfIdentityRef",
         ...{ class: "seat-identity" },
@@ -3420,32 +3387,63 @@ if (__VLS_ctx.selfPlayer) {
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "seat-tags" },
+        ...{ class: "dynamic-action-track" },
+        'data-testid': "dynamic-action-track",
     });
-    if (__VLS_ctx.isMyTurn) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "tag turn" },
-        });
+    var __VLS_66 = {};
+    if (props.state?.phase === 'playing' && (__VLS_ctx.canAct || __VLS_ctx.canDiscard)) {
+        /** @type {[typeof ActionPanel, ]} */ ;
+        // @ts-ignore
+        const __VLS_68 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+            ...{ 'onConfirmDiscard': {} },
+            ...{ 'onSubmit': {} },
+            ...{ class: "embedded-actions action-dock" },
+            fixedStatus: true,
+            actions: (props.actions ?? []),
+            canAct: (__VLS_ctx.canAct),
+            canDiscard: (__VLS_ctx.canDiscard),
+            hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+            discardPending: (Boolean(__VLS_ctx.discardingCardId)),
+            isCurrentTurn: (Boolean(props.isCurrentTurn)),
+            responsePhase: (props.responsePhase ?? ''),
+            pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
+            secondsLeft: (__VLS_ctx.seatCountdownSeconds),
+            untimed: (Boolean(props.decisionUntimed)),
+            decisionKey: (props.decisionKey ?? ''),
+            actionFeedback: (__VLS_ctx.effectiveActionFeedback),
+            selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
+        }));
+        const __VLS_69 = __VLS_68({
+            ...{ 'onConfirmDiscard': {} },
+            ...{ 'onSubmit': {} },
+            ...{ class: "embedded-actions action-dock" },
+            fixedStatus: true,
+            actions: (props.actions ?? []),
+            canAct: (__VLS_ctx.canAct),
+            canDiscard: (__VLS_ctx.canDiscard),
+            hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
+            discardPending: (Boolean(__VLS_ctx.discardingCardId)),
+            isCurrentTurn: (Boolean(props.isCurrentTurn)),
+            responsePhase: (props.responsePhase ?? ''),
+            pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
+            secondsLeft: (__VLS_ctx.seatCountdownSeconds),
+            untimed: (Boolean(props.decisionUntimed)),
+            decisionKey: (props.decisionKey ?? ''),
+            actionFeedback: (__VLS_ctx.effectiveActionFeedback),
+            selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
+        let __VLS_71;
+        let __VLS_72;
+        let __VLS_73;
+        const __VLS_74 = {
+            onConfirmDiscard: (__VLS_ctx.confirmDiscard)
+        };
+        const __VLS_75 = {
+            onSubmit: (__VLS_ctx.onSubmitAction)
+        };
+        var __VLS_70;
     }
-    if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "turn-countdown" },
-        });
-        (__VLS_ctx.seatCountdownSeconds);
-    }
-    if (__VLS_ctx.isMyTurn && __VLS_ctx.seatCountdownSeconds !== null) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "turn-timer-bar self-turn-timer" },
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ style: ({ width: `${__VLS_ctx.seatCountdownPercent}%` }) },
-        });
-    }
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
-        ...{ class: "self-info-hint" },
-    });
-    (__VLS_ctx.compactCenterHint);
-    if (__VLS_ctx.currentListeningWaits.length) {
+    if (__VLS_ctx.showInlineListeningWaits) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "current-listening-waits" },
             role: "status",
@@ -3465,16 +3463,16 @@ if (__VLS_ctx.selfPlayer) {
             });
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_76 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (wait.card),
                 size: "xs",
                 mode: "large",
             }));
-            const __VLS_67 = __VLS_66({
+            const __VLS_77 = __VLS_76({
                 card: (wait.card),
                 size: "xs",
                 mode: "large",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_66));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_76));
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "wait-count-badge" },
                 'aria-hidden': "true",
@@ -3482,18 +3480,6 @@ if (__VLS_ctx.selfPlayer) {
             (wait.visibleRemaining);
         }
     }
-}
-if (__VLS_ctx.selfPlayer) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
-        ...{ class: "self-hand-card" },
-        ...{ class: ({ 'declaring-hand': __VLS_ctx.state?.phase === 'declaring' }) },
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "decision-status" },
-        'data-testid': "decision-status",
-    });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
-    (__VLS_ctx.fixedStatusText);
     if (__VLS_ctx.showDecisionClock) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "fixed-clock" },
@@ -3502,7 +3488,32 @@ if (__VLS_ctx.selfPlayer) {
         });
         (__VLS_ctx.fixedClockText);
     }
-    var __VLS_69 = {};
+}
+const __VLS_79 = {}.Transition;
+/** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
+// @ts-ignore
+const __VLS_80 = __VLS_asFunctionalComponent(__VLS_79, new __VLS_79({
+    name: "quick-phrase",
+}));
+const __VLS_81 = __VLS_80({
+    name: "quick-phrase",
+}, ...__VLS_functionalComponentArgsRest(__VLS_80));
+__VLS_82.slots.default;
+if (__VLS_ctx.flowStatusText) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "self-flow-toast" },
+        'data-testid': "decision-status",
+        role: "status",
+        'aria-live': "polite",
+    });
+    (__VLS_ctx.flowStatusText);
+}
+var __VLS_82;
+if (__VLS_ctx.selfPlayer) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ class: "self-hand-card" },
+        ...{ class: ({ 'declaring-hand': __VLS_ctx.state?.phase === 'declaring' }) },
+    });
     if (__VLS_ctx.selectedPreview) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "selected-card-preview" },
@@ -3511,16 +3522,16 @@ if (__VLS_ctx.selfPlayer) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_71 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_83 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
         }));
-        const __VLS_72 = __VLS_71({
+        const __VLS_84 = __VLS_83({
             card: (__VLS_ctx.selectedPreview),
             size: "xl",
             mode: (__VLS_ctx.ownCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_71));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_83));
         if (__VLS_ctx.selectedDiscardListeningRoute?.waits.length) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                 ...{ class: "selected-preview-wait-label" },
@@ -3541,16 +3552,16 @@ if (__VLS_ctx.selfPlayer) {
                 });
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_74 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_86 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
                 }));
-                const __VLS_75 = __VLS_74({
+                const __VLS_87 = __VLS_86({
                     card: (wait.card),
                     size: "xs",
                     mode: "large",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_74));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_86));
                 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
                     ...{ class: "wait-count-badge" },
                     'data-testid': "listening-wait-count",
@@ -3563,6 +3574,64 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "self-hand-panel" },
         ...{ class: ({ 'has-toolbar': __VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow }) },
     });
+    if (__VLS_ctx.currentListeningWaits.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.selfPlayer))
+                        return;
+                    if (!(__VLS_ctx.currentListeningWaits.length))
+                        return;
+                    __VLS_ctx.listeningDetailsOpen = !__VLS_ctx.listeningDetailsOpen;
+                } },
+            ref: "listeningToggleRef",
+            ...{ class: "listening-toggle" },
+            type: "button",
+            'data-testid': "listening-toggle",
+            'aria-expanded': (__VLS_ctx.listeningDetailsOpen),
+            'aria-controls': "listening-details",
+            'aria-label': "查看听牌详情",
+        });
+        /** @type {typeof __VLS_ctx.listeningToggleRef} */ ;
+    }
+    if (__VLS_ctx.listeningDetailsOpen && __VLS_ctx.currentListeningWaits.length) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            id: "listening-details",
+            ref: "listeningDetailsRef",
+            ...{ class: "listening-popover current-listening-waits" },
+            role: "dialog",
+            'aria-label': "听牌详情",
+        });
+        /** @type {typeof __VLS_ctx.listeningDetailsRef} */ ;
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "current-listening-label" },
+            'aria-hidden': "true",
+        });
+        for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.currentListeningWaits))) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                key: (`popover-wait-${wait.card.id}`),
+                ...{ class: "current-listening-card" },
+                ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
+                'data-visible-remaining': (wait.visibleRemaining),
+            });
+            /** @type {[typeof CardComp, ]} */ ;
+            // @ts-ignore
+            const __VLS_89 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                card: (wait.card),
+                size: "xs",
+                mode: "large",
+            }));
+            const __VLS_90 = __VLS_89({
+                card: (wait.card),
+                size: "xs",
+                mode: "large",
+            }, ...__VLS_functionalComponentArgsRest(__VLS_89));
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+                ...{ class: "wait-count-badge" },
+                'aria-hidden': "true",
+            });
+            (wait.visibleRemaining);
+        }
+    }
     if (__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "hand-toolbar" },
@@ -3695,71 +3764,19 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_77 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_92 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
         }));
-        const __VLS_78 = __VLS_77({
+        const __VLS_93 = __VLS_92({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (props.ownCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_77));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_92));
     }
-}
-if (props.state?.phase === 'playing') {
-    /** @type {[typeof ActionPanel, ]} */ ;
-    // @ts-ignore
-    const __VLS_80 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
-        ...{ 'onConfirmDiscard': {} },
-        ...{ 'onSubmit': {} },
-        ...{ class: "embedded-actions action-dock" },
-        fixedStatus: true,
-        actions: (props.actions ?? []),
-        canAct: (__VLS_ctx.canAct),
-        canDiscard: (__VLS_ctx.canDiscard),
-        hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
-        discardPending: (Boolean(__VLS_ctx.discardingCardId)),
-        isCurrentTurn: (Boolean(props.isCurrentTurn)),
-        responsePhase: (props.responsePhase ?? ''),
-        pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
-        secondsLeft: (__VLS_ctx.seatCountdownSeconds),
-        untimed: (Boolean(props.decisionUntimed)),
-        decisionKey: (props.decisionKey ?? ''),
-        actionFeedback: (__VLS_ctx.effectiveActionFeedback),
-        selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }));
-    const __VLS_81 = __VLS_80({
-        ...{ 'onConfirmDiscard': {} },
-        ...{ 'onSubmit': {} },
-        ...{ class: "embedded-actions action-dock" },
-        fixedStatus: true,
-        actions: (props.actions ?? []),
-        canAct: (__VLS_ctx.canAct),
-        canDiscard: (__VLS_ctx.canDiscard),
-        hasDiscardSelection: (Boolean(__VLS_ctx.selectedDiscardCardId)),
-        discardPending: (Boolean(__VLS_ctx.discardingCardId)),
-        isCurrentTurn: (Boolean(props.isCurrentTurn)),
-        responsePhase: (props.responsePhase ?? ''),
-        pausedHint: (__VLS_ctx.effectiveInteractionPausedMessage),
-        secondsLeft: (__VLS_ctx.seatCountdownSeconds),
-        untimed: (Boolean(props.decisionUntimed)),
-        decisionKey: (props.decisionKey ?? ''),
-        actionFeedback: (__VLS_ctx.effectiveActionFeedback),
-        selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_80));
-    let __VLS_83;
-    let __VLS_84;
-    let __VLS_85;
-    const __VLS_86 = {
-        onConfirmDiscard: (__VLS_ctx.confirmDiscard)
-    };
-    const __VLS_87 = {
-        onSubmit: (__VLS_ctx.onSubmitAction)
-    };
-    var __VLS_82;
 }
 if (__VLS_ctx.isMyTurn) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3768,16 +3785,16 @@ if (__VLS_ctx.isMyTurn) {
         'aria-hidden': "true",
     });
 }
-const __VLS_88 = {}.Teleport;
+const __VLS_95 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_89 = __VLS_asFunctionalComponent(__VLS_88, new __VLS_88({
+const __VLS_96 = __VLS_asFunctionalComponent(__VLS_95, new __VLS_95({
     to: "body",
 }));
-const __VLS_90 = __VLS_89({
+const __VLS_97 = __VLS_96({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_89));
-__VLS_91.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_96));
+__VLS_98.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -3801,21 +3818,21 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_92 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_99 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
         }));
-        const __VLS_93 = __VLS_92({
+        const __VLS_100 = __VLS_99({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_92));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_99));
     }
 }
-var __VLS_91;
+var __VLS_98;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -3834,16 +3851,16 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_95 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_102 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
         }));
-        const __VLS_96 = __VLS_95({
+        const __VLS_103 = __VLS_102({
             card: (flight.card),
             mode: (props.tableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_95));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_102));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3854,7 +3871,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -3865,8 +3881,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -3883,8 +3897,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -3895,8 +3907,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -3936,8 +3946,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow-side']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -3948,8 +3956,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact']} */ ;
@@ -3987,9 +3993,8 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-arrow']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-turn-arrow']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-name-measure']} */ ;
@@ -4000,26 +4005,28 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
-/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
-/** @type {__VLS_StyleScopedClasses['tag']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
-/** @type {__VLS_StyleScopedClasses['turn-timer-bar']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-info-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['decision-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-flow-toast']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-waits']} */ ;
 /** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-toggle']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-popover']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
@@ -4034,8 +4041,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['candidate-selection-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-protected-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
-/** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-outline']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
@@ -4044,7 +4049,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 // @ts-ignore
-var __VLS_70 = __VLS_69;
+var __VLS_67 = __VLS_66;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -4087,6 +4092,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             selfNameRef: selfNameRef,
             selfNameMeasureRef: selfNameMeasureRef,
             useSelfNameFallback: useSelfNameFallback,
+            listeningToggleRef: listeningToggleRef,
+            listeningDetailsRef: listeningDetailsRef,
+            listeningDetailsOpen: listeningDetailsOpen,
             selfGroupBlocks: selfGroupBlocks,
             topGroupBlocks: topGroupBlocks,
             leftGroupBlocks: leftGroupBlocks,
@@ -4115,9 +4123,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedChiCandidate: selectedChiCandidate,
             effectiveActionFeedback: effectiveActionFeedback,
             tableNoticeText: tableNoticeText,
-            fixedStatusText: fixedStatusText,
             fixedClockText: fixedClockText,
             currentListeningWaits: currentListeningWaits,
+            showInlineListeningWaits: showInlineListeningWaits,
             currentListeningAccessibleLabel: currentListeningAccessibleLabel,
             listeningMarkContext: listeningMarkContext,
             isListeningDiscard: isListeningDiscard,
@@ -4125,17 +4133,14 @@ const __VLS_self = (await import('vue')).defineComponent({
             selectedDiscardListeningRoute: selectedDiscardListeningRoute,
             selectedPreviewAccessibleLabel: selectedPreviewAccessibleLabel,
             seatCountdownSeconds: seatCountdownSeconds,
-            seatCountdownPercent: seatCountdownPercent,
-            showCollectiveCountdown: showCollectiveCountdown,
             showDecisionClock: showDecisionClock,
-            compactCenterHint: compactCenterHint,
+            flowStatusText: flowStatusText,
             crowdedActionDock: crowdedActionDock,
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
             dealerCeremonyCard: dealerCeremonyCard,
             dealerRevealAccessibleText: dealerRevealAccessibleText,
             showDealerSeatMarker: showDealerSeatMarker,
-            isCollectiveResponder: isCollectiveResponder,
             seatActionText: seatActionText,
             hasSeatAction: hasSeatAction,
             isCurrentTurn: isCurrentTurn,
@@ -4147,7 +4152,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isDiscardProtectedCard: isDiscardProtectedCard,
             selectHandCard: selectHandCard,
             ensureHandCardSelected: ensureHandCardSelected,
-            clearChiSelection: clearChiSelection,
+            handleBoardEscape: handleBoardEscape,
             scheduleHandLayoutUpdate: scheduleHandLayoutUpdate,
             scrollHand: scrollHand,
             confirmDiscard: confirmDiscard,

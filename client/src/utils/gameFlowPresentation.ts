@@ -29,18 +29,6 @@ export function projectResponseCardPlacement(input: ResponseCardPlacementInput):
   return isReceiver ? "center" : "flow";
 }
 
-export function isQuietSelfDiscardWait(input: {
-  responsePhase: string;
-  responseSource?: string;
-  originPlayerId?: string;
-  viewerPlayerId?: string;
-}): boolean {
-  return input.responsePhase === "collective" &&
-    input.responseSource === "upper" &&
-    Boolean(input.viewerPlayerId) &&
-    input.originPlayerId === input.viewerPlayerId;
-}
-
 export function getDisplayedTurnPlayerId(input: {
   responsePhase?: string;
   pendingReceiverId?: string;

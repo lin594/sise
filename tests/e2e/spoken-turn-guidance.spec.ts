@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
@@ -10,8 +10,17 @@ async function enterDeclaration(page: Page, path = "/?e2eDebug=1"): Promise<void
   await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   if (path.includes("e2eDebug=1")) {
-    await stageDeclarationForTest(page);
+    await page.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: { setupScenario: (scenario: string) => void };
+      }).__siseLocalTest;
+      if (!bridge) throw new Error("Local test bridge is unavailable");
+      bridge.setupScenario("staged_declaration");
+    });
+    await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
+    return;
   }
+  await finishDeclarationIfNeeded(page);
 }
 
 async function setupChiScenario(page: Page): Promise<void> {

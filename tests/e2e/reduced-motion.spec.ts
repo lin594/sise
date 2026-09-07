@@ -3,12 +3,20 @@ import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
-async function enterGame(page: Page): Promise<void> {
-  await page.goto("/");
+async function enterDeclaration(page: Page): Promise<void> {
+  await page.goto("/?e2eDebug=1");
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await finishDeclarationIfNeeded(page);
+  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+    }).__siseLocalTest;
+    if (!bridge) throw new Error("Local test bridge is unavailable");
+    bridge.setupScenario("staged_declaration");
+  });
+  await expect(page.getByTestId("confirm-declaration")).toBeEnabled({ timeout: 20_000 });
 }
 
 async function recordNextHandScrollBehavior(page: Page): Promise<void> {

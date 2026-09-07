@@ -3,10 +3,11 @@
     class="layout"
     :class="{
       playing: isPlaying,
+      'table-active': showGameTools,
       'compact-viewport': isCompactViewport,
       'ultra-compact-viewport': isUltraCompactViewport,
       'legacy-compact-viewport': isLegacyCompactViewport,
-      'compact-landscape': isCompactViewport && isPlaying,
+      'compact-landscape': isCompactViewport && showGameTools,
       'effective-short-landscape': effectiveWidth > effectiveHeight && effectiveHeight <= 600,
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
@@ -217,14 +218,12 @@
         :listening-hints="listeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
-        :declaration-status="declarationStatus"
         :my-seat-id="mySeatId"
         :can-discard="canDiscard"
         :actions="availableActions"
         :can-act="canAct"
         :is-current-turn="isMyTurn"
         :response-phase="state?.responsePhase || ''"
-        :turn-hint="turnHint"
         :interaction-paused-message="interactionPausedMessage"
         :decision-untimed="decisionTimer.untimed"
         :decision-timer-total-ms="decisionTimer.totalMs"
@@ -249,7 +248,6 @@
             :hand="privateHand"
             :step="mePlayer?.declarationStep || 'fish'"
             @marks="declarationMarks = $event"
-            @status="declarationStatus = $event"
             :submitted="isDeclareSubmitted"
             :hand-ready="privateHandSynchronized"
             :seconds-left="declareSecondsLeft"
@@ -696,7 +694,7 @@ import type {
   TurnAlertMode,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
-import { getDisplayedTurnPlayerId, getRoundKey, isQuietSelfDiscardWait } from "@/utils/gameFlowPresentation";
+import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
   () => import("@/components/FriendInviteQrDialog.vue"),
@@ -1428,12 +1426,6 @@ const openingDealActive = computed(
     /^DEALER\s+\S+/.test(String(state.value?.lastAction ?? "")) &&
     Number(state.value?.responseEndsAt ?? 0) > nowMs.value,
 );
-const openingDealSecondsLeft = computed(() => {
-  if (!openingDealActive.value) {
-    return 0;
-  }
-  return Math.max(0, Math.ceil((Number(state.value?.responseEndsAt ?? 0) - nowMs.value) / 1000));
-});
 const tablePresentationActive = computed(() => Number(state.value?.presentationUntil ?? 0) > nowMs.value + Number(state.value?.presentationClockOffsetMs ?? 0));
 const currentActionSubmissionLocked = computed(() => Boolean(
   decisionTimer.value.decisionKey &&
@@ -1568,7 +1560,6 @@ const inviteActionPending = ref<"copy" | "share" | null>(null);
 let globalNoticeTimer: number | null = null;
 let inviteCopyReturnFocus: HTMLElement | null = null;
 let inviteQrReturnFocus: HTMLElement | null = null;
-const declarationStatus = ref("");
 const declarationMarks = ref<{ fish: string[]; kong: string[] }>({ fish: [], kong: [] });
 const showRules = ref(false);
 const rulesPanelRef = ref<HTMLElement | null>(null);
@@ -1651,21 +1642,17 @@ function openRules(trigger?: Event | HTMLElement): void {
 function returnToDecision(): void {
   decisionControlFocusPending = true;
   void nextTick(() => {
-    focusReadyGameControl();
-    // The settings/rules leave transition briefly remains aria-modal. Retry
-    // after that compositor-only transition, and verify that removing the
-    // dialog did not return focus to the document body.
-    window.setTimeout(() => {
-      const focusedDecisionControl = document.activeElement instanceof HTMLElement && Boolean(
-        document.activeElement.matches(
-          ".hand-card.discard-selected:not(:disabled), .action-dock .btn:not(:disabled), .hand-card.playable:not(:disabled)",
-        ),
-      );
-      if (!focusedDecisionControl && settingsDecisionActive.value) {
-        decisionControlFocusPending = true;
-        focusReadyGameControl();
+    const focusAfterPopoverLeaves = (attempt = 0): void => {
+      if (!decisionControlFocusPending || focusReadyGameControl()) {
+        return;
       }
-    }, 220);
+      // 设置和规则使用离场过渡，节点短时间内仍具有 aria-modal。持续到节点真正卸载，
+      // 再把焦点还给已选牌或首个合法动作，避免不同设备合成帧速度造成偶发失焦。
+      if (settingsDecisionActive.value && attempt < 6) {
+        window.setTimeout(() => focusAfterPopoverLeaves(attempt + 1), 100);
+      }
+    };
+    focusAfterPopoverLeaves();
   });
 }
 
@@ -1687,13 +1674,12 @@ function closeRules(restoreFocus = true): void {
       returnTarget?.isConnected && !returnToGameSettings
         ? returnTarget
         : document.querySelector<HTMLElement>(
-          "[data-testid='lobby-rules']:not(:disabled), [data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='login-submit'], .reset-btn",
+          "[data-testid='game-settings']:not(:disabled), [data-testid='confirm-declaration']:not(:disabled), [data-testid='open-rules']:not(:disabled), [data-testid='login-submit'], .reset-btn",
         );
     const restore = () => resolveTarget()?.focus({ preventScroll: true });
     restore();
     window.requestAnimationFrame(restore);
-    // Closing the rules and settings layers in the same tick can briefly move
-    // focus back to the document. Retry only when nothing else has claimed it.
+    // 规则和设置同一帧关闭时，浏览器可能把焦点暂时退回 document。
     window.setTimeout(() => {
       if (!(document.activeElement instanceof HTMLElement) || document.activeElement === document.body) {
         restore();
@@ -2107,9 +2093,11 @@ function focusReadyGameControl(): boolean {
   if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
     return false;
   }
-  const control = document.querySelector<HTMLElement>(
-    ".hand-card.discard-selected:not(:disabled), .action-dock .btn:not(:disabled), .hand-card.playable:not(:disabled)",
-  );
+  // querySelector 对逗号选择器按 DOM 顺序返回；操作区重排到手牌之前后，必须显式
+  // 保留“已选牌 > 合法动作 > 其他可选牌”的焦点优先级。
+  const control = document.querySelector<HTMLElement>(".hand-card.discard-selected:not(:disabled)")
+    ?? document.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)")
+    ?? document.querySelector<HTMLElement>(".hand-card.playable:not(:disabled)");
   if (!control) {
     return false;
   }
@@ -3150,38 +3138,6 @@ const endSummary = computed(() => {
   return "对局结束。";
 });
 
-const turnHint = computed(() => {
-  if (openingDealActive.value) {
-    return `发牌中，${openingDealSecondsLeft.value}s 后开局`;
-  }
-  if (canDiscard.value) {
-    return "请点击手牌弃一张";
-  }
-  if (state.value?.responsePhase === "local_upper" && canAct.value) {
-    return isMyTurn.value ? "可选择吃或抓" : "等待对方操作";
-  }
-  if (state.value?.responsePhase === "local_draw" && canAct.value) {
-    if (isMyTurn.value && isPendingSpecialCard.value) {
-      return "请选择一种吃法";
-    }
-    return isMyTurn.value ? "可选择吃或过" : "等待对方操作";
-  }
-  if (state.value?.responsePhase === "collective") {
-    if (isQuietSelfDiscardWait({
-      responsePhase: state.value.responsePhase,
-      responseSource: state.value.responseCard?.source,
-      originPlayerId: state.value.pollOriginPlayerId || state.value.previousPlayerId,
-      viewerPlayerId: mySeatId.value,
-    })) {
-      return "";
-    }
-    if (canAct.value) {
-      return "全局待响阶段：你可以选择胡/开/碰/过";
-    }
-    return "等待其他玩家操作";
-  }
-  return isMyTurn.value ? "轮到你操作" : "等待对方操作";
-});
 
 const roundDealerCard = computed<Card | null>(() => {
   const card = state.value?.dealerCard ?? null;
@@ -3679,11 +3635,12 @@ watch(
   display: none;
 }
 
-.layout.playing {
+.layout.playing,
+.layout.table-active {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.layout.compact-landscape.playing {
+.layout.compact-landscape.table-active {
   grid-template-rows: var(--game-header-height) minmax(0, 1fr);
   gap: 0.2rem;
   padding: max(0.2rem, var(--safe-top)) max(0.2rem, var(--safe-right))
@@ -4829,7 +4786,8 @@ watch(
       max(0.25rem, var(--safe-bottom)) max(0.25rem, var(--safe-left));
   }
 
-  .layout.playing {
+  .layout.playing,
+  .layout.table-active {
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
@@ -4864,7 +4822,7 @@ watch(
     display: inline;
   }
 
-  .layout.compact-landscape.playing {
+  .layout.compact-landscape.table-active {
     grid-template-rows: var(--game-header-height) minmax(0, 1fr);
     gap: 0.2rem;
     padding: max(0.15rem, var(--safe-top)) max(0.15rem, var(--safe-right))

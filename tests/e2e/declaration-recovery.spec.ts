@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
@@ -9,7 +9,14 @@ test("a disconnected declaration stays visible and becomes retryable after recov
   await page.getByTestId("random-nickname").click();
   await page.getByTestId("login-submit").click();
   await page.getByTestId("lobby-start").click();
-  await stageDeclarationForTest(page);
+  await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { setupScenario: (scenario: string) => void };
+    }).__siseLocalTest;
+    if (!bridge) throw new Error("Local test bridge is unavailable");
+    bridge.setupScenario("staged_declaration");
+  });
 
   const confirm = page.getByTestId("confirm-declaration");
   await expect(confirm).toBeEnabled({ timeout: 20_000 });

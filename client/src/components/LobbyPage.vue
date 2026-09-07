@@ -36,7 +36,7 @@
           v-if="roomId"
           class="ghost head-action"
           type="button"
-          data-testid="lobby-rules"
+          data-testid="open-rules"
           @click="requestRules"
         >查看规则</button>
         <button
