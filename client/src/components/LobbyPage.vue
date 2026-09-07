@@ -63,7 +63,6 @@
     </div>
 
     <div class="lobby-scroll" data-testid="lobby-scroll">
-      <slot v-if="modes.length" name="recommendation" />
       <div v-if="modes.length" class="mode-grid">
         <button
           v-for="mode in modes"
@@ -83,6 +82,7 @@
         </button>
       </div>
 
+      <slot v-if="modes.length" name="recommendation" />
       <div v-if="modes.length" class="mode-share-card">
         <div>
           <strong>把四色牌推荐给朋友</strong>

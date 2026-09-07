@@ -31,6 +31,7 @@ for (const skin of ["cyber-minimal", "licheng-water", "puxian-house", "meizhou-s
 test("new defaults and the small-screen recommendation respect explicit choices", async ({ page }) => {
   await page.setViewportSize({ width: 568, height: 320 });
   await page.goto("/?new=1");
+  await page.getByTestId("login-submit").click();
   await expect(page.locator("html")).toHaveAttribute("data-skin", "licheng-water");
   await expect(page.locator("main.layout")).toHaveAttribute("data-table-layout", "classic");
   await expect(page.getByTestId("small-screen-recommendation")).toBeVisible();
