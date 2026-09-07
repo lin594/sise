@@ -1095,7 +1095,7 @@ onBeforeUnmount(() => {
 .kong-choice.selected {
   color: white;
   border-color: var(--kong);
-  background: linear-gradient(145deg, var(--ui-raised, #d97706), var(--ui-raised, #92400e));
+  background: var(--ui-accent, #92400e);
   box-shadow: 0 5px 14px rgba(180, 83, 9, 0.22);
 }
 
@@ -1110,7 +1110,7 @@ onBeforeUnmount(() => {
   color: white;
   border: 1px solid var(--kong);
   border-radius: 11px;
-  background: linear-gradient(145deg, var(--ui-raised, #d97706), var(--ui-raised, #92400e));
+  background: var(--ui-accent, #92400e);
 }
 
 .kong-selection-summary strong {
@@ -1228,7 +1228,7 @@ onBeforeUnmount(() => {
   color: white;
   border: 0;
   border-radius: 13px;
-  background: linear-gradient(135deg, var(--ui-raised, #0f766e), var(--ui-raised, #0d9488));
+  background: var(--ui-accent, #0f766e);
   box-shadow: 0 8px 20px rgba(15, 118, 110, 0.24);
   font-size: 0.94rem;
   font-weight: 800;

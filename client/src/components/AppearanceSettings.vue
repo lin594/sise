@@ -25,7 +25,7 @@ fieldset { border: 0; padding: 0; margin: .8rem 0; min-width: 0; }
 legend { font-weight: 700; margin-bottom: .5rem; }
 .appearance-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
 button { min-width: 0; padding: .5rem; border: 1px solid var(--ui-border, #475569); border-radius: .6rem; background: var(--ui-panel, #0f172a); color: var(--ui-text, #e2e8f0); cursor: pointer; text-align: left; }
-button[aria-checked="true"] { border-color: var(--ui-accent, #38bdf8); box-shadow: inset 0 0 0 1px var(--ui-accent, #38bdf8); }
+button[aria-checked="true"] { border-color: var(--ui-accent-text, #38bdf8); box-shadow: inset 0 0 0 1px var(--ui-accent, #38bdf8); }
 strong, small { display: block; } small { font-size: 13px; margin-top: .2rem; }
 .skin-preview { display: flex; justify-content: center; gap: .3rem; padding: .45rem; background: var(--ui-table, #14332d); border-radius: .4rem; margin-bottom: .4rem; }
 .skin-preview i { font-style: normal; background: #f2cc54; color: #23170e; padding: .4rem .2rem; border-radius: 50% / 20%; } .skin-preview i + i { background: #f6efdd; }
