@@ -3124,18 +3124,12 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   contain: strict;
 }
 .table-flight-turn { width: 100%; height: 100%; }
-.table-flight-turn > :deep(.card), .table-flight-turn > .card-back { width: 100%; height: 100%; box-sizing: border-box; }
-
-.board {
-  flex: 1;
-  min-height: 0;
+.table-flight-turn > :deep(.card), .table-flight-turn > .card-back {
+  width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: minmax(10rem, 23%) minmax(0, 1fr) clamp(12rem, 22vw, 18rem);
-  grid-template-rows: minmax(0, 1fr) clamp(8.5rem, 26vh, 13rem);
-  gap: clamp(0.3rem, 0.9vh, 0.5rem);
-  overflow: hidden;
-  overflow: clip;
+  border-radius: var(--long-card-radius);
+  border: 1px solid #f7b0a0;
+  background: var(--card-back);
 }
 
 .table {
@@ -3683,13 +3677,12 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   height: clamp(1.68rem, 3.2vh, 1.95rem);
   overflow: hidden;
   border-color: rgba(254, 202, 202, 0.84);
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 30% 70%, rgba(69, 10, 10, 0.2)),
-    #dc2626;
+  background: var(--card-back);
   box-shadow: inset 0 0 0 2px rgba(127, 29, 29, 0.68), 0 2px 5px rgba(var(--ui-page-rgb, 2, 6, 23), 0.36);
 }
 
 .mini-card-strip.mode-long .pending-fish-back {
+  border-radius: var(--long-card-radius);
   width: clamp(0.95rem, 1.7vh, 1.15rem);
   height: clamp(1.95rem, 3.8vh, 2.3rem);
 }
@@ -3950,10 +3943,8 @@ watch(() => [props.tableLayout, flights.value.length, tableFlights.value.length,
   height: calc(100% - 0.2rem);
   transform: translate(calc(-50% + var(--deck-x)), calc(-50% + var(--deck-y)));
   border: 1px solid rgba(254, 202, 202, 0.82);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(254, 226, 226, 0.22), transparent 30% 70%, rgba(69, 10, 10, 0.3)),
-    linear-gradient(180deg, #ef4444 0%, #b91c1c 46%, #7f1d1d 100%);
+  border-radius: var(--long-card-radius);
+  background: var(--card-back);
   box-shadow:
     inset 0 0 0 1px rgba(127, 29, 29, 0.42),
     0 1px 2px rgba(var(--ui-page-rgb, 2, 6, 23), 0.45);
