@@ -71,6 +71,7 @@
       <GameTools
         ref="gameToolsRef"
         :in-room="showGameTools"
+        :resolved-table-layout="resolvedTableLayout"
         :playing-context="state?.phase === 'playing' || state?.phase === 'declaring'"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
@@ -226,7 +227,7 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
-        :table-layout="displayPreferences.tableLayout"
+        :table-layout="resolvedTableLayout"
         :hand-layout="displayPreferences.handLayout"
         :listening-hints="listeningHints"
         :accepted-state-revision="acceptedStateRevision"
@@ -694,7 +695,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
-import { normalizeSkin, normalizeTableLayout } from "@/utils/appearance";
+import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
   ActionRequest,
@@ -1548,6 +1549,11 @@ const {
   viewportWidth,
 } = useResponsiveViewport();
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
+watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value] as const, ([layout, ultra], _, onCleanup) => {
+  const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+  onCleanup(() => clearTimeout(timer));
+});
 const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
 const showSmallScreenRecommendation = computed(() =>
   isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"

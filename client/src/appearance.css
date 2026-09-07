@@ -85,3 +85,11 @@ html[data-skin] :is(.tool-button.exit, .danger) { color: var(--ui-danger-text); 
 html[data-skin] :is(button, input, select, textarea):focus-visible { outline: 3px solid var(--ui-accent-text); outline-offset: 2px; }
 html[data-skin] button:disabled { opacity: .7; }
 html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active small { color: inherit; }
+
+html[data-skin="cyber-minimal"] { --table-felt: #1f3448; --table-wood: #24303b; }
+html[data-skin="licheng-water"] { --table-felt: #d4ddc4; --table-wood: #725638; }
+html[data-skin="puxian-house"] { --table-felt: #e4cfac; --table-wood: #754333; }
+html[data-skin="meizhou-sea"] { --table-felt: #c1dcd9; --table-wood: #6c6350; }
+html[data-skin] .board[data-table-layout="classic"] .table { background: transparent; border: 0; }
+
+html[data-skin] .board .btn.enabled { background: var(--ui-accent); color: #fffdf4; }

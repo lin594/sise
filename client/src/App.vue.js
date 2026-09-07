@@ -19,7 +19,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
-import { normalizeSkin, normalizeTableLayout } from "@/utils/appearance";
+import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
@@ -698,6 +698,11 @@ const isPendingSpecialCard = computed(() => {
 });
 const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, } = useResponsiveViewport();
 const displayPreferences = ref(readDisplayPreferences());
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
+watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value], ([layout, ultra], _, onCleanup) => {
+    const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+    onCleanup(() => clearTimeout(timer));
+});
 const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
 const showSmallScreenRecommendation = computed(() => isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
     && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
@@ -2964,6 +2969,7 @@ const __VLS_8 = __VLS_asFunctionalComponent(GameTools, new GameTools({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
     decisionActive: (__VLS_ctx.settingsDecisionActive),
@@ -2990,6 +2996,7 @@ const __VLS_9 = __VLS_8({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
     decisionActive: (__VLS_ctx.settingsDecisionActive),
@@ -3367,7 +3374,7 @@ else {
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
-        tableLayout: (__VLS_ctx.displayPreferences.tableLayout),
+        tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
         listeningHints: (__VLS_ctx.listeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
@@ -3399,7 +3406,7 @@ else {
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
-        tableLayout: (__VLS_ctx.displayPreferences.tableLayout),
+        tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
         listeningHints: (__VLS_ctx.listeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
@@ -4436,6 +4443,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             viewportHeight: viewportHeight,
             viewportWidth: viewportWidth,
             displayPreferences: displayPreferences,
+            resolvedTableLayout: resolvedTableLayout,
             showSmallScreenRecommendation: showSmallScreenRecommendation,
             dismissLayoutRecommendation: dismissLayoutRecommendation,
             acceptCompactLayout: acceptCompactLayout,

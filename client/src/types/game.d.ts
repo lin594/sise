@@ -1,5 +1,6 @@
 export type SkinId = "cyber-minimal" | "licheng-water" | "puxian-house" | "meizhou-sea";
-export type TableLayoutId = "compact" | "classic";
+export type RenderedTableLayoutId = "compact" | "classic";
+export type TableLayoutId = RenderedTableLayoutId | "adaptive";
 export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass";
 export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 export type CardDisplayMode = "large" | "adaptive" | "long";
