@@ -221,11 +221,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   );
   private readonly localTimeoutMs = Math.max(1000, Number(process.env.LOCAL_TIMEOUT_MS ?? this.operationTimeoutMs));
   private readonly localTransitionDelayMs = GAME_TIMING_CONFIG.localTransitionDelayMs;
-  // 生产规则固定为三秒：无人拦截时完整保护隐私，有胜者时仍允许提前裁决。
-  // 单元测试可直接覆写该私有时钟，避免把测试加速旋钮暴露成生产配置。
-  private collectiveResponseWindowMs = process.env.NODE_ENV === "test"
-    ? Math.min(3000, Math.max(0, Number(process.env.TEST_COLLECTIVE_RESPONSE_WINDOW_MS ?? 0)))
-    : 3000;
+  // 生产按本轮手动响应资格确定 10/3 秒；仅测试可以覆盖共享时钟。
+  private collectiveResponseWindowMs: number | undefined = process.env.NODE_ENV === "test"
+    ? Math.min(10_000, Math.max(0, Number(process.env.TEST_COLLECTIVE_RESPONSE_WINDOW_MS ?? 0)))
+    : undefined;
   private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
   private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 2000));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
@@ -684,6 +683,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           .map(([seatId, cards]) => [seatId, cloneCards(cards)]),
         declareTimerTotalMs: this.declareTimerTotalMs,
         responseTimerTotalMs: this.responseTimerTotalMs,
+        collectiveResponseEndsAt: this.collectiveResponseEndsAt,
         declareDecisionWindowId: this.declareDecisionWindowId,
         responseDecisionWindowId: this.responseDecisionWindowId,
         collectiveQueue: [...this.collectiveQueue],
@@ -759,6 +759,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     this.declareTimerTotalMs = privateState.declareTimerTotalMs;
     this.responseTimerTotalMs = privateState.responseTimerTotalMs;
+    this.collectiveResponseEndsAt = privateState.collectiveResponseEndsAt ??
+      (this.state.responsePhase === "collective" ? Number(snapshot.state.responseEndsAt) || 0 : 0);
     this.declareDecisionWindowId = privateState.declareDecisionWindowId;
     this.responseDecisionWindowId = privateState.responseDecisionWindowId;
     this.collectiveQueue = [...privateState.collectiveQueue];
@@ -820,10 +822,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     } else if (this.state.phase === "declaring") {
       this.startDeclaringPhase();
     } else if (this.state.phase === "playing") {
-      this.responseTimerTotalMs = this.state.responsePhase === "collective"
-        ? this.collectiveResponseWindowMs
-        : this.localTimeoutMs;
-      this.responseDecisionWindowId += 1;
+      if (this.state.responsePhase !== "collective") {
+        this.responseTimerTotalMs = this.localTimeoutMs;
+        this.responseDecisionWindowId += 1;
+      }
       this.tickBots();
     }
   }
@@ -2750,7 +2752,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return false;
     }
     const player = this.state.players.get(seatId);
-    if (!player?.connected || player.isConfiguredBot || this.botIds.has(seatId)) {
+    if (!player?.connected || player.isConfiguredBot || player.isAutoPlay || this.botIds.has(seatId)) {
       return false;
     }
     return true;
@@ -2763,11 +2765,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     });
     const protectedHumans = connectedHumans.filter((seatId) => this.isHumanCollectiveSeat(seatId));
     const needsManualInterruptDecision = protectedHumans.some((seatId) => this.hasCollectiveActionBeyondPass(seatId));
-    // 单真人打给三台机器人且本人不能响应时无需空等；若真人确有胡、开、碰，
-    // 仍给他完整三秒。两名以上真人同桌则统一等待，以隐藏谁能响应、谁只能过。
-    return (needsManualInterruptDecision || connectedHumans.length >= 2 && protectedHumans.length > 0)
-      ? this.collectiveResponseWindowMs
-      : 0;
+    if (needsManualInterruptDecision) return this.collectiveResponseWindowMs ?? 10_000;
+    // 单人练习没有真人需要响应时跳过空等；多人局仍保留短窗口。
+    return connectedHumans.length >= 2 ? this.collectiveResponseWindowMs ?? 3_000 : 0;
   }
 
   private canSeatPreselectCollective(seatId: string): boolean {
@@ -4010,9 +4010,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         from: kind === "draw" ? { zone: "deck" } : { zone: "hand", playerId: pending.ownerId }, to: { zone: "center" } }]);
     }
     if (this.waitForPresentation()) return;
-    if (this.collectiveResponseEndsAt <= Date.now()) {
+    if (this.collectiveResponseEndsAt === 0) {
       // 一轮全局响应只创建一次共享截止点。轮询到哪位、谁有无可响应动作，
-      // 都不能重新续时，否则外部可以从等待长度反推出各家的暗牌信息。
+      // 都不能重新续时。本轮时长本身允许透露是否有真人响应资格。
       const responseWindowMs = this.currentCollectiveResponseWindowMs();
       this.collectiveResponseEndsAt = Date.now() + responseWindowMs;
       this.responseTimerTotalMs = responseWindowMs;
@@ -4066,7 +4066,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     preserveDecisionWindow = false,
   ): void {
     const isCollectivePhase = this.state.responsePhase === "collective";
-    const baseTimeoutMs = isCollectivePhase ? this.collectiveResponseWindowMs : this.localTimeoutMs;
+    const baseTimeoutMs = isCollectivePhase ? this.responseTimerTotalMs || this.collectiveResponseWindowMs || 3_000 : this.localTimeoutMs;
     const collectiveRemainingMs = Math.max(0, this.collectiveResponseEndsAt - Date.now());
     const timeoutMs = Math.max(
       1,
@@ -4371,7 +4371,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         startCollectivePolling: () => this.startCollectivePolling(),
         tickBots: () => this.tickBots(),
         setCollectiveResponseWindowMs: (delayMs) => {
-          this.collectiveResponseWindowMs = Math.min(3_000, Math.max(0, Math.trunc(delayMs)));
+          this.collectiveResponseWindowMs = Math.min(10_000, Math.max(0, Math.trunc(delayMs)));
         },
         endRound: (lastAction, winnerId, groups) => this.endRound(lastAction, winnerId, groups),
       },

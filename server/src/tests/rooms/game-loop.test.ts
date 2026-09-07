@@ -969,3 +969,46 @@ test("a later collective responder cannot act without preselection authority", (
     "ignore",
   );
 });
+
+test("online manual hu, kai or peng selects ten seconds; passive multiplayer keeps three", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = undefined;
+  room.pendingResponse = { ownerId: "A", card: mkCard("window", "red", "ju", "upper"), collectives: new Map() };
+  room.state.responsePhase = "collective";
+  for (const id of ["A", "B", "C", "D"]) room.state.players.get(id).connected = id === "A" || id === "B";
+  for (const action of ["hu", "kai", "peng"]) {
+    room.getAvailableActions = (id: string) => [{ action: id === "B" ? action : "pass", enabled: true }];
+    assert.equal(room.currentCollectiveResponseWindowMs(), 10_000, action);
+  }
+  const b = room.state.players.get("B");
+  b.isAutoPlay = true;
+  assert.equal(room.currentCollectiveResponseWindowMs(), 3_000);
+  b.isAutoPlay = false;
+  b.connected = false;
+  assert.equal(room.currentCollectiveResponseWindowMs(), 0);
+  b.connected = true;
+  b.isConfiguredBot = true;
+  assert.equal(room.currentCollectiveResponseWindowMs(), 0);
+  b.isConfiguredBot = false;
+  room.getAvailableActions = () => [{ action: "pass", enabled: true }];
+  assert.equal(room.currentCollectiveResponseWindowMs(), 3_000);
+  room.playerHands.set("B", [mkCard("ju1", "red", "ju", "upper"), mkCard("ju2", "red", "ju", "upper")]);
+});
+
+test("the ten-second window stays fixed across polling and timer rescheduling", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = undefined;
+  room.state.responsePhase = "collective";
+  room.pendingResponse = { ownerId: "A", card: mkCard("window", "red", "ju", "upper"), collectives: new Map() };
+  room.state.players.get("B").connected = true;
+  room.playerHands.set("B", [mkCard("ju1", "red", "ju", "upper"), mkCard("ju2", "red", "ju", "upper")]);
+  room.startCollectivePolling();
+  const end = room.collectiveResponseEndsAt;
+  assert.ok(end >= Date.now() + 9_900);
+  assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 10_000);
+  room.startCollectivePolling();
+  room.scheduleCollectiveTimeout(undefined, true);
+  assert.equal(room.collectiveResponseEndsAt, end);
+  assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 10_000);
+  room.clearCollectiveTimer();
+});
