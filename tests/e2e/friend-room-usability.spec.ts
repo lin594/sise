@@ -14,8 +14,8 @@ async function useStagedDeclaration(page: Page) {
 async function finishStagedDeclaration(page: Page) {
   await expect.poll(async () => {
     const confirm = page.getByTestId('confirm-declaration');
-    if (!await confirm.isVisible().catch(() => false)) return 'playing';
-    if (await confirm.isEnabled()) await confirm.click();
+    if (await page.locator('main.layout').evaluate(el => el.classList.contains('playing'))) return 'playing';
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled()) await confirm.click();
     return 'declaring';
   }, { timeout: 20_000 }).toBe('playing');
 }
