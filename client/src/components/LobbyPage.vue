@@ -883,7 +883,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary:hover,
 .guest-profile-summary:focus-visible {
-  border-color: var(--ui-accent, #7dd3fc);
+  border-color: var(--ui-accent-text, #7dd3fc);
   background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.5);
 }
 
@@ -951,7 +951,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .lobby-rule-tip,
 .invite-card p {
   margin: 0.35rem 0 0;
-  color: var(--ui-accent, #93c5fd);
+  color: var(--ui-accent-text, #93c5fd);
   font-size: 0.84rem;
 }
 
@@ -1122,7 +1122,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .mode-card.active,
 .seat-card.mine {
-  border-color: var(--ui-accent, #38bdf8);
+  border-color: var(--ui-accent-text, #38bdf8);
   box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.3);
 }
 
@@ -1143,7 +1143,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-head span {
-  color: var(--ui-accent, #93c5fd);
+  color: var(--ui-accent-text, #93c5fd);
   font-size: 0.8rem;
   font-weight: 750;
   white-space: nowrap;
@@ -1235,7 +1235,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .bot-level-button.active {
-  border-color: var(--ui-accent, #38bdf8);
+  border-color: var(--ui-accent-text, #38bdf8);
   background: var(--ui-raised, #075985);
   color: var(--ui-text, #f0f9ff);
   box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.28);
@@ -1486,7 +1486,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .guest-profile-dialog-head small {
-  color: var(--ui-accent, #7dd3fc);
+  color: var(--ui-accent-text, #7dd3fc);
   font-size: 0.82rem;
   font-weight: 750;
 }

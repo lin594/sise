@@ -1266,7 +1266,7 @@ onBeforeUnmount(() => {
 }
 
 .history-list time {
-  color: var(--ui-accent, #93c5fd);
+  color: var(--ui-accent-text, #93c5fd);
   font-variant-numeric: tabular-nums;
   font-size: max(0.76rem, 13px);
 }

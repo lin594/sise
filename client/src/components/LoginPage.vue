@@ -161,7 +161,7 @@ function onInput(event: Event) {
 
 .entry-input:focus {
   outline: none;
-  border-color: var(--ui-accent, #38bdf8);
+  border-color: var(--ui-accent-text, #38bdf8);
   box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.18);
 }
 
@@ -215,7 +215,7 @@ function onInput(event: Event) {
 }
 
 .quick-name {
-  border-color: var(--ui-accent, #0ea5e9);
+  border-color: var(--ui-accent-text, #0ea5e9);
   background: rgba(var(--ui-panel-rgb, 3, 105, 161), 0.28);
   color: var(--ui-accent-text, #e0f2fe);
 }
