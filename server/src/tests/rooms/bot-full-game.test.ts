@@ -26,7 +26,7 @@ function createBotGameRoom(): { room: any; hostClient: FakeClient } {
   // Zero-delay bots for synchronous execution
   room.botThinkMinMs = 0;
   room.botThinkMaxMs = 0;
-  room.collectiveTimeoutMs = 1000;
+  room.collectiveResponseWindowMs = 1000;
   room.localTimeoutMs = 1000;
   room.operationTimeoutMs = 1000;
   room.declareTimeoutMs = 1000;

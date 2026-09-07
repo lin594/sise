@@ -13,7 +13,7 @@ function fixture() {
   room.state.roomMode = "friends";
   // These deterministic flow tests assert synchronous resolution; timing
   // privacy has a dedicated real-timer regression in game-loop.test.ts.
-  room.humanForcedPassDelayMs = 0;
+  room.collectiveResponseWindowMs = 0;
   room.playerOrder = ["A", "B", "C", "D"];
   for (const id of room.playerOrder) {
     const player = new PlayerState(); player.clientId = id; player.name = id;
@@ -28,18 +28,16 @@ function fixture() {
 }
 const card = (id: string, color: Card["color"], type: Card["type"]): Card => ({ id, color, type });
 
-test("drawer can reserve an eat in the only collective and its actual cards fly", () => {
+test("drawer chooses an eat in the fresh local phase and its actual cards fly", () => {
   const room = fixture();
   room.playerHands.set("B", [card("ju", "red", "ju"), card("pao", "red", "pao"), card("spare", "yellow", "ma")]);
   room.pendingResponse = createPendingResponse("B", card("draw", "red", "ma"), "draw");
-  room.collectiveResponderId = "B";
-  room.collectiveQueue = ["B", "C", "D", "A"];
-  room.collectiveCursor = 0;
+  for (const id of room.playerOrder) room.pendingResponse.collectives.set(id, { action: "pass" });
+  room.resolveCollectivePhase();
+  assert.equal(room.state.responsePhase, "local_draw");
   const chi = room.getAvailableActions("B").find((item: any) => item.action === "chi");
   assert.equal(chi.enabled, true);
-  assert.equal(room.hasCollectiveActionBeyondPass("B"), true);
-  room.seatBySession.set("clientB", "B");
-  room.handleAction({ sessionId: "clientB", send: () => {} }, { action: "chi", candidateId: chi.candidates[0].id });
+  room.executeEat("B", chi.candidates[0].id);
   assert.deepEqual(room.playerHands.get("B").map((item: Card) => item.id), ["spare"]);
   assert.equal(room.awaitingDiscardOwnerId, "B");
   const moves = readTableTransitions(room.state.tableTransitionsJson).find((event) => event.kind === "meld")!.moves;
@@ -48,12 +46,17 @@ test("drawer can reserve an eat in the only collective and its actual cards fly"
   room.clearCollectiveTimer();
 });
 
-test("all pass moves the draw to B→C exactly once and C alone may eat", () => {
+test("all-pass collective gives B a local decision before B passes the draw to C", () => {
   const room = fixture();
   room.pendingResponse = createPendingResponse("B", card("draw", "red", "ma"), "draw");
   for (const id of room.playerOrder) room.pendingResponse.collectives.set(id, { action: "pass" });
   room.startCollectivePolling = () => { throw new Error("second collective"); };
   room.resolveCollectivePhase();
+  assert.equal(room.pendingResponse.ownerId, "B");
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.state.players.get("B").discardPile.length, 0);
+
+  room.executePassToNext("B");
   assert.equal(room.pendingResponse.ownerId, "C");
   assert.equal(room.state.responsePhase, "local_upper");
   assert.equal(room.state.pollOriginPlayerId, "B");
@@ -88,11 +91,13 @@ test("gold response settles as singles and single-eat auto hu does not count it 
   }
 });
 
-test("presentation blocks actions and starts the decision only after reveal", async () => {
+test("presentation blocks actions and starts the shared response window only after reveal", async () => {
   const room = fixture();
   room.clients.push({ sessionId: "viewer", send: () => {} });
   room.pendingResponse = createPendingResponse("B", card("draw", "red", "ma"), "draw");
   room.playerHands.set("B", [card("ju", "red", "ju"), card("pao", "red", "pao"), card("spare", "yellow", "ma")]);
+  room.playerHands.set("C", [card("ma-1", "red", "ma"), card("ma-2", "red", "ma")]);
+  room.state.players.get("C").connected = true;
   room.startCollectivePolling();
   const event = readTableTransitions(room.state.tableTransitionsJson)[0]!;
   assert.equal(event.endsAt - event.startsAt, 1200);
@@ -100,20 +105,27 @@ test("presentation blocks actions and starts the decision only after reveal", as
   assert.deepEqual(room.getAvailableActions("B"), []);
   room.clearPresentation();
   room.clients.length = 0;
+  room.collectiveResponseWindowMs = 40;
   room.startCollectivePolling();
+  // 内部游标可以停在无动作的 B 来保护隐私，但公开状态不暴露它；
+  // 真正可碰的 C 已能在同一共享窗口内并发提交。
   assert.equal(room.collectiveResponderId, "B");
+  assert.equal(room.state.activeResponderId, "");
+  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
+  assert.equal(
+    room.buildClientDecisionView("C").availableActions.some((item: any) => item.action === "peng"),
+    true,
+  );
   assert.ok(room.state.responseEndsAt > Date.now());
   room.clearCollectiveTimer();
 });
 
-test("another seat's Peng beats the drawer's reserved eat", () => {
+test("another seat's Peng interrupts before the drawer's local eat decision", () => {
   const room = fixture();
   room.playerHands.set("B", [card("ju", "red", "ju"), card("pao", "red", "pao"), card("spareB", "yellow", "ma")]);
   room.playerHands.set("C", [card("ma1", "red", "ma"), card("ma2", "red", "ma"), card("spareC", "white", "shi")]);
   room.pendingResponse = createPendingResponse("B", card("draw", "red", "ma"), "draw");
-  const chi = room.getAvailableActions("B", true).find((item: any) => item.action === "chi").candidates[0];
   const peng = room.getAvailableActions("C", true).find((item: any) => item.action === "peng").candidates[0];
-  room.pendingResponse.collectives.set("B", { action: "chi", candidateId: chi.id });
   room.pendingResponse.collectives.set("C", { action: "peng", candidateId: peng.id });
   room.resolveCollectivePhase();
   assert.equal(room.playerHands.get("B").length, 3);
@@ -128,6 +140,7 @@ test("C's local eat removes only B's target discard and flies from B's flow", ()
   room.pendingResponse.collectives.set("B", { action: "pass" });
   room.ops.pushDiscard("B", card("old", "green", "ju"));
   room.resolveCollectivePhase();
+  room.executePassToNext("B");
   const chi = room.getAvailableActions("C").find((item: any) => item.action === "chi").candidates[0];
   assert.equal(room.executeEat("C", chi.id), true);
   assert.deepEqual([...room.state.players.get("B").discardPile].map((c: Card) => c.id), ["old"]);

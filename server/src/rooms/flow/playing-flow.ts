@@ -120,6 +120,11 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
   const isCollective = input.responsePhase === "collective";
 
   if (isCollective) {
+    // 上家来牌的 owner 是弃牌者。本人不能响应自己刚打出的牌，这是公开规则，
+    // 也不能让它误入私有抢占候选或阻塞真正的胜者。
+    if (input.pending.card.source === "upper" && isOwner) {
+      return disabled;
+    }
     if (
       !input.probeCollectiveResponder &&
       !input.allowCollectivePreselection &&
@@ -149,11 +154,15 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
       { action: "peng", enabled: pengCandidates.length > 0, candidates: pengCandidates },
       {
         action: "chi",
-        enabled: input.pending.card.source === "draw" && previewChiCandidates.length > 0,
+        enabled: false,
         candidates: previewChiCandidates,
-        deferred: input.pending.card.source !== "draw" && previewChiCandidates.length > 0,
+        deferred: previewChiCandidates.length > 0,
       },
-      { action: "pass", enabled: !(input.pending.card.source === "draw" && isOwner && isDiscardRestricted(input.pending.card)), deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId },
+      {
+        action: "pass",
+        enabled: !(input.pending.card.source === "draw" && isOwner && isDiscardRestricted(input.pending.card)),
+        deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId,
+      },
     ];
   }
 
@@ -643,7 +652,7 @@ export interface BotRunnerDeps {
   getAvailableActions: (seatId: string) => AvailableActionEntry[];
   chooseAction: (seatId: string, actions: AvailableActionEntry[]) => { action: ActionType; candidateId?: string };
   chooseDiscardCardId: (seatId: string) => string | null;
-  setCollectiveChoice: (seatId: string, choice: { action: ActionType; candidateId?: string }) => void;
+  setCollectiveChoice: (seatId: string, choice: { action: ActionType; candidateId?: string }) => boolean;
   advanceCollectivePolling: () => void;
   broadcastAvailableActions: () => void;
   discardFromAndCollective: (ownerId: string, cardId?: string) => void;
@@ -672,8 +681,12 @@ export function runBotStep(deps: BotRunnerDeps): void {
     }
     const actions = deps.getAvailableActions(responderId);
     const choice = deps.chooseAction(responderId, actions);
-    deps.setCollectiveChoice(responderId, choice);
-    deps.advanceCollectivePolling();
+    // 机器人与真人提交拦截后必须走同一套即时裁决；若已经产生胜者或只剩真正的
+    // 高优先级阻塞者，回调会接管后续推进，不能再沿旧游标重复 advance。
+    const resolutionTakenOver = deps.setCollectiveChoice(responderId, choice);
+    if (!resolutionTakenOver) {
+      deps.advanceCollectivePolling();
+    }
     return;
   }
 
@@ -775,16 +788,13 @@ export interface AdvanceCollectiveDeps {
   queue: SeatId[];
   cursor: number;
   hasActionBeyondPass: (seatId: SeatId) => boolean;
-  responsePrivacyDelayMs: (seatId: SeatId) => number;
+  collectiveRemainingMs: (seatId: SeatId) => number;
   setCollectivePass: (seatId: SeatId) => void;
   setCursor: (cursor: number) => void;
   setResponder: (responderId: SeatId | null) => void;
-  setActiveResponder: (responderId: SeatId | "") => void;
-  setCurrentPlayer: (seatId: SeatId) => void;
-  setCurrentTurnPlayer: (seatId: SeatId) => void;
   isBot: (seatId: SeatId) => boolean;
   scheduleBotStep: () => void;
-  scheduleCollectiveTimeout: (timeoutOverrideMs?: number, responsePrivacyDelay?: boolean) => void;
+  scheduleCollectiveTimeout: (timeoutOverrideMs?: number) => void;
   broadcastAvailableActions: () => void;
   clearResponseEndsAt: () => void;
   resolveCollectivePhase: () => void;
@@ -794,7 +804,7 @@ export interface AdvanceCollectiveDeps {
 /**
  * 作用：推进 collective 轮询游标，直到找到下一位响应者或完成决议。
  * 关键输入/输出：输入轮询队列与读写依赖，输出无返回值。
- * 副作用：更新 responder/cursor/currentPlayer，并调度超时或 bot。
+ * 副作用：仅更新私有 responder/cursor，并调度超时或机器人；不改公开行动位。
  */
 export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
   if (!deps.pending || deps.responsePhase !== "collective") {
@@ -808,15 +818,13 @@ export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
   const next = resolveNextCollectiveResponder({
     queue: deps.queue,
     cursor: deps.cursor,
-    // A response preselected in private must not make the public cursor skip a
-    // human seat instantly; hold it for the same privacy window as auto-pass.
+    // 尚无拦截胜者时，真人即使已经点“过”也要等同一个全局截止点；
+    // 否则提前结束会暴露该玩家究竟有没有可响应动作。
     hasResponded: (seatId) =>
-      deps.hasResponded(seatId) && deps.responsePrivacyDelayMs(seatId) <= 0,
-    // Online humans with only Pass available still receive a real response
-    // slot. Skipping them synchronously leaks that their concealed hand had no
-    // interrupt, while configured bots and practice seats keep the fast path.
+      deps.hasResponded(seatId) && deps.collectiveRemainingMs(seatId) <= 0,
+    // 在线真人即使只能过，也参与共享的三秒窗口；机器人仍走快速路径。
     hasActionBeyondPass: (seatId) =>
-      deps.hasActionBeyondPass(seatId) || deps.responsePrivacyDelayMs(seatId) > 0,
+      deps.hasActionBeyondPass(seatId) || deps.collectiveRemainingMs(seatId) > 0,
   });
   for (const seatId of next.forcedPassIds) {
     deps.setCollectivePass(seatId);
@@ -825,17 +833,11 @@ export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
   if (next.responderId) {
     deps.setCursor(next.nextCursor);
     deps.setResponder(next.responderId);
-    deps.setCurrentPlayer(next.responderId);
-    deps.setCurrentTurnPlayer(next.responderId);
-    deps.setActiveResponder(next.responderId);
     if (deps.isBot(next.responderId)) {
       deps.scheduleBotStep();
     } else {
-      const responsePrivacyDelayMs = deps.responsePrivacyDelayMs(next.responderId);
-      deps.scheduleCollectiveTimeout(
-        responsePrivacyDelayMs > 0 ? responsePrivacyDelayMs : undefined,
-        responsePrivacyDelayMs > 0,
-      );
+      const remainingMs = deps.collectiveRemainingMs(next.responderId);
+      deps.scheduleCollectiveTimeout(remainingMs > 0 ? remainingMs : undefined);
     }
     deps.broadcastAvailableActions();
     return;
@@ -843,7 +845,6 @@ export function advanceCollectiveFlow(deps: AdvanceCollectiveDeps): void {
 
   deps.setCursor(next.nextCursor);
   deps.setResponder(null);
-  deps.setActiveResponder("");
   deps.clearResponseEndsAt();
   deps.resolveCollectivePhase();
 }
