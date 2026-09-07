@@ -62,7 +62,7 @@ const label = computed(() => ({
   background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.82);
 }
 .player-status-icon svg { width: 1.05rem; height: 1.05rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.status-computer { color: var(--ui-accent, #7dd3fc); border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.58); }
+.status-computer { color: var(--ui-accent-text, #7dd3fc); border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.58); }
 .status-autoplay { color: var(--ui-gold-text, #fcd34d); border-color: rgba(245, 158, 11, 0.64); }
 .status-takeover, .status-offline { color: var(--ui-danger-text, #fda4af); border-color: rgba(251, 113, 133, 0.64); }
 </style>

@@ -3403,7 +3403,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 
 .seat-meta {
   margin: 0;
-  color: var(--ui-accent, #93c5fd);
+  color: var(--ui-accent-text, #93c5fd);
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 

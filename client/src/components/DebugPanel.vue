@@ -75,7 +75,7 @@ function labelOf(key: string): string {
 
 .tips {
   margin: 8px 0 0;
-  color: var(--ui-accent, #93c5fd);
+  color: var(--ui-accent-text, #93c5fd);
 }
 
 .result {

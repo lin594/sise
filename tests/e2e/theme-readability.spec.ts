@@ -52,3 +52,30 @@ for (const scheme of ['dark','light'] as const) {
     }
   });
 }
+
+for (const scheme of ['dark','light'] as const) for (const skin of ['cyber-minimal','licheng-water','puxian-house','meizhou-sea']) {
+  test(`lobby and game panels remain readable: ${skin} ${scheme}`, async ({ page }, info) => {
+    await page.emulateMedia({colorScheme:scheme});
+    await page.setViewportSize({width:1024,height:768});
+    await page.addInitScript(skin => localStorage.setItem('sise_game_display_preferences_v2',JSON.stringify({skin})),skin);
+    await page.goto('/?new=1&e2eDebug=1');
+    await readableText(page.locator('main'));
+    await page.getByTestId('mode-practice_bots').click();
+    await expect(page.getByTestId('game-board')).toBeVisible();
+    await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
+    await expect(page.getByTestId('confirm-declaration')).toBeVisible();
+    await readableText(page.locator('.declare-panel'));
+    await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper'));
+    await page.getByTestId('game-history').click();
+    await readableText(page.getByTestId('history-panel'));
+    await page.getByTestId('close-history').click();
+    await page.getByTestId('game-interaction').click();
+    await readableText(page.getByTestId('quick-phrase-panel'));
+    await page.getByTestId('game-interaction').click();
+    await page.screenshot({path:info.outputPath(`${skin}-${scheme}-table.png`)});
+    await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('settlement_hu'));
+    await expect(page.getByTestId('settlement-panel')).toHaveAttribute('aria-busy','false',{timeout:20000});
+    await readableText(page.getByTestId('settlement-panel'));
+    await page.screenshot({path:info.outputPath(`${skin}-${scheme}-settlement.png`)});
+  });
+}

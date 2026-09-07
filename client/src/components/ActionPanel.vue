@@ -303,7 +303,7 @@ function onClick(item: PanelAction): void {
 
 .btn.enabled {
   color: #f8fafc;
-  border-color: var(--ui-accent, #38bdf8);
+  border-color: var(--ui-accent-text, #38bdf8);
   background: var(--ui-raised, #075985);
   cursor: pointer;
 }
