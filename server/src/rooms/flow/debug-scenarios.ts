@@ -258,11 +258,13 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
   } else if (scenario === "collective_no_actions" || scenario === "collective_passive_wait" || scenario === "collective_manual_wait") {
     if (scenario === "collective_passive_wait" || scenario === "collective_manual_wait") {
-      // 第二个浏览器需要时间接收自己的状态与私有消息；该场景直接沿用生产的三秒窗口。
+      // 双浏览器场景保留真实 3/10 秒窗口，替换手牌时同步清理随机开局的声明。
       context.setCollectiveResponseWindowMs(scenario === "collective_manual_wait" ? 10_000 : 3_000);
       const selfIndex = context.playerOrder.indexOf(seatId);
       const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
       for (const id of context.playerOrder) {
+        const seat = context.state.players.get(id);
+        if (seat) seat.declaredKongs = 0;
         context.playerHands.set(id, [
           { id: `passive-${id}-shi-${seq}`, color: "red", type: "shi" },
           { id: `passive-${id}-xiang-${seq}`, color: "green", type: "xiang" },

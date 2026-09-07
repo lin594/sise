@@ -1012,3 +1012,14 @@ test("the ten-second window stays fixed across polling and timer rescheduling", 
   assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 10_000);
   room.clearCollectiveTimer();
 });
+
+test("manual response fixture discards stale declarations from every replaced hand", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.players.get("B").connected = true;
+  room.state.players.get("B").declaredKongs = 2;
+  assert.equal(room.applyDebugScenario("A", "collective_manual_wait"), true);
+  assert.equal(room.state.players.get("B").declaredKongs, 0);
+  assert.ok(room.getAvailableActions("B", true).some((item: any) => item.action === "peng" && item.enabled));
+  assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 10_000);
+  room.clearCollectiveTimer();
+});
