@@ -26,9 +26,9 @@ const expanded = ref(true);
 
 <style scoped>
 .zone {
-  border: 1px solid #334155;
+  border: 1px solid var(--ui-raised, #334155);
   border-radius: 10px;
-  background: #111827;
+  background: var(--ui-panel, #111827);
   padding: 8px;
 }
 
@@ -36,7 +36,7 @@ const expanded = ref(true);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   cursor: pointer;
   margin-bottom: 8px;
 }

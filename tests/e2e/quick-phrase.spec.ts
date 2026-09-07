@@ -1,3 +1,4 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { quickPhrases } from "../../client/src/generated/quickPhrases";
 
@@ -67,21 +68,16 @@ test("folder-driven quick phrases are visible and played once for sender and tab
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("短句房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "短句房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect.poll(() => host.url()).toContain("roomId=");
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("短句牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "短句牌友");
     await guest.getByTestId("claim-seat-1").click();
     await host.getByTestId("fill-bots").click();
     await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
 
     const hostInteraction = host.getByTestId("game-interaction");
     const guestInteraction = guest.getByTestId("game-interaction");

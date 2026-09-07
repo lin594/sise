@@ -1,5 +1,5 @@
+import { openGameAs, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 type StartGameHold = {
   count: () => number;
@@ -7,9 +7,7 @@ type StartGameHold = {
 };
 
 async function enterModeLobby(page: Page, nickname: string): Promise<void> {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill(nickname);
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", nickname);
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -63,7 +61,6 @@ test("practice auto-start stays visibly pending until the server advances", asyn
   await enterModeLobby(page, "练习牌友");
   await holdStartGameMessages(page);
   await page.getByTestId("mode-practice_bots").click();
-  await page.getByTestId("lobby-start").click();
 
   const start = page.getByTestId("lobby-start");
   await expect.poll(() => heldStartGameCount(page)).toBe(1);
@@ -78,7 +75,6 @@ test("practice auto-start stays visibly pending until the server advances", asyn
 test("friend-room start accepts one impatient double click", async ({ page }) => {
   await enterModeLobby(page, "好友房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await page.getByTestId("fill-bots").click();
 
@@ -109,7 +105,6 @@ test("friend-room start accepts one impatient double click", async ({ page }) =>
 test("quick match explains that bots and the round are being prepared", async ({ page }) => {
   await enterModeLobby(page, "配桌牌友");
   await page.getByTestId("mode-quick_match").click();
-  await page.getByTestId("lobby-start").click();
   const start = page.getByTestId("lobby-start");
   await expect(start).toHaveText("电脑补位，立即开始");
 

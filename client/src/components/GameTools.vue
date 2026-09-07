@@ -2,6 +2,7 @@
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
       <button
+        v-if="inRoom"
         ref="historyButtonRef"
         class="tool-button history"
         type="button"
@@ -19,6 +20,7 @@
         <span>记录</span>
       </button>
       <button
+        v-if="inRoom"
         class="tool-button interaction"
         type="button"
         :aria-label="quickPhrases.length === 0 ? '快捷互动，暂无音效' : props.quickPhraseBusy ? '快捷互动，上一条语音播放中' : '快捷互动'"
@@ -35,8 +37,8 @@
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : '牌局设置'"
-        title="牌局设置"
+        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : inRoom ? '牌局设置' : '全局设置'"
+        :title="inRoom ? '牌局设置' : '全局设置'"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -49,6 +51,7 @@
         <span>设置</span>
       </button>
       <button
+        v-if="inRoom"
         ref="autoPlayButtonRef"
         class="tool-button auto-play"
         :class="{ active: props.autoPlay }"
@@ -67,6 +70,7 @@
         <span>{{ props.autoPlay ? "取消托管" : "托管" }}</span>
       </button>
       <button
+        v-if="inRoom"
         ref="exitButtonRef"
         class="tool-button exit"
         type="button"
@@ -165,8 +169,9 @@
       >
         <header>
           <div>
-            <small>牌局设置</small>
-            <strong id="settings-panel-title">牌面显示</strong>
+            <small>全局设置</small>
+            <strong id="settings-panel-title">{{ settingsPageTitle }}</strong>
+            <button v-if="settingsPage !== settingsRoot" type="button" data-testid="settings-back" @click="backSettings()">‹ 返回</button>
           </div>
           <button type="button" aria-label="关闭设置" @click="closeSettings()">×</button>
         </header>
@@ -185,7 +190,13 @@
             返回出牌
           </button>
         </div>
-        <div class="preference-group">
+        <nav v-if="settingsPage === 'home'" class="settings-categories" aria-label="设置分类">
+          <button v-for="category in settingsCategories" :key="category.id" type="button" :data-testid="`settings-category-${category.id}`" @click="openSettingsPage(category.id)">
+            <strong>{{ category.label }}</strong><small>{{ category.summary }}</small><span aria-hidden="true">›</span>
+          </button>
+        </nav>
+        <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
+        <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
           <div class="mode-options" role="radiogroup" aria-label="手牌排列">
             <button v-for="mode in (['single', 'paged'] as const)" :key="mode" type="button" role="radio"
@@ -193,7 +204,7 @@
               @click="emit('update:modelValue', { ...modelValue, handLayout: mode })">{{ mode === 'single' ? '单行模式' : '翻页模式' }}</button>
           </div>
         </div>
-        <div class="preference-group">
+        <div v-if="settingsPage === 'table' || settingsPage === 'quick'" class="preference-group">
           <div class="preference-copy">
             <strong>我的牌</strong>
             <small>手牌、声明与本人结算</small>
@@ -214,7 +225,7 @@
             </button>
           </div>
         </div>
-        <div class="preference-group">
+        <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy">
             <strong>桌面牌</strong>
             <small>待响、定庄、牌组与流水</small>
@@ -235,7 +246,7 @@
             </button>
           </div>
         </div>
-        <div class="preference-group">
+        <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy">
             <strong>玩家摆放</strong>
             <small>只调整你看到的左右方向</small>
@@ -265,7 +276,7 @@
             </button>
           </div>
         </div>
-        <div class="preference-group">
+        <div v-if="settingsPage === 'sound' || settingsPage === 'quick'" class="preference-group">
           <div class="preference-copy">
             <strong>轮到我提醒</strong>
             <small>每个操作窗口只提醒一次</small>
@@ -286,6 +297,8 @@
             </button>
           </div>
         </div>
+        <div v-if="settingsPage === 'sound'">
+          <button class="setting-switch" type="button" role="switch" :aria-checked="!quickPhraseMuted" data-testid="settings-phrase-sound" @click="emit('setQuickPhraseMuted', !props.quickPhraseMuted)"><span><strong>互动语音</strong><small>播放牌友发送的快捷语音</small></span><span>{{ quickPhraseMuted ? '关闭' : '开启' }}</span></button>
         <button
           v-if="props.spokenTurnGuidanceSupported"
           class="setting-switch"
@@ -316,6 +329,8 @@
           </span>
           <span class="switch-state">不可用</span>
         </div>
+        </div>
+        <div v-if="settingsPage === 'assist'">
         <button
           class="setting-switch"
           type="button"
@@ -378,8 +393,9 @@
           </span>
           <span class="switch-state">不可用</span>
         </div>
+        </div>
         <button
-          v-if="props.installAppAvailable"
+          v-if="props.installAppAvailable && settingsPage === 'home'"
           class="setting-switch install-app-setting"
           type="button"
           data-testid="settings-install-app"
@@ -391,7 +407,8 @@
           </span>
           <span class="switch-state install-state">安装</span>
         </button>
-        <button class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
+        <button v-if="settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-all" @click="openSettingsPage('home')">全部设置 <span aria-hidden="true">›</span></button>
+        <button v-if="settingsPage === 'home' || settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
         <p
@@ -403,8 +420,8 @@
       </section>
     </Transition>
 
-    <Teleport to=".layout">
-      <div v-if="confirmingAutoPlay" class="exit-confirm-mask" @click.self="cancelAutoPlay">
+    <Teleport v-if="confirmingAutoPlay" to=".layout">
+      <div class="exit-confirm-mask" @click.self="cancelAutoPlay">
         <section
           ref="autoPlayDialogRef"
           class="exit-confirm auto-play-confirm"
@@ -427,8 +444,8 @@
       </div>
     </Teleport>
 
-    <Teleport to=".layout">
-      <div v-if="confirmingExit" class="exit-confirm-mask" @click.self="cancelExit">
+    <Teleport v-if="confirmingExit" to=".layout">
+      <div class="exit-confirm-mask" @click.self="cancelExit">
         <section
           ref="exitDialogRef"
           class="exit-confirm"
@@ -455,6 +472,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { skins, tableLayouts } from "@/utils/appearance";
+import AppearanceSettings from "./AppearanceSettings.vue";
 import { quickPhrases } from "@/generated/quickPhrases";
 import type {
   CardDisplayMode,
@@ -468,6 +487,9 @@ import type {
 const props = withDefaults(
   defineProps<{
     modelValue: GameDisplayPreferences;
+    inRoom?: boolean;
+    playingContext?: boolean;
+    resolvedTableLayout?: "classic" | "compact";
     decisionActive?: boolean;
     decisionUntimed?: boolean;
     decisionSecondsLeft?: number;
@@ -483,6 +505,8 @@ const props = withDefaults(
     quickPhraseBusy?: boolean;
   }>(),
   {
+    inRoom: true,
+    playingContext: false,
     decisionActive: false,
     decisionUntimed: false,
     decisionSecondsLeft: 0,
@@ -518,6 +542,30 @@ const phraseOpen = ref(false);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
+type SettingsPage = "quick" | "home" | "appearance" | "table" | "sound" | "assist";
+const settingsRoot = ref<SettingsPage>("home");
+const settingsPage = ref<SettingsPage>("home");
+const settingsPageTitle = computed(() => ({ quick: "牌局快捷设置", home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
+const settingsCategories = computed(() => [
+  { id: "appearance" as const, label: "外观", summary: skins.find(s => s.id === props.modelValue.skin)?.name ?? "皮肤" },
+  { id: "table" as const, label: "牌桌与纸牌", summary: `${tableLayouts.find(l => l.id === props.modelValue.tableLayout)?.name ?? "布局"} · ${props.modelValue.handLayout === "paged" ? "翻页" : "单行"}` },
+  { id: "sound" as const, label: "声音与提醒", summary: props.modelValue.turnAlert === "off" ? "轮到我提醒已关闭" : "轮到我提醒已开启" },
+  { id: "assist" as const, label: "辅助功能", summary: "颜色辅助、动态效果、屏幕常亮" },
+]);
+let settingsReturnCategory: SettingsPage = "home";
+async function openSettingsPage(page: SettingsPage) {
+  settingsPage.value = page;
+  await nextTick();
+  settingsPanelRef.value?.scrollTo(0, 0);
+  settingsPanelRef.value?.focus();
+  updateSettingsScrollState();
+}
+async function backSettings() {
+  if (settingsPage.value === settingsRoot.value) { closeSettings(); return; }
+  settingsReturnCategory = settingsPage.value;
+  await openSettingsPage(settingsPage.value === "home" ? settingsRoot.value : "home");
+  settingsPanelRef.value?.querySelector<HTMLElement>(`[data-testid="settings-category-${settingsReturnCategory}"]`)?.focus();
+}
 const settingsCanScrollForward = ref(false);
 let settingsResizeObserver: ResizeObserver | null = null;
 const confirmingAutoPlay = ref(false);
@@ -600,6 +648,8 @@ async function toggleSettings(): Promise<void> {
   }
   closeHistory(false);
   phraseOpen.value = false;
+  settingsRoot.value = props.playingContext ? "quick" : "home";
+  settingsPage.value = settingsRoot.value;
   settingsOpen.value = true;
   await nextTick();
   observeSettingsScroll();
@@ -975,10 +1025,10 @@ onBeforeUnmount(() => {
   height: 2.55rem;
   padding: 0.35rem 0.62rem;
   border-radius: 0.72rem;
-  border: 1px solid rgba(148, 163, 184, 0.38);
-  background: rgba(15, 23, 42, 0.84);
-  color: #e2e8f0;
-  box-shadow: 0 5px 16px rgba(2, 6, 23, 0.34);
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.38);
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.84);
+  color: var(--ui-text, #e2e8f0);
+  box-shadow: 0 5px 16px rgba(var(--ui-page-rgb, 2, 6, 23), 0.34);
   backdrop-filter: blur(10px);
   display: inline-flex;
   align-items: center;
@@ -990,20 +1040,20 @@ onBeforeUnmount(() => {
 
 .tool-button:hover,
 .tool-button[aria-expanded="true"] {
-  border-color: rgba(56, 189, 248, 0.82);
-  color: #bae6fd;
+  border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.82);
+  color: var(--ui-accent-text, #bae6fd);
 }
 
 .tool-button.exit:hover {
   border-color: rgba(248, 113, 113, 0.82);
-  color: #fecaca;
+  color: var(--ui-text, #fecaca);
 }
 
 .tool-button.auto-play.active {
   border-color: #fbbf24;
-  background: #713f12;
-  color: #fef3c7;
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.22), 0 5px 16px rgba(2, 6, 23, 0.34);
+  background: var(--ui-raised, #713f12);
+  color: var(--ui-gold-text, #fef3c7);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.22), 0 5px 16px rgba(var(--ui-page-rgb, 2, 6, 23), 0.34);
 }
 
 .tool-button.auto-play:disabled {
@@ -1032,10 +1082,10 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: 0.8rem;
   border-radius: 1rem;
-  border: 1px solid rgba(71, 85, 105, 0.9);
-  background: #080f1d;
-  color: #e2e8f0;
-  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.48);
+  border: 1px solid rgba(var(--ui-border-rgb, 71, 85, 105), 0.9);
+  background: var(--ui-page, #080f1d);
+  color: var(--ui-text, #e2e8f0);
+  box-shadow: 0 16px 36px rgba(var(--ui-page-rgb, 2, 6, 23), 0.48);
   backdrop-filter: blur(14px);
   z-index: 1;
 }
@@ -1049,7 +1099,7 @@ onBeforeUnmount(() => {
 .phrase-busy {
   margin: 0;
   padding: 0.25rem 0.4rem;
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   font-size: max(0.8125rem, 13px);
   text-align: center;
 }
@@ -1058,14 +1108,14 @@ onBeforeUnmount(() => {
   min-height: 2.25rem;
   border: 0;
   border-radius: 0.55rem;
-  background: rgba(30, 41, 59, 0.9);
-  color: #f8fafc;
+  background: rgba(var(--ui-raised-rgb, 30, 41, 59), 0.9);
+  color: var(--ui-text, #f8fafc);
   text-align: left;
   padding: 0.35rem 0.65rem;
 }
 
 .phrase-panel .phrase-mute {
-  color: #bae6fd;
+  color: var(--ui-accent-text, #bae6fd);
   text-align: center;
 }
 
@@ -1073,7 +1123,7 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: var(--game-header-height, 3rem) 0 0;
   z-index: 0;
-  background: rgba(2, 6, 23, 0.16);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.16);
 }
 
 .history-panel {
@@ -1099,7 +1149,7 @@ onBeforeUnmount(() => {
 
 .settings-panel small,
 .history-panel small {
-  color: #94a3b8;
+  color: var(--ui-muted, #94a3b8);
   font-size: max(0.78rem, 13px);
 }
 
@@ -1116,8 +1166,8 @@ onBeforeUnmount(() => {
   min-height: 42px;
   border: 0;
   border-radius: 50%;
-  background: rgba(30, 41, 59, 0.78);
-  color: #cbd5e1;
+  background: rgba(var(--ui-raised-rgb, 30, 41, 59), 0.78);
+  color: var(--ui-muted, #cbd5e1);
   font-size: 1.25rem;
 }
 
@@ -1129,8 +1179,8 @@ onBeforeUnmount(() => {
   padding: 0.55rem 0.65rem;
   border: 1px solid rgba(251, 191, 36, 0.62);
   border-radius: 0.75rem;
-  background: #30220b;
-  box-shadow: 0 5px 14px rgba(2, 6, 23, 0.28);
+  background: var(--ui-raised, #30220b);
+  box-shadow: 0 5px 14px rgba(var(--ui-page-rgb, 2, 6, 23), 0.28);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1145,12 +1195,12 @@ onBeforeUnmount(() => {
 }
 
 .decision-reminder strong {
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   font-size: max(0.9rem, 15px);
 }
 
 .decision-reminder small {
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   line-height: 1.3;
 }
 
@@ -1160,8 +1210,8 @@ onBeforeUnmount(() => {
   padding: 0.35rem 0.62rem;
   border: 1px solid #fbbf24;
   border-radius: 0.65rem;
-  background: #b45309;
-  color: #fff7ed;
+  background: var(--ui-raised, #b45309);
+  color: var(--ui-text, #fff7ed);
   font-size: max(0.86rem, 14px);
   font-weight: 850;
 }
@@ -1175,8 +1225,8 @@ onBeforeUnmount(() => {
   padding: 0.75rem 0.5rem 0.35rem;
   display: grid;
   place-items: center;
-  background: linear-gradient(180deg, rgba(8, 15, 29, 0), #080f1d 38%);
-  color: #fde68a;
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 8, 15, 29), 0), var(--ui-page, #080f1d) 38%);
+  color: var(--ui-gold-text, #fde68a);
   font-size: max(0.78rem, 13px);
   font-weight: 850;
   line-height: 1.15;
@@ -1190,7 +1240,7 @@ onBeforeUnmount(() => {
 
 .history-description {
   margin: 0.45rem 0 0;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: max(0.8rem, 14px);
   line-height: 1.45;
 }
@@ -1206,9 +1256,9 @@ onBeforeUnmount(() => {
 .history-list li {
   min-height: 2.7rem;
   padding: 0.45rem 0.55rem;
-  border: 1px solid rgba(71, 85, 105, 0.72);
+  border: 1px solid rgba(var(--ui-border-rgb, 71, 85, 105), 0.72);
   border-radius: 0.72rem;
-  background: #111b2d;
+  background: var(--ui-raised, #111b2d);
   display: grid;
   grid-template-columns: 4.9rem minmax(0, 1fr);
   align-items: center;
@@ -1217,7 +1267,7 @@ onBeforeUnmount(() => {
 }
 
 .history-list time {
-  color: #93c5fd;
+  color: var(--ui-accent-text, #93c5fd);
   font-variant-numeric: tabular-nums;
   font-size: max(0.76rem, 13px);
 }
@@ -1235,13 +1285,13 @@ onBeforeUnmount(() => {
 
 .history-list p strong {
   overflow: hidden;
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .history-list p span {
-  color: #f8fafc;
+  color: var(--ui-text, #f8fafc);
 }
 
 .history-empty {
@@ -1250,8 +1300,8 @@ onBeforeUnmount(() => {
   padding: 0.7rem;
   border: 1px dashed rgba(100, 116, 139, 0.75);
   border-radius: 0.8rem;
-  background: #111827;
-  color: #cbd5e1;
+  background: var(--ui-panel, #111827);
+  color: var(--ui-muted, #cbd5e1);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1260,7 +1310,7 @@ onBeforeUnmount(() => {
 }
 
 .history-empty > span {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1.65rem;
 }
 
@@ -1310,9 +1360,9 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 2.75rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(71, 85, 105, 0.78);
-  background: rgba(15, 23, 42, 0.76);
-  color: #e2e8f0;
+  border: 1px solid rgba(var(--ui-border-rgb, 71, 85, 105), 0.78);
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.76);
+  color: var(--ui-text, #e2e8f0);
 }
 
 .setting-switch {
@@ -1327,8 +1377,8 @@ onBeforeUnmount(() => {
 
 .unavailable-setting {
   border-color: rgba(100, 116, 139, 0.46);
-  background: rgba(15, 23, 42, 0.55);
-  color: #94a3b8;
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.55);
+  color: var(--ui-muted, #94a3b8);
   cursor: default;
 }
 
@@ -1347,26 +1397,26 @@ onBeforeUnmount(() => {
   min-width: 3.1rem;
   padding: 0.3rem 0.45rem;
   border-radius: 999px;
-  background: #334155;
-  color: #cbd5e1;
+  background: var(--ui-raised, #334155);
+  color: var(--ui-muted, #cbd5e1);
   text-align: center;
   font-size: max(0.78rem, 13px);
   font-weight: 800;
 }
 
 .switch-state.active {
-  background: #047857;
-  color: #ecfdf5;
+  background: var(--ui-raised, #047857);
+  color: var(--ui-text, #ecfdf5);
 }
 
 .install-app-setting {
   border-color: rgba(251, 191, 36, 0.66);
-  background: rgba(120, 53, 15, 0.26);
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.26);
 }
 
 .install-app-setting .install-state {
-  background: #92400e;
-  color: #fef3c7;
+  background: var(--ui-raised, #92400e);
+  color: var(--ui-gold-text, #fef3c7);
 }
 
 .alert-options button {
@@ -1380,14 +1430,14 @@ onBeforeUnmount(() => {
 }
 
 .alert-options button > span:first-child {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1rem;
   line-height: 1;
 }
 
 .alert-options button.active {
-  border-color: rgba(56, 189, 248, 0.88);
-  background: rgba(8, 47, 73, 0.78);
+  border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
 }
 
 .mode-options button {
@@ -1402,9 +1452,9 @@ onBeforeUnmount(() => {
 }
 
 .mode-options button.active {
-  border-color: rgba(56, 189, 248, 0.88);
-  background: rgba(8, 47, 73, 0.78);
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2) inset;
+  border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
+  box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.2) inset;
 }
 
 .direction-options {
@@ -1425,7 +1475,7 @@ onBeforeUnmount(() => {
 }
 
 .direction-options button > span:first-child {
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 1.3rem;
   line-height: 1;
 }
@@ -1440,8 +1490,8 @@ onBeforeUnmount(() => {
 }
 
 .direction-options button.active {
-  border-color: rgba(56, 189, 248, 0.88);
-  background: rgba(8, 47, 73, 0.78);
+  border-color: rgba(var(--ui-accent-rgb, 56, 189, 248), 0.88);
+  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.78);
 }
 
 .mode-sample {
@@ -1468,8 +1518,8 @@ onBeforeUnmount(() => {
 
 .mode-sample.adaptive {
   background: linear-gradient(135deg, #facc15 0 48%, #fff7ed 48% 100%);
-  color: #172033;
-  border: 1px solid rgba(148, 163, 184, 0.65);
+  color: var(--ui-ink, #172033);
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.65);
 }
 
 .rules-entry {
@@ -1500,7 +1550,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 0.7rem;
-  background: rgba(2, 6, 23, 0.72);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.72);
 }
 
 .exit-confirm {
@@ -1509,11 +1559,11 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: 1.1rem;
   border-radius: 1.15rem;
-  border: 1px solid rgba(148, 163, 184, 0.46);
-  background: linear-gradient(160deg, #111827, #020617);
-  color: #f8fafc;
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.46);
+  background: linear-gradient(160deg, var(--ui-panel, #111827), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
   text-align: center;
-  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.58);
+  box-shadow: 0 20px 48px rgba(var(--ui-page-rgb, 2, 6, 23), 0.58);
 }
 
 .exit-symbol {
@@ -1523,8 +1573,8 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(127, 29, 29, 0.48);
-  color: #fecaca;
+  background: rgba(var(--ui-panel-rgb, 127, 29, 29), 0.48);
+  color: var(--ui-text, #fecaca);
   font-size: 1.45rem;
 }
 
@@ -1539,7 +1589,7 @@ onBeforeUnmount(() => {
 
 .exit-confirm p {
   margin-top: 0.45rem;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: max(0.95rem, 16px);
   line-height: 1.55;
 }
@@ -1555,26 +1605,26 @@ onBeforeUnmount(() => {
   min-height: 2.65rem;
   border-radius: 0.72rem;
   border: 1px solid #475569;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-size: max(0.95rem, 16px);
   font-weight: 750;
 }
 
 .exit-actions button.danger {
   border-color: #dc2626;
-  background: #b91c1c;
+  background: var(--ui-raised, #b91c1c);
 }
 
 .auto-play-symbol {
-  background: rgba(120, 53, 15, 0.58);
-  color: #fde68a;
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.58);
+  color: var(--ui-gold-text, #fde68a);
   font-weight: 900;
 }
 
 .exit-actions button.auto-play-accept {
   border-color: #d97706;
-  background: #a16207;
+  background: var(--ui-raised, #a16207);
 }
 
 @media (max-width: 960px), (max-height: 500px) {
@@ -1619,4 +1669,13 @@ onBeforeUnmount(() => {
     padding: 0.8rem;
   }
 }
+
+.settings-categories { display: grid; gap: .6rem; padding-block: .8rem; }
+.settings-categories button { display: grid; grid-template-columns: 1fr auto; gap: .3rem; text-align: left; padding: .8rem; border-radius: .65rem; border: 1px solid var(--ui-border, #475569); background: var(--ui-panel, #0f172a); color: var(--ui-text, #f8fafc); }
+.settings-categories small { grid-column: 1; color: var(--ui-muted, #cbd5e1); font-size: 13px; }
+.settings-categories button > span { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.settings-panel > header { position: sticky; top: -.8rem; z-index: 3; padding-block: .4rem; background: var(--ui-page, #080f1d); }
+.settings-panel > header > div { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+
+.settings-panel header button[data-testid="settings-back"] { width: auto; padding-inline: .5rem; white-space: nowrap; border-radius: .45rem; font-size: 14px; }
 </style>

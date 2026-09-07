@@ -1,8 +1,9 @@
+import { startLobbyAction } from "./helpers/game";
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
-  await page.getByTestId('random-nickname').click();
-  await page.getByTestId('login-submit').click();
+
 }
 async function useStagedDeclaration(page: Page) {
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
@@ -14,8 +15,8 @@ async function useStagedDeclaration(page: Page) {
 async function finishStagedDeclaration(page: Page) {
   await expect.poll(async () => {
     const confirm = page.getByTestId('confirm-declaration');
-    if (!await confirm.isVisible().catch(() => false)) return 'playing';
-    if (await confirm.isEnabled()) await confirm.click();
+    if (await page.locator('main.layout').evaluate(el => el.classList.contains('playing'))) return 'playing';
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled()) await confirm.click();
     return 'declaring';
   }, { timeout: 20_000 }).toBe('playing');
 }
@@ -30,7 +31,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
   test(`single row and embedded declaration ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     await login(page);
-    await page.getByTestId('lobby-start').click();
+    await startLobbyAction(page);
     await useStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveClass(/embedded/);
     await expect(page.locator('.hand-preview')).toHaveCount(0);
@@ -40,9 +41,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await finishStagedDeclaration(page);
     await expect(page.locator('.declare-mask')).toHaveCount(0);
     await page.getByTestId('game-settings').click();
+    await revealSetting(page, 'hand-layout-paged');
     await page.getByTestId('hand-layout-paged').click();
+    await revealSetting(page, 'hand-layout-paged');
     await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked', 'true');
+    await revealSetting(page, 'hand-layout-single');
     await page.getByTestId('hand-layout-single').click();
+    await revealSetting(page, 'settings-rules');
     await page.getByTestId('settings-rules').click();
     await expect(page.getByTestId('rules-panel')).toBeVisible();
     await expect(page.getByTestId('settings-panel')).toHaveCount(0);
@@ -55,7 +60,6 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
 test('friend waiting room rules entry opens the shared guide', async ({ page }) => {
   await login(page);
   await page.getByTestId('mode-friends').click();
-  await page.getByTestId('lobby-start').click();
   await page.getByTestId('lobby-rules').click();
   await expect(page.getByTestId('rules-panel')).toBeVisible();
   await expect(page.getByText('现在怎么操作', { exact: true })).toBeVisible();
@@ -65,7 +69,7 @@ test('friend waiting room rules entry opens the shared guide', async ({ page }) 
 test('listening marks stay in the hand and only discard selection opens a preview', async ({ page }, info) => {
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
   await expect(page.getByTestId('hand-card-unique-red-jiang')).toHaveAttribute('aria-pressed', 'true');
@@ -82,21 +86,26 @@ test('listening marks stay in the hand and only discard selection opens a previe
   await expect(discardMark).toHaveAttribute('data-listening-context', 'discard');
   await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveAttribute('aria-label', /打出后可听牌/);
   await page.getByTestId('hand-card-post-yellow-shi').click();
-  const preview = page.getByTestId('selected-card-preview');
+  const preview = page.getByTestId('listening-details');
   await expect(preview).toBeVisible();
-  await expect(preview).toHaveAttribute('aria-label', /打出后等待/);
-  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+  await expect(preview).toHaveAttribute('aria-label', '打出此牌后听');
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(0);
   await expect(preview.getByTestId('listening-wait-count').first()).toHaveText(/^\d张$/);
-  await expect(preview).toHaveAttribute('aria-label', /可见余量\d张/);
+  await expect(page.getByTestId('discard-confirm')).toBeInViewport({ ratio: 1 });
 
   const ordinaryDiscard = page.locator('.hand-card:not(.deal-concealed):not(:has([data-testid="listening-mark"]))').first();
   await ordinaryDiscard.click();
-  await expect(preview.locator('[role="img"]')).toHaveCount(1);
+  await expect(preview).toHaveCount(0);
   await expect(page.getByText('当前选择暂无听牌路线', { exact: true })).toHaveCount(0);
   await expect(page.getByText('当前没有打出一张即可听牌的路线', { exact: true })).toHaveCount(0);
   await page.getByTestId('hand-card-post-yellow-shi').click();
-  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(1);
+  await expect.poll(() => preview.locator('[role="img"]').count()).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath('listening.png') });
+  await expect(preview).toHaveCount(0, { timeout: 6500 });
+  await page.getByTestId('listening-toggle').click();
+  await expect(preview).toBeVisible();
+  await page.getByRole('button', { name: '关闭听牌详情' }).click();
+  await expect(page.getByTestId('listening-toggle')).toBeFocused();
 
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
@@ -108,7 +117,7 @@ test('listening marks stay in the hand and only discard selection opens a previe
   });
   await expect(page.getByTestId('listening-mark')).toHaveCount(0);
   await expect(page.getByTestId('listening-summary')).toHaveCount(0);
-  await expect(preview.locator('[role="img"]')).toHaveCount(1);
+  await expect(preview).toHaveCount(0);
   await expect(page.getByTestId('discard-confirm')).toBeEnabled();
 });
 
@@ -142,7 +151,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
       });
     }, 8);
   });
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await expect.poll(async () => {
     if (await page.getByTestId('confirm-declaration').isVisible().catch(() => false)) return 'ready';
     return await page.locator('main.layout').evaluate((node) => node.classList.contains('playing')) ? 'ready' : 'waiting';
@@ -172,7 +181,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await useStagedDeclaration(page);
 
   const allSamples: Array<{
@@ -254,7 +263,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
 test('21-card single row adapts to both card styles and layout preference survives refresh', async ({ page }) => {
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
-  await page.getByTestId('lobby-start').click();
+  await startLobbyAction(page);
   await useStagedDeclaration(page);
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
@@ -268,15 +277,50 @@ test('21-card single row adapts to both card styles and layout preference surviv
   });
   for (const style of ['large', 'long']) {
     await page.getByTestId('game-settings').click();
+    await revealSetting(page, `card-mode-own-${style}`);
     await page.getByTestId(`card-mode-own-${style}`).click();
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     await assertHandFits(page);
   }
   await page.getByTestId('game-settings').click();
+  await revealSetting(page, 'hand-layout-paged');
   await page.getByTestId('hand-layout-paged').click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sise_game_display_preferences_v2')!).handLayout)).toBe('paged');
   await page.reload();
   await expect(page.getByTestId('game-settings')).toBeVisible();
   await page.getByTestId('game-settings').click();
+  await revealSetting(page, 'hand-layout-paged');
   await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('many listening candidates scroll without covering discard and stay open during keyboard focus', async ({page}, info) => {
+  await page.setViewportSize({width:568,height:320});
+  await login(page);
+  await startLobbyAction(page);
+  await expect(page.getByTestId('game-board')).toBeVisible();
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
+  await page.getByTestId('action-chi').click();
+  await expect(page.getByTestId('discard-confirm')).toBeVisible();
+  await page.evaluate(() => {
+    const bridge=(window as any).__siseLocalTest, state=bridge.getRoomState();
+    const revision=state.stateRevision+1;
+    const waits=['red','yellow','green','white'].flatMap(color => ['jiang','shi','xiang','ju','ma','pao','zu'].map(type=>({card:{id:`wait-${color}-${type}`,color,type},visibleRemaining:color==='white'?0:2})));
+    bridge.applyRoomSnapshot({stateRevision:revision,listeningHints:{stateRevision:revision,decisionKey:bridge.getDecisionTimer().decisionKey,currentWaits:[],discards:[{discardCardId:'post-yellow-shi',waits}],chi:[]}},'explicit');
+  });
+  await page.getByTestId('hand-card-post-yellow-shi').click();
+  const details=page.getByTestId('listening-details');
+  await expect(details).toBeVisible();
+  await expect(details.locator('[role="img"]')).toHaveCount(28);
+  expect(await details.locator('.listening-details-cards').evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+  const unobstructed=await page.getByTestId('discard-confirm').evaluate(el => {
+    const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
+  });
+  expect(unobstructed).toBe(true);
+  await details.locator('.listening-details-cards').focus();
+  await page.waitForTimeout(5500);
+  await expect(details).toBeVisible();
+  await page.screenshot({path:info.outputPath('many-listening-candidates.png')});
+  await page.getByTestId('discard-confirm').click();
+  await expect(details).toHaveCount(0);
+  await expect(page.getByTestId('hand-card-post-yellow-shi')).toHaveCount(0);
 });

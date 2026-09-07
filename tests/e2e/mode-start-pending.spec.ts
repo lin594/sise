@@ -1,11 +1,10 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
 async function enterModeLobby(page: import("@playwright/test").Page): Promise<void> {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("慢网牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "慢网牌友");
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -40,7 +39,7 @@ for (const scenario of [
 
     await enterModeLobby(page);
     await page.getByTestId(scenario.modeTestId).click();
-    const start = page.getByTestId("lobby-start");
+    const start = page.getByTestId(scenario.modeTestId);
     await start.evaluate((button) => {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
       button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -48,8 +47,7 @@ for (const scenario of [
 
     await expect(page.locator(".lobby")).toHaveAttribute("aria-busy", "true");
     await expect(start).toBeDisabled();
-    await expect(start).toHaveText(scenario.pendingLabel);
-    await expect(page.locator(".start-hint")).toHaveText("请稍候，不用重复点击");
+    await expect(start).toContainText("正在进入…");
     await expect(page.locator(".mode-card:disabled")).toHaveCount(3);
     expect(roomRequests).toBe(1);
 
@@ -58,7 +56,7 @@ for (const scenario of [
     await expect(page.getByText("private internal detail")).toHaveCount(0);
     await expect(page.locator(".lobby")).toHaveAttribute("aria-busy", "false");
     await expect(start).toBeEnabled();
-    await expect(start).toHaveText(scenario.readyLabel);
+    await expect(start).not.toContainText("正在进入…");
     await expect(page.locator(".mode-card:disabled")).toHaveCount(0);
   });
 }
@@ -70,7 +68,6 @@ test("quick match uses joining language and can return to mode selection", async
   });
   await enterModeLobby(page);
   await page.getByTestId("mode-quick_match").click();
-  await page.getByTestId("lobby-start").click();
 
   const progress = page.getByTestId("resume-session-screen");
   await expect(progress.getByText("快速配桌", { exact: true })).toBeVisible();
@@ -81,8 +78,8 @@ test("quick match uses joining language and can return to mode selection", async
 
   await progress.getByTestId("cancel-session-resume").click();
   await expect(page.getByText("游戏模式选择")).toBeVisible();
-  await expect(page.getByTestId("mode-quick_match")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("lobby-start")).toHaveText("开始快速配桌");
+  await expect(page.getByTestId("mode-quick_match")).toBeEnabled();
+  await expect(page.getByTestId("mode-quick_match")).toContainText("开始配桌");
   await page.waitForTimeout(900);
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 });

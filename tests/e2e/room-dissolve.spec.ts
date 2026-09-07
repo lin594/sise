@@ -1,5 +1,5 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a host can dissolve a waiting friend table for everyone", async ({ browser }) => {
   const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
@@ -8,19 +8,14 @@ test("a host can dissolve a waiting friend table for everyone", async ({ browser
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("解散房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "解散房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
     const inviteUrl = host.url();
     const roomId = new URL(inviteUrl).searchParams.get("roomId");
     expect(roomId).toBeTruthy();
 
-    await guest.goto(inviteUrl);
-    await guest.getByTestId("nickname-input").fill("桌边牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, inviteUrl, "桌边牌友");
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByTestId("dissolve-room")).toHaveCount(0);
 
@@ -53,15 +48,12 @@ test("a host can dissolve a waiting friend table for everyone", async ({ browser
 });
 
 test("the host can dissolve after the whole table returns from settlement", async ({ page }) => {
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("返厅解散房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", "返厅解散房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await page.getByTestId("fill-bots").click();
   await expect(page.getByTestId("lobby-start")).toBeEnabled();
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
 
   await finishDeclarationIfNeeded(page);
 

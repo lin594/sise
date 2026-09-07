@@ -1,3 +1,4 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 type HeldReadyMessages = {
@@ -57,16 +58,11 @@ test("friend ready and cancel each wait for one authoritative update", async ({ 
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("准备房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "准备房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("准备牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "准备牌友");
     await guest.getByTestId("claim-seat-1").click();
     const ready = guest.getByTestId("lobby-ready");
     await expect(ready).toHaveText("我准备好了");

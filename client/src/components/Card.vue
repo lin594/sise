@@ -244,4 +244,7 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   background: #c41e1e;
   color: #fff7ed;
 }
+.card.mode-long { border-radius: 50% / 18%; }
+.mode-long .text-top { padding-top: 12%; }
+.mode-long .text-bottom { padding-bottom: 12%; }
 </style>

@@ -1,3 +1,4 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
 test("an unseated friend-room visitor waits for a seat before polling private state", async ({ browser }) => {
@@ -16,16 +17,11 @@ test("an unseated friend-room visitor waits for a seat before polling private st
   guest.on("console", (message) => consoleMessages.push(message.text()));
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("候客房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "候客房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("待入座牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "待入座牌友");
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByRole("heading", { name: "请先选择座位" })).toBeVisible();
 

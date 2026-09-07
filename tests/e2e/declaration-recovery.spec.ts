@@ -1,14 +1,13 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
 test("a disconnected declaration stays visible and becomes retryable after recovery", async ({ context, page }, testInfo) => {
   test.setTimeout(90_000);
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => {
     const bridge = (window as Window & {

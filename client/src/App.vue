@@ -14,6 +14,7 @@
       'reduce-motion': displayPreferences.reduceMotion,
       'show-card-color-assist': displayPreferences.showCardColorAssist,
     }"
+    :data-table-layout="displayPreferences.tableLayout"
     :data-effective-viewport="`${effectiveWidth}x${effectiveHeight}`"
     :data-rotated-phone-portrait="isRotatedPhonePortrait ? 'true' : 'false'"
     :data-reduce-motion="displayPreferences.reduceMotion ? 'true' : 'false'"
@@ -69,7 +70,9 @@
       </button>
       <GameTools
         ref="gameToolsRef"
-        v-if="showGameTools"
+        :in-room="showGameTools"
+        :resolved-table-layout="resolvedTableLayout"
+        :playing-context="state?.phase === 'playing' || state?.phase === 'declaring'"
         v-model="displayPreferences"
         :decision-active="settingsDecisionActive"
         :decision-untimed="decisionTimer.untimed"
@@ -97,15 +100,14 @@
         :class="{ 'front-lobby-meta': showModeLobby }"
         v-if="!hasLobbySession && !isConnectingWithoutState"
       >
-        <span v-if="showModeLobby" class="front-lobby-identity">昵称：<strong>{{ entryName }}</strong></span>
         <button
           v-if="showModeLobby"
           class="ghost reset-btn change-name"
           type="button"
           data-testid="change-entry-name"
           :disabled="enteringLobby"
-          @click="returnToEntry"
-        >修改昵称</button>
+          @click="openNicknameDialog"
+        ><strong>{{ entryName }}</strong><span> · 修改昵称</span></button>
         <button class="ghost reset-btn" type="button" data-testid="open-rules" @click="openRules">查看规则</button>
       </div>
     </header>
@@ -118,19 +120,7 @@
       data-testid="global-notice"
     >{{ globalNotice }}</p>
 
-    <LoginPage
-      v-if="showEntry"
-      :nickname="entryName"
-      :entering="enteringLobby"
-      :primary-label="entryPrimaryLabel"
-      :friend-invite="hasFriendInvite"
-      :history-names="nicknameHistory"
-      :storage-persistent="browserStoragePersistent"
-      @update:nickname="entryName = $event"
-      @submit="enterLobby"
-      @randomize="randomizeNickname"
-      @select-history="entryName = $event"
-    />
+    <section v-if="showEntry" class="sync-shell" role="status">正在进入大厅…</section>
 
     <LobbyPage
       ref="lobbyPageRef"
@@ -164,7 +154,7 @@
       :seat-claim-pending="seatClaimPending"
       :ready-pending="lobbyReadyPending"
       @start="startSelectedMode"
-      @select-mode="selectedLobbyMode = $event as LobbyModeId"
+      @select-mode="startLobbyMode"
       @copy-invite="copyInviteLink"
       @share-invite="shareInviteLink"
       @show-invite-qr="showInviteQr"
@@ -179,7 +169,15 @@
       @set-scoring-mode="setScoringMode"
       @open-rules="openRules"
       @set-lobby-ready="requestLobbyReady"
-    />
+    >
+      <template #recommendation>
+        <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
+          <span>屏幕较小，紧凑布局能留出更多操作空间</span>
+          <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
+          <button type="button" data-testid="dismiss-compact-recommendation" @click="dismissLayoutRecommendation">暂不调整</button>
+        </aside>
+      </template>
+    </LobbyPage>
 
     <section v-else-if="showSyncingScreen" class="sync-shell">
       <div class="sync-card" data-testid="resume-session-screen">
@@ -214,6 +212,7 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
+        :table-layout="resolvedTableLayout"
         :hand-layout="displayPreferences.handLayout"
         :listening-hints="listeningHints"
         :accepted-state-revision="acceptedStateRevision"
@@ -619,6 +618,9 @@
       </section>
     </div>
 
+    <NicknameDialog v-if="nicknameDialogOpen" :nickname="entryName" :history="nicknameHistory"
+      @save="saveNickname" @close="closeNicknameDialog" @randomize="nicknameDraftRandom = generateRandomNickname()" :random-name="nicknameDraftRandom" />
+
     <div v-if="showRules" class="rules-mask" @click.self="closeRules()">
       <div
         ref="rulesPanelRef"
@@ -670,7 +672,7 @@ import GameBoard from "@/components/GameBoard.vue";
 import GameTools from "@/components/GameTools.vue";
 import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue";
 import LobbyPage from "@/components/LobbyPage.vue";
-import LoginPage from "@/components/LoginPage.vue";
+import NicknameDialog from "@/components/NicknameDialog.vue";
 import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
 import { usePwaInstall, type PwaInstallGuide } from "@/composables/usePwaInstall";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -682,6 +684,7 @@ import { BACKEND_HTTP_URL } from "@/config/backend";
 import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
+import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
   ActionRequest,
@@ -775,6 +778,8 @@ function readDisplayPreferences(): GameDisplayPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
+        skin: normalizeSkin(parsed.skin),
+        tableLayout: normalizeTableLayout(parsed.tableLayout),
         handLayout: parsed.handLayout === "paged" ? "paged" : "single",
         ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
         tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
@@ -792,6 +797,8 @@ function readDisplayPreferences(): GameDisplayPreferences {
 
   const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
+    skin: normalizeSkin(null),
+    tableLayout: normalizeTableLayout(null),
     handLayout: "single",
     ownCards: "adaptive",
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
@@ -950,7 +957,6 @@ const ENTRY_NAME_KEY = "sise_entry_name";
 const ENTRY_HISTORY_KEY = "sise_entry_name_history";
 const storedEntryNameAtBoot = readStoredValue(ENTRY_NAME_KEY).trim();
 const nicknameHistoryAtBoot = readNicknameHistory();
-const confirmedInviteNameAtBoot = storedEntryNameAtBoot || nicknameHistoryAtBoot[0] || "";
 const entryName = ref(storedEntryNameAtBoot);
 const nicknameHistory = ref<string[]>(nicknameHistoryAtBoot);
 const entryInviteRoomId = ref(new URLSearchParams(window.location.search).get("roomId")?.trim() || "");
@@ -1064,10 +1070,8 @@ async function bootstrapRoomEntry(): Promise<void> {
     await resumeStoredRoomSession();
     return;
   }
-  if (entryInviteRoomId.value && confirmedInviteNameAtBoot) {
-    entryName.value = confirmedInviteNameAtBoot;
-    await enterLobby();
-  }
+  entryName.value = entryName.value.trim() || nicknameHistory.value[0] || generateRandomNickname();
+  await enterLobby();
 }
 
 async function returnToModeSelectionFromRoom(): Promise<void> {
@@ -1375,7 +1379,6 @@ const lobbyStartHint = computed(() => {
   return "四席已就绪，请点开始好友对局";
 });
 const hasFriendInvite = computed(() => Boolean(entryInviteRoomId.value));
-const entryPrimaryLabel = computed(() => (hasFriendInvite.value ? "加入好友房" : "下一步：选择玩法"));
 const nowMs = ref(Date.now());
 const matchSecondsLeft = computed(() => {
   const startsAt = Number(state.value?.matchStartsAt ?? 0);
@@ -1531,6 +1534,27 @@ const {
   viewportWidth,
 } = useResponsiveViewport();
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
+watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value] as const, ([layout, ultra], _, onCleanup) => {
+  const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+  onCleanup(() => clearTimeout(timer));
+});
+const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
+const showSmallScreenRecommendation = computed(() =>
+  isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
+  && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
+  && !isConnectingWithoutState.value && !isEnded.value,
+);
+function dismissLayoutRecommendation() {
+  layoutRecommendationDismissed.value = true;
+  writeStoredValue("sise_compact_recommendation_dismissed_v1", "1");
+}
+function acceptCompactLayout() {
+  displayPreferences.value.tableLayout = "compact";
+  dismissLayoutRecommendation();
+}
+
+watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
   if (mode !== "adaptive") {
     return mode;
@@ -1784,7 +1808,7 @@ async function rematchQuickTable(): Promise<void> {
   }
   quickRematchPending.value = true;
   globalError.value = "";
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   try {
     await leaveRoom();
     const ok = await connect({
@@ -2039,6 +2063,10 @@ function closeTopmostRoomLayerForBack(): boolean {
   }
   if (confirmingReturnLobby.value) {
     cancelReturnLobby();
+    return true;
+  }
+  if (nicknameDialogOpen.value) {
+    void closeNicknameDialog();
     return true;
   }
   if (gameToolsRef.value?.handleNavigationBack()) {
@@ -2512,9 +2540,6 @@ onMounted(() => {
   window.addEventListener("popstate", handleRoomNavigationPopState);
   armRoomNavigationGuard();
   installLocalTestBridge();
-  if (!entryName.value) {
-    entryName.value = nicknameHistory.value[0] || generateRandomNickname();
-  }
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
@@ -3151,7 +3176,7 @@ async function enterLobby() {
   if (enteringLobby.value || enteredFrontLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   globalError.value = "";
   writeStoredValue(ENTRY_NAME_KEY, nickname);
@@ -3200,18 +3225,33 @@ async function enterLobby() {
   }
 }
 
-function randomizeNickname() {
-  entryName.value = generateRandomNickname();
+const nicknameDialogOpen = ref(false);
+const nicknameDraftRandom = ref("");
+let nicknameReturnFocus: HTMLElement | null = null;
+async function openNicknameDialog() {
+  if (hasLobbySession.value || enteringLobby.value) return;
+  nicknameReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  nicknameDialogOpen.value = true;
 }
-
-async function returnToEntry() {
-  if (hasLobbySession.value || enteringLobby.value) {
-    return;
-  }
-  globalError.value = "";
-  enteredFrontLobby.value = false;
+async function closeNicknameDialog() {
+  nicknameDialogOpen.value = false;
   await nextTick();
-  document.querySelector<HTMLInputElement>("[data-testid='nickname-input']")?.focus();
+  nicknameReturnFocus?.focus();
+}
+function saveNickname(value: string) {
+  const nickname = value.trim().slice(0, 16);
+  if (!nickname) return;
+  entryName.value = nickname;
+  writeStoredValue(ENTRY_NAME_KEY, nickname);
+  nicknameHistory.value = [nickname, ...nicknameHistory.value.filter(name => name !== nickname)].slice(0, 8);
+  writeNicknameHistory(nicknameHistory.value);
+  void updateGuestProfileNickname(nickname);
+  void closeNicknameDialog();
+}
+function startLobbyMode(mode: string) {
+  if (enteringLobby.value || hasLobbySession.value) return;
+  selectedLobbyMode.value = mode as LobbyModeId;
+  startSelectedMode();
 }
 
 function startSelectedMode() {
@@ -3237,7 +3277,7 @@ async function startQuickMatchLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   startingRoomMode.value = "quick_match";
   enteringLobby.value = true;
@@ -3269,7 +3309,7 @@ async function startPracticeLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   entryName.value = nickname;
   startingRoomMode.value = "practice";
   enteringLobby.value = true;
@@ -3310,7 +3350,7 @@ async function startFriendLobby() {
   if (enteringLobby.value) {
     return;
   }
-  const nickname = entryName.value.trim() || generateRandomNickname();
+  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   startingRoomMode.value = "friends";
   enteringLobby.value = true;
   try {
@@ -3563,7 +3603,7 @@ watch(
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: clamp(0.35rem, calc(var(--effective-vh, 1vh) * 1), 0.55rem);
   padding: clamp(0.25rem, calc(var(--effective-vh, 1vh) * 0.8), 0.5rem);
-  background: radial-gradient(circle at 20% 20%, #0f172a 0%, #020617 60%);
+  background: radial-gradient(circle at 20% 20%, var(--ui-panel, #0f172a) 0%, var(--ui-page, #020617) 60%);
   overflow: hidden;
 }
 
@@ -3597,8 +3637,8 @@ watch(
   padding: 0.55rem 0.75rem;
   border: 1px solid rgba(74, 222, 128, 0.6);
   border-radius: 0.65rem;
-  background: rgba(20, 83, 45, 0.96);
-  color: #dcfce7;
+  background: rgba(var(--ui-panel-rgb, 20, 83, 45), 0.96);
+  color: var(--ui-text, #dcfce7);
   font-weight: 750;
 }
 
@@ -3615,8 +3655,8 @@ watch(
   margin-left: auto;
   padding: 0.4rem 0.7rem;
   border-color: rgba(251, 191, 36, 0.72);
-  background: rgba(120, 53, 15, 0.44);
-  color: #fef3c7;
+  background: rgba(var(--ui-panel-rgb, 120, 53, 15), 0.44);
+  color: var(--ui-gold-text, #fef3c7);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3654,11 +3694,11 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 0.65rem;
   padding: clamp(0.2rem, calc(var(--effective-vh, 1vh) * 0.8), 0.45rem) clamp(0.45rem, calc(var(--effective-vw, 1vw) * 1.2), 0.75rem);
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   min-height: 0;
 }
 
@@ -3669,11 +3709,10 @@ watch(
   min-height: var(--game-header-height);
   flex: 0 0 auto;
   padding-block: 0.18rem;
-  background:
-    linear-gradient(90deg, rgba(120, 53, 15, 0.2), transparent 35%),
-    rgba(7, 15, 28, 0.98);
-  border-color: rgba(148, 163, 184, 0.32);
-  box-shadow: 0 5px 18px rgba(2, 6, 23, 0.3);
+  background: linear-gradient(90deg, rgba(var(--ui-panel-rgb, 120, 53, 15), 0.2), transparent 35%),
+    rgba(var(--ui-panel-rgb, 7, 15, 28), 0.98);
+  border-color: rgba(var(--ui-muted-rgb, 148, 163, 184), 0.32);
+  box-shadow: 0 5px 18px rgba(var(--ui-page-rgb, 2, 6, 23), 0.3);
   min-width: 0;
 }
 
@@ -3715,7 +3754,8 @@ watch(
 }
 
 .brand-suits i:nth-child(4) {
-  background: #f8fafc;
+  background: #fffdf4;
+  border: 1px solid #64748b;
 }
 
 .top h1 {
@@ -3726,14 +3766,14 @@ watch(
 
 .top-slogan {
   margin: 0;
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   font-size: clamp(0.6rem, calc(var(--effective-vh, 1vh) * 1.3), 0.8rem);
 }
 
 .compact-game-slogan {
   min-width: 0;
   overflow: hidden;
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   font-size: clamp(0.62rem, calc(var(--effective-vh, 1vh) * 1.4), 0.78rem);
   line-height: 1;
   text-overflow: ellipsis;
@@ -3753,7 +3793,7 @@ watch(
 .meta {
   display: flex;
   gap: clamp(0.35rem, calc(var(--effective-vw, 1vw) * 1), 0.65rem);
-  color: #93c5fd;
+  color: var(--ui-accent-text, #93c5fd);
   font-size: clamp(0.6rem, calc(var(--effective-vh, 1vh) * 1.4), 0.78rem);
   align-items: center;
 }
@@ -3767,18 +3807,18 @@ watch(
   flex-wrap: nowrap;
   gap: 0.45rem;
   overflow: visible;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.88rem;
 }
 
 .front-lobby-identity strong {
-  color: #f8fafc;
+  color: var(--ui-text, #f8fafc);
   font-size: 1rem;
 }
 
 .front-lobby-meta .change-name {
-  border-color: #0ea5e9;
-  color: #e0f2fe;
+  border-color: var(--ui-accent-text, #0ea5e9);
+  color: var(--ui-accent-text, #e0f2fe);
 }
 
 .layout.game-tools-active .hu-mask,
@@ -3788,21 +3828,21 @@ watch(
 }
 
 .lobby {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 12px;
   padding: 12px;
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   gap: 0.9rem;
 }
 
 .entry-shell {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 18px;
   padding: clamp(0.9rem, 2vh, 1.3rem);
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   gap: 1rem;
 }
@@ -3812,11 +3852,11 @@ watch(
 }
 
 .sync-card {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 18px;
   padding: clamp(1rem, 2vh, 1.4rem);
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
   display: grid;
   gap: 0.45rem;
 }
@@ -3832,8 +3872,8 @@ watch(
   padding: 0.55rem 0.85rem;
   border: 1px solid #475569;
   border-radius: 0.7rem;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-size: 1rem;
   font-weight: 750;
 }
@@ -3849,17 +3889,17 @@ watch(
   width: fit-content;
   min-height: 2.65rem;
   padding: 0.55rem 0.85rem;
-  border: 1px solid #38bdf8;
+  border: 1px solid var(--ui-accent, #38bdf8);
   border-radius: 0.7rem;
-  background: #075985;
-  color: #f0f9ff;
+  background: var(--ui-raised, #075985);
+  color: var(--ui-text, #f0f9ff);
   font-size: 1rem;
   font-weight: 800;
 }
 
 .resume-cancel:focus-visible,
 .resume-retry:focus-visible {
-  outline: 3px solid rgba(56, 189, 248, 0.42);
+  outline: 3px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.42);
   outline-offset: 2px;
 }
 
@@ -3871,7 +3911,7 @@ watch(
 .entry-kicker,
 .lobby-kicker {
   margin: 0;
-  color: #fbbf24;
+  color: var(--ui-gold-text, #fbbf24);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3886,7 +3926,7 @@ watch(
 
 .entry-desc {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   max-width: 70ch;
   line-height: 1.65;
 }
@@ -3896,8 +3936,8 @@ watch(
   gap: 0.85rem;
   padding: 1rem;
   border-radius: 16px;
-  border: 1px solid #334155;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.92));
+  border: 1px solid var(--ui-raised, #334155);
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 15, 23, 42), 0.98), rgba(var(--ui-raised-rgb, 30, 41, 59), 0.92));
 }
 
 .entry-field {
@@ -3906,7 +3946,7 @@ watch(
 }
 
 .entry-field span {
-  color: #bfdbfe;
+  color: var(--ui-text, #bfdbfe);
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -3916,16 +3956,16 @@ watch(
   min-height: 2.8rem;
   border-radius: 12px;
   border: 1px solid #475569;
-  background: #020617;
-  color: #f8fafc;
+  background: var(--ui-page, #020617);
+  color: var(--ui-text, #f8fafc);
   padding: 0.7rem 0.85rem;
   font-size: 1rem;
 }
 
 .entry-input:focus {
   outline: none;
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+  border-color: var(--ui-accent-text, #38bdf8);
+  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.18);
 }
 
 .lobby-head {
@@ -3942,10 +3982,10 @@ watch(
 }
 
 .mode-card {
-  border: 1px solid #334155;
+  border: 1px solid var(--ui-raised, #334155);
   border-radius: 14px;
-  background: linear-gradient(180deg, #172033 0%, #0f172a 100%);
-  color: #e2e8f0;
+  background: linear-gradient(180deg, var(--ui-panel, #172033) 0%, var(--ui-panel, #0f172a) 100%);
+  color: var(--ui-text, #e2e8f0);
   padding: 0.9rem;
   display: grid;
   gap: 0.45rem;
@@ -3954,8 +3994,8 @@ watch(
 }
 
 .mode-card.active {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+  border-color: var(--ui-accent-text, #38bdf8);
+  box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb, 56, 189, 248), 0.3);
 }
 
 .mode-card.disabled {
@@ -3976,20 +4016,20 @@ watch(
 
 .mode-head span {
   font-size: 0.72rem;
-  color: #93c5fd;
+  color: var(--ui-accent-text, #93c5fd);
   white-space: nowrap;
 }
 
 .mode-card p {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   line-height: 1.55;
   font-size: 0.84rem;
 }
 
 .lobby-slogan {
   margin: 0 0 0.65rem;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   font-size: clamp(0.82rem, 1.8vh, 1rem);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -3997,7 +4037,7 @@ watch(
 
 .lobby-rule-tip {
   margin: 0;
-  color: #93c5fd;
+  color: var(--ui-accent-text, #93c5fd);
   font-size: clamp(0.72rem, 1.5vh, 0.88rem);
 }
 
@@ -4018,7 +4058,7 @@ watch(
 }
 
 .primary {
-  background: #2563eb;
+  background: var(--ui-raised, #2563eb);
   color: #fff;
 }
 
@@ -4028,9 +4068,9 @@ watch(
 }
 
 .ghost {
-  background: #1f2937;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: var(--ui-panel, #1f2937);
+  color: var(--ui-text, #e2e8f0);
+  border: 1px solid var(--ui-raised, #334155);
 }
 
 .player-grid {
@@ -4040,8 +4080,8 @@ watch(
 }
 
 .player-item {
-  background: #111827;
-  border: 1px solid #334155;
+  background: var(--ui-panel, #111827);
+  border: 1px solid var(--ui-raised, #334155);
   border-radius: 8px;
   padding: 8px;
   display: flex;
@@ -4054,13 +4094,13 @@ watch(
 }
 
 .error {
-  color: #fca5a5;
+  color: var(--ui-danger-text, #fca5a5);
 }
 
 .hu-mask {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.55);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -4072,7 +4112,7 @@ watch(
 .rules-mask {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.72);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.72);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -4086,11 +4126,10 @@ watch(
   max-height: 88vh;
   overflow: auto;
   border-radius: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), transparent 30%),
-    linear-gradient(180deg, #fffdf7 0%, #f8fafc 100%);
-  color: #0f172a;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.42);
+  background: radial-gradient(circle at top left, rgba(var(--ui-panel-rgb, 250, 204, 21), 0.14), transparent 30%),
+    linear-gradient(180deg, var(--ui-raised, #fffdf7) 0%, var(--ui-panel, #f8fafc) 100%);
+  color: var(--ui-text, #0f172a);
+  box-shadow: 0 24px 70px rgba(var(--ui-panel-rgb, 15, 23, 42), 0.42);
   padding: clamp(1rem, 2.4vh, 1.35rem);
   display: grid;
   gap: 0.9rem;
@@ -4105,12 +4144,12 @@ watch(
   top: calc(-1 * clamp(1rem, 2.4vh, 1.35rem));
   z-index: 3;
   padding: clamp(1rem, 2.4vh, 1.35rem) 0 0.7rem;
-  background: linear-gradient(180deg, #fffdf7 82%, rgba(255, 253, 247, 0));
+  background: linear-gradient(180deg, var(--ui-raised, #fffdf7) 82%, rgba(var(--ui-panel-rgb, 255, 253, 247), 0));
 }
 
 .rules-kicker {
   margin: 0 0 0.2rem;
-  color: #b45309;
+  color: var(--ui-danger-text, #b45309);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -4124,7 +4163,7 @@ watch(
 
 .rules-slogan {
   margin: 0.35rem 0 0;
-  color: #7c2d12;
+  color: var(--ui-danger-text, #7c2d12);
   font-weight: 700;
   font-size: clamp(0.84rem, 1.75vh, 0.98rem);
 }
@@ -4137,8 +4176,8 @@ watch(
   padding: 0.55rem 0.7rem;
   border: 1px solid #f59e0b;
   border-radius: 0.8rem;
-  background: #fffbeb;
-  color: #78350f;
+  background: var(--ui-raised, #fffbeb);
+  color: var(--ui-danger-text, #78350f);
   box-shadow: 0 5px 16px rgba(120, 53, 15, 0.14);
   display: flex;
   align-items: center;
@@ -4153,8 +4192,8 @@ watch(
   padding: 0.35rem 0.7rem;
   border: 1px solid #b45309;
   border-radius: 0.65rem;
-  background: #b45309;
-  color: #fff7ed;
+  background: var(--ui-raised, #b45309);
+  color: var(--ui-text, #fff7ed);
   font-size: max(0.88rem, 14px);
   font-weight: 850;
 }
@@ -4164,8 +4203,8 @@ watch(
   gap: 0.55rem;
   padding: 0.9rem 1rem;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--ui-text, #e2e8f0);
+  background: rgba(var(--ui-panel-rgb, 255, 255, 255), 0.82);
 }
 
 .rules-section h3 {
@@ -4178,7 +4217,7 @@ watch(
   padding-left: 1.15rem;
   display: grid;
   gap: 0.38rem;
-  color: #334155;
+  color: var(--ui-text, #334155);
   font-size: clamp(0.78rem, 1.6vh, 0.92rem);
   line-height: 1.55;
 }
@@ -4195,16 +4234,16 @@ watch(
   min-height: 2rem;
   padding: 0.2rem 0.68rem;
   border-radius: 999px;
-  background: #eff6ff;
+  background: var(--ui-raised, #eff6ff);
   border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  color: var(--ui-accent-text, #1d4ed8);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 .hu-panel {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--ui-panel, #f8fafc);
+  color: var(--ui-text, #0f172a);
   padding: clamp(0.9rem, 2vh, 1.2rem) clamp(1rem, 2.4vw, 1.4rem);
   border-radius: 12px;
   min-width: 300px;
@@ -4217,7 +4256,7 @@ watch(
 }
 
 .hu-panel:focus-visible {
-  outline: 3px solid #38bdf8;
+  outline: 3px solid var(--ui-accent, #38bdf8);
   outline-offset: -3px;
 }
 
@@ -4257,18 +4296,18 @@ watch(
 
 .settlement-loading {
   border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--ui-raised, #eff6ff);
+  color: var(--ui-accent-text, #1e3a8a);
 }
 
 .settlement-loading span {
-  color: #334155;
+  color: var(--ui-text, #334155);
 }
 
 .round-overview {
   border: 2px solid #f59e0b;
-  background: #fffbeb;
-  color: #451a03;
+  background: var(--ui-raised, #fffbeb);
+  color: var(--ui-danger-text, #451a03);
 }
 
 .round-overview strong {
@@ -4280,7 +4319,7 @@ watch(
 }
 
 .round-overview .round-number {
-  color: #92400e;
+  color: var(--ui-danger-text, #92400e);
   font-weight: 800;
   letter-spacing: 0.03em;
 }
@@ -4289,30 +4328,30 @@ watch(
   width: fit-content;
   padding: 0.22rem 0.55rem;
   border-radius: 999px;
-  background: #fef3c7;
+  background: var(--ui-panel, #fef3c7);
   font-weight: 750;
 }
 
 .round-overview small {
-  color: #57534e;
+  color: var(--ui-muted, #57534e);
   font-size: clamp(0.78rem, 1.6vh, 0.9rem);
 }
 
 .round-overview b.positive {
-  color: #166534;
+  color: var(--ui-accent-text, #166534);
 }
 
 .round-overview b.negative {
-  color: #b91c1c;
+  color: var(--ui-danger-text, #b91c1c);
 }
 
 .round-overview b.neutral {
-  color: #0f172a;
+  color: var(--ui-text, #0f172a);
 }
 
 .settlement {
   margin-top: 12px;
-  border-top: 1px dashed #cbd5e1;
+  border-top: 1px dashed var(--ui-muted, #cbd5e1);
   padding-top: 10px;
 }
 
@@ -4335,7 +4374,7 @@ watch(
 
 .end-global-info {
   margin: 6px 0 0;
-  color: #f59e0b;
+  color: var(--ui-danger-text, #f59e0b);
   font-weight: 600;
 }
 
@@ -4347,9 +4386,9 @@ watch(
 
 .settlement-item {
   position: relative;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--ui-muted, #cbd5e1);
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--ui-raised, #ffffff);
   padding: clamp(0.5rem, 1.1vh, 0.75rem);
 }
 
@@ -4363,7 +4402,7 @@ watch(
   inset: -2px;
   border-radius: 12px;
   padding: 2px;
-  background: linear-gradient(135deg, #f43f5e, #f59e0b, #22c55e, #38bdf8, #a855f7);
+  background: linear-gradient(135deg, var(--ui-raised, #f43f5e), var(--ui-raised, #f59e0b), var(--ui-raised, #22c55e), var(--ui-accent, #38bdf8), var(--ui-raised, #a855f7));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -4412,26 +4451,26 @@ watch(
 }
 
 .score-caption {
-  color: #64748b;
+  color: var(--ui-muted, #64748b);
 }
 
 .cumulative-total {
   padding: 0.12rem 0.42rem;
   border-radius: 999px;
-  background: #f1f5f9;
+  background: var(--ui-panel, #f1f5f9);
   font-weight: 750;
 }
 
 .cumulative-total.positive {
-  color: #166534;
+  color: var(--ui-accent-text, #166534);
 }
 
 .cumulative-total.negative {
-  color: #b91c1c;
+  color: var(--ui-danger-text, #b91c1c);
 }
 
 .cumulative-total.neutral {
-  color: #334155;
+  color: var(--ui-text, #334155);
 }
 
 .settlement-name {
@@ -4447,10 +4486,10 @@ watch(
   min-height: 1.35rem;
   margin-left: 0.35rem;
   padding: 0.05rem 0.38rem;
-  border: 1px solid #7dd3fc;
+  border: 1px solid var(--ui-accent, #7dd3fc);
   border-radius: 999px;
-  background: #e0f2fe;
-  color: #075985;
+  background: var(--ui-panel, #e0f2fe);
+  color: var(--ui-accent-text, #075985);
   font-size: 0.72em;
   font-weight: 800;
   line-height: 1;
@@ -4461,11 +4500,11 @@ watch(
   display: block;
   margin: 0;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: #334155;
+  color: var(--ui-text, #334155);
 }
 
 .settlement-toggle-label {
-  color: #1d4ed8;
+  color: var(--ui-accent-text, #1d4ed8);
   font-size: clamp(0.7rem, 1.2vh, 0.8rem);
   font-weight: 700;
   white-space: nowrap;
@@ -4486,7 +4525,7 @@ watch(
 .settlement-item-body {
   margin-top: 0.4rem;
   padding-top: 0.15rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--ui-text, #e2e8f0);
 }
 
 .settlement-cards {
@@ -4501,19 +4540,19 @@ watch(
 
 .settlement-empty {
   margin: 0;
-  color: #64748b;
+  color: var(--ui-muted, #64748b);
 }
 
 .settlement-zone {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--ui-text, #e2e8f0);
 }
 
 .zone-title {
   margin: 0 0 6px;
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: #334155;
+  color: var(--ui-text, #334155);
   font-weight: 600;
 }
 
@@ -4531,30 +4570,29 @@ watch(
   max-width: 100%;
   padding: 0.24rem 0.32rem;
   border-radius: 0.72rem;
-  border: 1px solid rgba(148, 163, 184, 0.8);
-  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.8);
+  background: rgba(var(--ui-panel-rgb, 241, 245, 249), 0.9);
 }
 
 .settlement-group.meld {
-  border-color: rgba(148, 163, 184, 0.9);
-  background: rgba(241, 245, 249, 0.92);
+  border-color: rgba(var(--ui-muted-rgb, 148, 163, 184), 0.9);
+  background: rgba(var(--ui-panel-rgb, 241, 245, 249), 0.92);
 }
 
 .settlement-group.fish {
   border-color: rgba(14, 165, 233, 0.6);
-  background: rgba(224, 242, 254, 0.9);
+  background: rgba(var(--ui-panel-rgb, 224, 242, 254), 0.9);
 }
 
 .settlement-group.public {
   border-color: rgba(245, 158, 11, 0.6);
-  background: rgba(254, 243, 199, 0.92);
+  background: rgba(var(--ui-panel-rgb, 254, 243, 199), 0.92);
 }
 
 .settlement-group.strong {
   border-color: rgba(185, 28, 28, 0.92);
   border-width: 2px;
-  background:
-    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(254, 242, 242, 0.96));
+  background: linear-gradient(180deg, rgba(var(--ui-panel-rgb, 255, 251, 235), 0.98), rgba(var(--ui-panel-rgb, 254, 242, 242), 0.96));
   box-shadow: 0 0 0 1px rgba(185, 28, 28, 0.12) inset;
 }
 
@@ -4567,8 +4605,8 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.88);
-  color: #e2e8f0;
+  background: rgba(var(--ui-panel-rgb, 15, 23, 42), 0.88);
+  color: var(--ui-text, #e2e8f0);
   font-size: clamp(0.68rem, 1.15vh, 0.78rem);
   font-weight: 700;
 }
@@ -4576,7 +4614,7 @@ watch(
 .score-breakdown {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--ui-text, #e2e8f0);
 }
 
 .score-formula {
@@ -4586,7 +4624,7 @@ watch(
 
 .score-formula p {
   margin: 0;
-  color: #0f172a;
+  color: var(--ui-text, #0f172a);
   font-weight: 700;
 }
 
@@ -4596,7 +4634,7 @@ watch(
 }
 
 .score-formula li {
-  color: #0f172a;
+  color: var(--ui-text, #0f172a);
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
 }
 
@@ -4607,7 +4645,7 @@ watch(
 
 .score-breakdown li {
   font-size: clamp(0.72rem, 1.25vh, 0.84rem);
-  color: #0f172a;
+  color: var(--ui-text, #0f172a);
 }
 
 .score-total {
@@ -4618,15 +4656,15 @@ watch(
 }
 
 .score-total.positive {
-  color: #166534;
+  color: var(--ui-accent-text, #166534);
 }
 
 .score-total.negative {
-  color: #b91c1c;
+  color: var(--ui-danger-text, #b91c1c);
 }
 
 .score-total.neutral {
-  color: #0f172a;
+  color: var(--ui-text, #0f172a);
 }
 
 .end-actions {
@@ -4638,7 +4676,7 @@ watch(
 
 .host-actions-hint {
   margin: 0;
-  color: #475569;
+  color: var(--ui-muted, #475569);
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -4646,8 +4684,8 @@ watch(
 .hu-panel > .end-actions {
   z-index: 5;
   padding-top: 0.65rem;
-  border-top: 1px solid #cbd5e1;
-  background: #f8fafc;
+  border-top: 1px solid var(--ui-muted, #cbd5e1);
+  background: var(--ui-panel, #f8fafc);
 }
 
 .table-return-mask {
@@ -4658,7 +4696,7 @@ watch(
   place-items: center;
   padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right))
     max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
-  background: rgba(2, 6, 23, 0.78);
+  background: rgba(var(--ui-page-rgb, 2, 6, 23), 0.78);
 }
 
 .table-return-dialog {
@@ -4666,12 +4704,12 @@ watch(
   max-height: calc(var(--effective-viewport-height, 100vh) - 1.4rem);
   overflow: auto;
   padding: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.48);
+  border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.48);
   border-radius: 1rem;
-  background: linear-gradient(160deg, #111827, #020617);
-  color: #f8fafc;
+  background: linear-gradient(160deg, var(--ui-panel, #111827), var(--ui-page, #020617));
+  color: var(--ui-text, #f8fafc);
   text-align: center;
-  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.62);
+  box-shadow: 0 20px 48px rgba(var(--ui-page-rgb, 2, 6, 23), 0.62);
 }
 
 .table-return-symbol {
@@ -4681,14 +4719,14 @@ watch(
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(127, 29, 29, 0.48);
-  color: #fecaca;
+  background: rgba(var(--ui-panel-rgb, 127, 29, 29), 0.48);
+  color: var(--ui-text, #fecaca);
   font-size: 1.45rem;
 }
 
 .table-return-symbol.next-round {
-  background: #14532d;
-  color: #dcfce7;
+  background: var(--ui-raised, #14532d);
+  color: var(--ui-text, #dcfce7);
   font-weight: 900;
 }
 
@@ -4703,7 +4741,7 @@ watch(
 
 .table-return-dialog p {
   margin-top: 0.5rem;
-  color: #cbd5e1;
+  color: var(--ui-muted, #cbd5e1);
   font-size: 0.9rem;
   line-height: 1.55;
 }
@@ -4720,14 +4758,14 @@ watch(
   padding: 0.55rem 0.65rem;
   border: 1px solid #475569;
   border-radius: 0.72rem;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-weight: 800;
 }
 
 .table-return-actions button.danger {
   border-color: #dc2626;
-  background: #b91c1c;
+  background: var(--ui-raised, #b91c1c);
 }
 
 @keyframes settlement-winner-glow {
@@ -5006,12 +5044,12 @@ watch(
   margin: -0.12rem -0.25rem 0;
   padding: 0.12rem 0.25rem;
   border-bottom: 1px solid #bfdbfe;
-  background: #ffffff;
-  box-shadow: 0 0.2rem 0.35rem rgba(15, 23, 42, 0.08);
+  background: var(--ui-raised, #ffffff);
+  box-shadow: 0 0.2rem 0.35rem rgba(var(--ui-panel-rgb, 15, 23, 42), 0.08);
 }
 
 .layout.compact-viewport .settlement-item.winner[open] > .settlement-head {
-  background: #f8fafc;
+  background: var(--ui-panel, #f8fafc);
 }
 
 .layout.compact-viewport .settlement-meta,
@@ -5114,13 +5152,16 @@ watch(
 }
 
 /* Keep the title and return action visible while only the illustrated guide scrolls. */
-.layout .rules-panel { display: flex; flex-direction: column; overflow: hidden; background: #111e30; color: #f8fafc; }
-.layout .rules-head { position: static; flex-direction: row; align-items: center; padding: 0; background: #111e30; flex-shrink: 0; }
-.layout .rules-kicker { color: #fcd34d; }
+.layout .rules-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--ui-raised, #111e30); color: var(--ui-text, #f8fafc); }
+.layout .rules-head { position: static; flex-direction: row; align-items: center; padding: 0; background: var(--ui-raised, #111e30); flex-shrink: 0; }
+.layout .rules-kicker { color: var(--ui-gold-text, #fcd34d); }
 .layout .rules-slogan { display: none; }
 .layout .rules-decision-reminder { position: static; flex-shrink: 0; }
 .layout .rules-content { min-height: 0; overflow-y: auto; }
 .layout.compact-viewport .rules-head { padding: 0; }
 .layout.compact-viewport .rules-kicker { display: none; }
 .layout.compact-viewport .rules-decision-reminder { min-height: 0; padding: 5px 8px; }
+.small-screen-recommendation { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; padding: .4rem .65rem; background: var(--ui-panel, #0f172a); border: 1px solid var(--ui-border, #475569); border-radius: .6rem; font-size: 13px; }
+.small-screen-recommendation span { flex: 1 1 15rem; }
+.small-screen-recommendation button { min-height: 36px; background: var(--ui-raised, #1e293b); color: inherit; border: 1px solid var(--ui-border, #475569); border-radius: .4rem; padding: .3rem .5rem; cursor: pointer; }
 </style>

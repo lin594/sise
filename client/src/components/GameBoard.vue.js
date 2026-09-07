@@ -1,5 +1,6 @@
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
+import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
 import { visibleDecisionEndsAt } from "@/utils/decisionClock";
@@ -69,6 +70,8 @@ const dealerReveal = ref(null);
 const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 const tableRef = ref(null);
+const appliedTableCardMode = ref(props.tableCardMode ?? "large");
+const appliedOwnCardMode = ref(props.ownCardMode ?? "large");
 const boardRef = ref(null);
 const responseLandingRef = ref(null);
 const deckAnchorRef = ref(null);
@@ -538,7 +541,7 @@ function tableLocationAnchorRect(location, size) {
     return cardRectAtPoint(pointFromElement(tableLocationAnchorElement(location)), size);
 }
 function defaultTableCardRect() {
-    return props.tableCardMode === "long"
+    return appliedTableCardMode.value === "long"
         ? { width: 32, height: 84 }
         : { width: 44, height: 50 };
 }
@@ -840,10 +843,6 @@ const activeHints = computed(() => {
     return !effectiveInteractionPausedMessage.value && hints?.stateRevision === (props.acceptedStateRevision ?? props.state?.stateRevision) && hints?.decisionKey === props.decisionKey ? hints : null;
 });
 const currentListeningWaits = computed(() => activeHints.value?.currentWaits ?? []);
-const showInlineListeningWaits = computed(() => props.state?.phase === "playing" &&
-    currentListeningWaits.value.length > 0 &&
-    !canAct.value &&
-    !canDiscard.value);
 const currentListeningAccessibleLabel = computed(() => `已经听牌，等待${currentListeningWaits.value
     .map((wait) => `${getCardAccessibleText(wait.card)}，可见余量${wait.visibleRemaining}张`)
     .join("；")}`);
@@ -863,6 +862,35 @@ const selectedPreview = computed(() => canDiscard.value
 const selectedDiscardListeningRoute = computed(() => selectedPreview.value
     ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
     : undefined);
+const listeningDetailWaits = computed(() => selectedPreview.value ? selectedDiscardListeningRoute.value?.waits ?? [] : currentListeningWaits.value);
+const listeningDetailTitle = computed(() => selectedPreview.value ? "打出此牌后听" : "当前听牌");
+let listeningCloseTimer = null;
+function pauseListeningTimer() {
+    if (listeningCloseTimer)
+        clearTimeout(listeningCloseTimer);
+    listeningCloseTimer = null;
+}
+function restartListeningTimer() {
+    pauseListeningTimer();
+    if (!listeningDetailsOpen.value || listeningDetailsRef.value?.contains(document.activeElement))
+        return;
+    listeningCloseTimer = setTimeout(() => closeListeningDetails(), 5000);
+}
+function toggleListeningDetails() {
+    if (listeningDetailsOpen.value)
+        closeListeningDetails();
+    else {
+        listeningDetailsOpen.value = true;
+        restartListeningTimer();
+    }
+}
+watch(() => selectedPreview.value?.id, () => {
+    closeListeningDetails();
+    if (selectedDiscardListeningRoute.value?.waits.length) {
+        listeningDetailsOpen.value = true;
+        restartListeningTimer();
+    }
+});
 const selectedPreviewAccessibleLabel = computed(() => {
     const selected = selectedPreview.value;
     if (!selected)
@@ -1098,6 +1126,7 @@ function clearChiSelection(event) {
     selectedChiCardIds.value = [];
 }
 function closeListeningDetails(restoreFocus = false) {
+    pauseListeningTimer();
     if (!listeningDetailsOpen.value)
         return;
     listeningDetailsOpen.value = false;
@@ -1746,6 +1775,7 @@ onMounted(() => {
     }, 500);
 });
 onUnmounted(() => {
+    pauseListeningTimer();
     document.removeEventListener("pointerdown", handleDocumentPointerDown);
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
@@ -1791,10 +1821,10 @@ onUnmounted(() => {
 });
 watch(() => `${selfPlayer.value?.name ?? ""}|${selfPlayer.value?.declaredKongs ?? 0}|${selfPlayer.value?.visibleGroupScore ?? 0}|${selfPlayer.value?.handCount ?? 0}`, () => void nextTick(updateSelfNameFit));
 watch(selfIdentityRef, observeSelfNameFit);
-watch(() => props.decisionKey, () => { listeningDetailsOpen.value = false; });
-watch(currentListeningWaits, (waits) => {
+watch(() => props.decisionKey, () => closeListeningDetails());
+watch(listeningDetailWaits, (waits) => {
     if (!waits.length)
-        listeningDetailsOpen.value = false;
+        closeListeningDetails();
 });
 // GameBoard is mounted when the waiting lobby changes into the dealer intro.
 // Present that initial DEALER_PICK/DEALER_CARD event immediately; the old
@@ -1886,7 +1916,7 @@ watch(handPresentationBusy, (busy) => {
         handScaleReady.value = false;
     void nextTick(scheduleHandLayoutUpdate);
 }, { immediate: true });
-watch(() => [props.ownCardMode, props.handLayout, props.viewportTransformKey], () => void nextTick(scheduleHandLayoutUpdate));
+watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey], () => void nextTick(scheduleHandLayoutUpdate));
 watch(handViewportRef, observeHandViewport, { immediate: true });
 watch(() => chiSelectionContextKey.value, (contextKey) => {
     if (contextKey === activeChiSelectionContextKey) {
@@ -1967,6 +1997,22 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
         target?.focus({ preventScroll: true });
     });
 }, { immediate: true });
+// Geometry changes wait for all visible card transactions, including opening deals.
+const appliedTableLayout = ref(props.tableLayout ?? "classic");
+watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)], async ([layout, tableMode, ownMode, dealCount, moveCount, revealing]) => {
+    if (dealCount || moveCount || revealing)
+        return;
+    if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode)
+        return;
+    appliedTableLayout.value = layout ?? "classic";
+    appliedTableCardMode.value = tableMode ?? "large";
+    appliedOwnCardMode.value = ownMode ?? "large";
+    lastCardRects.clear();
+    tableFlightSources.clear();
+    tableFlightDestinations.clear();
+    await nextTick();
+    scheduleHandLayoutUpdate();
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -2108,7 +2154,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
@@ -2333,14 +2378,6 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['quick-phrase-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-notice-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-card-pair']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
-/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['turn-countdown']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-timer']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2360,6 +2397,106 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-details']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-details']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-details']} */ ;
+/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['center-board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-empty']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['active']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-turn-outline']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2371,6 +2508,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
         }) },
     'data-testid': "game-board",
+    'data-table-layout': (__VLS_ctx.appliedTableLayout),
+    'data-layout-pending': (__VLS_ctx.appliedTableLayout !== props.tableLayout),
     'data-response-phase': (props.responsePhase ?? ''),
     'data-response-placement': (__VLS_ctx.responseCardPlacement),
 });
@@ -2402,7 +2541,7 @@ if (__VLS_ctx.flowTopLeftPlayer) {
             key: (`flow-top-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopLeftPlayer.clientId, card, index) }) },
@@ -2412,7 +2551,7 @@ if (__VLS_ctx.flowTopLeftPlayer) {
             key: (`flow-top-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopLeftPlayer.clientId, card, index) }) },
@@ -2434,6 +2573,27 @@ if (__VLS_ctx.topPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.topPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.appliedTableLayout === 'classic') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "opponent-card-stack" },
+            ...{ class: (`mode-${__VLS_ctx.appliedTableCardMode}`) },
+            'aria-hidden': "true",
+        });
+        for (const [i] of __VLS_getVForSourceType((4))) {
+            /** @type {[typeof CardBack, ]} */ ;
+            // @ts-ignore
+            const __VLS_3 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }));
+            const __VLS_4 = __VLS_3({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2447,12 +2607,12 @@ if (__VLS_ctx.topPlayer) {
     });
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_3 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_6 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.topPlayer)),
     }));
-    const __VLS_4 = __VLS_3({
+    const __VLS_7 = __VLS_6({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.topPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_3));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_6));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -2485,16 +2645,16 @@ if (__VLS_ctx.topPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_6 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_7 = __VLS_6({
+            const __VLS_10 = __VLS_9({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_6));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_9));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2524,7 +2684,7 @@ if (__VLS_ctx.topPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip stacked" },
-                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
+                ...{ class: ({ 'mode-long': __VLS_ctx.appliedTableCardMode === 'long' }) },
             });
             if (group.faceDownCount) {
                 for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
@@ -2545,24 +2705,24 @@ if (__VLS_ctx.topPlayer) {
                 for (const [card] of __VLS_getVForSourceType((group.cards))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_9 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`top-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
                     }));
-                    const __VLS_10 = __VLS_9({
+                    const __VLS_13 = __VLS_12({
                         key: (`top-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
                 }
             }
         }
@@ -2586,26 +2746,26 @@ if (__VLS_ctx.flowTopRightPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_12 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_15 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-top-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_13 = __VLS_12({
+        const __VLS_16 = __VLS_15({
             key: (`flow-top-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowTopRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_12));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_15));
     }
 }
 if (__VLS_ctx.leftPlayer) {
@@ -2622,6 +2782,27 @@ if (__VLS_ctx.leftPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.leftPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.appliedTableLayout === 'classic') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "opponent-card-stack" },
+            ...{ class: (`mode-${__VLS_ctx.appliedTableCardMode}`) },
+            'aria-hidden': "true",
+        });
+        for (const [i] of __VLS_getVForSourceType((4))) {
+            /** @type {[typeof CardBack, ]} */ ;
+            // @ts-ignore
+            const __VLS_18 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }));
+            const __VLS_19 = __VLS_18({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2635,12 +2816,12 @@ if (__VLS_ctx.leftPlayer) {
     });
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_15 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_21 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.leftPlayer)),
     }));
-    const __VLS_16 = __VLS_15({
+    const __VLS_22 = __VLS_21({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.leftPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_15));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_21));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -2673,16 +2854,16 @@ if (__VLS_ctx.leftPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_18 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_19 = __VLS_18({
+            const __VLS_25 = __VLS_24({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_18));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_24));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2712,7 +2893,7 @@ if (__VLS_ctx.leftPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip stacked" },
-                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
+                ...{ class: ({ 'mode-long': __VLS_ctx.appliedTableCardMode === 'long' }) },
             });
             if (group.faceDownCount) {
                 for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
@@ -2733,24 +2914,24 @@ if (__VLS_ctx.leftPlayer) {
                 for (const [card] of __VLS_getVForSourceType((group.cards))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_21 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_27 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`left-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
                     }));
-                    const __VLS_22 = __VLS_21({
+                    const __VLS_28 = __VLS_27({
                         key: (`left-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
                 }
             }
         }
@@ -2833,25 +3014,22 @@ if (__VLS_ctx.centerCardVisible && __VLS_ctx.responseCard) {
         ...{ class: ({ 'draw-pending-hidden': __VLS_ctx.isResponseCardDrawHidden || __VLS_ctx.isMovingCard(__VLS_ctx.responseCard.id) }) },
         'data-testid': "pending-card",
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "response-caption" },
-    });
     /** @type {[typeof CardComp, ]} */ ;
     // @ts-ignore
-    const __VLS_24 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-        key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
+    const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        key: (`resp-${__VLS_ctx.appliedTableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
-        mode: (props.tableCardMode),
+        mode: (__VLS_ctx.appliedTableCardMode),
         size: "lg",
         ...{ class: "response-card-face" },
     }));
-    const __VLS_25 = __VLS_24({
-        key: (`resp-${props.tableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
+    const __VLS_31 = __VLS_30({
+        key: (`resp-${__VLS_ctx.appliedTableCardMode}-${__VLS_ctx.responseCard.id}-${__VLS_ctx.responseCard.source || 'upper'}`),
         card: (__VLS_ctx.responseCard),
-        mode: (props.tableCardMode),
+        mode: (__VLS_ctx.appliedTableCardMode),
         size: "lg",
         ...{ class: "response-card-face" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_24));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_30));
 }
 if (__VLS_ctx.rightPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2900,6 +3078,27 @@ if (__VLS_ctx.rightPlayer) {
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.rightPlayer.clientId,
             }) },
     });
+    if (__VLS_ctx.appliedTableLayout === 'classic') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "opponent-card-stack" },
+            ...{ class: (`mode-${__VLS_ctx.appliedTableCardMode}`) },
+            'aria-hidden': "true",
+        });
+        for (const [i] of __VLS_getVForSourceType((4))) {
+            /** @type {[typeof CardBack, ]} */ ;
+            // @ts-ignore
+            const __VLS_33 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }));
+            const __VLS_34 = __VLS_33({
+                key: (i),
+                mode: (__VLS_ctx.appliedTableCardMode),
+                ...{ style: ({ '--stack-index': i - 1 }) },
+            }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+        }
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
         ...{ class: "seat-head" },
     });
@@ -2913,12 +3112,12 @@ if (__VLS_ctx.rightPlayer) {
     });
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_27 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_36 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.rightPlayer)),
     }));
-    const __VLS_28 = __VLS_27({
+    const __VLS_37 = __VLS_36({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.rightPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_27));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_36));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'data-testid': "opponent-hand-count",
@@ -2951,16 +3150,16 @@ if (__VLS_ctx.rightPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_30 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_39 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_31 = __VLS_30({
+            const __VLS_40 = __VLS_39({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_30));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_39));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -2990,7 +3189,7 @@ if (__VLS_ctx.rightPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip stacked" },
-                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
+                ...{ class: ({ 'mode-long': __VLS_ctx.appliedTableCardMode === 'long' }) },
             });
             if (group.faceDownCount) {
                 for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
@@ -3011,24 +3210,24 @@ if (__VLS_ctx.rightPlayer) {
                 for (const [card] of __VLS_getVForSourceType((group.cards))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_33 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`right-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
                     }));
-                    const __VLS_34 = __VLS_33({
+                    const __VLS_43 = __VLS_42({
                         key: (`right-group-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_33));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_42));
                 }
             }
         }
@@ -3052,26 +3251,26 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_36 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_45 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_37 = __VLS_36({
+        const __VLS_46 = __VLS_45({
             key: (`flow-bottom-left-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomLeftPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_36));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_45));
     }
 }
 if (__VLS_ctx.selfPlayer) {
@@ -3099,7 +3298,7 @@ if (__VLS_ctx.selfPlayer) {
             }
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
                 ...{ class: "mini-card-strip" },
-                ...{ class: ({ 'mode-long': props.tableCardMode === 'long' }) },
+                ...{ class: ({ 'mode-long': __VLS_ctx.appliedTableCardMode === 'long' }) },
             });
             if (group.faceDownCount) {
                 for (const [slot] of __VLS_getVForSourceType((group.faceDownCount))) {
@@ -3120,24 +3319,24 @@ if (__VLS_ctx.selfPlayer) {
                 for (const [card] of __VLS_getVForSourceType((group.cards))) {
                     /** @type {[typeof CardComp, ]} */ ;
                     // @ts-ignore
-                    const __VLS_39 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                    const __VLS_48 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                         key: (`self-exp-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
                     }));
-                    const __VLS_40 = __VLS_39({
+                    const __VLS_49 = __VLS_48({
                         key: (`self-exp-card-${card.id}`),
                         card: (card),
                         ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-                        mode: (props.tableCardMode),
+                        mode: (__VLS_ctx.appliedTableCardMode),
                         size: "xs",
                         ...{ class: "mini-card" },
                         title: (__VLS_ctx.cardLabel(card)),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_39));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_48));
                 }
             }
         }
@@ -3161,54 +3360,54 @@ if (__VLS_ctx.flowBottomRightPlayer) {
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_42 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_51 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
         }));
-        const __VLS_43 = __VLS_42({
+        const __VLS_52 = __VLS_51({
             key: (`flow-bottom-right-${card.id}`),
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xs",
             ...{ class: "discard-token" },
             ...{ class: ({ active: __VLS_ctx.isActiveDiscardCard(__VLS_ctx.flowBottomRightPlayer.clientId, card, index) }) },
             title: (__VLS_ctx.cardLabel(card)),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_42));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_51));
     }
 }
-const __VLS_45 = {}.Transition;
+const __VLS_54 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_46 = __VLS_asFunctionalComponent(__VLS_45, new __VLS_45({
+const __VLS_55 = __VLS_asFunctionalComponent(__VLS_54, new __VLS_54({
     name: "deal-fade",
 }));
-const __VLS_47 = __VLS_46({
+const __VLS_56 = __VLS_55({
     name: "deal-fade",
-}, ...__VLS_functionalComponentArgsRest(__VLS_46));
-__VLS_48.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_55));
+__VLS_57.slots.default;
 if (__VLS_ctx.showDealAnimation) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "deal-overlay" },
     });
 }
-var __VLS_48;
-const __VLS_49 = {}.Transition;
+var __VLS_57;
+const __VLS_58 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_50 = __VLS_asFunctionalComponent(__VLS_49, new __VLS_49({
+const __VLS_59 = __VLS_asFunctionalComponent(__VLS_58, new __VLS_58({
     name: "quick-phrase",
 }));
-const __VLS_51 = __VLS_50({
+const __VLS_60 = __VLS_59({
     name: "quick-phrase",
-}, ...__VLS_functionalComponentArgsRest(__VLS_50));
-__VLS_52.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_59));
+__VLS_61.slots.default;
 if (__VLS_ctx.quickPhrase) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "quick-phrase-toast" },
@@ -3222,17 +3421,17 @@ if (__VLS_ctx.quickPhrase) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     (__VLS_ctx.quickPhrase.text);
 }
-var __VLS_52;
-const __VLS_53 = {}.Transition;
+var __VLS_61;
+const __VLS_62 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_54 = __VLS_asFunctionalComponent(__VLS_53, new __VLS_53({
+const __VLS_63 = __VLS_asFunctionalComponent(__VLS_62, new __VLS_62({
     name: "quick-phrase",
 }));
-const __VLS_55 = __VLS_54({
+const __VLS_64 = __VLS_63({
     name: "quick-phrase",
-}, ...__VLS_functionalComponentArgsRest(__VLS_54));
-__VLS_56.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_63));
+__VLS_65.slots.default;
 if (__VLS_ctx.tableNoticeText) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "table-notice-toast" },
@@ -3242,7 +3441,7 @@ if (__VLS_ctx.tableNoticeText) {
     });
     (__VLS_ctx.tableNoticeText);
 }
-var __VLS_56;
+var __VLS_65;
 if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (`dealer-${__VLS_ctx.dealerReveal.id}`),
@@ -3282,16 +3481,16 @@ if (__VLS_ctx.dealerReveal) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_57 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_66 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (__VLS_ctx.dealerCeremonyCard),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xl",
         }));
-        const __VLS_58 = __VLS_57({
+        const __VLS_67 = __VLS_66({
             card: (__VLS_ctx.dealerCeremonyCard),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_66));
     }
     if (__VLS_ctx.dealerCeremonyCard) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
@@ -3349,12 +3548,12 @@ if (__VLS_ctx.selfPlayer) {
     /** @type {typeof __VLS_ctx.selfIdentityMetaRef} */ ;
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_69 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
     }));
-    const __VLS_61 = __VLS_60({
+    const __VLS_70 = __VLS_69({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_69));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'aria-label': (`剩余手牌 ${__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer)} 张`),
@@ -3387,27 +3586,27 @@ if (__VLS_ctx.selfPlayer) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_72 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_64 = __VLS_63({
+            const __VLS_73 = __VLS_72({
                 card: (__VLS_ctx.dealerInfoCard),
-                mode: (props.tableCardMode),
+                mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_72));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dynamic-action-track" },
         'data-testid': "dynamic-action-track",
     });
-    var __VLS_66 = {};
+    var __VLS_75 = {};
     if (props.state?.phase === 'playing' && (__VLS_ctx.canAct || __VLS_ctx.canDiscard)) {
         /** @type {[typeof ActionPanel, ]} */ ;
         // @ts-ignore
-        const __VLS_68 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        const __VLS_77 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
             ...{ 'onConfirmDiscard': {} },
             ...{ 'onSubmit': {} },
             ...{ class: "embedded-actions action-dock" },
@@ -3426,7 +3625,7 @@ if (__VLS_ctx.selfPlayer) {
             actionFeedback: (__VLS_ctx.effectiveActionFeedback),
             selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
         }));
-        const __VLS_69 = __VLS_68({
+        const __VLS_78 = __VLS_77({
             ...{ 'onConfirmDiscard': {} },
             ...{ 'onSubmit': {} },
             ...{ class: "embedded-actions action-dock" },
@@ -3444,54 +3643,17 @@ if (__VLS_ctx.selfPlayer) {
             decisionKey: (props.decisionKey ?? ''),
             actionFeedback: (__VLS_ctx.effectiveActionFeedback),
             selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
-        let __VLS_71;
-        let __VLS_72;
-        let __VLS_73;
-        const __VLS_74 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_77));
+        let __VLS_80;
+        let __VLS_81;
+        let __VLS_82;
+        const __VLS_83 = {
             onConfirmDiscard: (__VLS_ctx.confirmDiscard)
         };
-        const __VLS_75 = {
+        const __VLS_84 = {
             onSubmit: (__VLS_ctx.onSubmitAction)
         };
-        var __VLS_70;
-    }
-    if (__VLS_ctx.showInlineListeningWaits) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "current-listening-waits" },
-            role: "status",
-            'aria-label': (__VLS_ctx.currentListeningAccessibleLabel),
-            'data-testid': "current-listening-waits",
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "current-listening-label" },
-            'aria-hidden': "true",
-        });
-        for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.currentListeningWaits))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                key: (`current-wait-${wait.card.id}`),
-                ...{ class: "current-listening-card" },
-                ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
-                'data-visible-remaining': (wait.visibleRemaining),
-            });
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_76 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (wait.card),
-                size: "xs",
-                mode: "large",
-            }));
-            const __VLS_77 = __VLS_76({
-                card: (wait.card),
-                size: "xs",
-                mode: "large",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_76));
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "wait-count-badge" },
-                'aria-hidden': "true",
-            });
-            (wait.visibleRemaining);
-        }
+        var __VLS_79;
     }
     if (__VLS_ctx.showDecisionClock) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
@@ -3502,16 +3664,16 @@ if (__VLS_ctx.selfPlayer) {
         (__VLS_ctx.fixedClockText);
     }
 }
-const __VLS_79 = {}.Transition;
+const __VLS_85 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_80 = __VLS_asFunctionalComponent(__VLS_79, new __VLS_79({
+const __VLS_86 = __VLS_asFunctionalComponent(__VLS_85, new __VLS_85({
     name: "quick-phrase",
 }));
-const __VLS_81 = __VLS_80({
+const __VLS_87 = __VLS_86({
     name: "quick-phrase",
-}, ...__VLS_functionalComponentArgsRest(__VLS_80));
-__VLS_82.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_86));
+__VLS_88.slots.default;
 if (__VLS_ctx.flowStatusText) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-flow-toast" },
@@ -3521,81 +3683,78 @@ if (__VLS_ctx.flowStatusText) {
     });
     (__VLS_ctx.flowStatusText);
 }
-var __VLS_82;
+var __VLS_88;
+if (__VLS_ctx.listeningDetailsOpen && __VLS_ctx.listeningDetailWaits.length) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+        ...{ onPointerdown: (__VLS_ctx.restartListeningTimer) },
+        ...{ onScroll: (__VLS_ctx.restartListeningTimer) },
+        ...{ onFocusin: (__VLS_ctx.pauseListeningTimer) },
+        ...{ onFocusout: (() => __VLS_ctx.nextTick(__VLS_ctx.restartListeningTimer)) },
+        id: "listening-details",
+        ref: "listeningDetailsRef",
+        ...{ class: "listening-details" },
+        role: "region",
+        'aria-label': (__VLS_ctx.listeningDetailTitle),
+        'data-testid': "listening-details",
+        tabindex: "0",
+    });
+    /** @type {typeof __VLS_ctx.listeningDetailsRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    (__VLS_ctx.listeningDetailTitle);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!(__VLS_ctx.listeningDetailsOpen && __VLS_ctx.listeningDetailWaits.length))
+                    return;
+                __VLS_ctx.closeListeningDetails(true);
+            } },
+        type: "button",
+        'aria-label': "关闭听牌详情",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "listening-details-cards" },
+        tabindex: "0",
+    });
+    for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.listeningDetailWaits))) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            key: (wait.card.id),
+            ...{ class: "current-listening-card" },
+            ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
+            'data-visible-remaining': (wait.visibleRemaining),
+            'data-card-id': (wait.card.id),
+            'data-testid': "listening-wait",
+        });
+        /** @type {[typeof CardComp, ]} */ ;
+        // @ts-ignore
+        const __VLS_89 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            card: (wait.card),
+            size: "xs",
+            mode: "large",
+        }));
+        const __VLS_90 = __VLS_89({
+            card: (wait.card),
+            size: "xs",
+            mode: "large",
+        }, ...__VLS_functionalComponentArgsRest(__VLS_89));
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "wait-count-badge" },
+            'data-testid': "listening-wait-count",
+        });
+        (wait.visibleRemaining);
+    }
+}
 if (__VLS_ctx.selfPlayer) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ class: "self-hand-card" },
         ...{ class: ({ 'declaring-hand': __VLS_ctx.state?.phase === 'declaring' }) },
     });
-    if (__VLS_ctx.selectedPreview) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "selected-card-preview" },
-            'data-testid': "selected-card-preview",
-            'aria-label': (__VLS_ctx.selectedPreviewAccessibleLabel),
-        });
-        /** @type {[typeof CardComp, ]} */ ;
-        // @ts-ignore
-        const __VLS_83 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-            card: (__VLS_ctx.selectedPreview),
-            size: "xl",
-            mode: (__VLS_ctx.ownCardMode),
-        }));
-        const __VLS_84 = __VLS_83({
-            card: (__VLS_ctx.selectedPreview),
-            size: "xl",
-            mode: (__VLS_ctx.ownCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_83));
-        if (__VLS_ctx.selectedDiscardListeningRoute?.waits.length) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "selected-preview-wait-label" },
-                'aria-hidden': "true",
-            });
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "selected-preview-waits" },
-                'aria-hidden': "true",
-            });
-            for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.selectedDiscardListeningRoute.waits))) {
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                    key: (`selected-wait-${wait.card.id}`),
-                    ...{ class: "selected-preview-wait" },
-                    ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
-                    'data-card-id': (wait.card.id),
-                    'data-visible-remaining': (wait.visibleRemaining),
-                    'data-testid': "listening-wait",
-                });
-                /** @type {[typeof CardComp, ]} */ ;
-                // @ts-ignore
-                const __VLS_86 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                    card: (wait.card),
-                    size: "xs",
-                    mode: "large",
-                }));
-                const __VLS_87 = __VLS_86({
-                    card: (wait.card),
-                    size: "xs",
-                    mode: "large",
-                }, ...__VLS_functionalComponentArgsRest(__VLS_86));
-                __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                    ...{ class: "wait-count-badge" },
-                    'data-testid': "listening-wait-count",
-                });
-                (wait.visibleRemaining);
-            }
-        }
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-hand-panel" },
         ...{ class: ({ 'has-toolbar': __VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow }) },
     });
-    if (__VLS_ctx.currentListeningWaits.length) {
+    if (__VLS_ctx.listeningDetailWaits.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (...[$event]) => {
-                    if (!(__VLS_ctx.selfPlayer))
-                        return;
-                    if (!(__VLS_ctx.currentListeningWaits.length))
-                        return;
-                    __VLS_ctx.listeningDetailsOpen = !__VLS_ctx.listeningDetailsOpen;
-                } },
+            ...{ onClick: (__VLS_ctx.toggleListeningDetails) },
             ref: "listeningToggleRef",
             ...{ class: "listening-toggle" },
             type: "button",
@@ -3605,45 +3764,6 @@ if (__VLS_ctx.selfPlayer) {
             'aria-label': "查看听牌详情",
         });
         /** @type {typeof __VLS_ctx.listeningToggleRef} */ ;
-    }
-    if (__VLS_ctx.listeningDetailsOpen && __VLS_ctx.currentListeningWaits.length) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            id: "listening-details",
-            ref: "listeningDetailsRef",
-            ...{ class: "listening-popover current-listening-waits" },
-            role: "dialog",
-            'aria-label': "听牌详情",
-        });
-        /** @type {typeof __VLS_ctx.listeningDetailsRef} */ ;
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-            ...{ class: "current-listening-label" },
-            'aria-hidden': "true",
-        });
-        for (const [wait] of __VLS_getVForSourceType((__VLS_ctx.currentListeningWaits))) {
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                key: (`popover-wait-${wait.card.id}`),
-                ...{ class: "current-listening-card" },
-                ...{ class: ({ exhausted: wait.visibleRemaining === 0 }) },
-                'data-visible-remaining': (wait.visibleRemaining),
-            });
-            /** @type {[typeof CardComp, ]} */ ;
-            // @ts-ignore
-            const __VLS_89 = __VLS_asFunctionalComponent(CardComp, new CardComp({
-                card: (wait.card),
-                size: "xs",
-                mode: "large",
-            }));
-            const __VLS_90 = __VLS_89({
-                card: (wait.card),
-                size: "xs",
-                mode: "large",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_89));
-            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "wait-count-badge" },
-                'aria-hidden': "true",
-            });
-            (wait.visibleRemaining);
-        }
     }
     if (__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3724,8 +3844,8 @@ if (__VLS_ctx.selfPlayer) {
             'data-card-id': (card.id),
             ...{ class: "hand-card" },
             ...{ class: ({
-                    'mode-large': props.ownCardMode === 'large',
-                    'mode-long': props.ownCardMode === 'long',
+                    'mode-large': __VLS_ctx.appliedOwnCardMode === 'large',
+                    'mode-long': __VLS_ctx.appliedOwnCardMode === 'long',
                     'deal-concealed': __VLS_ctx.isDealConcealedCard(card.id),
                     playable: !__VLS_ctx.isDealConcealedCard(card.id) && __VLS_ctx.canSelectHandCard(card),
                     blocked: __VLS_ctx.canDiscard && __VLS_ctx.isDiscardProtectedCard(card),
@@ -3780,13 +3900,13 @@ if (__VLS_ctx.selfPlayer) {
         const __VLS_92 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.ownCardMode),
+            mode: (__VLS_ctx.appliedOwnCardMode),
             size: "xl",
         }));
         const __VLS_93 = __VLS_92({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
-            mode: (props.ownCardMode),
+            mode: (__VLS_ctx.appliedOwnCardMode),
             size: "xl",
         }, ...__VLS_functionalComponentArgsRest(__VLS_92));
     }
@@ -3824,25 +3944,30 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
         ...{ style: ({ transform: `rotateY(${flight.rotation}deg)` }) },
     });
     if (flight.back) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "card-back" },
-        });
+        /** @type {[typeof CardBack, ]} */ ;
+        // @ts-ignore
+        const __VLS_99 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+            mode: (__VLS_ctx.appliedTableCardMode),
+        }));
+        const __VLS_100 = __VLS_99({
+            mode: (__VLS_ctx.appliedTableCardMode),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_99));
     }
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_99 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_102 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
         }));
-        const __VLS_100 = __VLS_99({
+        const __VLS_103 = __VLS_102({
             card: (flight.card),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_99));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_102));
     }
 }
 var __VLS_98;
@@ -3857,23 +3982,28 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
         ...{ style: (__VLS_ctx.flightStyle(flight)) },
     });
     if (flight.mode === 'deal') {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "card-back" },
-        });
+        /** @type {[typeof CardBack, ]} */ ;
+        // @ts-ignore
+        const __VLS_105 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+            mode: (__VLS_ctx.appliedOwnCardMode),
+        }));
+        const __VLS_106 = __VLS_105({
+            mode: (__VLS_ctx.appliedOwnCardMode),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_105));
     }
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_102 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_108 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "md",
         }));
-        const __VLS_103 = __VLS_102({
+        const __VLS_109 = __VLS_108({
             card: (flight.card),
-            mode: (props.tableCardMode),
+            mode: (__VLS_ctx.appliedTableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_102));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_108));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -3884,6 +4014,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -3910,6 +4041,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -3947,7 +4079,6 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['response-slot']} */ ;
 /** @type {__VLS_StyleScopedClasses['pending-inline']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-focus']} */ ;
-/** @type {__VLS_StyleScopedClasses['response-caption']} */ ;
 /** @type {__VLS_StyleScopedClasses['response-card-face']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat']} */ ;
 /** @type {__VLS_StyleScopedClasses['center-seat-right']} */ ;
@@ -3959,6 +4090,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['center-pointer-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['opponent-card-stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
@@ -4021,25 +4153,15 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['action-dock']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-label']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-flow-toast']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-card-preview']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-preview-wait-label']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-preview-waits']} */ ;
-/** @type {__VLS_StyleScopedClasses['selected-preview-wait']} */ ;
-/** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
-/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['listening-toggle']} */ ;
-/** @type {__VLS_StyleScopedClasses['listening-popover']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-waits']} */ ;
-/** @type {__VLS_StyleScopedClasses['current-listening-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-details']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-details-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['current-listening-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['wait-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-toggle']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
@@ -4057,17 +4179,17 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['self-turn-outline']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
-/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
-/** @type {__VLS_StyleScopedClasses['card-back']} */ ;
 // @ts-ignore
-var __VLS_67 = __VLS_66;
+var __VLS_76 = __VLS_75;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            nextTick: nextTick,
             ActionPanel: ActionPanel,
+            CardBack: CardBack,
             CardComp: CardComp,
             PlayerStatusIcon: PlayerStatusIcon,
             getCardAccessibleText: getCardAccessibleText,
@@ -4088,6 +4210,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             dealerReveal: dealerReveal,
             flashActorId: flashActorId,
             tableRef: tableRef,
+            appliedTableCardMode: appliedTableCardMode,
+            appliedOwnCardMode: appliedOwnCardMode,
             boardRef: boardRef,
             responseLandingRef: responseLandingRef,
             deckAnchorRef: deckAnchorRef,
@@ -4137,14 +4261,13 @@ const __VLS_self = (await import('vue')).defineComponent({
             effectiveActionFeedback: effectiveActionFeedback,
             tableNoticeText: tableNoticeText,
             fixedClockText: fixedClockText,
-            currentListeningWaits: currentListeningWaits,
-            showInlineListeningWaits: showInlineListeningWaits,
-            currentListeningAccessibleLabel: currentListeningAccessibleLabel,
             listeningMarkContext: listeningMarkContext,
             isListeningDiscard: isListeningDiscard,
-            selectedPreview: selectedPreview,
-            selectedDiscardListeningRoute: selectedDiscardListeningRoute,
-            selectedPreviewAccessibleLabel: selectedPreviewAccessibleLabel,
+            listeningDetailWaits: listeningDetailWaits,
+            listeningDetailTitle: listeningDetailTitle,
+            pauseListeningTimer: pauseListeningTimer,
+            restartListeningTimer: restartListeningTimer,
+            toggleListeningDetails: toggleListeningDetails,
             seatCountdownSeconds: seatCountdownSeconds,
             showDecisionClock: showDecisionClock,
             flowStatusText: flowStatusText,
@@ -4165,6 +4288,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             isDiscardProtectedCard: isDiscardProtectedCard,
             selectHandCard: selectHandCard,
             ensureHandCardSelected: ensureHandCardSelected,
+            closeListeningDetails: closeListeningDetails,
             handleBoardEscape: handleBoardEscape,
             scheduleHandLayoutUpdate: scheduleHandLayoutUpdate,
             scrollHand: scrollHand,
@@ -4174,6 +4298,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             handCardAccessibleLabel: handCardAccessibleLabel,
             setSeatRef: setSeatRef,
             flightStyle: flightStyle,
+            appliedTableLayout: appliedTableLayout,
         };
     },
     __typeEmits: {},

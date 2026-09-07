@@ -1,13 +1,13 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
+import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
 test("flow lanes keep seat relationships, DOM identity, and one animation per action", async ({ page }) => {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
 
   await expect.poll(() => page.evaluate(() => {
@@ -107,6 +107,7 @@ test("flow lanes keep seat relationships, DOM identity, and one animation per ac
   })).toEqual({ lanesStable: true, cardsStable: true });
 
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "seat-direction-clockwise");
   await page.getByTestId("seat-direction-clockwise").click();
   await page.getByRole("button", { name: "关闭设置" }).click();
   expect(await laneState()).toEqual({

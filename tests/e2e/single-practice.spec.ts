@@ -1,5 +1,5 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -56,9 +56,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
 
 test("each practice round presents one bounded deal sequence", async ({ page }) => {
   test.setTimeout(120_000);
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("只看一次发牌");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", "只看一次发牌");
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 
   await page.evaluate(() => {
@@ -89,7 +87,7 @@ test("each practice round presents one bounded deal sequence", async ({ page }) 
     trackingWindow.__siseDealFlightObserver.observe(document.body, { childList: true, subtree: true });
   });
 
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
   await assertOpeningDealDoesNotRevealFullHand(page);
   await expect.poll(() => page.evaluate(() =>
     (window as Window & { __siseDealOverlayCount?: number }).__siseDealOverlayCount ?? 0,
@@ -160,11 +158,10 @@ test("practice settlement stays readable and reachable on legacy phones", async 
 
   await page.goto("/?e2eDebug=1");
 
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
+
 
   await expect(page.getByText("游戏模式选择")).toBeVisible();
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
 
   await expect(page.getByTestId("game-board")).toBeVisible();
   await finishDeclarationIfNeeded(page);
