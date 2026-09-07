@@ -74,6 +74,7 @@ test("the game motion preference is immediate, persistent, and still defers to t
   await expect(layout).toHaveAttribute("data-reduce-motion", "true", { timeout: 20_000 });
   await expect(settingsButton).toBeEnabled({ timeout: 20_000 });
   await settingsButton.click();
+  await revealSetting(page, "reduce-motion");
   await expect(setting).toHaveAttribute("aria-checked", "true");
 
   await setting.click();
