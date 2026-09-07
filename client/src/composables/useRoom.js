@@ -18,6 +18,9 @@ const ACTION_REJECTED_VISIBLE_MS = 3600;
 const CONNECTION_PROBE_INTERVAL_MS = 4000;
 const CONNECTION_PROBE_TIMEOUT_MS = 7000;
 const QUICK_PHRASE_MUTE_KEY = "sise_quick_phrase_muted";
+// iOS 和部分内嵌浏览器需要在用户手势中先解锁媒体播放。这里必须使用真正的静音素材，
+// 不能拿第一条互动语音静音试播，否则个别内核会在切换 muted 状态时把它短暂播出来。
+const QUICK_PHRASE_PRIMER_URL = "data:audio/wav;base64,UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA";
 const QUICK_PHRASES_BY_ID = new Map(quickPhrases.map((phrase) => [phrase.id, phrase]));
 const TERMINAL_ROOM_CLOSE_MESSAGES = {
     4100: "原座位已经失效，或牌局已不再接受加入。系统已停止自动恢复。",
@@ -437,14 +440,14 @@ export function useRoom(playerName = "Player") {
         return quickPhraseAudio;
     }
     function primeQuickPhraseAudio() {
-        const firstPhrase = quickPhrases[0];
-        if (quickPhraseAudioPrimed || quickPhraseMuted.value || !firstPhrase)
+        if (quickPhraseAudioPrimed || quickPhraseMuted.value || quickPhrases.length === 0)
             return;
         const audio = getQuickPhraseAudio();
         const generation = ++quickPhraseAudioGeneration;
         try {
-            audio.muted = true;
-            audio.src = firstPhrase.url;
+            audio.muted = false;
+            audio.volume = 1;
+            audio.src = QUICK_PHRASE_PRIMER_URL;
             const playResult = audio.play();
             quickPhraseAudioPrimed = true;
             void playResult.then(() => {
@@ -452,7 +455,6 @@ export function useRoom(playerName = "Player") {
                     return;
                 audio.pause();
                 audio.currentTime = 0;
-                audio.muted = false;
             }).catch(() => {
                 quickPhraseAudioPrimed = false;
             });
@@ -476,12 +478,11 @@ export function useRoom(playerName = "Player") {
         audio.volume = 1;
         try {
             void audio.play().catch(() => {
-                // Embedded browsers may still block remote autoplay before the player
-                // has touched the page. The visible table message remains available.
+                // 玩家尚未触碰页面时，部分内嵌浏览器仍会拦截自动播放；桌面文字提示照常保留。
             });
         }
         catch {
-            // Keep the visible message when media playback is unavailable.
+            // 媒体播放不可用时仍保留桌面文字提示。
         }
     }
     function stopQuickPhraseAudio() {
@@ -1981,8 +1982,7 @@ export function useRoom(playerName = "Player") {
             return false;
         }
         pendingLocalQuickPhrase = { seatId, phraseId: phrase.id, sentAt: now };
-        // Run inside the button gesture so iOS and embedded browsers allow audio.
-        // The server echo confirms delivery and refreshes the visible timer.
+        // 必须在按钮手势内播放，才能兼容 iOS 与部分内嵌浏览器；服务端回声只确认送达并刷新展示时间。
         presentQuickPhrase(seatId, phrase.id, -now);
         return true;
     }
