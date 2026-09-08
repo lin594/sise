@@ -647,7 +647,6 @@
             <h2 id="rules-panel-title">四色牌规则</h2>
             <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
           </div>
-          <button v-if="showGameTools" type="button" class="ghost" @click="backRulesToTools">返回设置</button>
           <button ref="rulesCloseButtonRef" class="ghost" data-testid="close-rules" @click="closeRules()">关闭</button>
         </div>
 
@@ -1683,12 +1682,6 @@ const settingsDecisionTimeText = computed(() =>
       ? "公共倒计时已结束，仍可响应，请尽快操作"
       : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
 );
-
-async function backRulesToTools() {
-  closeRules(false);
-  await nextTick();
-  await gameToolsRef.value?.openTools();
-}
 
 function openRules(trigger?: Event | HTMLElement): void {
   const explicitTarget = trigger instanceof HTMLElement

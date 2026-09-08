@@ -36,7 +36,7 @@ for (const scheme of ['dark','light'] as const) {
       await page.getByTestId(`skin-${skin}`).click();
       await readableText(page.getByTestId('settings-panel'));
       await page.getByTestId('settings-back').click();
-      for (const category of ['table','sound','assist']) {
+      for (const category of ['layout','table','sound','assist']) {
         await page.getByTestId(`settings-category-${category}`).click();
         await readableText(page.getByTestId('settings-panel'));
         await page.getByTestId('settings-back').click();

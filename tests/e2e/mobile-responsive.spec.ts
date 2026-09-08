@@ -877,7 +877,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("history-effective-viewport-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
   });
 });
 
@@ -1055,7 +1055,7 @@ test.describe("compact landscape gameplay", () => {
     await page.screenshot({ path: testInfo.outputPath("iphone-se-action-history.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
     await revealTool(page, "game-history");
     await gameHistory.click();
     const firstPlayableCard = page.locator(".hand-card.playable").first();
@@ -1067,7 +1067,7 @@ test.describe("compact landscape gameplay", () => {
     await page.mouse.click(playableCardCenter.x, playableCardCenter.y);
     await expect(historyPanel).toHaveCount(0);
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
     await expect.poll(async () => {
       const cards = page.locator("[data-testid^='hand-card-']");
       return await cards.count() > 0
@@ -1308,10 +1308,10 @@ test.describe("compact landscape gameplay", () => {
     await expect(gameSettings).toHaveAttribute("aria-label", "全局设置，当前轮到你操作");
     await expect(gameSettings).toHaveAttribute("title", "全局设置");
     await gameSettings.click();
-    await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
+    await expect(page.getByTestId("settings-decision-reminder")).toHaveCount(0);
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("settings-return-to-decision").click();
-    await expect(selectedCard).toBeFocused();
+    await page.getByRole("button", { name: "关闭设置", exact: true }).click();
+    await expect(gameSettings).toBeFocused();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await page.screenshot({ path: testInfo.outputPath("iphone-se-selected-card.png") });
     const discardButtonRect = await discardConfirm.evaluate((button) => {
@@ -1604,6 +1604,7 @@ test.describe("compact landscape gameplay", () => {
 
     await expect(dialog).toHaveCount(0);
     await expect(autoPlay).toHaveAttribute("aria-pressed", "true");
+    await expect(autoPlay).toBeFocused();
     await expect(autoPlay).toContainText("取消托管");
     await expect(page.getByTestId("player-self").locator("[data-testid='player-status-icon'][data-status-kind='autoplay']")).toBeVisible();
     await expect(page.getByTestId("player-self")).toHaveAccessibleName(/机器人代打|托管中/);
@@ -1772,11 +1773,10 @@ test.describe("compact landscape gameplay", () => {
     await expect(gameSettings).toHaveText("设置");
     await expect(gameSettings).toHaveAttribute("aria-label", "全局设置，当前轮到你操作");
     await gameSettings.click();
-    await expect(page.getByTestId("settings-decision-reminder")).toContainText("轮到你操作");
-    await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
-    await page.getByTestId("settings-return-to-decision").click();
+    await expect(page.getByTestId("settings-decision-reminder")).toHaveCount(0);
+    await page.getByRole("button", { name: "关闭设置", exact: true }).click();
     await expect(page.getByTestId("settings-panel")).toHaveCount(0);
-    await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
+    await expect(gameSettings).toBeFocused();
     const toolPositionsDuringDecision = await page.locator("[data-testid='game-history'], [data-testid='game-settings'], [data-testid='game-exit']")
       .evaluateAll((buttons) => buttons.map((button) => {
         const rect = button.getBoundingClientRect();
@@ -2013,8 +2013,8 @@ test.describe("compact landscape gameplay", () => {
     await revealSetting(page, "card-mode-own-large");
     await page.getByTestId("card-mode-own-large").click();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("settings-return-to-decision").click();
-    await expect(selectedCard).toBeFocused();
+    await page.getByRole("button", { name: "关闭设置", exact: true }).click();
+    await expect(gameSettings).toBeFocused();
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     await expect.poll(() => page.title()).toBe("轮到你了 · 四色牌");
     const vibrationCalls = await page.evaluate(() =>

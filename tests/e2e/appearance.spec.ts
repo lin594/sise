@@ -183,7 +183,10 @@ test('mobile tools keep habits nested and session mute never changes saved prefe
   expect(await page.evaluate(() => localStorage.getItem('sise_game_display_preferences_v2'))).toBe(saved);
   await page.getByTestId('game-history').click();
   await expect(page.getByTestId('history-panel')).toBeVisible();
-  await page.getByRole('button', { name: '返回设置' }).click();
+  await expect(page.getByRole('button', { name: '返回设置' })).toHaveCount(0);
+  await page.getByTestId('close-history').click();
+  await expect(page.getByTestId('game-history')).toBeFocused();
+  await page.getByTestId('game-settings').click();
   await expect(page.getByTestId('session-mute')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('session-mute').click();
   await page.keyboard.press('Escape');
@@ -342,4 +345,167 @@ test('a clock-only snapshot cannot leave rotation waiting on an expired animatio
   await expect(page.locator('main.layout')).toHaveAttribute('data-rotated-phone-portrait', 'true', { timeout: 5000 });
   await expect(board).toHaveAttribute('data-geometry-busy', 'false');
   await expect(page.locator('main.layout')).toHaveAttribute('data-effective-viewport', '568x320');
+});
+
+
+test('rules open from the toolbar and from each open tool panel', async ({ page }, info) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  for (const entry of ['direct', 'game-history', 'game-interaction', 'game-settings']) {
+    if (entry !== 'direct') await page.getByTestId(entry).click();
+    await page.getByTestId('tools-rules').click();
+    await expect(page.getByTestId('rules-panel')).toBeVisible();
+    await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '返回设置' })).toHaveCount(0);
+    await expect(page.getByTestId('close-rules')).toBeFocused();
+    if (entry === 'direct') await page.screenshot({ path: info.outputPath('toolbar-rules-568.png') });
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('rules-panel')).toHaveCount(0);
+  }
+  await page.getByTestId('game-settings').click();
+  await page.getByTestId('settings-rules').click();
+  await expect(page.getByTestId('rules-panel')).toBeVisible();
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+});
+
+test('settings group table placement under layout without a turn reminder', async ({ page }, info) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await startTable(page);
+  await page.getByTestId('game-settings').click();
+  const panel = page.getByTestId('settings-panel');
+  await expect(page.getByTestId('settings-decision-reminder')).toHaveCount(0);
+  await expect(panel.getByText('轮到你操作', { exact: true })).toHaveCount(0);
+  await page.getByTestId('settings-category-layout').click();
+  await expect(panel.getByRole('radiogroup', { name: '牌桌布局' })).toBeVisible();
+  await expect(panel.getByRole('radiogroup', { name: '玩家摆放方向' })).toBeVisible();
+  await page.getByTestId('seat-direction-clockwise').click();
+  await page.getByTestId('layout-classic').click();
+  const back = page.getByTestId('settings-back');
+  expect(await back.evaluate(el => el.scrollWidth <= el.clientWidth && getComputedStyle(el).fontFamily === getComputedStyle(document.documentElement).fontFamily)).toBe(true);
+  await page.screenshot({ path: info.outputPath('settings-layout-667.png') });
+  await back.click();
+  await expect(page.getByTestId('settings-category-layout')).toBeFocused();
+  await page.getByTestId('settings-category-table').click();
+  await expect(panel.getByRole('radiogroup', { name: '牌桌布局' })).toHaveCount(0);
+  await expect(panel.getByRole('radiogroup', { name: '玩家摆放方向' })).toHaveCount(0);
+  await expect(page.getByTestId('hand-layout-single')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  await expect(page.getByTestId('settings-panel')).toHaveCount(0);
+  await expect(page.getByTestId('history-panel').getByRole('button', { name: '返回设置' })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('history-667.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('game-history')).toBeFocused();
+  await page.reload();
+  await page.getByTestId('game-settings').click();
+  await page.getByTestId('settings-category-layout').click();
+  await expect(page.getByTestId('seat-direction-clockwise')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('layout-classic')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('opening auto play from interaction leaves no hidden modal behind', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-interaction').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+  await page.getByTestId('game-auto-play').click();
+  await expect(page.getByTestId('cancel-auto-play')).toBeFocused();
+  await expect(page.getByTestId('quick-phrase-panel')).toHaveCount(0);
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+  await expect(page.getByTestId('game-auto-play')).toBeFocused();
+});
+
+test('interaction dismisses on a header outside click and restores its entry', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-interaction').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+  await page.locator('.top-brand').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toHaveCount(0);
+  await expect(page.getByTestId('game-interaction')).toBeFocused();
+  await page.getByTestId('game-settings').click();
+  await expect(page.getByTestId('settings-panel')).toBeVisible();
+});
+
+test('a newer toolbar choice cancels a pending rules transition', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  // Two quick toolbar choices while the old panel is still leaving.
+  await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>('[data-testid="tools-rules"]')!.click();
+    document.querySelector<HTMLButtonElement>('[data-testid="game-settings"]')!.click();
+  });
+  await expect(page.getByTestId('settings-panel')).toBeVisible();
+  await expect(page.getByTestId('history-panel')).toHaveCount(0);
+  await expect(page.getByTestId('settings-panel')).toBeFocused();
+  await expect(page.getByTestId('rules-panel')).toHaveCount(0);
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+});
+
+for (const viewport of [{ width: 568, height: 320 }, { width: 320, height: 568 }]) {
+  test(`toolbar panels switch, trap focus and dismiss without selecting cards ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await startTable(page);
+    const entries = [
+      ['game-history', 'history-panel'],
+      ['game-interaction', 'quick-phrase-panel'],
+      ['game-settings', 'settings-panel'],
+    ];
+    for (const [source] of entries) {
+      for (const [entry, panelId] of entries) {
+        if (entry === source) continue;
+        await page.getByTestId(source).click();
+        await expect(page.getByTestId(source)).toHaveAttribute('aria-expanded', 'true');
+        await page.getByTestId(entry).click();
+        const panel = page.getByTestId(panelId);
+        await expect(panel).toBeFocused();
+        await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+        await expect(page.getByTestId(source)).toHaveAttribute('aria-expanded', 'false');
+        await expect(page.getByTestId(entry)).toHaveAttribute('aria-expanded', 'true');
+        const buttons = panel.locator('button:visible:enabled');
+        await page.keyboard.press('Shift+Tab');
+        await expect(buttons.last()).toBeFocused();
+        await page.keyboard.press('Tab');
+        await expect(buttons.first()).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+        await expect(page.getByTestId(entry)).toBeFocused();
+        await expect(page.getByTestId(entry)).toHaveAttribute('aria-expanded', 'false');
+      }
+    }
+    for (const [entry, panelId] of entries) {
+      const cards = page.locator('.hand-card');
+      const selection = await cards.evaluateAll(nodes => nodes.map(el => el.getAttribute('aria-pressed')));
+      const card = await cards.first().boundingBox();
+      await page.getByTestId(entry).click();
+      await expect(page.getByTestId(panelId)).toBeVisible();
+      await page.mouse.click(card!.x + card!.width / 2, card!.y + card!.height / 2);
+      await expect(page.getByTestId(panelId)).toHaveCount(0);
+      expect(await cards.evaluateAll(nodes => nodes.map(el => el.getAttribute('aria-pressed')))).toEqual(selection);
+      await expect(page.getByTestId(entry)).toBeFocused();
+    }
+  });
+}
+
+test('superseded panel openings cannot swallow confirmation clicks', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  for (const entry of ['game-history', 'game-interaction', 'game-settings']) {
+    // Both clicks precede Vue's next render: no abandoned panel may install an
+    // outside listener after the confirmation has already taken over.
+    await page.evaluate(entry => {
+      document.querySelector<HTMLButtonElement>(`[data-testid="${entry}"]`)!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="game-auto-play"]')!.click();
+    }, entry);
+    await expect(page.getByTestId('cancel-auto-play')).toBeFocused();
+    await page.getByTestId('cancel-auto-play').click();
+    await expect(page.getByTestId('cancel-auto-play')).toHaveCount(0);
+    await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+    await expect(page.getByTestId('game-auto-play')).toBeFocused();
+  }
 });
