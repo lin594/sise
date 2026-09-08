@@ -63,9 +63,8 @@
       ></div>
     </Transition>
 
-    <Transition name="popover">
+    <Transition name="popover" @after-leave="finishOpeningRules">
       <section v-if="phraseOpen" ref="phrasePanelRef" class="phrase-panel" data-testid="quick-phrase-panel" role="dialog" aria-modal="true" aria-label="快捷互动" tabindex="-1" @keydown.esc.stop.prevent="closePhrases" @keydown.tab="trapPanelFocus($event, phrasePanelRef)">
-        <button type="button" @click="backToTools">‹ 返回设置</button>
         <button type="button" @click="closePhrases">关闭互动</button>
         <p v-if="props.quickPhraseBusy" class="phrase-busy" role="status">上一条语音播放中…</p>
         <p v-else-if="quickPhrases.length === 0" class="phrase-busy" role="status">暂无互动音效</p>
@@ -76,7 +75,7 @@
       </section>
     </Transition>
 
-    <Transition name="popover">
+    <Transition name="popover" @after-leave="finishOpeningRules">
       <section
         v-if="historyOpen"
         id="game-history-panel"
@@ -92,7 +91,6 @@
         @keydown.tab="trapHistoryFocus"
       >
         <header>
-          <button type="button" @click="backToTools">‹ 返回设置</button>
           <div>
             <small>没看清刚才发生了什么？</small>
             <strong id="history-panel-title">最近操作</strong>
@@ -141,25 +139,10 @@
           <div>
             <small>全局设置</small>
             <strong id="settings-panel-title">{{ settingsPageTitle }}</strong>
-            <button v-if="settingsPage !== settingsRoot" type="button" data-testid="settings-back" @click="backSettings()">‹ 返回</button>
+            <button v-if="settingsPage !== settingsRoot" type="button" class="settings-back" data-testid="settings-back" @click="backSettings()">‹ 返回</button>
           </div>
           <button type="button" aria-label="关闭设置" @click="closeSettings()">×</button>
         </header>
-        <div
-          v-if="decisionActive"
-          class="decision-reminder"
-          data-testid="settings-decision-reminder"
-          role="status"
-          aria-live="polite"
-        >
-          <span>
-            <strong>轮到你操作</strong>
-            <small>{{ decisionTimeText }}</small>
-          </span>
-          <button type="button" data-testid="settings-return-to-decision" @click="returnToDecision">
-            {{ declaring ? "返回声明" : "返回出牌" }}
-          </button>
-        </div>
         <nav v-if="settingsPage === 'home'" class="settings-categories" aria-label="设置分类">
           <button v-for="category in settingsCategories" :key="category.id" type="button" :data-testid="`settings-category-${category.id}`" @click="openSettingsPage(category.id)">
             <strong>{{ category.label }}</strong><small>{{ category.summary }}</small><span aria-hidden="true">›</span>
@@ -169,7 +152,7 @@
           <button type="button" data-testid="session-mute" :aria-pressed="sessionMuted" @click="emit('toggleSessionMute')">{{ sessionMuted ? '取消临时静音' : '临时静音' }}</button>
           <button ref="exitButtonRef" type="button" data-testid="game-exit" @click="requestExit">退出牌局</button>
         </div>
-        <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
+        <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'layout'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行缩放后一屏显示全部；翻页保留原尺寸</small></div>
           <div class="mode-options" role="radiogroup" aria-label="手牌排列">
@@ -220,7 +203,7 @@
             </button>
           </div>
         </div>
-        <div v-if="settingsPage === 'table'" class="preference-group">
+        <div v-if="settingsPage === 'layout'" class="preference-group">
           <div class="preference-copy">
             <strong>玩家摆放</strong>
             <small>只调整你看到的左右方向</small>
@@ -519,14 +502,15 @@ const phrasePanelRef = ref<HTMLElement | null>(null);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
-type SettingsPage = "home" | "appearance" | "table" | "sound" | "assist";
+type SettingsPage = "home" | "appearance" | "layout" | "table" | "sound" | "assist";
 const interactionButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsRoot = ref<SettingsPage>("home");
 const settingsPage = ref<SettingsPage>("home");
-const settingsPageTitle = computed(() => ({ home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
+const settingsPageTitle = computed(() => ({ home: "全部设置", appearance: "外观", layout: "布局", table: "纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
 const settingsCategories = computed(() => [
   { id: "appearance" as const, label: "外观", summary: skins.find(s => s.id === props.modelValue.skin)?.name ?? "皮肤" },
-  { id: "table" as const, label: "牌桌与纸牌", summary: `${tableLayouts.find(l => l.id === props.modelValue.tableLayout)?.name ?? "布局"} · ${props.modelValue.handLayout === "paged" ? "翻页" : "单行"}` },
+  { id: "layout" as const, label: "布局", summary: `${tableLayouts.find(l => l.id === props.modelValue.tableLayout)?.name ?? "布局"} · ${props.modelValue.seatDirection === "clockwise" ? "顺时针" : "逆时针"}` },
+  { id: "table" as const, label: "纸牌", summary: `牌面样式 · ${props.modelValue.handLayout === "paged" ? "翻页" : "单行"}` },
   { id: "sound" as const, label: "声音与提醒", summary: props.modelValue.turnAlert === "off" ? "轮到我提醒已关闭" : "轮到我提醒已开启" },
   { id: "assist" as const, label: "辅助功能", summary: "颜色辅助、动态效果、屏幕常亮" },
 ]);
@@ -635,12 +619,6 @@ async function toggleSettings(): Promise<void> {
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
 }
 
-async function backToTools(): Promise<void> {
-  closeHistory(false);
-  phraseOpen.value = false;
-  await toggleSettings();
-}
-
 async function toggleHistory(): Promise<void> {
   if (historyOpen.value) {
     closeHistory();
@@ -691,7 +669,7 @@ function closeHistory(restoreFocus = true): void {
   removeSettingsOutsideListener();
   historyOpen.value = false;
   if (restoreFocus) {
-    void nextTick(() => settingsButtonRef.value?.focus());
+    void nextTick(() => historyButtonRef.value?.focus());
   }
 }
 
@@ -840,11 +818,15 @@ function finishOpeningRules(): void {
 }
 
 function openRules(): void {
+  const leavingPanel = settingsOpen.value || historyOpen.value || phraseOpen.value;
   rulesOpeningPending = true;
   removeSettingsOutsideListener();
   stopObservingSettingsScroll();
   settingsOpen.value = false;
   historyOpen.value = false;
+  phraseOpen.value = false;
+  // A direct toolbar entry has no panel leave transition to wait for.
+  if (!leavingPanel) finishOpeningRules();
 }
 
 function returnToDecision(): void {
@@ -1006,6 +988,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.game-tools :deep(button) { font-family: inherit; }
 .game-tools {
   position: relative;
   z-index: 2;
@@ -1170,6 +1153,8 @@ onBeforeUnmount(() => {
   color: var(--ui-muted, #cbd5e1);
   font-size: 1.25rem;
 }
+
+.settings-panel header .settings-back { width: auto; height: auto; min-height: 36px; padding: .35rem .65rem; border-radius: .5rem; font-size: 14px; white-space: nowrap; }
 
 .decision-reminder {
   position: sticky;
@@ -1677,5 +1662,4 @@ onBeforeUnmount(() => {
 .settings-panel > header { position: sticky; top: -.8rem; z-index: 3; padding-block: .4rem; background: var(--ui-page, #080f1d); }
 .settings-panel > header > div { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 
-.settings-panel header button[data-testid="settings-back"] { width: auto; padding-inline: .5rem; white-space: nowrap; border-radius: .45rem; font-size: 14px; }
 </style>

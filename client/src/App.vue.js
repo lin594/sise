@@ -807,11 +807,6 @@ const settingsDecisionTimeText = computed(() => decisionTimer.value.untimed
     : state.value?.responsePhase === "collective" && settingsDecisionSecondsLeft.value === 0
         ? "公共倒计时已结束，仍可响应，请尽快操作"
         : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`);
-async function backRulesToTools() {
-    closeRules(false);
-    await nextTick();
-    await gameToolsRef.value?.openTools();
-}
 function openRules(trigger) {
     const explicitTarget = trigger instanceof HTMLElement
         ? trigger
@@ -4258,13 +4253,6 @@ if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "rules-slogan" },
     });
-    if (__VLS_ctx.showGameTools) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
-            ...{ onClick: (__VLS_ctx.backRulesToTools) },
-            type: "button",
-            ...{ class: "ghost" },
-        });
-    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.showRules))
@@ -4419,7 +4407,6 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['rules-kicker']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
-/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-decision-reminder']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-content']} */ ;
 // @ts-ignore
@@ -4566,7 +4553,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             settingsDecisionActive: settingsDecisionActive,
             settingsDecisionSecondsLeft: settingsDecisionSecondsLeft,
             settingsDecisionTimeText: settingsDecisionTimeText,
-            backRulesToTools: backRulesToTools,
             openRules: openRules,
             returnToDecision: returnToDecision,
             returnToDecisionFromRules: returnToDecisionFromRules,

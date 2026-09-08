@@ -4,6 +4,7 @@ export async function revealSetting(page: Page, testId: string) {
   const control = page.getByTestId(testId);
   if (await control.isVisible()) return;
   const category = testId.startsWith("skin-") ? "appearance"
+    : /^(layout-|seat-direction-)/.test(testId) ? "layout"
     : /^(turn-alert-|spoken-turn)/.test(testId) ? "sound"
     : /^(reduce-motion|card-color-assist|keep-screen)/.test(testId) ? "assist" : "table";
   if (!await page.getByTestId(`settings-category-${category}`).isVisible()) {
