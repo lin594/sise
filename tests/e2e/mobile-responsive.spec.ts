@@ -1018,6 +1018,7 @@ test.describe("compact landscape gameplay", () => {
     const gameHistory = page.getByTestId("game-history");
     await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
       .toBeGreaterThan(0);
+    await revealTool(page, "game-history");
     await gameHistory.click();
     const historyPanel = page.getByTestId("history-panel");
     await expect(historyPanel).toBeVisible();
@@ -1055,6 +1056,7 @@ test.describe("compact landscape gameplay", () => {
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
     await expect(page.getByTestId("game-settings")).toBeFocused();
+    await revealTool(page, "game-history");
     await gameHistory.click();
     const firstPlayableCard = page.locator(".hand-card.playable").first();
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");

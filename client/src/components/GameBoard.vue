@@ -8,6 +8,7 @@
       'board-declaring': state?.phase === 'declaring',
     }"
     data-testid="game-board"
+    :data-geometry-busy="Boolean(flights.length || tableFlights.length || dealerReveal)"
     :data-table-layout="appliedTableLayout"
     :data-layout-pending="appliedTableLayout !== props.tableLayout"
     :data-response-phase="props.responsePhase ?? ''"
@@ -5818,9 +5819,10 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; }
 
 /* Stable controls share one rail; the clock never participates in scrolling. */
-.board .self-command-row { grid-template-columns: 56px minmax(110px, 25%) minmax(0, 1fr); }
+.board .self-command-row { border: 0; grid-template-columns: 56px minmax(110px, 25%) minmax(0, 1fr); }
 .clock-slot { grid-column: 1; grid-row: 1; display: grid; place-items: center; min-width: 0; }
 .board .fixed-clock { position: static; min-width: 0; width: 52px; padding-inline: 1px; }
+.board .embedded-actions { padding: 0; }
 .board .embedded-actions :deep(.btn) { flex: 0 1 96px; min-width: 44px; max-width: 96px; min-height: 44px; }
 .board .embedded-actions :deep(.action-row) { flex-wrap: wrap; }
 .board .dynamic-action-track { grid-column: 3; grid-row: 1; overflow: visible; min-width: 0; }
@@ -5843,7 +5845,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 @media (max-width: 960px), (max-height: 500px) {
   .board:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) 44px 76px; gap: 2px; }
   .board.crowded-action-dock:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
-  .board .self-command-row { grid-template-columns: 56px minmax(100px, 25%) minmax(0, 1fr); }
+  .board .self-command-row { border: 0; grid-template-columns: 56px minmax(100px, 25%) minmax(0, 1fr); }
   .board .dynamic-action-track { padding-block: 0; }
   .board .self-info-card .group-score-badge { display: none; }
 }
