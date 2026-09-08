@@ -6,7 +6,7 @@ async function inject(page: Page, scenario: string) {
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario, ok: true });
 }
 
-for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand'] as const) {
+for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect'] as const) {
   test(`confirmed collective chi respects ${outcome} and consumes each card once`, async ({ browser }) => {
     const hostContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
     const guestContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
@@ -40,8 +40,26 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand'] as const) {
       if (outcome !== 'only-chi') {
         await expect(host.getByTestId('decision-status')).toContainText('已选择吃，等待其他玩家响应');
         await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
+        if (outcome === 'disconnect') {
+          await hostContext.setOffline(true);
+          await expect(host.locator('main.layout')).toHaveAttribute('data-connection-state', 'offline');
+          await expect.poll(() => host.evaluate(() => (window as any).__siseLocalTest.getDeferredChiDebug().intent)).toBeNull();
+          await hostContext.setOffline(false);
+          await expect(host.locator('main.layout')).toHaveAttribute('data-connection-state', /^(connected|restored)$/);
+        }
         if (outcome === 'delayed-hand') await host.evaluate(() => (window as any).__siseLocalTest.setPrivateHandReadyOverride(false));
-        await guest.getByTestId(`action-${outcome === 'delayed-hand' ? 'pass' : outcome}`).click();
+        await guest.getByTestId(`action-${outcome === 'delayed-hand' || outcome === 'disconnect' ? 'pass' : outcome}`).click();
+        if (outcome === 'disconnect') {
+          await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'local_upper', { timeout: 15_000 });
+          await expect(host.getByTestId('action-chi')).toBeEnabled();
+          await expect(host.getByTestId('hand-card-confirm-ma')).toBeVisible();
+          await expect.poll(() => host.evaluate(() => (window as any).__siseLocalTest.getDeferredChiDebug().intent)).toBeNull();
+          for (const id of ['confirm-ma', 'confirm-pao']) {
+            const card = host.getByTestId(`hand-card-${id}`);
+            if (await card.getAttribute('aria-pressed') !== 'true') await card.click();
+          }
+          await host.getByTestId('action-chi').click();
+        }
         if (outcome === 'delayed-hand') {
           await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'local_upper');
           await expect(host.getByTestId('hand-card-confirm-ma')).toBeVisible();
