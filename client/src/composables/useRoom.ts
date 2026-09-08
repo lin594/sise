@@ -1,7 +1,7 @@
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import type { ListeningHints } from "@/types/game";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
-import { Client, ErrorCode, MatchMakeError, Room } from "@colyseus/sdk";
+import { Client, ErrorCode, MatchMakeError, Protocol, Room } from "@colyseus/sdk";
 import type {
   ActionFeedback,
   ActionCandidate,
@@ -1274,6 +1274,12 @@ export function useRoom(playerName = "Player") {
     // Access Proxy properties directly without calling toJSON() to avoid circular reference
     const rawSnapshot = next as any;
     const normalized = normalizeSnapshot(next);
+    // The SDK exposes an empty schema immediately after its join handshake,
+    // before the server has sent the first state. Keep the syncing screen until
+    // an authoritative phase arrives instead of rendering a permanent 0-card table.
+    if (!["waiting", "declaring", "playing", "ended"].includes(normalized.phase)) {
+      return;
+    }
     if (!normalized.roomId && activeRoomId.value) {
       normalized.roomId = activeRoomId.value;
     }
@@ -1951,6 +1957,14 @@ export function useRoom(playerName = "Player") {
       if (joined.state) {
         applySnapshot(joined.state);
       }
+      // A successful SDK join only confirms receipt of the server handshake.
+      // Repeat its idempotent acknowledgment using an owned ArrayBuffer, after
+      // all listeners are installed. Until this reaches the server, snapshots
+      // and probe replies remain queued and the empty schema cannot recover.
+      if (rawSocket?.readyState === WebSocket.OPEN) {
+        rawSocket.send(new Uint8Array([Protocol.JOIN_ROOM]).buffer);
+      }
+      requestSyncState("after_join");
       startConnectionProbes(joined);
       void fetchPrivateState("after_join");
       return true;
