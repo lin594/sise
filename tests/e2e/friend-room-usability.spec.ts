@@ -22,11 +22,16 @@ async function finishStagedDeclaration(page: Page) {
 }
 async function assertHandFits(page: Page) {
   await expect.poll(() => page.locator('.cards.hand').evaluate((el) => {
-    const rail = el.getBoundingClientRect();
-    const cards = [...el.querySelectorAll('[data-card-id]')].map((c) => c.getBoundingClientRect());
-    return cards.length >= 20 && cards.every((c) => c.left >= rail.left - 2 && c.right <= rail.right + 2 && c.top >= rail.top - 2 && c.bottom <= rail.bottom + 2 && c.left >= -2 && c.right <= window.innerWidth + 2 && c.top >= -2 && c.bottom <= window.innerHeight + 2);
+    const cards = [...el.querySelectorAll<HTMLElement>('[data-card-id]')];
+    const viewport = el.getBoundingClientRect();
+    return cards.length >= 20 && cards.every(c => {
+      const r = c.getBoundingClientRect();
+      return r.left >= viewport.left-1 && r.right <= viewport.right+1 && r.top >= viewport.top-1 && r.bottom <= viewport.bottom+1;
+    }) && el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1;
   })).toBe(true);
+  await expect(page.getByTestId('hand-scroll-tools')).toHaveCount(0);
 }
+
 for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 }, { width: 667, height: 375 }, { width: 375, height: 667 }]) {
   test(`single row and embedded declaration ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
@@ -177,12 +182,15 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     expect(Math.max(...values) - Math.min(...values), `${key} must stay stable during the deal`).toBeLessThanOrEqual(0.5);
   }
 });
-test('single-row hand stays stable while shrinking from 20 to 12 cards', async ({ page }) => {
+test('single-row hand stays stable at key counts from 21 to 5 cards', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await startLobbyAction(page);
   await useStagedDeclaration(page);
+
+  // Count snapshots represent settled hands; opening animation has its own frame-level test.
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
 
   const allSamples: Array<{
     count: number;
@@ -191,7 +199,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
     cardsFit: boolean;
     lastBounds: { viewport: Record<string, number>; cards: Record<string, number> } | null;
   }> = [];
-  for (const count of [20, 18, 17, 16, 15, 14, 13, 12]) {
+  for (const count of [21, 20, 18, 16, 14, 10, 5]) {
     await page.evaluate((nextCount) => {
       const bridge = (window as any).__siseLocalTest;
       const state = bridge.getRoomState();
@@ -237,9 +245,9 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
             width: viewportRect.width,
             height: viewportRect.height,
           });
-          cardsFit &&= cardRects.every((rect) =>
-            rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
-            rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1);
+          // Every key hand count must stay in one fully visible stable row.
+          cardsFit &&= cardRects.every((rect) => rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 && rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1)
+            && hand.scrollHeight <= hand.clientHeight + 1;
           if (performance.now() - startedAt >= 320) {
             window.clearInterval(timer);
             resolve();
@@ -253,7 +261,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
 
   for (const sample of allSamples) {
     expect(new Set(sample.scales.map((scale) => scale.toFixed(4))).size, `${sample.count} cards must keep one scale`).toBe(1);
-    expect(sample.cardsFit, `${sample.count} cards must stay inside the hand viewport: ${JSON.stringify(sample.lastBounds)}`).toBe(true);
+    expect(sample.cardsFit, `${sample.count} cards must stay in one vertically contained row: ${JSON.stringify(sample.lastBounds)}`).toBe(true);
     for (const key of ['left', 'top', 'width', 'height'] as const) {
       const values = sample.viewportRects.map((rect) => rect[key]);
       expect(Math.max(...values) - Math.min(...values), `${sample.count} cards viewport ${key} must not move`).toBeLessThanOrEqual(0.5);

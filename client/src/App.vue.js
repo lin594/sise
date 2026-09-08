@@ -2849,6 +2849,13 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['game-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['tool-button']} */ ;
+/** @type {__VLS_StyleScopedClasses['layout']} */ ;
+/** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-slogan']} */ ;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['ultra-compact-viewport']} */ ;
@@ -3381,6 +3388,7 @@ else {
         ...{ 'onGeometryBusy': {} },
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        ...{ class: ({ 'small-table-viewport': __VLS_ctx.effectiveWidth <= 740 && __VLS_ctx.effectiveHeight <= 400 }) },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
@@ -3415,6 +3423,7 @@ else {
         ...{ 'onGeometryBusy': {} },
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        ...{ class: ({ 'small-table-viewport': __VLS_ctx.effectiveWidth <= 740 && __VLS_ctx.effectiveHeight <= 400 }) },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),

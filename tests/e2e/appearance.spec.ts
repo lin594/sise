@@ -135,7 +135,7 @@ test("lobby boots with a saved name and edits without an entry screen", async ({
 test('invalid fields fall back independently and preserve valid preferences', async ({page}) => {
   await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({skin:'unknown',tableLayout:'unknown',ownCards:'large',handLayout:'paged'})));
   await page.goto('/?new=1');
-  await expect(page.locator('html')).toHaveAttribute('data-skin','licheng-water');
+  await expect(page.locator('html')).toHaveAttribute('data-skin','puxian-house');
   await expect(page.locator('main')).toHaveAttribute('data-table-layout','adaptive');
   await page.getByTestId('game-settings').click();
   await revealSetting(page,'card-mode-own-large');
@@ -259,10 +259,15 @@ test('classic table places actual exposed groups around the felt', async ({ page
 });
 
 test('dealer ceremony counts from the picker to the authoritative dealer for every color', async ({ page }, info) => {
+  await page.clock.install();
   await page.setViewportSize({ width: 568, height: 320 });
   await startTable(page);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   for (const [color, total] of [['yellow', 1], ['red', 2], ['green', 3], ['white', 4], ['gold', 2]] as const) {
-    await page.evaluate(scenario => (window as any).__siseLocalTest.setupScenario(scenario), `dealer_count_${color}`);
+    const startedAt = await page.evaluate(scenario => {
+      (window as any).__siseLocalTest.setupScenario(scenario);
+      return Date.now();
+    }, `dealer_count_${color}`);
     const status = page.getByTestId('dealer-count-status');
     await expect(status).toHaveAttribute('data-count-step', '1');
     await expect(page.getByTestId('dealer-ceremony')).not.toContainText('从翻牌者数起');
@@ -270,18 +275,41 @@ test('dealer ceremony counts from the picker to the authoritative dealer for eve
     const state = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState());
     const seats = [...state.players].sort((a: any,b: any) => a.seatIndex - b.seatIndex);
     const first = seats.findIndex((p: any) => p.clientId === state.dealerPickerId);
+    const readCount = () => status.evaluate(el => ({
+      step: Number(el.getAttribute('data-count-step')), seat: el.getAttribute('data-count-seat'),
+    }));
+    // Freeze between observations: real-time polling can miss a 650ms step on CI.
+    // Advance in small increments to include the production 500ms render timer.
     for (let step = 1; step <= total; step++) {
-      await expect(status).toHaveAttribute('data-count-step', String(step));
-      await expect(status).toHaveAttribute('data-count-seat', seats[(first + step - 1) % seats.length].clientId);
+      for (let elapsed = 0; (await readCount()).step < step && elapsed < 1500; elapsed += 50) {
+        await page.clock.runFor(50);
+      }
+      expect(await readCount()).toEqual({step, seat: seats[(first + step - 1) % seats.length].clientId});
+      if (step < total) await expect(page.locator('.dealer-reveal-result')).toHaveCount(0);
     }
-    await expect(status).toHaveAttribute('data-count-seat', state.dealerId);
-    await page.waitForTimeout(520);
-    const endPosition = await status.boundingBox();
-    if (total > 1) expect(Math.hypot(endPosition!.x - startPosition!.x, endPosition!.y - startPosition!.y)).toBeGreaterThan(30);
+    expect((await readCount()).seat).toBe(state.dealerId);
+    const resultAt = 450 + (total - 1) * 650 + 480;
+    const elapsed = await page.evaluate(() => Date.now()) - startedAt;
+    if (elapsed < resultAt) {
+      await page.clock.runFor(resultAt - elapsed - 1);
+      await expect(page.locator('.dealer-reveal-result')).toHaveCount(0);
+    }
+    for (let elapsed = 0; !await page.locator('.dealer-reveal-result').count() && elapsed < 1500; elapsed += 50) {
+      await page.clock.runFor(50);
+    }
     await expect(page.locator('.dealer-reveal-result')).toBeVisible();
+    expect(await page.evaluate(() => Date.now()) - startedAt).toBeGreaterThanOrEqual(resultAt);
+    // CSS transitions use the browser animation timeline, independently of Clock.
+    if (total > 1) await expect.poll(async () => {
+      const endPosition = await status.boundingBox();
+      return Math.hypot(endPosition!.x - startPosition!.x, endPosition!.y - startPosition!.y);
+    }).toBeGreaterThan(30);
+    expect(await readCount()).toEqual({step: total, seat: state.dealerId});
     await expect(page.getByTestId('game-interaction')).toBeInViewport({ ratio: 1 });
     await expect(page.getByTestId('game-auto-play')).toBeInViewport({ ratio: 1 });
     if (color === 'white') await page.screenshot({ path: info.outputPath('dealer-count-white-4.png') });
+    await page.clock.fastForward(4200);
+    await expect(status).toHaveCount(0);
   }
 });
 

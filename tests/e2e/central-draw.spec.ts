@@ -330,13 +330,14 @@ test("declining a draw lands it in the drawer's outgoing flow without a second p
       const range = document.createRange();
       range.selectNodeContents(card.querySelector<HTMLElement>(".text-top")!);
       const glyphRect = range.getBoundingClientRect();
-      return { width: glyphRect.width / cardRect.width, height: glyphRect.height / cardRect.height };
+      return { width: glyphRect.width / cardRect.width, height: glyphRect.height / cardRect.height, rect: { left: cardRect.left, top: cardRect.top, width: cardRect.width, height: cardRect.height } };
     };
     return {
       flight: ratio(document.querySelector<HTMLElement>(`[data-transition-kind="flow"][data-transition-card-id="${id}"] [data-face-id]`)! ),
       target: ratio(document.querySelector<HTMLElement>(`[data-testid="game-board"] .discard-token[data-face-id="${id}"]`)! ),
     };
   }, origin.id);
+  expectRectClose(flowGlyphRatios.flight.rect, flowGlyphRatios.target.rect);
   expectGlyphRatioClose(flowGlyphRatios.flight, flowGlyphRatios.target);
   await expect(page.getByTestId("game-board").locator(`.discard-token[data-face-id="${origin.id}"]`)).toBeVisible();
   const events = await page.evaluate((id) => (window as any).__siseLocalTest.getRoomState().tableTransitions.filter((e: any) => e.moves.some((m: any) => m.card.id === id)), origin.id);

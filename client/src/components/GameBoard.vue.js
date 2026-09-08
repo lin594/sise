@@ -396,6 +396,7 @@ const tableEvents = computed(() => rawTableEvents.value.flatMap((event) => {
 const lastCardRects = new Map();
 const tableFlightSources = new Map();
 const tableFlightDestinations = new Map();
+const tableFlightFaceStyles = new Map();
 let presentationScopeKey = "";
 let lastPresentationPaintAt = 0;
 watch(() => props.viewportTransformKey, () => {
@@ -405,6 +406,7 @@ watch(() => props.viewportTransformKey, () => {
     lastCardRects.clear();
     tableFlightSources.clear();
     tableFlightDestinations.clear();
+    tableFlightFaceStyles.clear();
     flights.value = [];
     lastPresentationPaintAt = 0;
 }, { flush: "sync" });
@@ -419,6 +421,7 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.pha
         lastCardRects.clear();
         tableFlightSources.clear();
         tableFlightDestinations.clear();
+        tableFlightFaceStyles.clear();
         lastPresentationPaintAt = 0;
     }
     const currentMoveKeys = new Set(tableEvents.value.flatMap((event) => event.moves.map((_, index) => `${event.round}:${event.id}:${index}`)));
@@ -611,12 +614,26 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
     const scaleX = Math.max(0.01, current.width / end.width);
     const scaleY = Math.max(0.01, current.height / end.height);
     const destinationVisual = tableFlightCardVisual(move.to);
+    let cardStyle = tableFlightFaceStyles.get(key);
+    const destinationElement = tableLocationCardElement(move.to, move.card.id);
+    if (!cardStyle && destinationElement) {
+        const style = getComputedStyle(destinationElement);
+        const top = destinationElement.querySelector('.text-top');
+        const bottom = destinationElement.querySelector('.text-bottom');
+        cardStyle = { width: '100%', height: '100%', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+            '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
+            '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
+        tableFlightFaceStyles.set(key, cardStyle);
+        while (tableFlightFaceStyles.size > 128)
+            tableFlightFaceStyles.delete(tableFlightFaceStyles.keys().next().value);
+    }
     return [{ key, card: move.card, kind: event.kind,
             back, rotation: draw ? (back ? flip : flip - 180) : 0,
             stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
             destinationZone: move.to.zone,
             cardSize: destinationVisual.size,
             cardClass: destinationVisual.className,
+            cardStyle,
             style: {
                 width: `${Math.max(1, end.width)}px`,
                 height: `${Math.max(1, end.height)}px`,
@@ -628,9 +645,7 @@ function flowCardCount(playerId) {
     return flowCards(playerId).length;
 }
 function visibleFlowCards(playerId) {
-    const cards = flowCards(playerId);
-    const limit = props.ultraCompact ? 8 : 14;
-    return cards.slice(Math.max(0, cards.length - limit));
+    return flowCards(playerId);
 }
 function isActiveDiscardCard(playerId, card, index) {
     const cards = visibleFlowCards(playerId);
@@ -1196,33 +1211,48 @@ function updateHandLayoutState() {
         handVisibleRange.value = { start: 0, end: 0, total: 0 };
         return;
     }
-    if (props.handLayout !== 'paged') {
-        const cards = Array.from(hand.querySelectorAll('[data-card-id]'));
-        const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
+    const panel = viewport?.parentElement;
+    const panelStyle = panel ? getComputedStyle(panel) : null;
+    const available = panel ? panel.clientWidth - (parseFloat(panelStyle.paddingLeft) || 0) - (parseFloat(panelStyle.paddingRight) || 0) : viewport?.clientWidth ?? 0;
+    const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
+    let needsOverflow = keepGeometry ? handHasOverflow.value : false;
+    if (props.handLayout !== 'paged' && !keepGeometry) {
         const style = getComputedStyle(hand);
-        const gap = parseFloat(style.columnGap) || 0;
-        const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-        const available = viewport?.clientWidth ?? 0;
-        if (available > 0 && cards.length > 0) {
-            // 给缩放后的子像素取整留出少量余量，避免左右两端各溢出约 1px 而被外框裁切。
-            const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 8)));
+        const card = hand.querySelector('.hand-card');
+        const face = card?.querySelector('.card');
+        if (card && face && viewport?.clientWidth) {
+            // Natural CSS dimensions are independent of the previously applied scale.
+            const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
+            const count = handLayoutCards.value.length;
+            const gap = parseFloat(style.columnGap) || 0;
+            const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+            // Single mode fits every authoritative card, including concealed opening cards.
+            // Only paged mode reserves toolbar space and enforces large touch targets.
+            const spacing = padding + gap * Math.max(0, count - 1) + 4;
+            needsOverflow = false;
+            const fit = (available - spacing) / (naturalWidth * count);
+            const nextScale = Math.min(1, Math.max(0.01, fit));
+            hand.scrollLeft = 0;
             if (Math.abs(handScale.value - nextScale) > 0.001) {
                 handScale.value = nextScale;
+                void nextTick(scheduleHandLayoutUpdate);
             }
             handScaleReady.value = true;
         }
-        hand.scrollLeft = 0;
-        handHasOverflow.value = false;
-        handCanScrollBackward.value = false;
-        handCanScrollForward.value = false;
-        handVisibleRange.value = cards.length
-            ? { start: 1, end: cards.length, total: cards.length }
-            : { start: 0, end: 0, total: 0 };
-        return;
     }
-    handScale.value = 1;
+    else if (!keepGeometry) {
+        handScale.value = 1;
+        const cards = Array.from(hand.querySelectorAll('.hand-card'));
+        const style = getComputedStyle(hand);
+        needsOverflow = cards.reduce((width, card) => width + card.offsetWidth, 0)
+            + (parseFloat(style.columnGap) || 0) * Math.max(0, cards.length - 1)
+            + (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) > available + 2;
+    }
+    if (handHasOverflow.value !== needsOverflow) {
+        handHasOverflow.value = needsOverflow;
+        void nextTick(scheduleHandLayoutUpdate);
+    }
     const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
-    handHasOverflow.value = maxScrollLeft > 2;
     handCanScrollBackward.value = hand.scrollLeft > 2;
     handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
     const cards = Array.from(hand.querySelectorAll("[data-card-id]"));
@@ -1252,11 +1282,12 @@ function scheduleHandLayoutUpdate() {
     handLayoutFrame = window.requestAnimationFrame(() => {
         handLayoutFrame = null;
         updateHandLayoutState();
+        updateFlowLayout();
     });
 }
 function scrollHand(direction) {
     const hand = selfHandRef.value;
-    if (!hand || props.handLayout !== "paged") {
+    if (!hand) {
         return;
     }
     const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
@@ -1264,7 +1295,7 @@ function scrollHand(direction) {
     const target = Math.min(maxScrollLeft, Math.max(0, hand.scrollLeft + (direction === "forward" ? distance : -distance)));
     // 翻页按钮每次移动一段可预期距离并播报新区间；触屏拖动仍由原生滚动处理。
     hand.scrollTo({ left: target, behavior: "auto" });
-    scheduleHandLayoutUpdate();
+    updateHandLayoutState();
 }
 function observeHandViewport(viewport) {
     handResizeObserver?.disconnect();
@@ -1276,8 +1307,86 @@ function observeHandViewport(viewport) {
     if (typeof ResizeObserver !== "undefined") {
         handResizeObserver = new ResizeObserver(scheduleHandLayoutUpdate);
         handResizeObserver.observe(viewport);
+        boardRef.value?.querySelectorAll(".flow-card").forEach(el => handResizeObserver?.observe(el));
     }
     void nextTick(scheduleHandLayoutUpdate);
+}
+let rotatedScroll = null;
+let scrollDragged = false;
+function startRotatedScroll(event) {
+    scrollDragged = false;
+    rotatedScroll = null;
+    if (event.pointerType !== 'touch' || !props.viewportTransformKey?.endsWith(':rotated'))
+        return;
+    const element = event.target.closest('.hand, .discard-strip, .self-groups-card, .player-card');
+    if (!element || (element.scrollWidth <= element.clientWidth + 2 && element.scrollHeight <= element.clientHeight + 2))
+        return;
+    rotatedScroll = { element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop };
+}
+function moveRotatedScroll(event) {
+    const drag = rotatedScroll;
+    if (!drag || drag.pointerId !== event.pointerId)
+        return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!scrollDragged && Math.hypot(dx, dy) < 6)
+        return;
+    scrollDragged = true;
+    event.preventDefault();
+    boardRef.value?.setPointerCapture(event.pointerId);
+    // The board rotates 90 degrees: screen Y is local X; screen X is -local Y.
+    drag.element.scrollLeft = drag.left - dy;
+    drag.element.scrollTop = drag.top + dx;
+    scheduleHandLayoutUpdate();
+}
+function endRotatedScroll(event) {
+    if (rotatedScroll?.pointerId !== event.pointerId)
+        return;
+    if (boardRef.value?.hasPointerCapture(event.pointerId))
+        boardRef.value.releasePointerCapture(event.pointerId);
+    rotatedScroll = null;
+}
+function suppressScrollClick(event) {
+    if (!scrollDragged)
+        return;
+    event.preventDefault();
+    event.stopPropagation();
+    scrollDragged = false;
+}
+function updateFlowScrollHints() {
+    boardRef.value?.querySelectorAll('.discard-strip').forEach(strip => {
+        strip.dataset.scrollBefore = String(strip.scrollTop > 2);
+        strip.dataset.scrollAfter = String(strip.scrollHeight - strip.clientHeight - strip.scrollTop > 2);
+    });
+}
+function updateFlowLayout() {
+    if (flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length))
+        return;
+    boardRef.value?.querySelectorAll('.flow-card').forEach(zone => {
+        const strip = zone.querySelector('.discard-strip');
+        if (!strip || !strip.clientWidth || !strip.clientHeight)
+            return;
+        const cards = strip.querySelectorAll('.discard-token');
+        const count = cards.length;
+        const latestId = cards[count - 1]?.dataset.faceId ?? '';
+        const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && strip.dataset.scrollAfter !== 'true');
+        const long = appliedTableCardMode.value === 'long';
+        const width = long ? 24 : 30, height = long ? 32 : 30;
+        const availableWidth = strip.clientWidth - 8, availableHeight = strip.clientHeight - 8;
+        let scale = 1;
+        // The lower bound retains a 10px font. Full rows wrap before scrolling.
+        while (scale > 5 / 6) {
+            const columns = Math.max(1, Math.floor((availableWidth + 2) / (width * scale + 2)));
+            const rows = Math.ceil(count / columns);
+            if (rows * (height * scale + 2) - 2 <= availableHeight)
+                break;
+            scale = Math.max(5 / 6, scale - .025);
+        }
+        zone.style.setProperty('--flow-scale', String(scale));
+        if (followLatest)
+            strip.scrollTop = strip.scrollHeight;
+        strip.dataset.latestId = latestId;
+    });
+    updateFlowScrollHints();
 }
 function confirmDiscard() {
     const cardId = selectedDiscardCardId.value;
@@ -1950,14 +2059,20 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     }
     void nextTick(scheduleHandLayoutUpdate);
 });
-watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(scheduleHandLayoutUpdate));
+// Settle the new count's scale after mounting, before its first paint.
+watch(() => handLayoutCards.value.map((card) => card.id).join("|"), () => updateHandLayoutState(), { flush: "post" });
 watch(handPresentationBusy, (busy) => {
     if (busy && props.handLayout !== "paged")
         handScaleReady.value = false;
     void nextTick(scheduleHandLayoutUpdate);
 }, { immediate: true });
-watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey], () => void nextTick(scheduleHandLayoutUpdate));
+watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey], () => {
+    handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+});
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
+    flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => chiSelectionContextKey.value, (contextKey) => {
     if (contextKey === activeChiSelectionContextKey) {
         return;
@@ -2053,6 +2168,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     lastCardRects.clear();
     tableFlightSources.clear();
     tableFlightDestinations.clear();
+    tableFlightFaceStyles.clear();
     await nextTick();
     scheduleHandLayoutUpdate();
 });
@@ -2518,6 +2634,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-turn-outline']} */ ;
@@ -2540,6 +2658,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -2614,14 +2736,392 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-top-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['listening-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['cards']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-token']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['center']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-slot']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-slot']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['response-card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['text']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['deck-layer']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['table-flight']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['text']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['text']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-identity-meta']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-viewport']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ onKeydown: (__VLS_ctx.handleBoardEscape) },
+    ...{ onScroll: (__VLS_ctx.updateFlowScrollHints) },
+    ...{ onPointerdown: (__VLS_ctx.startRotatedScroll) },
+    ...{ onPointermove: (__VLS_ctx.moveRotatedScroll) },
+    ...{ onPointerup: (__VLS_ctx.endRotatedScroll) },
+    ...{ onPointercancel: (__VLS_ctx.endRotatedScroll) },
+    ...{ onClick: (__VLS_ctx.suppressScrollClick) },
     ref: "boardRef",
     ...{ class: "board" },
     ...{ class: ({
             'crowded-action-dock': __VLS_ctx.crowdedActionDock,
+            'hand-overflow': __VLS_ctx.handHasOverflow,
+            'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
             'dealer-ceremony-active': Boolean(__VLS_ctx.dealerReveal),
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
         }) },
@@ -2669,6 +3169,8 @@ if (__VLS_ctx.flowTopLeftPlayer) {
     (__VLS_ctx.flowTitle(__VLS_ctx.flowTopLeftPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
+        tabindex: "0",
+        'aria-label': "流水牌，可滚动查看",
     });
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
@@ -2859,6 +3361,8 @@ if (__VLS_ctx.flowTopRightPlayer) {
     (__VLS_ctx.flowTitle(__VLS_ctx.flowTopRightPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
+        tabindex: "0",
+        'aria-label': "流水牌，可滚动查看",
     });
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowTopRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
@@ -3326,6 +3830,8 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
     (__VLS_ctx.flowTitle(__VLS_ctx.flowBottomLeftPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
+        tabindex: "0",
+        'aria-label': "流水牌，可滚动查看",
     });
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomLeftPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
@@ -3435,6 +3941,8 @@ if (__VLS_ctx.flowBottomRightPlayer) {
     (__VLS_ctx.flowTitle(__VLS_ctx.flowBottomRightPlayer.clientId));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "discard-strip" },
+        tabindex: "0",
+        'aria-label': "流水牌，可滚动查看",
     });
     for (const [card, index] of __VLS_getVForSourceType((__VLS_ctx.visibleFlowCards(__VLS_ctx.flowBottomRightPlayer.clientId)))) {
         /** @type {[typeof CardComp, ]} */ ;
@@ -3947,12 +4455,12 @@ if (__VLS_ctx.selfPlayer) {
         });
         if (__VLS_ctx.state?.phase === 'declaring' && __VLS_ctx.declarationMarks?.fish.includes(card.id)) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "hand-mark" },
+                ...{ class: "hand-mark fish-mark" },
             });
         }
         else if (__VLS_ctx.state?.phase === 'declaring' && __VLS_ctx.declarationMarks?.kong.includes(card.id)) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-                ...{ class: "hand-mark" },
+                ...{ class: "hand-mark kan-mark" },
             });
         }
         else if (__VLS_ctx.isListeningDiscard(card.id)) {
@@ -4046,12 +4554,14 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
             mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
+            ...{ style: (flight.cardStyle) },
         }));
         const __VLS_94 = __VLS_93({
             card: (flight.card),
             mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
+            ...{ style: (flight.cardStyle) },
         }, ...__VLS_functionalComponentArgsRest(__VLS_93));
     }
 }
@@ -4255,7 +4765,9 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['fish-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
+/** @type {__VLS_StyleScopedClasses['kan-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['listening-mark']} */ ;
 /** @type {__VLS_StyleScopedClasses['discard-selection-badge']} */ ;
@@ -4385,6 +4897,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             handleBoardEscape: handleBoardEscape,
             scheduleHandLayoutUpdate: scheduleHandLayoutUpdate,
             scrollHand: scrollHand,
+            startRotatedScroll: startRotatedScroll,
+            moveRotatedScroll: moveRotatedScroll,
+            endRotatedScroll: endRotatedScroll,
+            suppressScrollClick: suppressScrollClick,
+            updateFlowScrollHints: updateFlowScrollHints,
             confirmDiscard: confirmDiscard,
             onSubmitAction: onSubmitAction,
             cardLabel: cardLabel,

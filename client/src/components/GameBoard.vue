@@ -4,6 +4,8 @@
     class="board"
     :class="{
       'crowded-action-dock': crowdedActionDock,
+      'hand-overflow': handHasOverflow,
+      'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
       'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
     }"
@@ -14,6 +16,12 @@
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
     @keydown.esc="handleBoardEscape"
+    @scroll.capture.passive="updateFlowScrollHints"
+    @pointerdown.capture="startRotatedScroll"
+    @pointermove.capture="moveRotatedScroll"
+    @pointerup.capture="endRotatedScroll"
+    @pointercancel.capture="endRotatedScroll"
+    @click.capture="suppressScrollClick"
   >
     <div class="table" ref="tableRef">
       <div v-if="dealerReveal?.stage === 'revealed' && dealerReveal.pickerId" class="dealer-count-token" :key="dealerReveal.id" data-testid="dealer-count-status"
@@ -28,7 +36,7 @@
         :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
-        <div class="discard-strip">
+        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
@@ -132,7 +140,7 @@
         :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
-        <div class="discard-strip">
+        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
@@ -388,7 +396,7 @@
         :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
-        <div class="discard-strip">
+        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
@@ -455,7 +463,7 @@
         :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
-        <div class="discard-strip">
+        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
@@ -707,8 +715,8 @@
               @click="selectHandCard(card.id)"
               @dblclick.prevent="ensureHandCardSelected(card.id)"
             >
-              <span v-if="state?.phase === 'declaring' && declarationMarks?.fish.includes(card.id)" class="hand-mark">鱼</span>
-              <span v-else-if="state?.phase === 'declaring' && declarationMarks?.kong.includes(card.id)" class="hand-mark">坎</span>
+              <span v-if="state?.phase === 'declaring' && declarationMarks?.fish.includes(card.id)" class="hand-mark fish-mark">鱼</span>
+              <span v-else-if="state?.phase === 'declaring' && declarationMarks?.kong.includes(card.id)" class="hand-mark kan-mark">坎</span>
               <span
                 v-else-if="isListeningDiscard(card.id)"
                 class="hand-mark listening-mark"
@@ -757,6 +765,7 @@
             :mode="appliedTableCardMode"
             :size="flight.cardSize"
             :class="flight.cardClass"
+            :style="flight.cardStyle"
           />
         </div>
       </div>
@@ -1336,6 +1345,7 @@ const tableEvents = computed<TableTransition[]>(() => rawTableEvents.value.flatM
 const lastCardRects = new Map<string, CardRect>();
 const tableFlightSources = new Map<string, CardRect>();
 const tableFlightDestinations = new Map<string, CardRect>();
+const tableFlightFaceStyles = new Map<string, Record<string, string>>();
 let presentationScopeKey = "";
 let lastPresentationPaintAt = 0;
 watch(() => props.viewportTransformKey, () => {
@@ -1344,7 +1354,7 @@ watch(() => props.viewportTransformKey, () => {
   // stretching an in-flight card toward an obsolete rectangle.
   lastCardRects.clear();
   tableFlightSources.clear();
-  tableFlightDestinations.clear();
+  tableFlightDestinations.clear(); tableFlightFaceStyles.clear();
   flights.value = [];
   lastPresentationPaintAt = 0;
 }, { flush: "sync" });
@@ -1357,7 +1367,7 @@ watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.pha
     presentationScopeKey = nextScopeKey;
     lastCardRects.clear();
     tableFlightSources.clear();
-    tableFlightDestinations.clear();
+    tableFlightDestinations.clear(); tableFlightFaceStyles.clear();
     lastPresentationPaintAt = 0;
   }
   const currentMoveKeys = new Set(tableEvents.value.flatMap((event) =>
@@ -1549,12 +1559,25 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
   const scaleX = Math.max(0.01, current.width / end.width);
   const scaleY = Math.max(0.01, current.height / end.height);
   const destinationVisual = tableFlightCardVisual(move.to);
+  let cardStyle = tableFlightFaceStyles.get(key);
+  const destinationElement = tableLocationCardElement(move.to, move.card.id);
+  if (!cardStyle && destinationElement) {
+    const style = getComputedStyle(destinationElement);
+    const top = destinationElement.querySelector('.text-top');
+    const bottom = destinationElement.querySelector('.text-bottom');
+    cardStyle = { width: '100%', height: '100%', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+      '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
+      '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
+    tableFlightFaceStyles.set(key, cardStyle);
+    while (tableFlightFaceStyles.size > 128) tableFlightFaceStyles.delete(tableFlightFaceStyles.keys().next().value!);
+  }
   return [{ key, card: move.card, kind: event.kind,
     back, rotation: draw ? (back ? flip : flip - 180) : 0,
     stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
     destinationZone: move.to.zone,
     cardSize: destinationVisual.size,
     cardClass: destinationVisual.className,
+    cardStyle,
     style: {
       width: `${Math.max(1, end.width)}px`,
       height: `${Math.max(1, end.height)}px`,
@@ -1568,9 +1591,7 @@ function flowCardCount(playerId: string): number {
 }
 
 function visibleFlowCards(playerId: string): Card[] {
-  const cards = flowCards(playerId);
-  const limit = props.ultraCompact ? 8 : 14;
-  return cards.slice(Math.max(0, cards.length - limit));
+  return flowCards(playerId);
 }
 
 function isActiveDiscardCard(playerId: string, card: Card, index: number): boolean {
@@ -2185,33 +2206,47 @@ function updateHandLayoutState(): void {
     handVisibleRange.value = { start: 0, end: 0, total: 0 };
     return;
   }
-  if (props.handLayout !== 'paged') {
-    const cards = Array.from(hand.querySelectorAll<HTMLElement>('[data-card-id]'));
-    const naturalWidth = cards.reduce((sum, card) => sum + card.offsetWidth, 0);
+  const panel = viewport?.parentElement;
+  const panelStyle = panel ? getComputedStyle(panel) : null;
+  const available = panel ? panel.clientWidth - (parseFloat(panelStyle!.paddingLeft) || 0) - (parseFloat(panelStyle!.paddingRight) || 0) : viewport?.clientWidth ?? 0;
+  const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
+  let needsOverflow = keepGeometry ? handHasOverflow.value : false;
+  if (props.handLayout !== 'paged' && !keepGeometry) {
     const style = getComputedStyle(hand);
-    const gap = parseFloat(style.columnGap) || 0;
-    const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-    const available = viewport?.clientWidth ?? 0;
-    if (available > 0 && cards.length > 0) {
-      // 给缩放后的子像素取整留出少量余量，避免左右两端各溢出约 1px 而被外框裁切。
-      const nextScale = Math.min(1, Math.max(0.1, available / Math.max(1, naturalWidth + gap * Math.max(0, cards.length - 1) + padding + 8)));
+    const card = hand.querySelector<HTMLElement>('.hand-card');
+    const face = card?.querySelector<HTMLElement>('.card');
+    if (card && face && viewport?.clientWidth) {
+      // Natural CSS dimensions are independent of the previously applied scale.
+      const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
+      const count = handLayoutCards.value.length;
+      const gap = parseFloat(style.columnGap) || 0;
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      // Single mode fits every authoritative card, including concealed opening cards.
+      // Only paged mode reserves toolbar space and enforces large touch targets.
+      const spacing = padding + gap * Math.max(0, count - 1) + 4;
+      needsOverflow = false;
+      const fit = (available - spacing) / (naturalWidth * count);
+      const nextScale = Math.min(1, Math.max(0.01, fit));
+      hand.scrollLeft = 0;
       if (Math.abs(handScale.value - nextScale) > 0.001) {
         handScale.value = nextScale;
+        void nextTick(scheduleHandLayoutUpdate);
       }
       handScaleReady.value = true;
     }
-    hand.scrollLeft = 0;
-    handHasOverflow.value = false;
-    handCanScrollBackward.value = false;
-    handCanScrollForward.value = false;
-    handVisibleRange.value = cards.length
-      ? { start: 1, end: cards.length, total: cards.length }
-      : { start: 0, end: 0, total: 0 };
-    return;
+  } else if (!keepGeometry) {
+    handScale.value = 1;
+    const cards = Array.from(hand.querySelectorAll<HTMLElement>('.hand-card'));
+    const style = getComputedStyle(hand);
+    needsOverflow = cards.reduce((width, card) => width + card.offsetWidth, 0)
+      + (parseFloat(style.columnGap) || 0) * Math.max(0, cards.length - 1)
+      + (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) > available + 2;
   }
-  handScale.value = 1;
+  if (handHasOverflow.value !== needsOverflow) {
+    handHasOverflow.value = needsOverflow;
+    void nextTick(scheduleHandLayoutUpdate);
+  }
   const maxScrollLeft = Math.max(0, hand.scrollWidth - hand.clientWidth);
-  handHasOverflow.value = maxScrollLeft > 2;
   handCanScrollBackward.value = hand.scrollLeft > 2;
   handCanScrollForward.value = hand.scrollLeft < maxScrollLeft - 2;
 
@@ -2242,12 +2277,13 @@ function scheduleHandLayoutUpdate(): void {
   handLayoutFrame = window.requestAnimationFrame(() => {
     handLayoutFrame = null;
     updateHandLayoutState();
+    updateFlowLayout();
   });
 }
 
 function scrollHand(direction: "backward" | "forward"): void {
   const hand = selfHandRef.value;
-  if (!hand || props.handLayout !== "paged") {
+  if (!hand) {
     return;
   }
   const distance = Math.max(120, Math.round(hand.clientWidth * 0.72));
@@ -2258,7 +2294,7 @@ function scrollHand(direction: "backward" | "forward"): void {
   );
   // 翻页按钮每次移动一段可预期距离并播报新区间；触屏拖动仍由原生滚动处理。
   hand.scrollTo({ left: target, behavior: "auto" });
-  scheduleHandLayoutUpdate();
+  updateHandLayoutState();
 }
 
 function observeHandViewport(viewport: HTMLElement | null): void {
@@ -2271,8 +2307,78 @@ function observeHandViewport(viewport: HTMLElement | null): void {
   if (typeof ResizeObserver !== "undefined") {
     handResizeObserver = new ResizeObserver(scheduleHandLayoutUpdate);
     handResizeObserver.observe(viewport);
+    boardRef.value?.querySelectorAll(".flow-card").forEach(el => handResizeObserver?.observe(el));
   }
   void nextTick(scheduleHandLayoutUpdate);
+}
+
+let rotatedScroll: { element: HTMLElement; pointerId: number; x: number; y: number; left: number; top: number } | null = null;
+let scrollDragged = false;
+function startRotatedScroll(event: PointerEvent): void {
+  scrollDragged = false;
+  rotatedScroll = null;
+  if (event.pointerType !== 'touch' || !props.viewportTransformKey?.endsWith(':rotated')) return;
+  const element = (event.target as Element).closest<HTMLElement>('.hand, .discard-strip, .self-groups-card, .player-card');
+  if (!element || (element.scrollWidth <= element.clientWidth + 2 && element.scrollHeight <= element.clientHeight + 2)) return;
+  rotatedScroll = { element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop };
+}
+function moveRotatedScroll(event: PointerEvent): void {
+  const drag = rotatedScroll;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  if (!scrollDragged && Math.hypot(dx, dy) < 6) return;
+  scrollDragged = true;
+  event.preventDefault();
+  boardRef.value?.setPointerCapture(event.pointerId);
+  // The board rotates 90 degrees: screen Y is local X; screen X is -local Y.
+  drag.element.scrollLeft = drag.left - dy;
+  drag.element.scrollTop = drag.top + dx;
+  scheduleHandLayoutUpdate();
+}
+function endRotatedScroll(event: PointerEvent): void {
+  if (rotatedScroll?.pointerId !== event.pointerId) return;
+  if (boardRef.value?.hasPointerCapture(event.pointerId)) boardRef.value.releasePointerCapture(event.pointerId);
+  rotatedScroll = null;
+}
+function suppressScrollClick(event: MouseEvent): void {
+  if (!scrollDragged) return;
+  event.preventDefault();
+  event.stopPropagation();
+  scrollDragged = false;
+}
+
+function updateFlowScrollHints(): void {
+  boardRef.value?.querySelectorAll<HTMLElement>('.discard-strip').forEach(strip => {
+    strip.dataset.scrollBefore = String(strip.scrollTop > 2);
+    strip.dataset.scrollAfter = String(strip.scrollHeight - strip.clientHeight - strip.scrollTop > 2);
+  });
+}
+
+function updateFlowLayout(): void {
+  if (flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length)) return;
+  boardRef.value?.querySelectorAll<HTMLElement>('.flow-card').forEach(zone => {
+    const strip = zone.querySelector<HTMLElement>('.discard-strip');
+    if (!strip || !strip.clientWidth || !strip.clientHeight) return;
+    const cards = strip.querySelectorAll<HTMLElement>('.discard-token');
+    const count = cards.length;
+    const latestId = cards[count - 1]?.dataset.faceId ?? '';
+    const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && strip.dataset.scrollAfter !== 'true');
+    const long = appliedTableCardMode.value === 'long';
+    const width = long ? 24 : 30, height = long ? 32 : 30;
+    const availableWidth = strip.clientWidth - 8, availableHeight = strip.clientHeight - 8;
+    let scale = 1;
+    // The lower bound retains a 10px font. Full rows wrap before scrolling.
+    while (scale > 5 / 6) {
+      const columns = Math.max(1, Math.floor((availableWidth + 2) / (width * scale + 2)));
+      const rows = Math.ceil(count / columns);
+      if (rows * (height * scale + 2) - 2 <= availableHeight) break;
+      scale = Math.max(5 / 6, scale - .025);
+    }
+    zone.style.setProperty('--flow-scale', String(scale));
+    if (followLatest) strip.scrollTop = strip.scrollHeight;
+    strip.dataset.latestId = latestId;
+  });
+  updateFlowScrollHints();
 }
 
 function confirmDiscard(): void {
@@ -2995,9 +3101,11 @@ watch(
   },
 );
 
+// Settle the new count's scale after mounting, before its first paint.
 watch(
-  () => displayPrivateHand.value.map((card) => card.id).join("|"),
-  () => void nextTick(scheduleHandLayoutUpdate),
+  () => handLayoutCards.value.map((card) => card.id).join("|"),
+  () => updateHandLayoutState(),
+  { flush: "post" },
 );
 
 watch(
@@ -3011,10 +3119,15 @@ watch(
 
 watch(
   () => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey],
-  () => void nextTick(scheduleHandLayoutUpdate),
+  () => {
+    handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+  },
 );
 
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
+  flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 
 watch(
   () => chiSelectionContextKey.value,
@@ -3137,7 +3250,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     appliedTableLayout.value = layout ?? "classic";
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
-    lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear();
+    lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear(); tableFlightFaceStyles.clear();
     await nextTick(); scheduleHandLayoutUpdate();
   },
 );
@@ -5477,13 +5590,13 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 
 .hand-mark {
   position: absolute;
-  top: 0;
+  top: -14px;
   left: 0;
   z-index: 2;
   padding: 1px 3px;
   border-radius: 3px;
-  background: var(--ui-raised, #0f766e);
-  color: white;
+  background: var(--mark-background, #175c50);
+  color: var(--mark-text, #fff);
   font-size: 11px;
 }
 
@@ -5805,11 +5918,11 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 
 /* Layout owns geometry only. Theme materials are inherited from appearance.css. */
 .board[data-table-layout="classic"] .table {
-  grid-template-columns: minmax(0, 20%) minmax(0, 16%) minmax(0, 28%) minmax(0, 16%) minmax(0, 20%);
+  grid-template-columns: minmax(0, 24%) minmax(0, 14%) minmax(0, 24%) minmax(0, 14%) minmax(0, 24%);
   grid-template-areas:
-    "left flowtl top flowtr right"
+    "flowtl flowtl top flowtr flowtr"
     "left center center center right"
-    "flowbl flowbl selfgroups flowbr flowbr";
+    "flowbl selfgroups selfgroups selfgroups flowbr";
   grid-template-rows: minmax(0, .9fr) minmax(4.4rem, 1.1fr) minmax(0, .8fr);
   column-gap: 0;
   padding: clamp(.35rem, 1.2vh, .8rem);
@@ -5825,7 +5938,6 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: .25rem; }
 @media (max-width: 960px), (max-height: 500px) {
   .board[data-table-layout="classic"] .table {
-    grid-template-columns: minmax(0, 22%) minmax(0, 14%) minmax(0, 28%) minmax(0, 14%) minmax(0, 22%);
     padding: 2px; border-radius: .8rem; row-gap: 1px;
   }
   .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: 1px; padding: 1px; }
@@ -5841,7 +5953,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] { isolation: isolate; padding: clamp(4px, 1.2vw, 16px); gap: 3px; }
 .board[data-table-layout="classic"]::before { content: ""; position: absolute; inset: 0; z-index: -1; border: clamp(4px, 1vw, 13px) solid var(--table-wood, #63503b); border-radius: clamp(18px, 4vw, 56px); background: radial-gradient(ellipse at 50% 30%, #ffffff0d, transparent 70%), var(--table-felt, #24384a); box-shadow: inset 0 0 0 2px #0003, inset 0 8px 20px #0002, 0 6px 18px #0003; }
 .board[data-table-layout="classic"]::after { content: ""; position: absolute; inset: 5px; z-index: -1; border-radius: inherit; pointer-events: none; border-bottom: 2px solid #ffffff30; }
-.board[data-table-layout="classic"] .table { border: 0; border-radius: 0; overflow: hidden; padding: 2px; grid-template-rows: minmax(0, .95fr) minmax(3.4rem, 1fr) minmax(0, .85fr); }
+.board[data-table-layout="classic"] .table { border: 0; border-radius: 0; overflow: hidden; padding: 2px; grid-template-rows: minmax(34px, 1fr) minmax(40px, 1fr) minmax(34px, 1fr); }
 .board[data-table-layout="classic"] :is(.player-card, .flow-card, .self-groups-card, .center, .center-board, .self-hand-card, .self-hand-panel, .group-block, .group-block-list, .seat-head) { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
 .board[data-table-layout="classic"] :is(.player-card, .self-groups-card) { padding: 3px; height: auto; min-height: 0; align-self: center; }
 .board[data-table-layout="classic"] .player-top { align-self: start; justify-self: center; width: max-content; max-width: 100%; }
@@ -5853,7 +5965,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] :is(.hand-count-badge, .kan-count-badge, .group-score-badge) { border: 0; background: transparent; padding: 0 2px; min-height: 0; }
 .board[data-table-layout="classic"] .player-card.active { box-shadow: none; }
 .board[data-table-layout="classic"] .player-card.active .seat-head { text-decoration: underline; text-decoration-color: var(--ui-accent); text-underline-offset: 4px; }
-.board[data-table-layout="classic"] .self-command-row { background: rgba(var(--ui-panel-rgb), .88); border: 0; border-radius: .5rem; box-shadow: none; }
+.board[data-table-layout="classic"] .self-command-row { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.board[data-table-layout="classic"] .dynamic-action-track { border: 0; }
 .board[data-table-layout="classic"] .self-hand-card { box-shadow: inset 0 2px #0002; }
 .board[data-table-layout="classic"] .self-turn-outline { border: 0; box-shadow: none; }
 .opponent-card-stack { display: flex; position: relative; width: 3.2rem; height: 2.8rem; margin: 0 auto .25rem; }
@@ -5867,6 +5980,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board[data-table-layout="classic"] .seat-identity-meta :is(.kan-count-badge, .group-score-badge) { font-size: 11px; }
 }
 
+.board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block-list { justify-content: center; }
 .board[data-table-layout="classic"] .seat-identity { justify-content: center; text-align: center; }
 .board[data-table-layout="classic"] .seat-identity > strong { flex: 1 0 100%; }
 .board[data-table-layout="classic"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; }
@@ -5902,5 +6016,154 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board .self-command-row { border: 0; grid-template-columns: 56px minmax(100px, 25%) minmax(0, 1fr); }
   .board .dynamic-action-track { padding-block: 0; }
   .board .self-info-card .group-score-badge { display: none; }
+}
+
+/* Content density uses the effective (possibly rotated) viewport. */
+.board[data-table-layout="classic"] { padding: clamp(7px, 1.2vw, 18px); }
+.board[data-table-layout="classic"] .table { padding: 8px clamp(12px, calc(2 * var(--effective-vw, 1vw)), 26px); row-gap: 2px; }
+.board[data-table-layout="classic"] .flow-card { width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; align-self: stretch; }
+.board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { padding-top: 2px; }
+.board[data-table-layout="classic"] :is(.flow-top-right, .flow-bottom-right) .discard-strip { justify-content: flex-end; }
+.board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip { align-content: safe flex-end; }
+.board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip[data-scroll-after="true"],
+.board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip[data-scroll-before="true"] { align-content: flex-start; }
+.board[data-table-layout="classic"] .self-groups-card { width: 100%; max-height: 100%; align-self: end; padding: 4px; }
+.board[data-table-layout="classic"] .self-groups-card .group-block-list { justify-content: center; }
+.self-groups-card .mini-card-strip { flex-wrap: nowrap; gap: 2px; }
+.self-groups-card .mini-card-strip.mode-long { gap: 0; }
+.self-groups-card .group-block { flex-shrink: 0; }
+.board[data-table-layout] .kan-count-badge, .board .group-badge { color: var(--mark-text); background: var(--mark-background); border: 0; }
+.board[data-table-layout] .kan-count-badge { padding: 1px 4px; border-radius: 4px; }
+.board .hand-mark { font-size: 11px; line-height: 12px; font-weight: 800; }
+.board .listening-mark { background: #175c50; color: #fff; }
+
+/* Scroll real card boxes; transforms leave unusable overflow and hit targets. */
+.board .cards.hand { --hand-width: 36px; --hand-height: 66px; --hand-font: 20px; gap: 2px; padding: 16px 4px 6px; flex-wrap: nowrap; align-items: center; align-content: center; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; }
+.board .cards.hand:has(.mode-large) { --hand-width: 48px; --hand-font: 24px; }
+.board .cards.hand.single-line { flex: 1 1 auto; width: 100%; transform: none; justify-content: flex-start; }
+.board .hand .hand-card { box-sizing: border-box; flex: 0 0 auto; width: calc(var(--hand-width) * var(--hand-scale, 1)); height: calc(var(--hand-height) * var(--hand-scale, 1)); min-width: 28px; min-height: 44px; }
+.board .hand.single-line .hand-card { width: calc(var(--hand-width) * var(--hand-scale, 1)); min-width: 0; min-height: 0; }
+.board .hand .hand-card:first-child { margin-inline-start: auto; }
+.board .hand .hand-card:last-child { margin-inline-end: auto; }
+.board .hand .hand-card :deep(.card) { box-sizing: border-box; width: 100%; height: 100%; font-size: calc(var(--hand-font) * var(--hand-scale, 1)); }
+.board .hand-viewport { min-height: 0; }
+.board .self-hand-panel { gap: 0; }
+.board .hand-toolbar { min-height: 20px; }
+.board .hand-scroll-tools { gap: 4px; }
+.board .hand-scroll-tools button { height: 24px; min-height: 24px; padding: 0 8px; }
+.board .hand-visible-range { font-size: 11px; }
+.board .flow-card { overflow: hidden; }
+.board .discard-strip { min-height: 0; flex: 1 1 auto; gap: 2px; padding: 4px; overflow-x: hidden; overflow-y: auto; align-content: flex-start; overscroll-behavior: contain; }
+.board .discard-token { box-sizing: border-box; font-size: calc(12px * var(--flow-scale, 1)); }
+.board .discard-token.mode-long { width: calc(24px * var(--flow-scale, 1)); height: calc(32px * var(--flow-scale, 1)); }
+.board .discard-token.mode-large { width: calc(30px * var(--flow-scale, 1)); height: calc(30px * var(--flow-scale, 1)); }
+.board :is(.discard-strip, .hand, .self-groups-card, .player-card) { scrollbar-width: thin; scrollbar-color: var(--ui-border) transparent; }
+.board :is(.discard-strip, .hand, .self-groups-card, .player-card)::-webkit-scrollbar { width: 4px; height: 4px; }
+.board :is(.discard-strip, .hand, .self-groups-card, .player-card)::-webkit-scrollbar-thumb { background: var(--ui-border); border-radius: 8px; }
+.board .discard-strip[data-scroll-after="true"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 9px), transparent); }
+.board .discard-strip[data-scroll-before="true"] { mask-image: linear-gradient(to bottom, transparent, #000 9px); }
+.board .discard-strip[data-scroll-before="true"][data-scroll-after="true"] { mask-image: linear-gradient(to bottom, transparent, #000 9px, #000 calc(100% - 9px), transparent); }
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="classic"] { padding: 6px; }
+  .board .cards.hand { --hand-width: 32px; --hand-height: 52px; --hand-font: 16px; }
+  .board .cards.hand:has(.mode-large) { --hand-width: 44px; --hand-font: 22px; }
+  .board.hand-overflow:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 92px; }
+  .board :is(.discard-strip, .hand, .self-groups-card, .player-card) { scrollbar-width: none; }
+  .board :is(.discard-strip, .hand, .self-groups-card, .player-card)::-webkit-scrollbar { display: none; }
+}
+@media (pointer: coarse) {
+  .board :is(.discard-strip, .hand, .self-groups-card, .player-card) { scrollbar-width: none; }
+  .board :is(.discard-strip, .hand, .self-groups-card, .player-card)::-webkit-scrollbar { display: none; }
+}
+.board.rotated-scroll :is(.hand, .discard-strip, .self-groups-card, .player-card) { touch-action: none; }
+
+/* Tiny flow cards retain two distinct glyphs instead of overlapping text padding. */
+.board .discard-token { border-width: 1px; }
+.board .discard-token.mode-long :deep(.text-top), .board .discard-token.mode-long :deep(.text-bottom) { padding: 0; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="classic"] .table { grid-template-rows: minmax(44px, var(--classic-top-weight, 1fr)) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), var(--classic-center-weight, 1.3fr)) minmax(40px, var(--classic-bottom-weight, .9fr)); }
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(44px, var(--classic-top-weight, 1fr)) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), var(--classic-center-weight, 1.3fr)) minmax(clamp(28px, calc(20 * var(--effective-vh, 1vh) - 34px), 40px), var(--classic-bottom-weight, .9fr)); }
+  .board[data-table-layout="classic"] .player-top { gap: 2px; }
+  .board[data-table-layout="classic"] .player-top .seat-identity { flex-wrap: nowrap; gap: 2px; }
+  .board[data-table-layout="classic"] .player-top .seat-identity > strong { font-size: 12px; max-width: 4em; }
+  .board[data-table-layout="classic"] .player-top :is(.group-score-badge, .dealer-card-mark) { display: none; }
+  .board[data-table-layout="classic"] .player-top .seat-identity-meta { gap: 1px; }
+  .board[data-table-layout="classic"] .player-top .hand-count-badge { font-size: 11px; min-width: 0; }
+  .board[data-table-layout="classic"] .player-top .dealer-badge { width: 16px; height: 16px; font-size: 11px; }
+  .board[data-table-layout="classic"] .player-top .mini-card.mode-long { width: 18px; height: 22px; font-size: 10px; padding: 0; border-width: 1px; }
+  .board[data-table-layout="classic"] .player-top .mini-card.mode-long :deep(.text) { padding: 0; }
+  .board[data-table-layout="classic"] .player-top .group-block { min-height: 0; }
+}
+@media (max-height: 380px), (max-width: 380px) {
+  .board .center { padding: 0; }
+  .board :is(.deck-slot, .response-slot) { height: 40px; }
+  .board .response-card-face { height: 40px; width: 28px; font-size: 14px; }
+  .board .response-card-face.mode-long :deep(.text) { padding: 0; }
+  .board .deck-stack { height: 34px; }
+  .board .deck-layer { width: 8px; }
+}
+.table-flight .card :deep(.text-top) { padding-top: var(--flight-top-padding, 3px); }
+.table-flight .card :deep(.text-bottom) { padding-bottom: var(--flight-bottom-padding, 3px); }
+
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="compact"] .table { grid-template-rows: minmax(44px, 1fr) minmax(40px, 1fr) minmax(34px, .9fr); }
+  .board[data-table-layout="compact"] .flow-card { padding: 0; }
+  .board[data-table-layout="compact"] .flow-card > p { display: none; }
+  .board .self-groups-card { padding: 2px; }
+  .board .self-groups-card .group-block-list { column-gap: 4px; }
+  .board .self-groups-card .group-block { min-height: 0; padding: 0; }
+  .board .self-groups-card .mini-card.mode-long { width: 20px; height: clamp(28px, calc(20 * var(--effective-vh, 1vh) - 36px), 40px); font-size: clamp(10px, calc(2 * var(--effective-vh, 1vh) + 3.6px), 12px); padding: 0; border-width: 1px; }
+  .board .self-groups-card .mini-card.mode-long :deep(.text) { padding: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-head { flex: 0 0 auto; width: 100%; gap: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-tags:empty { display: none; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block { min-height: 0; padding: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block-list { flex: 0 0 auto; width: 100%; max-width: 100%; justify-content: center; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-score-badge { display: none; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .mini-card.mode-long { width: 20px; height: clamp(28px, calc(20 * var(--effective-vh, 1vh) - 36px), 40px); font-size: clamp(10px, calc(2 * var(--effective-vh, 1vh) + 3.6px), 12px); padding: 0; border-width: 1px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .mini-card.mode-long :deep(.text) { padding: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity-meta { gap: 1px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .hand-count-badge { min-width: 0; font-size: 11px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { padding: 0 2px; }
+  .board[data-table-layout="classic"] .self-groups-card { padding-block: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity > strong { grid-column: 1; grid-row: 1; min-width: 0; font-size: 12px; line-height: 16px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity-meta { grid-column: 1 / -1; grid-row: 2; flex-wrap: nowrap; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .dealer-seat-lockup { grid-column: 2; grid-row: 1; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .dealer-card-mark { display: none; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .dealer-badge { width: 16px; height: 16px; font-size: 11px; }
+
+}
+
+/* Paging sits beside the hand, preserving full touch targets without another row. */
+.board .self-hand-panel { --hand-tools-width: 104px; }
+.board .self-hand-panel.has-toolbar { grid-template-rows: minmax(0, 1fr); }
+.board .has-toolbar .hand-viewport { width: calc(100% - var(--hand-tools-width)); margin-inline: calc(var(--hand-tools-width) / 2); }
+.board .has-toolbar .hand { padding-bottom: 16px; }
+.board .hand-toolbar { position: absolute; inset: 0; pointer-events: none; }
+.board .hand-scroll-tools { position: relative; width: 100%; height: 100%; justify-content: space-between; }
+.board .hand-scroll-tools button { pointer-events: auto; width: 48px; min-width: 48px; height: 44px; min-height: 44px; padding: 0; font-size: 13px; }
+.board .hand-visible-range { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-size: 13px; }
+/* SE: preserve complete card rows inside the table's finite height. */
+@media (max-height: 340px), (max-width: 340px) {
+  .board[data-table-layout="classic"] .table,
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(38px, var(--classic-top-weight, 1fr)) minmax(64px, var(--classic-center-weight, 1.5fr)) minmax(28px, var(--classic-bottom-weight, .8fr)); }
+  .board[data-table-layout="classic"] .player-top .seat-head { gap: 0; }
+  .board[data-table-layout="classic"] .player-top .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
+  .board[data-table-layout="classic"] .player-top .mini-card.mode-long { height: 20px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { padding-block: 1px; }
+  .board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip { padding-block: 0; }
+  .board[data-table-layout="classic"] .self-groups-card { padding-block: 0; }
+  .board[data-table-layout="classic"].hand-overflow:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
+  .board[data-table-layout="classic"] .has-toolbar .hand { padding-top: 6px; padding-bottom: 16px; }
+  .board[data-table-layout="classic"] .hand-visible-range { height: 16px; }
+}
+/* Use App's settled effective viewport so portrait rotation has identical geometry. */
+.board[data-table-layout="classic"].small-table-viewport .table {
+  grid-template-columns: minmax(0, 28%) minmax(0, 10%) minmax(0, 24%) minmax(0, 10%) minmax(0, 28%);
+  --classic-top-weight: 1.1fr;
+  --classic-center-weight: 1.1fr;
+  --classic-bottom-weight: 1fr;
 }
 </style>

@@ -214,6 +214,7 @@
 
     <template v-else>
       <GameBoard
+        :class="{ 'small-table-viewport': effectiveWidth <= 740 && effectiveHeight <= 400 }"
         @geometry-busy="viewportGeometryBusy = $event"
         :state="state"
         :players="players"
@@ -5143,7 +5144,9 @@ watch(
   display: none;
 }
 
-.layout.ultra-compact-viewport :deep(.game-tools .tool-button svg) { display: none; }
+.layout.ultra-compact-viewport :deep(.game-tools .tool-label) { display: none; }
+.layout.ultra-compact-viewport :deep(.game-tools .tool-button) { width: 44px; min-width: 44px; padding-inline: 0; gap: 0; }
+.layout.ultra-compact-viewport :deep(.game-tools .tool-button svg) { width: 20px; height: 20px; }
 
 .layout.ultra-compact-viewport .rules-slogan {
   display: none;

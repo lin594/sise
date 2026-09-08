@@ -10,7 +10,7 @@ export const tableLayouts: { id: TableLayoutId; name: string; description: strin
   { id: "compact", name: "紧凑布局", description: "紧凑分区，适合小屏" },
   { id: "classic", name: "经典布局", description: "围桌而坐，中央开阔" },
 ];
-export const normalizeSkin = (value: unknown): SkinId => skins.find(item => item.id === value)?.id ?? "licheng-water";
+export const normalizeSkin = (value: unknown): SkinId => skins.find(item => item.id === value)?.id ?? "puxian-house";
 export const normalizeTableLayout = (value: unknown): TableLayoutId => tableLayouts.find(item => item.id === value)?.id ?? "adaptive";
 
 export const resolveTableLayout = (layout: TableLayoutId, ultraCompact: boolean): RenderedTableLayoutId => layout === "adaptive" ? ultraCompact ? "compact" : "classic" : layout;
