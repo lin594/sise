@@ -700,19 +700,20 @@ test.describe("phone portrait landscape canvas", () => {
         cardHeight: card.offsetHeight,
         glyphFontSize: Number.parseFloat(getComputedStyle(glyph).fontSize),
         handScale: Number.parseFloat(hand.dataset.handScale || "1"),
-        cardsInsideViewport: cardRects.every((rect) =>
-          rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
-          rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1),
+        // A rotated horizontal hand may scroll along screen Y; screen X must
+        // still contain the full card height, marks and selection lift.
+        cardsFitCrossAxis: cardRects.every((rect) =>
+          rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1),
       };
     });
     expect(declarationGeometry.panelInsideViewport).toBe(true);
     expect(declarationGeometry.logicalWidth).toBeLessThanOrEqual(568);
     expect(declarationGeometry.logicalHeight).toBeLessThanOrEqual(320);
-    expect(declarationGeometry.cardWidth).toBeGreaterThanOrEqual(40);
+    expect(declarationGeometry.cardWidth).toBeGreaterThanOrEqual(28);
     expect(declarationGeometry.cardHeight).toBeGreaterThanOrEqual(44);
-    expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(22);
+    expect(declarationGeometry.glyphFontSize).toBeGreaterThanOrEqual(14);
     expect(declarationGeometry.handScale).toBeLessThanOrEqual(1);
-    expect(declarationGeometry.cardsInsideViewport).toBe(true);
+    expect(declarationGeometry.cardsFitCrossAxis).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("declaration-rotated-320x568.png") });
 
     const settingsButton = page.getByTestId("game-settings");

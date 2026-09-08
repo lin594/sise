@@ -135,7 +135,7 @@ test("lobby boots with a saved name and edits without an entry screen", async ({
 test('invalid fields fall back independently and preserve valid preferences', async ({page}) => {
   await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({skin:'unknown',tableLayout:'unknown',ownCards:'large',handLayout:'paged'})));
   await page.goto('/?new=1');
-  await expect(page.locator('html')).toHaveAttribute('data-skin','licheng-water');
+  await expect(page.locator('html')).toHaveAttribute('data-skin','puxian-house');
   await expect(page.locator('main')).toHaveAttribute('data-table-layout','adaptive');
   await page.getByTestId('game-settings').click();
   await revealSetting(page,'card-mode-own-large');

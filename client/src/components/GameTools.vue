@@ -162,7 +162,7 @@
         </div>
         <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div v-if="settingsPage === 'table'" class="preference-group">
-          <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
+          <div class="preference-copy"><strong>手牌排列</strong><small>单行适度缩小，牌多时可滑动；翻页保留原尺寸</small></div>
           <div class="mode-options" role="radiogroup" aria-label="手牌排列">
             <button v-for="mode in (['single', 'paged'] as const)" :key="mode" type="button" role="radio"
               :class="{ active: modelValue.handLayout === mode }" :aria-checked="modelValue.handLayout === mode" :data-testid="`hand-layout-${mode}`"

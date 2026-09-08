@@ -22,11 +22,21 @@ async function finishStagedDeclaration(page: Page) {
 }
 async function assertHandFits(page: Page) {
   await expect.poll(() => page.locator('.cards.hand').evaluate((el) => {
-    const rail = el.getBoundingClientRect();
-    const cards = [...el.querySelectorAll('[data-card-id]')].map((c) => c.getBoundingClientRect());
-    return cards.length >= 20 && cards.every((c) => c.left >= rail.left - 2 && c.right <= rail.right + 2 && c.top >= rail.top - 2 && c.bottom <= rail.bottom + 2 && c.left >= -2 && c.right <= window.innerWidth + 2 && c.top >= -2 && c.bottom <= window.innerHeight + 2);
+    const cards = [...el.querySelectorAll<HTMLElement>('[data-card-id]')];
+    return cards.length >= 20 && cards.every(c => c.offsetWidth >= 28 && c.offsetHeight >= 44
+      && parseFloat(getComputedStyle(c.querySelector('.text')!).fontSize) >= 13.95)
+      && el.scrollHeight <= el.clientHeight + 1;
   })).toBe(true);
+  const overflow = await page.locator('.cards.hand').evaluate(el => el.scrollWidth > el.clientWidth + 2);
+  if (overflow) {
+    await expect(page.getByTestId('hand-scroll-tools')).toBeVisible();
+    for (let i = 0; i < 8 && await page.getByTestId('hand-scroll-next').isEnabled(); i++) { await page.getByTestId('hand-scroll-next').click(); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+    await expect(page.getByTestId('hand-scroll-next')).toBeDisabled();
+    await expect.poll(() => page.locator('.cards.hand').evaluate(el => el.scrollWidth - el.clientWidth - el.scrollLeft)).toBeLessThanOrEqual(2);
+    for (let i = 0; i < 8 && await page.getByTestId('hand-scroll-prev').isEnabled(); i++) { await page.getByTestId('hand-scroll-prev').click(); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+  }
 }
+
 for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 }, { width: 667, height: 375 }, { width: 375, height: 667 }]) {
   test(`single row and embedded declaration ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
@@ -237,9 +247,10 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
             width: viewportRect.width,
             height: viewportRect.height,
           });
-          cardsFit &&= cardRects.every((rect) =>
-            rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 &&
-            rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1);
+          // Horizontal overflow is intentional at the readable minimum. Keep
+          // one stable row with no vertical clipping or inaccessible scroll tail.
+          cardsFit &&= cardRects.every((rect) => rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1)
+            && hand.scrollHeight <= hand.clientHeight + 1;
           if (performance.now() - startedAt >= 320) {
             window.clearInterval(timer);
             resolve();
@@ -253,7 +264,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
 
   for (const sample of allSamples) {
     expect(new Set(sample.scales.map((scale) => scale.toFixed(4))).size, `${sample.count} cards must keep one scale`).toBe(1);
-    expect(sample.cardsFit, `${sample.count} cards must stay inside the hand viewport: ${JSON.stringify(sample.lastBounds)}`).toBe(true);
+    expect(sample.cardsFit, `${sample.count} cards must stay in one vertically contained row: ${JSON.stringify(sample.lastBounds)}`).toBe(true);
     for (const key of ['left', 'top', 'width', 'height'] as const) {
       const values = sample.viewportRects.map((rect) => rect[key]);
       expect(Math.max(...values) - Math.min(...values), `${sample.count} cards viewport ${key} must not move`).toBeLessThanOrEqual(0.5);
