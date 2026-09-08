@@ -408,7 +408,9 @@ watch(() => props.viewportTransformKey, () => {
     flights.value = [];
     lastPresentationPaintAt = 0;
 }, { flush: "sync" });
-watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.phase, props.state?.tableTransitions], () => {
+// Same-revision snapshots can correct the clock after the RAF loop went idle.
+// Restart it so revived transitions expire and release deferred viewport changes.
+watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.phase, props.state?.tableTransitions, props.state?.presentationClockOffsetMs], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
     const nextScopeKey = getRoundKey(props.state?.roomId, props.state?.completedRounds, props.state?.phase);
