@@ -259,3 +259,29 @@ test('long flows follow new cards without pulling a reader away from older cards
   expect(await strip.evaluate(el => el.scrollTop)).toBe(0);
   await expect(strip.locator('.discard-token')).toHaveCount(17);
 });
+
+
+test('header tools retain icons and collapse labels only on very small screens', async ({page}, info) => {
+  await start(page);
+  for (const [width,height] of [[568,320],[320,568],[844,390],[1440,900]]) {
+    await page.setViewportSize({width,height});
+    await settle(page);
+    const tiny = await page.locator('main.layout').evaluate(el => el.classList.contains('ultra-compact-viewport'));
+    for (const id of ['game-history','tools-rules','game-interaction','game-settings','game-auto-play']) {
+      const button=page.getByTestId(id);
+      await expect(button.locator('svg')).toBeVisible();
+      await expect(button).toHaveAccessibleName(/.+/);
+      if (tiny) await expect(button.locator('.tool-label')).toBeHidden();
+      else await expect(button.locator('.tool-label')).toBeVisible();
+      await expect(button).toBeInViewport({ratio:1});
+    }
+    await page.screenshot({path:info.outputPath(`header-tools-${width}x${height}.png`)});
+  }
+  await page.setViewportSize({width:568,height:320});
+  await settle(page);
+  await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByTestId('game-interaction').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+});

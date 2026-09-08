@@ -1,9 +1,18 @@
 <template>
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
-      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" @click="toggleHistory">记录</button>
-      <button v-if="inRoom" class="tool-button" type="button" data-testid="tools-rules" @click="openRules">规则</button>
-      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" @click="togglePhrases">互动</button>
+      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" title="最近操作" @click="toggleHistory">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6M12 7v5l3 2" /></svg>
+        <span class="tool-label">记录</span>
+      </button>
+      <button v-if="inRoom" class="tool-button" type="button" data-testid="tools-rules" aria-label="规则速查" title="规则速查" @click="openRules">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v15M12 5C9 3 5 3 3 4v14c3-1 6-1 9 2 3-3 6-3 9-2V4c-2-1-6-1-9 1Z" /></svg>
+        <span class="tool-label">规则</span>
+      </button>
+      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" aria-label="快捷互动" title="快捷互动" @click="togglePhrases">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM8 10h.01M12 10h.01M16 10h.01" /></svg>
+        <span class="tool-label">互动</span>
+      </button>
 
       <button
         ref="settingsButtonRef"
@@ -20,7 +29,7 @@
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
           <path d="m19.2 13.4 1.3 1-.1 1.5-1.5 1.8-1.6-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.7-1.4.6h-2.5l-.7-1.5a7.8 7.8 0 0 1-2-.6l-1.4.9-1.3-.8-1.2-2.2.9-1.4a7.8 7.8 0 0 1-.2-2.1L4 11.7l.3-1.5 1.3-2 1.7.1a7.8 7.8 0 0 1 1.7-1.2l.1-1.7 1.4-.7H13l.9 1.4a7.8 7.8 0 0 1 1.9.8l1.5-.7 1.2.9 1 2.3-1 1.3c.2.9.3 1.8.1 2.7h.6Z" />
         </svg>
-        <span>设置</span>
+        <span class="tool-label">设置</span>
       </button>
       <button
         v-if="inRoom"
@@ -39,7 +48,7 @@
           <path d="M8 7h8a4 4 0 0 1 4 4v7H4v-7a4 4 0 0 1 4-4Z" />
           <path d="M12 4v3M9 12h.01M15 12h.01M8 18v2M16 18v2" />
         </svg>
-        <span>{{ props.autoPlay ? "取消托管" : "托管" }}</span>
+        <span class="tool-label">{{ props.autoPlay ? "取消托管" : "托管" }}</span>
       </button>
 
     </div>
