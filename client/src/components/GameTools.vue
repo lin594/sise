@@ -624,6 +624,7 @@ async function toggleSettings(): Promise<void> {
   settingsPage.value = settingsRoot.value;
   settingsOpen.value = true;
   await nextTick();
+  if (!settingsOpen.value) return;
   observeSettingsScroll();
   settingsPanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
@@ -638,6 +639,7 @@ async function toggleHistory(): Promise<void> {
   dismissToolPanels();
   historyOpen.value = true;
   await nextTick();
+  if (!historyOpen.value) return;
   historyPanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
 }
@@ -671,6 +673,7 @@ async function togglePhrases(): Promise<void> {
   dismissToolPanels();
   phraseOpen.value = true;
   await nextTick();
+  if (!phraseOpen.value) return;
   phrasePanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
 }

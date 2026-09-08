@@ -491,3 +491,21 @@ for (const viewport of [{ width: 568, height: 320 }, { width: 320, height: 568 }
     }
   });
 }
+
+test('superseded panel openings cannot swallow confirmation clicks', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  for (const entry of ['game-history', 'game-interaction', 'game-settings']) {
+    // Both clicks precede Vue's next render: no abandoned panel may install an
+    // outside listener after the confirmation has already taken over.
+    await page.evaluate(entry => {
+      document.querySelector<HTMLButtonElement>(`[data-testid="${entry}"]`)!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="game-auto-play"]')!.click();
+    }, entry);
+    await expect(page.getByTestId('cancel-auto-play')).toBeFocused();
+    await page.getByTestId('cancel-auto-play').click();
+    await expect(page.getByTestId('cancel-auto-play')).toHaveCount(0);
+    await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+    await expect(page.getByTestId('game-auto-play')).toBeFocused();
+  }
+});
