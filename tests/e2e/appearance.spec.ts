@@ -265,6 +265,8 @@ test('dealer ceremony counts from the picker to the authoritative dealer for eve
     await page.evaluate(scenario => (window as any).__siseLocalTest.setupScenario(scenario), `dealer_count_${color}`);
     const status = page.getByTestId('dealer-count-status');
     await expect(status).toHaveAttribute('data-count-step', '1');
+    await expect(page.getByTestId('dealer-ceremony')).not.toContainText('从翻牌者数起');
+    const startPosition = await status.boundingBox();
     const state = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState());
     const seats = [...state.players].sort((a: any,b: any) => a.seatIndex - b.seatIndex);
     const first = seats.findIndex((p: any) => p.clientId === state.dealerPickerId);
@@ -273,6 +275,9 @@ test('dealer ceremony counts from the picker to the authoritative dealer for eve
       await expect(status).toHaveAttribute('data-count-seat', seats[(first + step - 1) % seats.length].clientId);
     }
     await expect(status).toHaveAttribute('data-count-seat', state.dealerId);
+    await page.waitForTimeout(520);
+    const endPosition = await status.boundingBox();
+    if (total > 1) expect(Math.hypot(endPosition!.x - startPosition!.x, endPosition!.y - startPosition!.y)).toBeGreaterThan(30);
     await expect(page.locator('.dealer-reveal-result')).toBeVisible();
     await expect(page.getByTestId('game-interaction')).toBeInViewport({ ratio: 1 });
     await expect(page.getByTestId('game-auto-play')).toBeInViewport({ ratio: 1 });
