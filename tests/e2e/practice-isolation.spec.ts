@@ -1,11 +1,10 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
 
 async function preparePracticeEntry(page: Page, name: string): Promise<void> {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill(name);
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", name);
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -38,8 +37,8 @@ test("two simultaneous single-player sessions never see each other", async ({ br
       preparePracticeEntry(second, "练习乙"),
     ]);
     await Promise.all([
-      first.getByTestId("lobby-start").click(),
-      second.getByTestId("lobby-start").click(),
+      first.getByTestId("mode-practice_bots").click(),
+      second.getByTestId("mode-practice_bots").click(),
     ]);
     await Promise.all([
       expect(first.getByTestId("game-board")).toBeVisible({ timeout: 20_000 }),
@@ -81,9 +80,7 @@ test("an occupied practice room rejects a new identity but still restores its ow
     expect(created.roomId).toBeTruthy();
     const roomUrl = `/?roomId=${encodeURIComponent(created.roomId!)}`;
 
-    await owner.goto(roomUrl);
-    await owner.getByTestId("nickname-input").fill("练习主人");
-    await owner.getByTestId("login-submit").click();
+    await openGameAs(owner, roomUrl, "练习主人");
     await expect(owner.getByTestId("seat-grid")).toBeVisible();
     const originalSeatId = await owner.evaluate(() =>
       document.querySelector<HTMLElement>("[data-testid='seat-grid'] [data-testid^='seat-']")
@@ -91,9 +88,7 @@ test("an occupied practice room rejects a new identity but still restores its ow
     );
     expect(originalSeatId).toBeTruthy();
 
-    await visitor.goto(roomUrl);
-    await visitor.getByTestId("nickname-input").fill("陌生访客");
-    await visitor.getByTestId("login-submit").click();
+    await openGameAs(visitor, roomUrl, "陌生访客");
     await expect(visitor.locator("main.layout")).toHaveAttribute("data-connection-state", "closed", {
       timeout: 10_000,
     });

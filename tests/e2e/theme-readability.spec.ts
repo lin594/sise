@@ -60,8 +60,7 @@ for (const scheme of ['dark','light'] as const) for (const skin of ['cyber-minim
     await page.addInitScript(skin => localStorage.setItem('sise_game_display_preferences_v2',JSON.stringify({skin})),skin);
     await page.goto('/?new=1&e2eDebug=1');
     await readableText(page.locator('main'));
-    await page.getByTestId('login-submit').click();
-    await page.getByTestId('lobby-start').click();
+    await page.getByTestId('mode-practice_bots').click();
     await expect(page.getByTestId('game-board')).toBeVisible();
     await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
     await expect(page.getByTestId('confirm-declaration')).toBeVisible();

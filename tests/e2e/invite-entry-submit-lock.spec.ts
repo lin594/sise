@@ -1,3 +1,4 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
 const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567";
@@ -19,15 +20,8 @@ test("an impatient invitee starts only one clearly labelled join", async ({ page
     await route.continue();
   });
 
-  await page.goto(`/?roomId=${encodeURIComponent(created.roomId!)}`);
-  const nickname = page.getByTestId("nickname-input");
-  await nickname.fill("急性子牌友");
-  await nickname.evaluate((input) => {
-    const eventInit = { key: "Enter", code: "Enter", bubbles: true, cancelable: true };
-    input.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-    input.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-  });
-
+  await openGameAs(page, `/?roomId=${encodeURIComponent(created.roomId!)}`, "急性子牌友");
+  await expect(page.getByTestId("nickname-input")).toHaveCount(0);
   const progress = page.getByTestId("resume-session-screen");
   await expect(progress).toBeVisible();
   await expect(progress.getByText("加入好友房", { exact: true })).toBeVisible();
@@ -63,9 +57,7 @@ test("an impatient invitee starts only one clearly labelled join", async ({ page
 
 test("an expired invite leaves the retry loop for mode selection", async ({ page }) => {
   const missingRoomId = "missing-friend-room-for-entry-retry";
-  await page.goto(`/?roomId=${missingRoomId}`);
-  await page.getByTestId("nickname-input").fill("重试牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, `/?roomId=${missingRoomId}`, "重试牌友");
 
   await expect(page.getByRole("heading", { name: "这个好友房已经关闭" })).toBeVisible();
   await expect(page.getByTestId("login-submit")).toHaveCount(0);
@@ -73,7 +65,7 @@ test("an expired invite leaves the retry loop for mode selection", async ({ page
   await expect(returnButton).toBeFocused();
   await returnButton.click();
   await expect(page.getByText("游戏模式选择")).toBeVisible();
-  await expect(page.locator(".front-lobby-identity")).toContainText("重试牌友");
+  await expect(page.getByTestId("change-entry-name")).toContainText("重试牌友");
   expect(new URL(page.url()).searchParams.get("roomId")).toBeNull();
   expect(await page.evaluate((roomId) => localStorage.getItem(`four_player_token:${roomId}`), missingRoomId)).toBeNull();
 });
@@ -96,9 +88,7 @@ test("a temporary invite network failure stays retryable and then joins", async 
     await route.continue();
   });
 
-  await page.goto(`/?roomId=${encodeURIComponent(created.roomId!)}`);
-  await page.getByTestId("nickname-input").fill("网络恢复牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, `/?roomId=${encodeURIComponent(created.roomId!)}`, "网络恢复牌友");
 
   const progress = page.getByTestId("resume-session-screen");
   await expect(progress.getByRole("heading", { name: "正在重新连接好友房" })).toBeVisible();
@@ -119,9 +109,7 @@ test("cancelling an in-flight invite clears its temporary room credential", asyn
     await new Promise((resolve) => setTimeout(resolve, 700));
     await route.continue();
   });
-  await page.goto(`/?roomId=${encodeURIComponent(created.roomId!)}`);
-  await page.getByTestId("nickname-input").fill("临时牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, `/?roomId=${encodeURIComponent(created.roomId!)}`, "临时牌友");
   await expect(page.getByTestId("resume-session-screen")).toBeVisible();
   await page.getByTestId("cancel-session-resume").click();
 

@@ -1,12 +1,9 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { waitForDeclarationOrPlaying } from "./helpers/game";
 
 async function openFriendInvitation(page: Page) {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("邀请房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "邀请房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 }
 
@@ -109,16 +106,11 @@ test("both friend-room clients receive one concealed deal sequence in the first 
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/?e2eDebug=1");
-    await host.getByTestId("nickname-input").fill("续局房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/?e2eDebug=1", "续局房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("续局牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "续局牌友");
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");
     await guest.getByTestId("lobby-ready").click();
@@ -126,7 +118,7 @@ test("both friend-room clients receive one concealed deal sequence in the first 
     await host.getByTestId("fill-bots").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await Promise.all([observeDealSequences(host), observeDealSequences(guest)]);
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
 
     const [hostFirstCount, guestFirstCount] = await Promise.all([
       expectOneNewDealSequence(host, 0),
@@ -190,12 +182,9 @@ test("host invites a friend, configures bots, and starts a shared game", async (
   });
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("同名牌友");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "同名牌友");
     await expect(host.getByText("游戏模式选择")).toBeVisible();
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
 
     await expect(host.getByTestId("seat-grid")).toBeVisible();
     await expect(host.getByTestId("seat-0")).toContainText("房主");
@@ -222,13 +211,8 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     expect(await host.evaluate(() => sessionStorage.getItem("sise_test_unexpected_share"))).toBeNull();
 
     await guest.setViewportSize({ width: 667, height: 375 });
-    await guest.goto(clipboardSnapshot.copiedInviteUrl!);
-    await expect(guest.getByRole("heading", { name: "输入昵称，加入好友房" })).toBeVisible();
-    await expect(guest.getByText("不用注册。输入牌桌上显示的名字，就能进入朋友的房间选座。")).toBeVisible();
-    await expect(guest.getByTestId("login-submit")).toHaveText("加入好友房");
-    await guest.screenshot({ path: testInfo.outputPath("friend-invite-entry-iphone-se.png") });
-    await guest.getByTestId("nickname-input").fill("同名牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, clipboardSnapshot.copiedInviteUrl!, "同名牌友");
+    await expect(guest.getByTestId("nickname-input")).toHaveCount(0);
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await expect(guest.getByText("请选择一个写着“等待入座”的空座位；入座后等待房主开始。")).toBeVisible();
     await expect(guest.getByTestId("lobby-start")).toHaveText("请先选择座位");
@@ -307,7 +291,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByTestId("seat-ready-1")).toHaveText("已准备");
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
 
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
     await expect(host.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await expect(guest.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
 
@@ -405,11 +389,8 @@ test.describe("friend room invitation QR", () => {
   test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
 test("is local, readable, and safe on a legacy phone", async ({ page }, testInfo) => {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("二维码房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "二维码房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await expect.poll(() => page.url()).toContain("roomId=");
 
@@ -521,11 +502,8 @@ test("falls back to a selectable local link when canvas generation fails", async
       value: () => null,
     });
   });
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("二维码回退测试");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "二维码回退测试");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
   await expect.poll(() => page.url()).toContain("roomId=");
 
@@ -556,17 +534,12 @@ test("a host refresh keeps ownership while a confirmed exit transfers it immedia
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("刷新房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "刷新房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-0")).toContainText("房主 · 你");
     const inviteUrl = host.url();
 
-    await guest.goto(inviteUrl);
-    await guest.getByTestId("nickname-input").fill("接任牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, inviteUrl, "接任牌友");
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");
     await expect(guest.getByTestId("fill-bots")).toHaveCount(0);
@@ -599,25 +572,20 @@ test("a later friend can preselect while the current peng winner receives the di
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/?e2eDebug=1");
-    await host.getByTestId("nickname-input").fill("预选房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/?e2eDebug=1", "预选房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
     await expect.poll(() => host.url()).toContain("roomId=");
     const inviteUrl = host.url();
 
-    await guest.goto(inviteUrl);
-    await guest.getByTestId("nickname-input").fill("先响应牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, inviteUrl, "先响应牌友");
     await guest.getByTestId("claim-seat-1").click();
     await host.getByTestId("claim-seat-3").click();
     await host.getByTestId("fill-bots").click();
     await expect(host.getByTestId("lobby-start")).toBeDisabled();
     await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
     await Promise.all([finishOpeningIfNeeded(host), finishOpeningIfNeeded(guest)]);
 
     await host.evaluate(() => {
@@ -669,11 +637,8 @@ test("a later friend can preselect while the current peng winner receives the di
 test("legacy small waiting room keeps seats clear and allows a safe personal exit", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 568, height: 320 });
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("小屏房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "小屏房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
 
   const seatGrid = page.getByTestId("seat-grid");
   const leaveButton = page.getByTestId("leave-waiting-room");
@@ -789,11 +754,8 @@ test.describe("rotated legacy friend waiting room", () => {
 
   test("keeps the leave confirmation inside the rotated canvas", async ({ page }, testInfo) => {
     test.setTimeout(60_000);
-    await page.goto("/");
-    await page.getByTestId("nickname-input").fill("竖屏牌友");
-    await page.getByTestId("login-submit").click();
+    await openGameAs(page, "/", "竖屏牌友");
     await page.getByTestId("mode-friends").click();
-    await page.getByTestId("lobby-start").click();
 
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
@@ -844,11 +806,8 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
     });
   });
 
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("分享房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "分享房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
   const inviteButton = page.getByTestId("share-invite");
@@ -888,11 +847,8 @@ test("keeps the friend room unchanged when system sharing is cancelled", async (
     });
   });
 
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("取消分享房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "取消分享房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
   const inviteButton = page.getByTestId("share-invite");
@@ -921,11 +877,8 @@ test("copies an invite link on an insecure LAN deployment", async ({ page }) => 
     });
   });
 
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("局域网房主");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "局域网房主");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
   await expect(page.getByTestId("seat-grid")).toBeVisible();
 
   await expect(page.getByTestId("share-invite")).toBeVisible();
@@ -1071,11 +1024,8 @@ for (const action of ["copy", "share"] as const) {
     });
     await page.setViewportSize({ width: 375, height: 667 });
 
-    await page.goto("/");
-    await page.getByTestId("nickname-input").fill("复制受限房主");
-    await page.getByTestId("login-submit").click();
+    await openGameAs(page, "/", "复制受限房主");
     await page.getByTestId("mode-friends").click();
-    await page.getByTestId("lobby-start").click();
     await expect(page.getByTestId("seat-grid")).toBeVisible();
 
     const copyButton = page.getByTestId(`${action}-invite`);

@@ -1,5 +1,5 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a friend-room host confirms before pulling other players out of settlement", async ({ browser }, testInfo) => {
   test.setTimeout(240_000);
@@ -9,21 +9,16 @@ test("a friend-room host confirms before pulling other players out of settlement
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/?e2eDebug=1");
-    await host.getByTestId("nickname-input").fill("续局房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/?e2eDebug=1", "续局房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("看分牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "看分牌友");
     await guest.getByTestId("claim-seat-1").click();
     await host.getByTestId("fill-bots").click();
     await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
 
     await Promise.all([finishDeclarationIfNeeded(host), finishDeclarationIfNeeded(guest)]);
 

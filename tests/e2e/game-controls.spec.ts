@@ -1,12 +1,10 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("a player can explicitly enable and cancel auto play", async ({ page }) => {
-  await page.goto("/");
-  await page.getByTestId("nickname-input").fill("托管体验玩家");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/", "托管体验玩家");
   await expect(page.getByText("游戏模式选择")).toBeVisible();
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
 
   await finishDeclarationIfNeeded(page);
 

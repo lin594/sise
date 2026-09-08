@@ -71,14 +71,15 @@
           class="mode-card"
           :class="{ active: selectedMode === mode.id, disabled: !mode.enabled || startPending }"
           :disabled="!mode.enabled || startPending"
-          :aria-pressed="selectedMode === mode.id"
+          :aria-label="`${mode.name}，${mode.description}`"
           @click="$emit('select-mode', mode.id)"
         >
           <div class="mode-head">
             <strong>{{ mode.name }}</strong>
-            <span>{{ selectedMode === mode.id ? "已选择" : mode.badge }}</span>
+            <span>{{ startPending && selectedMode === mode.id ? "正在进入…" : mode.badge }}</span>
           </div>
           <p>{{ mode.description }}</p>
+          <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "开始练习" }} <span aria-hidden="true">↗</span></span>
         </button>
       </div>
 
@@ -99,7 +100,7 @@
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
-          <p>复制链接发给牌友，打开后输入昵称即可选座。</p>
+          <p>复制链接发给牌友，打开后沿用本机昵称即可选座。</p>
         </div>
         <div class="invite-actions">
           <button
@@ -315,7 +316,7 @@
       <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
     </div>
 
-    <div class="lobby-actions">
+    <div v-if="!modes.length" class="lobby-actions">
       <div class="lobby-primary-actions">
         <button
           v-if="showFillBots"
@@ -364,9 +365,8 @@
       <span v-if="startHint" class="start-hint" role="status" aria-live="polite">{{ startHint }}</span>
     </div>
 
-    <Teleport to=".layout">
+    <Teleport v-if="guestProfileOpen" to=".layout">
       <div
-        v-if="guestProfileOpen"
         class="waiting-leave-mask guest-profile-mask"
         data-testid="guest-profile-mask"
         @click.self="closeGuestProfile"
@@ -1862,4 +1862,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   min-height: 46px;
   padding-block: 0.4rem;
 }
+.mode-enter { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--ui-border, #475569); color: var(--ui-accent-text, #bae6fd); font-weight: 800; }
+.mode-selection .mode-card { min-height: 9rem; }
+@media (max-height: 450px) { .mode-selection .mode-card { min-height: 0; padding: .65rem; } .mode-enter { margin-top: .5rem; padding-top: .4rem; } }
 </style>

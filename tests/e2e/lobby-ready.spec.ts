@@ -1,5 +1,5 @@
+import { openGameAs, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test("friend-room guests explicitly prepare before the host can start", async ({ browser }, testInfo) => {
   const hostContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
@@ -8,16 +8,11 @@ test("friend-room guests explicitly prepare before the host can start", async ({
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("准备房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "准备房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("银发牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "银发牌友");
     await expect(guest.getByTestId("seat-grid")).toBeVisible();
     await guest.getByTestId("claim-seat-1").click();
     await expect(guest.getByTestId("seat-1")).toContainText("你");

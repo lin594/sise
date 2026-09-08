@@ -3657,13 +3657,12 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   height: clamp(1.68rem, 3.2vh, 1.95rem);
   overflow: hidden;
   border-color: rgba(254, 202, 202, 0.84);
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 30% 70%, rgba(69, 10, 10, 0.2)),
-    #dc2626;
+  background: var(--card-back);
   box-shadow: inset 0 0 0 2px rgba(127, 29, 29, 0.68), 0 2px 5px rgba(var(--ui-page-rgb, 2, 6, 23), 0.36);
 }
 
 .mini-card-strip.mode-long .pending-fish-back {
+  border-radius: var(--long-card-radius);
   width: clamp(0.95rem, 1.7vh, 1.15rem);
   height: clamp(1.95rem, 3.8vh, 2.3rem);
 }
@@ -5756,7 +5755,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] :is(.player-left, .player-right) {
   align-self: center; height: auto; max-height: 100%; min-height: 0; margin-inline: .15rem; width: calc(100% - .3rem);
 }
-.board[data-table-layout="classic"] .player-top { min-height: 0; }
+.board[data-table-layout="classic"] .player-top { min-height: 0; height: fit-content; max-height: 100%; align-self: start; }
 .board[data-table-layout="classic"] .center { margin-inline: .3rem; width: calc(100% - .6rem); }
 .board[data-table-layout="classic"] .flow-card { align-self: center; max-height: 100%; }
 .board[data-table-layout="classic"] .player-card .seat-identity-meta { flex-wrap: wrap; }

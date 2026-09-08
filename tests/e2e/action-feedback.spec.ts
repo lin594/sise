@@ -1,5 +1,5 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
@@ -37,9 +37,8 @@ async function setupChiScenario(page: Page): Promise<void> {
 
 test("an invalid meld is explained and immediately becomes retryable", async ({ page }) => {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
 
   await finishDeclarationIfNeeded(page);
 
@@ -67,9 +66,8 @@ test("an invalid meld is explained and immediately becomes retryable", async ({ 
 
 test("an accepted meld yields immediately to the next discard instruction", async ({ page }) => {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
 
   await finishDeclarationIfNeeded(page);
 

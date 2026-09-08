@@ -1,5 +1,5 @@
+import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 } });
 
@@ -31,18 +31,15 @@ function scoreFromText(text: string | null): number {
 test("friend-room cumulative scoring survives a lobby return and adds the next round", async ({ page }) => {
   test.setTimeout(120_000);
 
-  await page.goto("/?e2eDebug=1");
-  await page.getByTestId("nickname-input").fill("累计牌友");
-  await page.getByTestId("login-submit").click();
+  await openGameAs(page, "/?e2eDebug=1", "累计牌友");
   await page.getByTestId("mode-friends").click();
-  await page.getByTestId("lobby-start").click();
 
   await expect(page.getByTestId("scoring-mode-card")).toBeVisible();
   await page.getByTestId("scoring-mode-cumulative").click();
   await expect(page.getByTestId("scoring-mode-cumulative")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("fill-bots").click();
   await expect(page.getByTestId("lobby-start")).toBeEnabled();
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
 
   await finishRoundThroughDebugHu(page);
   await expect(page.getByTestId("round-overview")).toContainText("本桌第 1 局");
@@ -78,7 +75,7 @@ test("friend-room cumulative scoring survives a lobby return and adds the next r
   const myLobbyScore = page.getByTestId("cumulative-scoreboard").locator("li").filter({ hasText: "累计牌友" });
   await expect(myLobbyScore).toContainText(`${firstCumulative > 0 ? "+" : ""}${firstCumulative}分`);
 
-  await page.getByTestId("lobby-start").click();
+  await startLobbyAction(page);
   await finishRoundThroughDebugHu(page);
   await expect(page.getByTestId("round-overview")).toContainText("本桌第 2 局");
   const secondMe = page.locator(".settlement-item").filter({ hasText: "累计牌友（你）" });

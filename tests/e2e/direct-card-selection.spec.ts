@@ -1,12 +1,12 @@
+import { startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
 async function enterPractice(page: Page): Promise<void> {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await expect.poll(async () => {
     const layoutClass = await page.locator("main.layout").getAttribute("class");
     if (layoutClass?.split(/\s+/u).includes("playing")) return "playing";

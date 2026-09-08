@@ -1,3 +1,4 @@
+import { openGameAs } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 type HeldSeatClaims = {
@@ -57,16 +58,11 @@ test("a slow friend-room seat claim keeps the first deliberate choice", async ({
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/");
-    await host.getByTestId("nickname-input").fill("选座房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/", "选座房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect(host.getByTestId("seat-grid")).toBeVisible();
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("选座牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "选座牌友");
     await expect(guest.getByTestId("claim-seat-1")).toBeVisible();
     await holdSeatClaims(guest);
 

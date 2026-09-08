@@ -1,12 +1,12 @@
 <template>
   <div class="appearance-settings">
-    <fieldset v-if="section !== 'table'"><legend>皮肤</legend><div class="appearance-options">
+    <fieldset v-if="section !== 'table'"><legend>皮肤</legend><div class="appearance-options" role="radiogroup" aria-label="皮肤">
       <button v-for="skin in skins" :key="skin.id" type="button" role="radio" :aria-checked="modelValue.skin === skin.id" :data-testid="`skin-${skin.id}`" @click="emit('update:modelValue', { ...modelValue, skin: skin.id })">
         <span class="skin-preview" :data-skin="skin.id" aria-hidden="true"><i>将</i><i>相</i></span>
         <strong>{{ skin.name }}</strong><small>{{ skin.description }}</small>
       </button>
     </div></fieldset>
-    <fieldset v-if="section !== 'appearance'"><legend>牌桌布局</legend><div class="appearance-options">
+    <fieldset v-if="section !== 'appearance'"><legend>牌桌布局</legend><div class="appearance-options" role="radiogroup" aria-label="牌桌布局">
       <button v-for="layout in tableLayouts" :key="layout.id" type="button" role="radio" :aria-checked="modelValue.tableLayout === layout.id" :data-testid="`layout-${layout.id}`" @click="emit('update:modelValue', { ...modelValue, tableLayout: layout.id })">
         <span class="layout-preview" :class="layout.id" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <strong>{{ layout.name }}</strong><small>{{ layout.id === "adaptive" ? `当前${resolvedLayout === "compact" ? "紧凑" : "经典"}` : layout.description }}</small>

@@ -1,6 +1,6 @@
+import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
@@ -31,14 +31,13 @@ type MeldHandoff = {
 
 async function start(page: Page, scenario: string) {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
   await page.evaluate((name) => {
     (window as any).__drawStages = [];
     new MutationObserver(() => {
-      const stage = document.querySelector('[data-transition-kind="draw"]')?.getAttribute("data-transition-stage");
+      const stage = document.querySelector('[data-transition-kind="draw"][data-transition-card-id^="draw-ma"]')?.getAttribute("data-transition-stage");
       if (stage && !(window as any).__drawStages.includes(stage)) (window as any).__drawStages.push(stage);
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-transition-stage"] });
     (window as any).__siseLocalTest.setupScenario(name);
@@ -225,6 +224,13 @@ test("draw flies face down, pauses, flips, then accepts B's eat with real cards"
   const flight = page.locator('[data-transition-kind="draw"]');
   await expect(flight).toBeVisible();
   await expect(flight.locator(".card-back")).toBeVisible();
+  const back = await flight.locator(".card-back").evaluate(el => ({
+    background: getComputedStyle(el).backgroundImage,
+    radius: getComputedStyle(el).borderRadius,
+  }));
+  expect(back.background).toContain("rgb(182, 36, 44)");
+  expect(back.radius).toBe("6px");
+  await expect(page.locator(".deck-layer").first()).toHaveCSS("background-image", back.background);
   await expect(flight).toHaveAttribute("data-transition-stage", "waiting");
   const landedDraw = await page.evaluate(() => {
     const read = (selector: string) => {

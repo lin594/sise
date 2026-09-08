@@ -1,6 +1,6 @@
+import { openGameAs, startLobbyAction } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
-import { finishDeclarationIfNeeded } from "./helpers/game";
 
 async function finishOpening(page: import("@playwright/test").Page): Promise<void> {
   await expect.poll(async () => {
@@ -23,21 +23,16 @@ test("a passive human response keeps the privacy window without exposing a count
   const guest = await guestContext.newPage();
 
   try {
-    await host.goto("/?e2eDebug=1");
-    await host.getByTestId("nickname-input").fill("被动响应房主");
-    await host.getByTestId("login-submit").click();
+    await openGameAs(host, "/?e2eDebug=1", "被动响应房主");
     await host.getByTestId("mode-friends").click();
-    await host.getByTestId("lobby-start").click();
     await expect.poll(() => host.url()).toContain("roomId=");
 
-    await guest.goto(host.url());
-    await guest.getByTestId("nickname-input").fill("观察响应牌友");
-    await guest.getByTestId("login-submit").click();
+    await openGameAs(guest, host.url(), "观察响应牌友");
     await guest.getByTestId("claim-seat-1").click();
     await host.getByTestId("fill-bots").click();
     await guest.getByTestId("lobby-ready").click();
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
-    await host.getByTestId("lobby-start").click();
+    await startLobbyAction(host);
 
     // 无鱼或无坎时服务端会跳过该玩家的对应步骤，两端都只推进实际存在的声明。
     await Promise.all([finishOpening(host), finishOpening(guest)]);

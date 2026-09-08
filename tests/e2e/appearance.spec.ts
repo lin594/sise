@@ -1,3 +1,4 @@
+import { startLobbyAction } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 
@@ -35,8 +36,8 @@ for (const skin of ["cyber-minimal", "licheng-water", "puxian-house", "meizhou-s
 
 async function startTable(page: import('@playwright/test').Page) {
   await page.goto('/?new=1&e2eDebug=1');
-  await page.getByTestId('login-submit').click();
-  await page.getByTestId('lobby-start').click();
+
+  await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible();
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper'));
   await expect(page.getByTestId('hand-card-d1')).toBeVisible();
@@ -45,7 +46,7 @@ async function startTable(page: import('@playwright/test').Page) {
 test('adaptive is the default while explicit classic still offers a small-screen recommendation', async ({ page }) => {
   await page.setViewportSize({width:568,height:320});
   await page.goto('/?new=1');
-  await page.getByTestId('login-submit').click();
+
   await expect(page.locator('main.layout')).toHaveAttribute('data-table-layout','adaptive');
   await expect(page.getByTestId('small-screen-recommendation')).toHaveCount(0);
   await page.getByTestId('game-settings').click();
@@ -108,4 +109,60 @@ test('settings use categories outside play and restore navigation focus', async 
   await page.getByTestId('settings-back').click();
   await expect(page.getByTestId('settings-category-table')).toBeFocused();
   await page.keyboard.press('Escape'); await expect(page.getByTestId('game-settings')).toBeFocused();
+});
+
+test("lobby boots with a saved name and edits without an entry screen", async ({ page }) => {
+  await page.addInitScript(() => { if (!localStorage.getItem("sise_entry_name")) localStorage.setItem("sise_entry_name", "荔城牌友"); });
+  await page.goto("/?new=1");
+  await expect(page.getByTestId("change-entry-name")).toContainText("荔城牌友");
+  await expect(page.getByTestId("nickname-input")).toHaveCount(0);
+  await page.getByTestId("change-entry-name").click();
+  await page.getByTestId("nickname-input").fill("湄洲牌友");
+  await page.getByTestId("cancel-nickname").click();
+  await expect(page.getByTestId("change-entry-name")).toContainText("荔城牌友");
+  await expect(page.getByTestId("change-entry-name")).toBeFocused();
+  await page.getByTestId("change-entry-name").click();
+  await page.getByTestId("nickname-input").fill("湄洲牌友");
+  await page.getByTestId("login-submit").click();
+  await page.reload();
+  await expect(page.getByTestId("change-entry-name")).toContainText("湄洲牌友");
+  await expect(page.locator(".mode-card")).toHaveCount(3);
+});
+
+test('invalid fields fall back independently and preserve valid preferences', async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({skin:'unknown',tableLayout:'unknown',ownCards:'large',handLayout:'paged'})));
+  await page.goto('/?new=1');
+  await expect(page.locator('html')).toHaveAttribute('data-skin','licheng-water');
+  await expect(page.locator('main')).toHaveAttribute('data-table-layout','adaptive');
+  await page.getByTestId('game-settings').click();
+  await revealSetting(page,'card-mode-own-large');
+  await expect(page.getByTestId('card-mode-own-large')).toHaveAttribute('aria-checked','true');
+  await expect(page.getByTestId('hand-layout-paged')).toHaveAttribute('aria-checked','true');
+});
+
+test('blocked storage retains choices and recommendation dismissal within the session', async ({page}) => {
+  await page.setViewportSize({width:568,height:320});
+  await page.addInitScript(() => { for(const name of ['getItem','setItem','removeItem']) Object.defineProperty(Storage.prototype,name,{configurable:true,value(){throw new DOMException('blocked','SecurityError');}}); });
+  await page.goto('/?new=1');
+  await expect(page.getByTestId('small-screen-recommendation')).toHaveCount(0);
+  await page.getByTestId('game-settings').click();
+  await revealSetting(page,'layout-classic');
+  await page.getByTestId('layout-classic').click();
+  await page.getByRole('button',{name:'关闭设置',exact:true}).click();
+  await page.getByTestId('dismiss-compact-recommendation').click();
+  await page.getByTestId('game-settings').click();
+  await revealSetting(page,'skin-meizhou-sea');
+  await page.getByTestId('skin-meizhou-sea').click();
+  await page.getByRole('button',{name:'关闭设置',exact:true}).click();
+  await expect(page.getByTestId('small-screen-recommendation')).toHaveCount(0);
+  await page.getByTestId('mode-practice_bots').click();
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout','classic');
+  await expect(page.locator('html')).toHaveAttribute('data-skin','meizhou-sea');
+});
+
+test('a recent historical name supplies the automatic lobby identity', async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem('sise_entry_name_history',JSON.stringify(['历史牌友','旧昵称'])));
+  await page.goto('/?new=1');
+  await expect(page.getByTestId('change-entry-name')).toContainText('历史牌友');
+  expect(await page.evaluate(() => localStorage.getItem('sise_entry_name'))).toBe('历史牌友');
 });

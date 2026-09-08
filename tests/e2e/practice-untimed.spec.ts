@@ -1,12 +1,12 @@
+import { startLobbyAction } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
 test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true });
 
 test("single-player practice keeps human decisions untimed", async ({ page }) => {
   await page.goto("/?e2eDebug=1");
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByTestId("lobby-start").click();
+
+  await startLobbyAction(page);
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => {
     const bridge = (window as Window & {
