@@ -242,7 +242,11 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
     const area = await manyMelds(page, side);
     for (const [width, height] of [[640, 350], [667, 375], [390, 844], [1440, 900]]) {
       await page.setViewportSize({ width, height });
-      await page.waitForTimeout(250);
+      // The viewport debounce is followed by layout/ResizeObserver frames.
+      // WebKit on CI can still report pre-resize used sizes after a timer alone.
+      await page.waitForTimeout(220);
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
       const overview = await area.evaluate(el => {
         const b = el.getBoundingClientRect();
         return { overflow: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
@@ -254,7 +258,7 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
       });
       if (overview.overflow || overview.cards.some(card => !card.visible)) {
         console.log('meld overview geometry', JSON.stringify(await area.evaluate(el => ({
-          cardStyles: [...el.querySelectorAll<HTMLElement>('.mini-card')].slice(0, 3).map(card => ({ inline: card.getAttribute('style'), scale: getComputedStyle(card).getPropertyValue('--meld-scale'), width: getComputedStyle(card).width })), inline: el.getAttribute('style'), viewport: [el.clientWidth, el.clientHeight], content: [el.scrollWidth, el.scrollHeight], scale: getComputedStyle(el).getPropertyValue('--meld-scale'),
+          cardStyles: [...el.querySelectorAll<HTMLElement>('.mini-card')].slice(0, 3).map(card => ({ inline: card.getAttribute('style'), scale: getComputedStyle(card).getPropertyValue('--meld-scale'), width: getComputedStyle(card).width, minWidth: getComputedStyle(card).minWidth, minHeight: getComputedStyle(card).minHeight, height: getComputedStyle(card).height, font: getComputedStyle(card).fontSize, animation: getComputedStyle(card).animationName })), inline: el.getAttribute('style'), viewport: [el.clientWidth, el.clientHeight], content: [el.scrollWidth, el.scrollHeight], scale: getComputedStyle(el).getPropertyValue('--meld-scale'),
           groups: [...el.querySelectorAll<HTMLElement>('.group-block')].map(group => [group.offsetLeft, group.offsetTop, group.offsetWidth, group.offsetHeight]),
           tableRows: getComputedStyle(document.querySelector('.table')!).gridTemplateRows,
         }))));

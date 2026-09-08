@@ -77,6 +77,8 @@
 .board[data-table-layout="mahjong"] .mini-card-strip { flex-wrap: nowrap; gap: 1px; padding: 0; }
 .board[data-table-layout="mahjong"] :is(.player-card, .self-groups-card) .mini-card {
   box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
   width: 20px;
   height: 24px;
   font-size: 12px;
