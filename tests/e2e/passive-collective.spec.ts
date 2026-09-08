@@ -87,7 +87,7 @@ test("a shared three-second public clock preserves the ten-second manual respons
       expect(host.getByTestId("self-turn-outline")).toBeVisible(),
       expect(host.locator(".center-pointer.pointer-down")).toBeVisible(),
       expect(host).not.toHaveTitle(/轮到你/),
-      expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "牌局设置"),
+      expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "全局设置"),
       expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveCount(0),
       expect(guest.getByTestId("decision-countdown")).toHaveText(/^[0-3]秒$/),
     ]);

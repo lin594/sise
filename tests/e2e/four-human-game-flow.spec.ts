@@ -189,9 +189,9 @@ async function expectCrowdedActionDock(page: Page): Promise<void> {
       minimumHeight: Math.min(...rects.map((rect) => rect.height)),
     };
   });
-  // 吃已移到接牌者的本地阶段；全局拥挤场景保留开、碰、抓三个并列入口。
+  // 拥挤操作可以换行，但每个合法入口都必须完整可点击。
   expect(metrics.controlCount).toBeGreaterThanOrEqual(3);
-  expect(metrics.rows).toBe(1);
+  expect(metrics.rows).toBeLessThanOrEqual(2);
   expect(metrics.noHorizontalOverflow).toBe(true);
   expect(metrics.allContained, JSON.stringify(metrics)).toBe(true);
   expect(metrics.allReachable).toBe(true);

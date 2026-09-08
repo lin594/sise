@@ -29,7 +29,7 @@ test("single-player practice keeps human decisions untimed", async ({ page }) =>
 
   await declarationConfirm.click();
   await expect(page.locator(".pending-fish-back")).toHaveCount(4);
-  await expect(declarationConfirm.locator("span")).toHaveText("开始游戏");
+  await expect(declarationConfirm.locator("span")).toHaveText("确认坎数");
   await declarationConfirm.click();
   await expect(page.locator("main.layout")).toHaveClass(/\bplaying\b/, { timeout: 20_000 });
   await page.setViewportSize({ width: 568, height: 320 });

@@ -1,44 +1,16 @@
 <template>
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
-      <button
-        v-if="inRoom"
-        ref="historyButtonRef"
-        class="tool-button history"
-        type="button"
-        :aria-label="historyButtonLabel"
-        title="回看本局最近操作"
-        data-testid="game-history"
-        aria-controls="game-history-panel"
-        :aria-expanded="historyOpen"
-        @click="toggleHistory"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h11M4 12h11M4 17h8" />
-          <path d="M18 14v5l3-2.5L18 14Z" />
-        </svg>
-        <span>记录</span>
-      </button>
-      <button
-        v-if="inRoom"
-        class="tool-button interaction"
-        type="button"
-        :aria-label="quickPhrases.length === 0 ? '快捷互动，暂无音效' : props.quickPhraseBusy ? '快捷互动，上一条语音播放中' : '快捷互动'"
-        :title="quickPhrases.length === 0 ? '暂无互动音效' : props.quickPhraseBusy ? '上一条语音播放中' : '快捷互动'"
-        data-testid="game-interaction"
-        :aria-expanded="phraseOpen"
-        :disabled="props.quickPhraseBusy || quickPhrases.length === 0"
-        @click="togglePhrases"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z" /><path d="M8 9h8M8 12h5" /></svg>
-        <span>互动</span>
-      </button>
+      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" @click="toggleHistory">记录</button>
+      <button v-if="inRoom" class="tool-button" type="button" data-testid="tools-rules" @click="openRules">规则</button>
+      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" @click="togglePhrases">互动</button>
+
       <button
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局设置，当前轮到你操作' : inRoom ? '牌局设置' : '全局设置'"
-        :title="inRoom ? '牌局设置' : '全局设置'"
+        :aria-label="decisionActive ? '全局设置，当前轮到你操作' : '全局设置'"
+        title="全局设置"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -69,22 +41,7 @@
         </svg>
         <span>{{ props.autoPlay ? "取消托管" : "托管" }}</span>
       </button>
-      <button
-        v-if="inRoom"
-        ref="exitButtonRef"
-        class="tool-button exit"
-        type="button"
-        aria-label="退出牌局"
-        title="退出牌局"
-        data-testid="game-exit"
-        @click="requestExit"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M10 5H5v14h5" />
-          <path d="M13 8l4 4-4 4M8 12h9" />
-        </svg>
-        <span>退出</span>
-      </button>
+
     </div>
 
     <Transition name="popover">
@@ -98,7 +55,9 @@
     </Transition>
 
     <Transition name="popover">
-      <section v-if="phraseOpen" class="phrase-panel" data-testid="quick-phrase-panel" aria-label="快捷互动">
+      <section v-if="phraseOpen" ref="phrasePanelRef" class="phrase-panel" data-testid="quick-phrase-panel" role="dialog" aria-modal="true" aria-label="快捷互动" tabindex="-1" @keydown.esc.stop.prevent="closePhrases" @keydown.tab="trapPanelFocus($event, phrasePanelRef)">
+        <button type="button" @click="backToTools">‹ 返回设置</button>
+        <button type="button" @click="closePhrases">关闭互动</button>
         <p v-if="props.quickPhraseBusy" class="phrase-busy" role="status">上一条语音播放中…</p>
         <p v-else-if="quickPhrases.length === 0" class="phrase-busy" role="status">暂无互动音效</p>
         <button v-for="phrase in quickPhrases" :key="phrase.id" type="button" :disabled="props.quickPhraseBusy" @click="sendPhrase(phrase.id)">{{ phrase.label }}</button>
@@ -124,6 +83,7 @@
         @keydown.tab="trapHistoryFocus"
       >
         <header>
+          <button type="button" @click="backToTools">‹ 返回设置</button>
           <div>
             <small>没看清刚才发生了什么？</small>
             <strong id="history-panel-title">最近操作</strong>
@@ -131,6 +91,7 @@
           <button type="button" aria-label="关闭最近操作" data-testid="close-history" @click="closeHistory()">×</button>
         </header>
         <p id="history-panel-description" class="history-description">本局最新记录排在最前；查看时牌局计时仍会继续。</p>
+        <div v-if="decisionActive" class="decision-reminder" role="status"><span>{{ decisionTimeText }}</span><button type="button" @click="returnToDecision">{{ declaring ? '返回声明' : '返回出牌' }}</button></div>
         <ol v-if="historyItems.length" class="history-list">
           <li
             v-for="item in historyItems"
@@ -187,7 +148,7 @@
             <small>{{ decisionTimeText }}</small>
           </span>
           <button type="button" data-testid="settings-return-to-decision" @click="returnToDecision">
-            返回出牌
+            {{ declaring ? "返回声明" : "返回出牌" }}
           </button>
         </div>
         <nav v-if="settingsPage === 'home'" class="settings-categories" aria-label="设置分类">
@@ -195,6 +156,10 @@
             <strong>{{ category.label }}</strong><small>{{ category.summary }}</small><span aria-hidden="true">›</span>
           </button>
         </nav>
+        <div v-if="settingsPage === 'home' && inRoom" class="settings-categories">
+          <button type="button" data-testid="session-mute" :aria-pressed="sessionMuted" @click="emit('toggleSessionMute')">{{ sessionMuted ? '取消临时静音' : '临时静音' }}</button>
+          <button ref="exitButtonRef" type="button" data-testid="game-exit" @click="requestExit">退出牌局</button>
+        </div>
         <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
@@ -204,7 +169,7 @@
               @click="emit('update:modelValue', { ...modelValue, handLayout: mode })">{{ mode === 'single' ? '单行模式' : '翻页模式' }}</button>
           </div>
         </div>
-        <div v-if="settingsPage === 'table' || settingsPage === 'quick'" class="preference-group">
+        <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy">
             <strong>我的牌</strong>
             <small>手牌、声明与本人结算</small>
@@ -276,7 +241,7 @@
             </button>
           </div>
         </div>
-        <div v-if="settingsPage === 'sound' || settingsPage === 'quick'" class="preference-group">
+        <div v-if="settingsPage === 'sound'" class="preference-group">
           <div class="preference-copy">
             <strong>轮到我提醒</strong>
             <small>每个操作窗口只提醒一次</small>
@@ -407,8 +372,7 @@
           </span>
           <span class="switch-state install-state">安装</span>
         </button>
-        <button v-if="settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-all" @click="openSettingsPage('home')">全部设置 <span aria-hidden="true">›</span></button>
-        <button v-if="settingsPage === 'home' || settingsPage === 'quick'" class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
+        <button v-if="settingsPage === 'home'" class="rules-entry" type="button" data-testid="settings-rules" @click="openRules">
           <span>规则速查</span><span aria-hidden="true">›</span>
         </button>
         <p
@@ -490,6 +454,8 @@ const props = withDefaults(
     inRoom?: boolean;
     playingContext?: boolean;
     resolvedTableLayout?: "classic" | "compact";
+    declaring?: boolean;
+    sessionMuted?: boolean;
     decisionActive?: boolean;
     decisionUntimed?: boolean;
     decisionSecondsLeft?: number;
@@ -525,6 +491,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "update:modelValue": [preferences: GameDisplayPreferences];
+  toggleSessionMute: [];
   openRules: [];
   installApp: [];
   returnToDecision: [];
@@ -539,13 +506,15 @@ const historyButtonRef = ref<HTMLButtonElement | null>(null);
 const historyPanelRef = ref<HTMLElement | null>(null);
 const historyOpen = ref(false);
 const phraseOpen = ref(false);
+const phrasePanelRef = ref<HTMLElement | null>(null);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
-type SettingsPage = "quick" | "home" | "appearance" | "table" | "sound" | "assist";
+type SettingsPage = "home" | "appearance" | "table" | "sound" | "assist";
+const interactionButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsRoot = ref<SettingsPage>("home");
 const settingsPage = ref<SettingsPage>("home");
-const settingsPageTitle = computed(() => ({ quick: "牌局快捷设置", home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
+const settingsPageTitle = computed(() => ({ home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
 const settingsCategories = computed(() => [
   { id: "appearance" as const, label: "外观", summary: skins.find(s => s.id === props.modelValue.skin)?.name ?? "皮肤" },
   { id: "table" as const, label: "牌桌与纸牌", summary: `${tableLayouts.find(l => l.id === props.modelValue.tableLayout)?.name ?? "布局"} · ${props.modelValue.handLayout === "paged" ? "翻页" : "单行"}` },
@@ -648,13 +617,19 @@ async function toggleSettings(): Promise<void> {
   }
   closeHistory(false);
   phraseOpen.value = false;
-  settingsRoot.value = props.playingContext ? "quick" : "home";
+  settingsRoot.value = "home";
   settingsPage.value = settingsRoot.value;
   settingsOpen.value = true;
   await nextTick();
   observeSettingsScroll();
   settingsPanelRef.value?.focus();
   document.addEventListener("pointerdown", handleSettingsOutsidePointer);
+}
+
+async function backToTools(): Promise<void> {
+  closeHistory(false);
+  phraseOpen.value = false;
+  await toggleSettings();
 }
 
 async function toggleHistory(): Promise<void> {
@@ -672,7 +647,7 @@ async function toggleHistory(): Promise<void> {
 
 function closeOpenPopover(): void {
   if (phraseOpen.value) {
-    phraseOpen.value = false;
+    closePhrases();
     return;
   }
   if (historyOpen.value) {
@@ -682,15 +657,21 @@ function closeOpenPopover(): void {
   closeSettings();
 }
 
+function closePhrases() {
+  phraseOpen.value = false;
+  void nextTick(() => interactionButtonRef.value?.focus());
+}
+
 function togglePhrases(): void {
   const opening = !phraseOpen.value;
   closeHistory(false);
   closeSettings(false);
   phraseOpen.value = opening;
+  if (opening) void nextTick(() => phrasePanelRef.value?.focus());
 }
 
 function sendPhrase(phraseId: string): void {
-  phraseOpen.value = false;
+  closePhrases();
   emit("quickPhrase", phraseId);
 }
 
@@ -701,7 +682,7 @@ function closeHistory(restoreFocus = true): void {
   removeSettingsOutsideListener();
   historyOpen.value = false;
   if (restoreFocus) {
-    void nextTick(() => historyButtonRef.value?.focus());
+    void nextTick(() => settingsButtonRef.value?.focus());
   }
 }
 
@@ -722,6 +703,15 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
   if (!(target instanceof Node) || gameToolsRef.value?.contains(target)) {
     return;
   }
+  // Consume the dismissing gesture so it cannot select or submit a card below.
+  event.preventDefault();
+  const consumeClick = (click: MouseEvent) => {
+    click.preventDefault();
+    click.stopImmediatePropagation();
+    document.removeEventListener("click", consumeClick, true);
+  };
+  document.addEventListener("click", consumeClick, true);
+  window.setTimeout(() => document.removeEventListener("click", consumeClick, true), 500);
   if (settingsOpen.value) {
     closeSettings();
   }
@@ -916,7 +906,7 @@ function removeConfirmationFocusGuard(): void {
 async function requestExit(): Promise<void> {
   exitReturnFocus = document.activeElement instanceof HTMLElement
     ? document.activeElement
-    : exitButtonRef.value;
+    : settingsButtonRef.value;
   removeSettingsOutsideListener();
   stopObservingSettingsScroll();
   settingsOpen.value = false;
@@ -933,7 +923,7 @@ async function cancelExit(): Promise<void> {
   confirmingExit.value = false;
   removeConfirmationFocusGuard();
   await nextTick();
-  const target = exitReturnFocus?.isConnected ? exitReturnFocus : exitButtonRef.value;
+  const target = settingsButtonRef.value;
   target?.focus();
   exitReturnFocus = null;
 }
@@ -987,13 +977,14 @@ function handleNavigationBack(): boolean {
     return true;
   }
   if (phraseOpen.value) {
-    phraseOpen.value = false;
+    closePhrases();
     return true;
   }
   return false;
 }
 
 defineExpose({
+  openTools: toggleSettings,
   handleNavigationBack,
   requestExit,
 });

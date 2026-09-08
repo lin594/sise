@@ -225,8 +225,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private collectiveResponseWindowMs: number | undefined = process.env.NODE_ENV === "test"
     ? Math.min(10_000, Math.max(0, Number(process.env.TEST_COLLECTIVE_RESPONSE_WINDOW_MS ?? 0)))
     : undefined;
-  private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 1100));
-  private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 2000));
+  private readonly dealerPickIntroMs = Math.max(0, Number(process.env.DEALER_PICK_INTRO_MS ?? 2200));
+  private readonly dealerRevealIntroMs = Math.max(0, Number(process.env.DEALER_REVEAL_INTRO_MS ?? 3400));
   private readonly openingDealDelayMs = Math.max(0, Number(process.env.OPENING_DEAL_DELAY_MS ?? 3200));
   private readonly declareTimeoutMs = Math.max(
     1000,

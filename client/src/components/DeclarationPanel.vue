@@ -1,5 +1,11 @@
 <template>
   <div class="declare-mask" :class="{ embedded }">
+    <Teleport v-if="embedded && handReady && initialized && !submitted && !submitPending && step !== 'done'" to="#declaration-guidance-anchor">
+      <aside class="declaration-guidance" role="status" aria-live="polite" data-testid="declaration-guidance">
+        <strong>{{ step === 'fish' ? '声明鱼' : '声明坎' }}</strong>
+        <span>{{ declarationDescription }}</span>
+      </aside>
+    </Teleport>
     <div
       ref="panelRef"
       class="declare-panel"
@@ -344,12 +350,12 @@ const canRestoreRecommendation = computed(
   () => props.step === "fish" && initialized.value && !isLocked.value && !isAtRecommendation.value,
 );
 const confirmationText = computed(() => {
-  return props.step === "fish" ? "确认鱼" : "开始游戏";
+  return props.step === "fish" ? "确认鱼" : "确认坎数";
 });
 const declarationDescription = computed(() => props.step === "fish"
   ? "选择要亮出的鱼；默认已选推荐鱼，确认后其他玩家先看到红色牌背。"
   : props.step === "kong"
-    ? "选择声明坎数，再点击开始游戏；手牌中的坎候选均已标出。"
+    ? "选择声明坎数，再点击确认坎数；手牌中的坎候选均已标出。"
     : "声明已经完成，正在等待其他玩家声明。",
 );
 const declarationStatusText = computed(() => {
@@ -1637,4 +1643,6 @@ button:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.declare-mask.embedded .confirm-declaration, .declare-mask.embedded .fish-option, .declare-mask.embedded .kong-choice { min-height: 44px; height: 44px; }
+.declaration-guidance { display: grid; gap: 3px; padding: 6px 10px; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-panel); color: var(--ui-text); box-shadow: 0 3px 12px #0003; font-size: 13px; line-height: 1.35; }
 </style>

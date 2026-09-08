@@ -1,5 +1,6 @@
+import { sessionAudioMuted } from "@/composables/sessionAudio";
 import type { ListeningHints } from "@/types/game";
-import { computed, onUnmounted, ref, shallowRef } from "vue";
+import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { Client, ErrorCode, MatchMakeError, Room } from "@colyseus/sdk";
 import type {
   ActionFeedback,
@@ -526,7 +527,7 @@ export function useRoom(playerName = "Player") {
   }
 
   function playQuickPhrase(phraseId: string): void {
-    if (quickPhraseMuted.value) return;
+    if (quickPhraseMuted.value || sessionAudioMuted.value) return;
     const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
     if (!phrase) return;
     const audio = getQuickPhraseAudio();
@@ -544,6 +545,8 @@ export function useRoom(playerName = "Player") {
       // 媒体播放不可用时仍保留桌面文字提示。
     }
   }
+
+  watch(sessionAudioMuted, muted => { if (muted) stopQuickPhraseAudio(); });
 
   function stopQuickPhraseAudio(): void {
     if (!quickPhraseAudio) return;

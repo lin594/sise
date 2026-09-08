@@ -1,3 +1,4 @@
+import { revealTool } from "./helpers/settings";
 import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -420,6 +421,7 @@ test.describe("牌局断线恢复", () => {
 
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await responseCaptured;
+    await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();

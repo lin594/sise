@@ -1,3 +1,4 @@
+import { sessionAudioMuted } from "@/composables/sessionAudio";
 import { onMounted, onUnmounted, watch, type Ref } from "vue";
 import type { TurnAlertMode } from "@/types/game";
 
@@ -116,6 +117,7 @@ export function useTurnAlert(options: TurnAlertOptions): void {
   };
 
   const playChime = (decisionKey: string): void => {
+    if (sessionAudioMuted.value) return;
     if (!decisionKey || options.mode.value === "off" || lastSoundKey === decisionKey) {
       return;
     }

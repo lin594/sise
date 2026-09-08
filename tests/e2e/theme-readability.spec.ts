@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { revealSetting } from './helpers/settings';
+import { revealSetting, revealTool } from './helpers/settings';
 
 async function readableText(panel: Locator) {
   const failures = await panel.evaluate(root => {
@@ -66,12 +66,15 @@ for (const scheme of ['dark','light'] as const) for (const skin of ['cyber-minim
     await expect(page.getByTestId('confirm-declaration')).toBeVisible();
     await readableText(page.locator('.declare-panel'));
     await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper'));
-    await page.getByTestId('game-history').click();
+    await revealTool(page, "game-history");
+    await page.getByTestId("game-history").click();
     await readableText(page.getByTestId('history-panel'));
     await page.getByTestId('close-history').click();
-    await page.getByTestId('game-interaction').click();
+    await revealTool(page, "game-interaction");
+    await page.getByTestId("game-interaction").click();
     await readableText(page.getByTestId('quick-phrase-panel'));
-    await page.getByTestId('game-interaction').click();
+    await page.getByTestId("game-settings").click();
+    await page.keyboard.press("Escape");
     await page.screenshot({path:info.outputPath(`${skin}-${scheme}-table.png`)});
     await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('settlement_hu'));
     await expect(page.getByTestId('settlement-panel')).toHaveAttribute('aria-busy','false',{timeout:20000});

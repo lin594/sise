@@ -1,6 +1,8 @@
-import { startLobbyAction } from "./helpers/game";
+import { startLobbyAction, stageDeclarationForTest } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
+
+test.use({ hasTouch: true });
 
 test("global appearance settings are reachable before joining and retain other preferences", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("sise_game_display_preferences_v2", JSON.stringify({ ownCards: "long", handLayout: "paged" })));
@@ -80,7 +82,8 @@ test('all skins and layouts keep actual cards and actions inside representative 
         const delta=await page.locator('.deck-stack').evaluate(el => {
           const r=el.getBoundingClientRect();
           const layers=[...el.querySelectorAll('.deck-layer')].map(l=>l.getBoundingClientRect());
-          return Math.max(...layers.map(l=>Math.abs((l.top+l.bottom)/2-(r.top+r.bottom)/2)));
+          const rotated = el.closest(".layout")?.classList.contains("rotated-phone-portrait");
+          return Math.max(...layers.map(l => rotated ? Math.abs((l.left+l.right-r.left-r.right)/2) : Math.abs((l.top+l.bottom-r.top-r.bottom)/2)));
         });
         expect(delta).toBeLessThanOrEqual(1);
         if(width===568 || width===1440) await page.screenshot({path:info.outputPath(`${skin}-${layout}-${width}.png`)});
@@ -165,4 +168,119 @@ test('a recent historical name supplies the automatic lobby identity', async ({p
   await page.goto('/?new=1');
   await expect(page.getByTestId('change-entry-name')).toContainText('历史牌友');
   expect(await page.evaluate(() => localStorage.getItem('sise_entry_name'))).toBe('历史牌友');
+});
+
+
+test('mobile tools keep habits nested and session mute never changes saved preferences', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await startTable(page);
+  await page.getByTestId('game-settings').click();
+  await expect(page.getByTestId('settings-panel')).toContainText('全部设置');
+  await expect(page.getByTestId('card-mode-own-large')).toHaveCount(0);
+  const saved = await page.evaluate(() => localStorage.getItem('sise_game_display_preferences_v2'));
+  await page.getByTestId('session-mute').click();
+  await expect(page.getByTestId('session-mute')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => localStorage.getItem('sise_game_display_preferences_v2'))).toBe(saved);
+  await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  await page.getByRole('button', { name: '返回设置' }).click();
+  await expect(page.getByTestId('session-mute')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('session-mute').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('game-settings')).toBeFocused();
+});
+
+test('rotated PWA respects visual viewport offsets and safe edges', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperties(viewport, { width: { value: 390, configurable: true }, height: { value: 800, configurable: true }, offsetTop: { value: 20, configurable: true } });
+  });
+  await startTable(page);
+  await expect(page.locator('main.layout')).toHaveAttribute('data-effective-viewport', '800x390');
+  const padding = await page.locator('main.layout').evaluate(el => {
+    const node = el as HTMLElement;
+    for (const [side, size] of Object.entries({ top: 47, right: 9, bottom: 34, left: 7 })) node.style.setProperty(`--device-safe-${side}`, `${size}px`);
+    const css = getComputedStyle(node);
+    return [css.paddingTop, css.paddingRight, css.paddingBottom, css.paddingLeft].map(parseFloat);
+  });
+  expect(padding).toEqual([9, 34, 7, 47]);
+  const rect = await page.locator('main.layout').boundingBox();
+  expect(rect!.x).toBeCloseTo(0, 0); expect(rect!.y).toBeCloseTo(20, 0);
+  expect(rect!.width).toBeCloseTo(390, 0); expect(rect!.height).toBeCloseTo(800, 0);
+  await expect(page.getByTestId('action-chi')).toBeInViewport({ ratio: 1 });
+  const geometry = await page.locator('.self-command-row').evaluate(el => {
+    const clock = el.querySelector('.clock-slot') as HTMLElement;
+    const info = el.querySelector('.self-info-card') as HTMLElement;
+    return { clock: clock.offsetWidth, overlap: clock.offsetLeft + clock.offsetWidth > info.offsetLeft, widths: [...el.querySelectorAll<HTMLElement>('.action-row .btn')].map(b => b.offsetWidth) };
+  });
+  expect(geometry.clock).toBe(56); expect(geometry.overlap).toBe(false);
+  for (const width of geometry.widths) { expect(width).toBeGreaterThanOrEqual(44); expect(width).toBeLessThanOrEqual(96); }
+  await page.screenshot({ path: info.outputPath('rotated-pwa-visual-viewport.png') });
+});
+
+
+test('declaration guidance follows fish and kong confirmation without covering controls', async ({ page }, info) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await startTable(page);
+  await stageDeclarationForTest(page);
+  const guide = page.getByTestId('declaration-guidance');
+  await expect(guide).toContainText('声明鱼');
+  await expect(guide).toBeVisible();
+  await expect(page.getByTestId('confirm-declaration')).toContainText('确认鱼');
+  await page.screenshot({ path: info.outputPath('declaration-fish.png') });
+  await page.getByTestId('confirm-declaration').click();
+  await expect(guide).toContainText('声明坎');
+  await expect(page.getByTestId('confirm-declaration')).toContainText('确认坎数');
+  await page.getByTestId('confirm-declaration').click();
+  await expect(guide).toHaveCount(0);
+});
+
+test('classic table places actual exposed groups around the felt', async ({ page }, info) => {
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario: 'readable_exposed_groups', ok: true });
+  for (const skin of ['licheng-water', 'puxian-house', 'meizhou-sea', 'cyber-minimal']) {
+    await page.getByTestId('game-settings').click();
+    await revealSetting(page, `skin-${skin}`); await page.getByTestId(`skin-${skin}`).click();
+    await revealSetting(page, 'layout-classic'); await page.getByTestId('layout-classic').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings-panel')).toHaveCount(0);
+    for (const [width, height] of [[844,390],[390,844],[1440,900]]) {
+      await page.setViewportSize({ width, height });
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', 'classic');
+      await expect(page.getByTestId('player-top')).toBeInViewport({ ratio: 1 });
+      await expect(page.locator('.opponent-card-stack')).toHaveCount(0);
+      await expect(page.locator('.self-groups-card .group-block-list [data-face-id]').first()).toBeVisible();
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: info.outputPath(`${skin}-classic-groups-${width}.png`) });
+    }
+  }
+});
+
+test('dealer ceremony counts from the picker to the authoritative dealer for every color', async ({ page }, info) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  for (const [color, total] of [['yellow', 1], ['red', 2], ['green', 3], ['white', 4], ['gold', 2]] as const) {
+    await page.evaluate(scenario => (window as any).__siseLocalTest.setupScenario(scenario), `dealer_count_${color}`);
+    const status = page.getByTestId('dealer-count-status');
+    await expect(status).toHaveAttribute('data-count-step', '1');
+    await expect(page.getByTestId('dealer-ceremony')).not.toContainText('从翻牌者数起');
+    const startPosition = await status.boundingBox();
+    const state = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState());
+    const seats = [...state.players].sort((a: any,b: any) => a.seatIndex - b.seatIndex);
+    const first = seats.findIndex((p: any) => p.clientId === state.dealerPickerId);
+    for (let step = 1; step <= total; step++) {
+      await expect(status).toHaveAttribute('data-count-step', String(step));
+      await expect(status).toHaveAttribute('data-count-seat', seats[(first + step - 1) % seats.length].clientId);
+    }
+    await expect(status).toHaveAttribute('data-count-seat', state.dealerId);
+    await page.waitForTimeout(520);
+    const endPosition = await status.boundingBox();
+    if (total > 1) expect(Math.hypot(endPosition!.x - startPosition!.x, endPosition!.y - startPosition!.y)).toBeGreaterThan(30);
+    await expect(page.locator('.dealer-reveal-result')).toBeVisible();
+    await expect(page.getByTestId('game-interaction')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('game-auto-play')).toBeInViewport({ ratio: 1 });
+    if (color === 'white') await page.screenshot({ path: info.outputPath('dealer-count-white-4.png') });
+  }
 });

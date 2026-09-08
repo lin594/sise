@@ -1,4 +1,5 @@
-import { computed, onUnmounted, ref, shallowRef } from "vue";
+import { sessionAudioMuted } from "@/composables/sessionAudio";
+import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { Client, ErrorCode, MatchMakeError } from "@colyseus/sdk";
 import { sortHandCards } from "@/utils/cardSort";
 import { getCardAccessibleText } from "@/utils/cardText";
@@ -464,7 +465,7 @@ export function useRoom(playerName = "Player") {
         }
     }
     function playQuickPhrase(phraseId) {
-        if (quickPhraseMuted.value)
+        if (quickPhraseMuted.value || sessionAudioMuted.value)
             return;
         const phrase = QUICK_PHRASES_BY_ID.get(phraseId);
         if (!phrase)
@@ -485,6 +486,8 @@ export function useRoom(playerName = "Player") {
             // 媒体播放不可用时仍保留桌面文字提示。
         }
     }
+    watch(sessionAudioMuted, muted => { if (muted)
+        stopQuickPhraseAudio(); });
     function stopQuickPhraseAudio() {
         if (!quickPhraseAudio)
             return;

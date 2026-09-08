@@ -22,6 +22,8 @@
     :data-decision-attention="decisionAttention"
     :data-connection-state="connectionState"
     :style="{
+      '--viewport-left': `${viewportLeft}px`,
+      '--viewport-top': `${viewportTop}px`,
       '--physical-viewport-width': `${viewportWidth}px`,
       '--physical-viewport-height': `${viewportHeight}px`,
       '--effective-vw': `${effectiveWidth / 100}px`,
@@ -86,6 +88,9 @@
         :screen-wake-lock-supported="screenWakeLockSupported"
         :install-app-available="canOfferPwaInstall"
         :quick-phrase-muted="quickPhraseMuted"
+        :session-muted="sessionAudioMuted"
+        :declaring="isDeclaring"
+        @toggle-session-mute="sessionAudioMuted = !sessionAudioMuted"
         :quick-phrase-busy="Boolean(quickPhrase)"
         @open-rules="openRules"
         @install-app="requestPwaInstall"
@@ -209,6 +214,7 @@
 
     <template v-else>
       <GameBoard
+        @geometry-busy="viewportGeometryBusy = $event"
         :state="state"
         :players="players"
         :private-hand="privateHand"
@@ -235,7 +241,7 @@
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
         :viewport-transformed="isRotatedPhonePortrait"
-        :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
+        :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${viewportLeft},${viewportTop}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
@@ -532,7 +538,7 @@
               aria-live="polite"
             >整桌请求已发送，请稍候</p>
           </template>
-          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用右上角退出按钮个人离开。</p>
+          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用设置中的退出牌局个人离开。</p>
         </div>
       </div>
     </div>
@@ -639,6 +645,7 @@
             <h2 id="rules-panel-title">四色牌规则</h2>
             <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
           </div>
+          <button v-if="showGameTools" type="button" class="ghost" @click="backRulesToTools">返回设置</button>
           <button ref="rulesCloseButtonRef" class="ghost" data-testid="close-rules" @click="closeRules()">关闭</button>
         </div>
 
@@ -651,7 +658,7 @@
         >
           <span><strong>轮到你操作</strong> · {{ settingsDecisionTimeText }}</span>
           <button type="button" data-testid="rules-return-to-decision" @click="returnToDecisionFromRules">
-            返回出牌
+            {{ isDeclaring ? "返回声明" : "返回出牌" }}
           </button>
         </div>
 
@@ -675,6 +682,7 @@ import LobbyPage from "@/components/LobbyPage.vue";
 import NicknameDialog from "@/components/NicknameDialog.vue";
 import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
 import { usePwaInstall, type PwaInstallGuide } from "@/composables/usePwaInstall";
+import { sessionAudioMuted } from "@/composables/sessionAudio";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { useGuestProfile } from "@/composables/useGuestProfile";
@@ -757,7 +765,8 @@ function closePwaInstallGuide(restoreFocus = true): void {
       const returnTarget = pwaInstallReturnFocus?.isConnected
         && !pwaInstallReturnFocus.closest("[data-testid='settings-panel']")
         ? pwaInstallReturnFocus
-        : document.querySelector<HTMLElement>("[data-testid='pwa-install-entry'], [data-testid='game-settings']");
+        : document.querySelector<HTMLElement>("[data-testid='game-settings']")
+          ?? document.querySelector<HTMLElement>("[data-testid='pwa-install-entry']");
       returnTarget?.focus({ preventScroll: true });
       pwaInstallReturnFocus = null;
     });
@@ -1536,6 +1545,7 @@ const isPendingSpecialCard = computed(() => {
   const card = candidateTargetCard.value;
   return Boolean(card && (card.color === "gold" || card.type === "jiang"));
 });
+const viewportGeometryBusy = ref(false);
 const {
   effectiveHeight,
   effectiveWidth,
@@ -1545,7 +1555,9 @@ const {
   isUltraCompactViewport,
   viewportHeight,
   viewportWidth,
-} = useResponsiveViewport();
+  viewportLeft,
+  viewportTop,
+} = useResponsiveViewport(viewportGeometryBusy);
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
 const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
 watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value] as const, ([layout, ultra], _, onCleanup) => {
@@ -1584,6 +1596,7 @@ const globalError = ref("");
 const globalNotice = ref("");
 const gameToolsRef = ref<{
   handleNavigationBack: () => boolean;
+  openTools: () => Promise<void>;
   requestExit: () => Promise<void>;
 } | null>(null);
 const lobbyPageRef = ref<{
@@ -1648,7 +1661,8 @@ const shouldShowDeclarePanel = computed(
     !Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay),
 );
 const settingsDecisionActive = computed(
-  () => decisionAttention.value === "action" || decisionAttention.value === "discard",
+  () => decisionAttention.value === "action" || decisionAttention.value === "discard"
+    || (shouldShowDeclarePanel.value && !isDeclareSubmitted.value && mePlayer.value?.declarationStep !== "done"),
 );
 const settingsDecisionSecondsLeft = computed(() => {
   if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
@@ -1664,6 +1678,12 @@ const settingsDecisionTimeText = computed(() =>
       ? "公共倒计时已结束，仍可响应，请尽快操作"
       : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
 );
+
+async function backRulesToTools() {
+  closeRules(false);
+  await nextTick();
+  await gameToolsRef.value?.openTools();
+}
 
 function openRules(trigger?: Event | HTMLElement): void {
   const explicitTarget = trigger instanceof HTMLElement
@@ -2139,7 +2159,8 @@ function focusReadyGameControl(): boolean {
   }
   // querySelector 对逗号选择器按 DOM 顺序返回；操作区重排到手牌之前后，必须显式
   // 保留“已选牌 > 合法动作 > 其他可选牌”的焦点优先级。
-  const control = document.querySelector<HTMLElement>(".hand-card.discard-selected:not(:disabled)")
+  const control = (isDeclaring.value ? document.querySelector<HTMLElement>("[data-testid='confirm-declaration']:not(:disabled)") : null)
+    ?? document.querySelector<HTMLElement>(".hand-card.discard-selected:not(:disabled)")
     ?? document.querySelector<HTMLElement>(".action-dock .btn:not(:disabled)")
     ?? document.querySelector<HTMLElement>(".hand-card.playable:not(:disabled)");
   if (!control) {
@@ -2194,7 +2215,7 @@ const turnAlertMode = computed(() => displayPreferences.value.turnAlert);
 const spokenTurnGuidanceSupported =
   typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
 const screenWakeLockSupported = isScreenWakeLockSupported();
-const spokenTurnGuidance = computed(() => displayPreferences.value.spokenTurnGuidance);
+const spokenTurnGuidance = computed(() => !sessionAudioMuted.value && displayPreferences.value.spokenTurnGuidance);
 const spokenDecisionMessage = computed(() => {
   if (!settingsDecisionActive.value) {
     return "";
@@ -3604,11 +3625,14 @@ watch(
     7.5rem
   );
   --game-header-height: 3rem;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  width: 100%;
+  --safe-top: var(--device-safe-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--device-safe-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--device-safe-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--device-safe-left, env(safe-area-inset-left, 0px));
+  position: fixed;
+  top: var(--viewport-top, 0px);
+  left: var(--viewport-left, 0px);
+  width: var(--physical-viewport-width, 100vw);
   height: var(--physical-viewport-height, 100vh);
   max-width: none;
   margin: 0 auto;
@@ -3628,13 +3652,14 @@ watch(
     calc(var(--physical-viewport-width, 100vw) * 0.31),
     7.5rem
   );
-  --safe-top: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-right, 0px);
-  --safe-left: env(safe-area-inset-bottom, 0px);
+  --safe-top: var(--device-safe-right, env(safe-area-inset-right, 0px));
+  --safe-right: var(--device-safe-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-bottom: var(--device-safe-left, env(safe-area-inset-left, 0px));
+  --safe-left: var(--device-safe-top, env(safe-area-inset-top, 0px));
   position: fixed;
   top: 0;
-  left: var(--physical-viewport-width, 100vw);
+  top: var(--viewport-top, 0px);
+  left: calc(var(--viewport-left, 0px) + var(--physical-viewport-width, 100vw));
   width: var(--physical-viewport-height, 100vh);
   height: var(--physical-viewport-width, 100vw);
   transform: rotate(90deg);
@@ -5110,17 +5135,7 @@ watch(
   display: none;
 }
 
-.layout.ultra-compact-viewport :deep(.game-tools .tool-button > span:not(.history-count)) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+.layout.ultra-compact-viewport :deep(.game-tools .tool-button svg) { display: none; }
 
 .layout.ultra-compact-viewport .rules-slogan {
   display: none;

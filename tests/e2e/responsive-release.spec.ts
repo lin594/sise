@@ -188,9 +188,12 @@ test.describe("mobile responsive release gate", () => {
 
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
+    // Check the real opening before injecting a ready-made declaration hand.
+    // The fixture replaces all cards immediately and is not a dealing animation.
+    await expectOpeningHandGate(page);
     await applyDebugScenario(page, "staged_declaration");
-    const hasDeclaration = await expectOpeningHandGate(page);
-    expect(hasDeclaration).toBe(true);
+    await expect(page.getByTestId("confirm-declaration")).toBeEnabled();
+    const hasDeclaration = true;
 
     if (hasDeclaration) {
       for (const viewport of allViewports) {
@@ -224,7 +227,7 @@ test.describe("mobile responsive release gate", () => {
     await expect(declarationButton.locator("span")).toHaveText("确认鱼");
     await declarationButton.click();
     await expect(page.locator(".pending-fish-back")).toHaveCount(4);
-    await expect(declarationButton.locator("span")).toHaveText("开始游戏");
+    await expect(declarationButton.locator("span")).toHaveText("确认坎数");
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("kong-count-1")).toHaveAttribute("aria-checked", "true");
     await finishOpeningDeclaration(page);

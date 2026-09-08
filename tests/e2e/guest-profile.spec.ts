@@ -1,3 +1,4 @@
+import { revealTool } from "./helpers/settings";
 import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -109,6 +110,8 @@ test("a passwordless local profile stays private and updates after settlement", 
   await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
   await applySettlementScenario(page);
   await expect(page.getByTestId("settlement-panel")).toBeVisible();
+
+  await revealTool(page, "game-exit");
 
   await page.getByTestId("game-exit").click();
   await page.getByTestId("confirm-exit").click();

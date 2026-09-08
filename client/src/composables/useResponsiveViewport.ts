@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from "vue";
 
 const PHONE_SHORT_EDGE_MAX = 600;
 const COMPACT_WIDTH_MAX = 960;
@@ -8,18 +8,30 @@ const ULTRA_COMPACT_HEIGHT_MAX = 380;
 const LEGACY_COMPACT_WIDTH_MAX = 600;
 const LEGACY_COMPACT_HEIGHT_MAX = 340;
 
-export function useResponsiveViewport() {
+export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
   const viewportWidth = ref(typeof window === "undefined" ? 1280 : window.innerWidth);
   const viewportHeight = ref(typeof window === "undefined" ? 720 : window.innerHeight);
+  const viewportLeft = ref(0);
+  const viewportTop = ref(0);
   const coarsePointer = ref(false);
   let coarsePointerQuery: MediaQueryList | null = null;
   let focusVisibilityTimer: number | null = null;
 
   const updateViewport = () => {
-    viewportWidth.value = window.innerWidth;
-    viewportHeight.value = window.innerHeight;
+    if (geometryBusy?.value) return;
+    const visual = window.visualViewport;
+    // Pinch zoom is magnification, not a request to rotate/reflow the table.
+    // innerWidth may expand to fit the previous rotated canvas on iOS/mobile
+    // emulation; the root client size still describes the new layout viewport.
+    const useVisual = visual && Math.abs(visual.scale - 1) < 0.01;
+    viewportWidth.value = useVisual ? visual.width : (document.documentElement.clientWidth || window.innerWidth);
+    viewportHeight.value = useVisual ? visual.height : (document.documentElement.clientHeight || window.innerHeight);
+    viewportLeft.value = useVisual ? visual.offsetLeft : 0;
+    viewportTop.value = useVisual ? visual.offsetTop : 0;
     coarsePointer.value = Boolean(coarsePointerQuery?.matches);
   };
+
+  if (geometryBusy) watch(geometryBusy, busy => { if (!busy) updateViewport(); });
 
   const keepFocusedControlVisible = () => {
     if (focusVisibilityTimer !== null) {
@@ -69,6 +81,9 @@ export function useResponsiveViewport() {
     coarsePointerQuery = window.matchMedia("(pointer: coarse)");
     updateViewport();
     window.addEventListener("resize", updateViewport);
+    window.addEventListener("pageshow", updateViewport);
+    document.addEventListener("visibilitychange", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
     coarsePointerQuery.addEventListener?.("change", updateViewport);
     window.visualViewport?.addEventListener("resize", handleVisualViewportResize);
@@ -76,6 +91,9 @@ export function useResponsiveViewport() {
 
   onUnmounted(() => {
     window.removeEventListener("resize", updateViewport);
+    window.removeEventListener("pageshow", updateViewport);
+    document.removeEventListener("visibilitychange", updateViewport);
+    window.visualViewport?.removeEventListener("scroll", updateViewport);
     window.removeEventListener("orientationchange", updateViewport);
     coarsePointerQuery?.removeEventListener?.("change", updateViewport);
     window.visualViewport?.removeEventListener("resize", handleVisualViewportResize);
@@ -92,6 +110,8 @@ export function useResponsiveViewport() {
     isPhoneLike,
     isRotatedPhonePortrait,
     isUltraCompactViewport,
+    viewportLeft,
+    viewportTop,
     viewportHeight,
     viewportWidth,
   };
