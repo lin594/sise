@@ -235,3 +235,25 @@ test('declaration guidance follows fish and kong confirmation without covering c
   await page.getByTestId('confirm-declaration').click();
   await expect(guide).toHaveCount(0);
 });
+
+test('classic table places actual exposed groups around the felt', async ({ page }, info) => {
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario: 'readable_exposed_groups', ok: true });
+  for (const skin of ['licheng-water', 'puxian-house', 'meizhou-sea', 'cyber-minimal']) {
+    await page.getByTestId('game-settings').click();
+    await revealSetting(page, `skin-${skin}`); await page.getByTestId(`skin-${skin}`).click();
+    await revealSetting(page, 'layout-classic'); await page.getByTestId('layout-classic').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings-panel')).toHaveCount(0);
+    for (const [width, height] of [[844,390],[390,844],[1440,900]]) {
+      await page.setViewportSize({ width, height });
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', 'classic');
+      await expect(page.getByTestId('player-top')).toBeInViewport({ ratio: 1 });
+      await expect(page.locator('.opponent-card-stack')).toHaveCount(0);
+      await expect(page.locator('.self-groups-card .group-block-list [data-face-id]').first()).toBeVisible();
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: info.outputPath(`${skin}-classic-groups-${width}.png`) });
+    }
+  }
+});

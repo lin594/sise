@@ -3,7 +3,7 @@
     <details :open="phase !== 'playing'">
       <summary>现在怎么操作</summary>
       <ol>
-        <li><strong>开局：</strong>手牌上方会选好建议声明的鱼和坎。检查后点“开始游戏”。</li>
+        <li><strong>开局：</strong>按悬浮提示检查推荐，依次点“确认鱼”和“确认坎数”；没有候选的步骤会跳过。</li>
         <li><strong>轮到你：</strong>先看手牌上方的提示。可以吃、碰、开、胡时，相应按钮会亮起。</li>
         <li><strong>选择吃牌：</strong>点手牌选择要组成一组的牌，再点“吃”。</li>
         <li><strong>需要出牌：</strong>点一张手牌，再点“出”。将和金条标有“留”，不能主动打出。</li>

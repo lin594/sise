@@ -702,6 +702,15 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
   if (!(target instanceof Node) || gameToolsRef.value?.contains(target)) {
     return;
   }
+  // Consume the dismissing gesture so it cannot select or submit a card below.
+  event.preventDefault();
+  const consumeClick = (click: MouseEvent) => {
+    click.preventDefault();
+    click.stopImmediatePropagation();
+    document.removeEventListener("click", consumeClick, true);
+  };
+  document.addEventListener("click", consumeClick, true);
+  window.setTimeout(() => document.removeEventListener("click", consumeClick, true), 500);
   if (settingsOpen.value) {
     closeSettings();
   }
