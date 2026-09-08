@@ -47,7 +47,8 @@ export default defineConfig({
             // CI 忙碌时浏览器上下文和邀请页可能数秒后才启动，因此沿用生产环境的宽限期。
             WAITING_ROOM_IDLE_MS: "60000",
             ACTIVE_ROOM_IDLE_MS: "3000",
-            RECONNECT_GRACE_MS: process.env.RECONNECT_GRACE_MS || "300",
+            // Match the production grace period: offline UI assertions/screenshots must not race takeover.
+            RECONNECT_GRACE_MS: process.env.RECONNECT_GRACE_MS || "5000",
             BOT_THINK_MIN_MS: "30",
             BOT_THINK_MAX_MS: "60",
             BOT_COLLECTIVE_THINK_MIN_MS: "10",
