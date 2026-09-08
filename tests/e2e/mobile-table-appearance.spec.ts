@@ -8,9 +8,9 @@ const phones = [[568,320],[667,375],[740,360],[812,375],[844,390],[852,393],[896
   [320,568],[375,667],[390,844],[393,852],[412,915],[428,926]];
 const computers = [[1024,768],[1280,720],[1440,900],[1920,1080]];
 
-async function start(page: Page, skin = 'puxian-house', ownCards = 'long', tableLayout = 'classic') {
+async function start(page: Page, skin = 'puxian-house', ownCards = 'long', tableLayout = 'classic', handLayout = 'single') {
   await page.addInitScript(prefs => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify(prefs)),
-    {skin, ownCards, tableCards: ownCards, tableLayout, reduceMotion: true});
+    {skin, ownCards, tableCards: ownCards, tableLayout, handLayout, reduceMotion: true});
   await page.goto('/?new=1&e2eDebug=1');
   await startLobbyAction(page);
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
@@ -42,7 +42,7 @@ async function settle(page: Page) {
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
 }
 
-async function assertDensity(page: Page, classic = true) {
+async function assertDensity(page: Page, classic = true, paged = false) {
   await settle(page);
   const viewport = page.viewportSize()!;
   const rotated = viewport.width < viewport.height && viewport.width <= 500;
@@ -62,7 +62,49 @@ async function assertDensity(page: Page, classic = true) {
     const topLeft = board.querySelector<HTMLElement>('.flow-top-left')!;
     const topRight = board.querySelector<HTMLElement>('.flow-top-right')!;
     const group = board.querySelector<HTMLElement>('.self-groups-card')!;
+    // Work in the unrotated board coordinates, including its rounded wood rim.
+    const localBox = (el: HTMLElement) => {
+      let x = 0, y = 0;
+      for (let node: HTMLElement | null = el; node && node !== board; node = node.offsetParent as HTMLElement | null) {
+        x += node.offsetLeft; y += node.offsetTop;
+      }
+      return {x, y, width: el.offsetWidth, height: el.offsetHeight};
+    };
+    const rim = getComputedStyle(board, '::before');
+    const inset = (parseFloat(rim.borderTopWidth) || 0) + 2;
+    const radius = Math.max(0, (parseFloat(rim.borderTopLeftRadius) || 0) - inset);
+    const feltContains = (x: number, y: number) => {
+      const right = board.clientWidth - inset, bottom = board.clientHeight - inset;
+      if (x < inset || x > right || y < inset || y > bottom) return false;
+      const cx = Math.max(inset + radius, Math.min(right - radius, x));
+      const cy = Math.max(inset + radius, Math.min(bottom - radius, y));
+      return Math.hypot(x - cx, y - cy) <= radius + 1;
+    };
+    const flowsInsideFelt = [...board.querySelectorAll<HTMLElement>('.flow-card')].every(el => {
+      const {x,y,width,height} = localBox(el);
+      return [[x,y],[x+width,y],[x,y+height],[x+width,y+height]].every(([px,py]) => feltContains(px,py));
+    });
+    const sideGroupsBelowIdentity = [...board.querySelectorAll<HTMLElement>('.player-left, .player-right')].every(seat => {
+      const head = localBox(seat.querySelector<HTMLElement>('.seat-head')!);
+      const group = seat.querySelector<HTMLElement>('.group-block-list');
+      if (!group) return true;
+      const rect = localBox(group);
+      return rect.y >= head.y + head.height - 1 && Math.abs(rect.x + rect.width/2 - head.x - head.width/2) <= 2;
+    });
     return {
+      flowsInsideFelt, sideGroupsBelowIdentity,
+      tableFits: table.scrollHeight <= table.clientHeight + 1,
+      firstGroupsVisible: [...board.querySelectorAll<HTMLElement>('.player-left, .player-right, .self-groups-card')].every(area => {
+        const card = area.querySelector<HTMLElement>('.mini-card');
+        if (!card) return true;
+        const a = area.getBoundingClientRect(), c = card.getBoundingClientRect();
+        return c.left >= a.left-1 && c.right <= a.right+1 && c.top >= a.top-1 && c.bottom <= a.bottom+1;
+      }),
+      handUsesWidth: Math.abs(cards[0].offsetWidth - parseFloat(getComputedStyle(hand).getPropertyValue('--hand-width')) * Number(hand.dataset.handScale)) <= 1,
+      allHandCardsVisible: cards.every(c => {
+        const r = c.getBoundingClientRect(), v = hand.getBoundingClientRect();
+        return r.left >= v.left-1 && r.right <= v.right+1 && r.top >= v.top-1 && r.bottom <= v.bottom+1;
+      }),
       responseOverlapsGroups: Boolean(responseOverlapsGroups),
       seatNamesVisible: [...board.querySelectorAll('.player-card')].every(seat => {
         const area = seat.getBoundingClientRect(), name = seat.querySelector('.seat-identity > strong')!.getBoundingClientRect();
@@ -80,15 +122,25 @@ async function assertDensity(page: Page, classic = true) {
   });
   expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
   expect(geometry.responseOverlapsGroups).toBe(false);
-  expect(geometry.hitSizes).toBe(true);
-  expect(geometry.fonts).toBe(true);
+  if (paged) {
+    expect(geometry.hitSizes).toBe(true);
+    expect(geometry.fonts).toBe(true);
+  } else {
+    expect(geometry.scrollable).toBe(false);
+    expect(geometry.allHandCardsVisible).toBe(true);
+    expect(geometry.handUsesWidth).toBe(true);
+    await expect(page.getByTestId('hand-scroll-tools')).toHaveCount(0);
+    await expect(page.locator('.self-hand-panel')).not.toHaveClass(/has-toolbar/);
+  }
   expect(geometry.flowFonts).toBe(true);
   if (classic) {
     expect(geometry.seatNamesVisible, JSON.stringify(geometry)).toBe(true);
     expect(geometry.topWidth).toBeGreaterThan(.35);
     expect(geometry.groupWidth).toBeGreaterThan(.49);
-    expect(geometry.topLeftInset).toBeLessThanOrEqual(8);
-    expect(geometry.topRightInset).toBeLessThanOrEqual(8);
+    expect(geometry.flowsInsideFelt, JSON.stringify(geometry)).toBe(true);
+    expect(geometry.tableFits, JSON.stringify(geometry)).toBe(true);
+    expect(geometry.firstGroupsVisible, JSON.stringify(geometry)).toBe(true);
+    expect(geometry.sideGroupsBelowIdentity, JSON.stringify(geometry)).toBe(true);
     expect(geometry.railBackground).toBe('rgba(0, 0, 0, 0)');
   }
   if (geometry.scrollable) {
@@ -157,6 +209,30 @@ test('other skins and layouts preserve dense card access', async ({page}, info) 
   }
 });
 
+test('SE single mode fits all cards and paged mode preserves access through switches and rotation', async ({page}, info) => {
+  await page.setViewportSize({width:568,height:320});
+  await start(page, 'puxian-house', 'large');
+  await crowdedTable(page);
+  const ids = await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')));
+  for (const [width,height] of [[568,320],[320,568],[667,375],[375,667]]) {
+    await page.setViewportSize({width,height});
+    for (const mode of ['paged','single']) {
+      await page.getByTestId('game-settings').click();
+      await revealSetting(page, `hand-layout-${mode}`);
+      await page.getByTestId(`hand-layout-${mode}`).click();
+      await page.keyboard.press('Escape');
+      await assertDensity(page, true, mode === 'paged');
+      expect(await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')))).toEqual(ids);
+      if (mode === 'single') {
+        const last = page.locator('.hand-card').last();
+        if (await last.getAttribute('aria-pressed') !== 'true') await last.click();
+        await expect(last).toHaveClass(/discard-selected/);
+        await page.screenshot({path:info.outputPath(`se-${mode}-${width}x${height}.png`)});
+      }
+    }
+  }
+});
+
 test('new and invalid settings use Puxian without replacing a saved skin', async ({page}) => {
   await page.goto('/?new=1');
   await expect(page.locator('html')).toHaveAttribute('data-skin','puxian-house');
@@ -201,7 +277,7 @@ test('fish and kan badges remain readable above the cards in every skin', async 
 test('touch swipes follow overflowing hands and flows after portrait rotation', async ({page,browserName}) => {
   test.skip(browserName !== 'chromium', 'CDP touch injection; shared overflow and paging are also tested in WebKit');
   await page.setViewportSize({width:320,height:568});
-  await start(page, 'puxian-house', 'large');
+  await start(page, 'puxian-house', 'large', 'classic', 'paged');
   await crowdedTable(page);
   await settle(page);
   const session = await page.context().newCDPSession(page);

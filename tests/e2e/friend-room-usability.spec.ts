@@ -23,18 +23,13 @@ async function finishStagedDeclaration(page: Page) {
 async function assertHandFits(page: Page) {
   await expect.poll(() => page.locator('.cards.hand').evaluate((el) => {
     const cards = [...el.querySelectorAll<HTMLElement>('[data-card-id]')];
-    return cards.length >= 20 && cards.every(c => c.offsetWidth >= 28 && c.offsetHeight >= 44
-      && parseFloat(getComputedStyle(c.querySelector('.text')!).fontSize) >= 13.95)
-      && el.scrollHeight <= el.clientHeight + 1;
+    const viewport = el.getBoundingClientRect();
+    return cards.length >= 20 && cards.every(c => {
+      const r = c.getBoundingClientRect();
+      return r.left >= viewport.left-1 && r.right <= viewport.right+1 && r.top >= viewport.top-1 && r.bottom <= viewport.bottom+1;
+    }) && el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1;
   })).toBe(true);
-  const overflow = await page.locator('.cards.hand').evaluate(el => el.scrollWidth > el.clientWidth + 2);
-  if (overflow) {
-    await expect(page.getByTestId('hand-scroll-tools')).toBeVisible();
-    for (let i = 0; i < 8 && await page.getByTestId('hand-scroll-next').isEnabled(); i++) { await page.getByTestId('hand-scroll-next').click(); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
-    await expect(page.getByTestId('hand-scroll-next')).toBeDisabled();
-    await expect.poll(() => page.locator('.cards.hand').evaluate(el => el.scrollWidth - el.clientWidth - el.scrollLeft)).toBeLessThanOrEqual(2);
-    for (let i = 0; i < 8 && await page.getByTestId('hand-scroll-prev').isEnabled(); i++) { await page.getByTestId('hand-scroll-prev').click(); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
-  }
+  await expect(page.getByTestId('hand-scroll-tools')).toHaveCount(0);
 }
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 }, { width: 667, height: 375 }, { width: 375, height: 667 }]) {
@@ -187,12 +182,15 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
     expect(Math.max(...values) - Math.min(...values), `${key} must stay stable during the deal`).toBeLessThanOrEqual(0.5);
   }
 });
-test('single-row hand stays stable while shrinking from 20 to 12 cards', async ({ page }) => {
+test('single-row hand stays stable at key counts from 21 to 5 cards', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
   await startLobbyAction(page);
   await useStagedDeclaration(page);
+
+  // Count snapshots represent settled hands; opening animation has its own frame-level test.
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
 
   const allSamples: Array<{
     count: number;
@@ -201,7 +199,7 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
     cardsFit: boolean;
     lastBounds: { viewport: Record<string, number>; cards: Record<string, number> } | null;
   }> = [];
-  for (const count of [20, 18, 17, 16, 15, 14, 13, 12]) {
+  for (const count of [21, 20, 18, 16, 14, 10, 5]) {
     await page.evaluate((nextCount) => {
       const bridge = (window as any).__siseLocalTest;
       const state = bridge.getRoomState();
@@ -247,9 +245,8 @@ test('single-row hand stays stable while shrinking from 20 to 12 cards', async (
             width: viewportRect.width,
             height: viewportRect.height,
           });
-          // Horizontal overflow is intentional at the readable minimum. Keep
-          // one stable row with no vertical clipping or inaccessible scroll tail.
-          cardsFit &&= cardRects.every((rect) => rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1)
+          // Every key hand count must stay in one fully visible stable row.
+          cardsFit &&= cardRects.every((rect) => rect.left >= viewportRect.left - 1 && rect.right <= viewportRect.right + 1 && rect.top >= viewportRect.top - 1 && rect.bottom <= viewportRect.bottom + 1)
             && hand.scrollHeight <= hand.clientHeight + 1;
           if (performance.now() - startedAt >= 320) {
             window.clearInterval(timer);

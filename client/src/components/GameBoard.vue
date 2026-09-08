@@ -637,7 +637,7 @@
     <section v-if="selfPlayer" class="self-hand-card" :class="{ 'declaring-hand': state?.phase === 'declaring' }">
       <div
         class="self-hand-panel"
-        :class="{ 'has-toolbar': handHasOverflow }"
+        :class="{ 'has-toolbar': handLayout === 'paged' && handHasOverflow }"
       >
         <button
           v-if="listeningDetailWaits.length"
@@ -650,7 +650,7 @@
           aria-label="查看听牌详情"
           @click="toggleListeningDetails"
         >听</button>
-        <div v-if="handHasOverflow" class="hand-toolbar">
+        <div v-if="handLayout === 'paged' && handHasOverflow" class="hand-toolbar">
           <div class="hand-scroll-tools" data-testid="hand-scroll-tools">
             <button
               type="button"
@@ -2209,7 +2209,6 @@ function updateHandLayoutState(): void {
   const panel = viewport?.parentElement;
   const panelStyle = panel ? getComputedStyle(panel) : null;
   const available = panel ? panel.clientWidth - (parseFloat(panelStyle!.paddingLeft) || 0) - (parseFloat(panelStyle!.paddingRight) || 0) : viewport?.clientWidth ?? 0;
-  const toolsWidth = parseFloat(panelStyle?.getPropertyValue('--hand-tools-width') ?? '') || 104;
   const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
   let needsOverflow = keepGeometry ? handHasOverflow.value : false;
   if (props.handLayout !== 'paged' && !keepGeometry) {
@@ -2219,16 +2218,16 @@ function updateHandLayoutState(): void {
     if (card && face && viewport?.clientWidth) {
       // Natural CSS dimensions are independent of the previously applied scale.
       const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
-      const naturalHeight = parseFloat(style.getPropertyValue('--hand-height'));
-      const naturalFont = parseFloat(style.getPropertyValue('--hand-font'));
       const count = handLayoutCards.value.length;
       const gap = parseFloat(style.columnGap) || 0;
       const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-      const minimum = Math.max(28 / naturalWidth, 44 / naturalHeight, 14 / naturalFont);
-      const spacing = padding + gap * Math.max(0, count - 1) + 2;
-      needsOverflow = naturalWidth * minimum * count + spacing > available;
-      const fit = (available - (needsOverflow ? toolsWidth : 0) - spacing) / (naturalWidth * count);
-      const nextScale = Math.min(1, Math.max(minimum, fit));
+      // Single mode fits every authoritative card, including concealed opening cards.
+      // Only paged mode reserves toolbar space and enforces large touch targets.
+      const spacing = padding + gap * Math.max(0, count - 1) + 4;
+      needsOverflow = false;
+      const fit = (available - spacing) / (naturalWidth * count);
+      const nextScale = Math.min(1, Math.max(0.01, fit));
+      hand.scrollLeft = 0;
       if (Math.abs(handScale.value - nextScale) > 0.001) {
         handScale.value = nextScale;
         void nextTick(scheduleHandLayoutUpdate);
@@ -3102,9 +3101,11 @@ watch(
   },
 );
 
+// Settle the new count's scale after mounting, before its first paint.
 watch(
-  () => displayPrivateHand.value.map((card) => card.id).join("|"),
-  () => void nextTick(scheduleHandLayoutUpdate),
+  () => handLayoutCards.value.map((card) => card.id).join("|"),
+  () => updateHandLayoutState(),
+  { flush: "post" },
 );
 
 watch(
@@ -3118,7 +3119,10 @@ watch(
 
 watch(
   () => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey],
-  () => void nextTick(scheduleHandLayoutUpdate),
+  () => {
+    handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+  },
 );
 
 watch(handViewportRef, observeHandViewport, { immediate: true });
@@ -5976,6 +5980,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board[data-table-layout="classic"] .seat-identity-meta :is(.kan-count-badge, .group-score-badge) { font-size: 11px; }
 }
 
+.board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block-list { justify-content: center; }
 .board[data-table-layout="classic"] .seat-identity { justify-content: center; text-align: center; }
 .board[data-table-layout="classic"] .seat-identity > strong { flex: 1 0 100%; }
 .board[data-table-layout="classic"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; }
@@ -6015,7 +6020,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 
 /* Content density uses the effective (possibly rotated) viewport. */
 .board[data-table-layout="classic"] { padding: clamp(7px, 1.2vw, 18px); }
-.board[data-table-layout="classic"] .table { padding: 2px; row-gap: 2px; }
+.board[data-table-layout="classic"] .table { padding: 8px clamp(12px, calc(2 * var(--effective-vw, 1vw)), 26px); row-gap: 2px; }
 .board[data-table-layout="classic"] .flow-card { width: 100%; height: 100%; min-width: 0; margin: 0; padding: 0; align-self: stretch; }
 .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { padding-top: 2px; }
 .board[data-table-layout="classic"] :is(.flow-top-right, .flow-bottom-right) .discard-strip { justify-content: flex-end; }
@@ -6037,6 +6042,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board .cards.hand:has(.mode-large) { --hand-width: 48px; --hand-font: 24px; }
 .board .cards.hand.single-line { flex: 1 1 auto; width: 100%; transform: none; justify-content: flex-start; }
 .board .hand .hand-card { box-sizing: border-box; flex: 0 0 auto; width: calc(var(--hand-width) * var(--hand-scale, 1)); height: calc(var(--hand-height) * var(--hand-scale, 1)); min-width: 28px; min-height: 44px; }
+.board .hand.single-line .hand-card { width: calc(var(--hand-width) * var(--hand-scale, 1)); min-width: 0; min-height: 0; }
 .board .hand .hand-card:first-child { margin-inline-start: auto; }
 .board .hand .hand-card:last-child { margin-inline-end: auto; }
 .board .hand .hand-card :deep(.card) { box-sizing: border-box; width: 100%; height: 100%; font-size: calc(var(--hand-font) * var(--hand-scale, 1)); }
@@ -6075,7 +6081,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board .discard-token { border-width: 1px; }
 .board .discard-token.mode-long :deep(.text-top), .board .discard-token.mode-long :deep(.text-bottom) { padding: 0; }
 @media (max-width: 960px), (max-height: 500px) {
-  .board[data-table-layout="classic"] .table { grid-template-rows: minmax(44px, 1fr) minmax(40px, 1fr) minmax(34px, .9fr); }
+  .board[data-table-layout="classic"] .table { grid-template-rows: minmax(44px, 1fr) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), 1.3fr) minmax(40px, .9fr); }
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(44px, 1fr) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), 1.3fr) minmax(clamp(28px, calc(20 * var(--effective-vh, 1vh) - 34px), 40px), .9fr); }
   .board[data-table-layout="classic"] .player-top { gap: 2px; }
   .board[data-table-layout="classic"] .player-top .seat-identity { flex-wrap: nowrap; gap: 2px; }
   .board[data-table-layout="classic"] .player-top .seat-identity > strong { font-size: 12px; max-width: 4em; }
@@ -6107,15 +6114,19 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board .self-groups-card .group-block { min-height: 0; padding: 0; }
   .board .self-groups-card .mini-card.mode-long { width: 20px; height: clamp(28px, calc(20 * var(--effective-vh, 1vh) - 36px), 40px); font-size: clamp(10px, calc(2 * var(--effective-vh, 1vh) + 3.6px), 12px); padding: 0; border-width: 1px; }
   .board .self-groups-card .mini-card.mode-long :deep(.text) { padding: 0; }
-  .board[data-table-layout="classic"] :is(.player-left, .player-right) { display: flex; align-items: center; gap: 2px; }
-  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-head { flex: 1 0 66px; }
-  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block-list { flex: 0 1 auto; max-width: 50%; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-head { flex: 0 0 auto; width: 100%; gap: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-tags:empty { display: none; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block { min-height: 0; padding: 0; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-block-list { flex: 0 0 auto; width: 100%; max-width: 100%; justify-content: center; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .group-score-badge { display: none; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .mini-card.mode-long { width: 20px; height: clamp(28px, calc(20 * var(--effective-vh, 1vh) - 36px), 40px); font-size: clamp(10px, calc(2 * var(--effective-vh, 1vh) + 3.6px), 12px); padding: 0; border-width: 1px; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .mini-card.mode-long :deep(.text) { padding: 0; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity-meta { gap: 1px; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .hand-count-badge { min-width: 0; font-size: 11px; }
-  .board[data-table-layout="classic"] :is(.player-left, .player-right) { padding: 2px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { padding: 0 2px; }
+  .board[data-table-layout="classic"] .self-groups-card { padding-block: 0; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity > strong { grid-column: 1; grid-row: 1; min-width: 0; font-size: 12px; line-height: 16px; }
   .board[data-table-layout="classic"] :is(.player-left, .player-right) .seat-identity-meta { grid-column: 1 / -1; grid-row: 2; flex-wrap: nowrap; }
@@ -6134,4 +6145,18 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board .hand-scroll-tools { position: relative; width: 100%; height: 100%; justify-content: space-between; }
 .board .hand-scroll-tools button { pointer-events: auto; width: 48px; min-width: 48px; height: 44px; min-height: 44px; padding: 0; font-size: 13px; }
 .board .hand-visible-range { position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-size: 13px; }
+/* SE: preserve complete card rows inside the table's finite height. */
+@media (max-height: 340px), (max-width: 340px) {
+  .board[data-table-layout="classic"] .table,
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(38px, 1fr) minmax(64px, 1.5fr) minmax(28px, .8fr); }
+  .board[data-table-layout="classic"] .player-top .seat-head { gap: 0; }
+  .board[data-table-layout="classic"] .player-top .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
+  .board[data-table-layout="classic"] .player-top .mini-card.mode-long { height: 20px; }
+  .board[data-table-layout="classic"] :is(.player-left, .player-right) { padding-block: 1px; }
+  .board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip { padding-block: 0; }
+  .board[data-table-layout="classic"] .self-groups-card { padding-block: 0; }
+  .board[data-table-layout="classic"].hand-overflow:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
+  .board[data-table-layout="classic"] .has-toolbar .hand { padding-top: 6px; padding-bottom: 16px; }
+  .board[data-table-layout="classic"] .hand-visible-range { height: 16px; }
+}
 </style>

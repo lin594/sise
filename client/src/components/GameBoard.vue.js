@@ -1214,7 +1214,6 @@ function updateHandLayoutState() {
     const panel = viewport?.parentElement;
     const panelStyle = panel ? getComputedStyle(panel) : null;
     const available = panel ? panel.clientWidth - (parseFloat(panelStyle.paddingLeft) || 0) - (parseFloat(panelStyle.paddingRight) || 0) : viewport?.clientWidth ?? 0;
-    const toolsWidth = parseFloat(panelStyle?.getPropertyValue('--hand-tools-width') ?? '') || 104;
     const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
     let needsOverflow = keepGeometry ? handHasOverflow.value : false;
     if (props.handLayout !== 'paged' && !keepGeometry) {
@@ -1224,16 +1223,16 @@ function updateHandLayoutState() {
         if (card && face && viewport?.clientWidth) {
             // Natural CSS dimensions are independent of the previously applied scale.
             const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
-            const naturalHeight = parseFloat(style.getPropertyValue('--hand-height'));
-            const naturalFont = parseFloat(style.getPropertyValue('--hand-font'));
             const count = handLayoutCards.value.length;
             const gap = parseFloat(style.columnGap) || 0;
             const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-            const minimum = Math.max(28 / naturalWidth, 44 / naturalHeight, 14 / naturalFont);
-            const spacing = padding + gap * Math.max(0, count - 1) + 2;
-            needsOverflow = naturalWidth * minimum * count + spacing > available;
-            const fit = (available - (needsOverflow ? toolsWidth : 0) - spacing) / (naturalWidth * count);
-            const nextScale = Math.min(1, Math.max(minimum, fit));
+            // Single mode fits every authoritative card, including concealed opening cards.
+            // Only paged mode reserves toolbar space and enforces large touch targets.
+            const spacing = padding + gap * Math.max(0, count - 1) + 4;
+            needsOverflow = false;
+            const fit = (available - spacing) / (naturalWidth * count);
+            const nextScale = Math.min(1, Math.max(0.01, fit));
+            hand.scrollLeft = 0;
             if (Math.abs(handScale.value - nextScale) > 0.001) {
                 handScale.value = nextScale;
                 void nextTick(scheduleHandLayoutUpdate);
@@ -2060,13 +2059,17 @@ watch(() => props.privateHand.map((x) => x.id).join("|"), () => {
     }
     void nextTick(scheduleHandLayoutUpdate);
 });
-watch(() => displayPrivateHand.value.map((card) => card.id).join("|"), () => void nextTick(scheduleHandLayoutUpdate));
+// Settle the new count's scale after mounting, before its first paint.
+watch(() => handLayoutCards.value.map((card) => card.id).join("|"), () => updateHandLayoutState(), { flush: "post" });
 watch(handPresentationBusy, (busy) => {
     if (busy && props.handLayout !== "paged")
         handScaleReady.value = false;
     void nextTick(scheduleHandLayoutUpdate);
 }, { immediate: true });
-watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey], () => void nextTick(scheduleHandLayoutUpdate));
+watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey], () => {
+    handScaleReady.value = false;
+    void nextTick(scheduleHandLayoutUpdate);
+});
 watch(handViewportRef, observeHandViewport, { immediate: true });
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
     flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
@@ -2656,6 +2659,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['seat-identity']} */ ;
@@ -2791,6 +2798,10 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
+/** @type {__VLS_StyleScopedClasses['single-line']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand']} */ ;
@@ -2890,6 +2901,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-top']} */ ;
@@ -2974,6 +2988,18 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-tags']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['group-block']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-block-list']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
@@ -3001,6 +3027,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-left']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-right']} */ ;
@@ -3042,6 +3070,38 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-scroll-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['seat-head']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-status-icon']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['mini-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['flow-bottom-right']} */ ;
+/** @type {__VLS_StyleScopedClasses['discard-strip']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-groups-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand-overflow']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-toolbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['hand']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 // CSS variable injection 
@@ -4281,7 +4341,7 @@ if (__VLS_ctx.selfPlayer) {
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-hand-panel" },
-        ...{ class: ({ 'has-toolbar': __VLS_ctx.handHasOverflow }) },
+        ...{ class: ({ 'has-toolbar': __VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow }) },
     });
     if (__VLS_ctx.listeningDetailWaits.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
@@ -4296,7 +4356,7 @@ if (__VLS_ctx.selfPlayer) {
         });
         /** @type {typeof __VLS_ctx.listeningToggleRef} */ ;
     }
-    if (__VLS_ctx.handHasOverflow) {
+    if (__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "hand-toolbar" },
         });
@@ -4308,7 +4368,7 @@ if (__VLS_ctx.selfPlayer) {
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    if (!(__VLS_ctx.handHasOverflow))
+                    if (!(__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow))
                         return;
                     __VLS_ctx.scrollHand('backward');
                 } },
@@ -4329,7 +4389,7 @@ if (__VLS_ctx.selfPlayer) {
             ...{ onClick: (...[$event]) => {
                     if (!(__VLS_ctx.selfPlayer))
                         return;
-                    if (!(__VLS_ctx.handHasOverflow))
+                    if (!(__VLS_ctx.handLayout === 'paged' && __VLS_ctx.handHasOverflow))
                         return;
                     __VLS_ctx.scrollHand('forward');
                 } },
