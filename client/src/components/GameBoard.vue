@@ -16,7 +16,8 @@
     @keydown.esc="handleBoardEscape"
   >
     <div class="table" ref="tableRef">
-      <div v-if="dealerCountingSeatId === mySeatId" class="dealer-self-marker" data-testid="dealer-self-marker">{{ dealerReveal?.stage === 'picking' ? '由你翻牌' : `${dealerCountStep} · 数到你` }}</div>
+      <div v-if="dealerReveal?.stage === 'revealed' && dealerReveal.pickerId" class="dealer-count-token" :key="dealerReveal.id" data-testid="dealer-count-status"
+        :style="[dealerCounterPosition, reducedTableMotion ? { transition: 'none' } : {}]" :data-count-step="dealerCountStep" :data-count-seat="dealerCountingSeatId" :aria-label="`${dealerCountStep}，${dealerCountingName}`">{{ dealerCountStep }}</div>
       <div id="declaration-guidance-anchor" class="declaration-guidance-anchor" :style="{ visibility: dealerReveal || flights.length || tableFlights.length ? 'hidden' : undefined }" />
       <section
         v-if="flowTopLeftPlayer"
@@ -508,8 +509,7 @@
         :aria-label="dealerRevealAccessibleText"
       >
         <div class="dealer-reveal-panel">
-            <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
-            <strong v-if="dealerReveal.stage === 'picking'" class="dealer-picker-name" data-testid="dealer-picker-name">由{{ dealerPickerDescription }}翻定庄牌</strong>
+            <strong v-if="dealerReveal.stage === 'picking'" class="dealer-picker-name" data-testid="dealer-picker-name">{{ dealerCountingName }}</strong>
             <div class="dealer-reveal-tile">
               <div
                 v-if="dealerReveal.stage === 'picking'"
@@ -527,11 +527,7 @@
             <strong v-if="dealerCeremonyCard" class="dealer-reveal-card-name">
               {{ getCardAccessibleText(dealerCeremonyCard) }}
             </strong>
-            <div v-if="dealerReveal.stage === 'revealed' && dealerReveal.pickerId" class="dealer-count-status" data-testid="dealer-count-status" :data-count-step="dealerCountStep" :data-count-seat="dealerCountingSeatId">
-              <span>{{ dealerCountColor }}数{{ dealerCountTotal }}，从翻牌者数起</span>
-              <strong :key="dealerCountStep">{{ dealerCountStep }} · {{ dealerCountingName }}</strong>
-            </div>
-            <small v-if="dealerReveal.stage === 'revealed' && dealerReveal.dealerName && (!dealerReveal.pickerId || dealerCountStep === dealerCountTotal)" class="dealer-reveal-result">
+            <small v-if="dealerReveal.stage === 'revealed' && dealerReveal.dealerName && (!dealerReveal.pickerId || dealerCountingFinished)" class="dealer-reveal-result">
               {{ dealerReveal.dealerName }}坐庄
             </small>
         </div>
@@ -1966,6 +1962,7 @@ const dealerPickerDescription = computed(() => {
 const dealerCountTotal = computed(() => ({ yellow: 1, red: 2, green: 3, white: 4, gold: 2 }[dealerCeremonyCard.value?.color ?? "yellow"] ?? 1));
 const dealerCountStep = computed(() => dealerReveal.value?.stage === "revealed"
   ? Math.min(dealerCountTotal.value, 1 + Math.floor(Math.max(0, nowMs.value - dealerReveal.value.startedAt - 450) / 650)) : 0);
+const dealerCountingFinished = computed(() => Boolean(dealerReveal.value && nowMs.value - dealerReveal.value.startedAt >= 450 + (dealerCountTotal.value - 1) * 650 + 480));
 const dealerCountingSeatId = computed(() => {
   const reveal = dealerReveal.value;
   if (!reveal) return "";
@@ -1976,7 +1973,13 @@ const dealerCountingSeatId = computed(() => {
   return first < 0 ? "" : players[(first + dealerCountStep.value - 1) % players.length]?.clientId ?? "";
 });
 const dealerCountingName = computed(() => dealerCountingSeatId.value === props.mySeatId ? "你" : props.players.find(player => player.clientId === dealerCountingSeatId.value)?.name || "牌友");
-const dealerCountColor = computed(() => ({ yellow: "黄", red: "红", green: "绿", white: "白", gold: "金条按红色" }[dealerCeremonyCard.value?.color ?? "yellow"]));
+const dealerCounterPosition = computed(() => {
+  const id = dealerCountingSeatId.value;
+  const position = id === props.mySeatId ? [50, 88]
+    : id === topPlayer.value?.clientId ? [50, 15]
+    : id === leftPlayer.value?.clientId ? [16, 50] : [84, 50];
+  return { left: `${position[0]}%`, top: `${position[1]}%` };
+});
 const dealerRevealAccessibleText = computed(() => {
   const reveal = dealerReveal.value;
   const card = dealerCeremonyCard.value;
@@ -3137,9 +3140,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 </script>
 
 <style scoped>
-.dealer-count-status { display: grid; text-align: center; gap: 3px; color: var(--ui-text); font-size: 13px; }
-.dealer-count-status strong { font-size: 20px; color: var(--ui-gold-text); }
-.dealer-self-marker { position: absolute; bottom: 6px; left: 12px; z-index: 31; padding: 4px 12px; border: 2px solid var(--ui-gold-text); border-radius: 12px; background: var(--ui-panel); color: var(--ui-text); }
+.dealer-count-token { position: absolute; z-index: 32; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--ui-gold-text, #b87912); background: var(--ui-panel, #fff7df); color: var(--ui-text); box-shadow: 0 0 16px rgba(210, 163, 55, .55); font-size: 25px; font-weight: 850; transform: translate(-50%, -50%); transition: left 480ms ease-in-out, top 480ms ease-in-out; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .dealer-count-token { transition: none; } }
 .dealer-picker-name { color: var(--ui-text); font-size: clamp(1rem, 3vh, 1.4rem); max-width: 22rem; overflow-wrap: anywhere; }
 .board .player-card.dealer-picker-active::after { content: attr(data-dealer-count); position: absolute; top: -8px; right: -8px; display: grid; place-items: center; min-width: 24px; height: 24px; border-radius: 50%; background: var(--ui-gold-text, #b87912); color: var(--ui-panel, #fff7df); font-size: 16px; font-weight: 800; }
 .board .player-card.dealer-picker-active { z-index: 11; outline: 3px solid var(--ui-gold-text, #b87912); outline-offset: 3px; background: rgba(var(--ui-raised-rgb, 255, 247, 220), .8); }

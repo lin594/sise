@@ -990,6 +990,7 @@ const dealerPickerDescription = computed(() => {
 const dealerCountTotal = computed(() => ({ yellow: 1, red: 2, green: 3, white: 4, gold: 2 }[dealerCeremonyCard.value?.color ?? "yellow"] ?? 1));
 const dealerCountStep = computed(() => dealerReveal.value?.stage === "revealed"
     ? Math.min(dealerCountTotal.value, 1 + Math.floor(Math.max(0, nowMs.value - dealerReveal.value.startedAt - 450) / 650)) : 0);
+const dealerCountingFinished = computed(() => Boolean(dealerReveal.value && nowMs.value - dealerReveal.value.startedAt >= 450 + (dealerCountTotal.value - 1) * 650 + 480));
 const dealerCountingSeatId = computed(() => {
     const reveal = dealerReveal.value;
     if (!reveal)
@@ -1003,7 +1004,13 @@ const dealerCountingSeatId = computed(() => {
     return first < 0 ? "" : players[(first + dealerCountStep.value - 1) % players.length]?.clientId ?? "";
 });
 const dealerCountingName = computed(() => dealerCountingSeatId.value === props.mySeatId ? "你" : props.players.find(player => player.clientId === dealerCountingSeatId.value)?.name || "牌友");
-const dealerCountColor = computed(() => ({ yellow: "黄", red: "红", green: "绿", white: "白", gold: "金条按红色" }[dealerCeremonyCard.value?.color ?? "yellow"]));
+const dealerCounterPosition = computed(() => {
+    const id = dealerCountingSeatId.value;
+    const position = id === props.mySeatId ? [50, 88]
+        : id === topPlayer.value?.clientId ? [50, 15]
+            : id === leftPlayer.value?.clientId ? [16, 50] : [84, 50];
+    return { left: `${position[0]}%`, top: `${position[1]}%` };
+});
 const dealerRevealAccessibleText = computed(() => {
     const reveal = dealerReveal.value;
     const card = dealerCeremonyCard.value;
@@ -2049,7 +2056,7 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
-/** @type {__VLS_StyleScopedClasses['dealer-count-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-count-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-picker-active']} */ ;
@@ -2627,12 +2634,17 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "tableRef",
 });
 /** @type {typeof __VLS_ctx.tableRef} */ ;
-if (__VLS_ctx.dealerCountingSeatId === __VLS_ctx.mySeatId) {
+if (__VLS_ctx.dealerReveal?.stage === 'revealed' && __VLS_ctx.dealerReveal.pickerId) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "dealer-self-marker" },
-        'data-testid': "dealer-self-marker",
+        ...{ class: "dealer-count-token" },
+        key: (__VLS_ctx.dealerReveal.id),
+        'data-testid': "dealer-count-status",
+        ...{ style: ([__VLS_ctx.dealerCounterPosition, __VLS_ctx.reducedTableMotion ? { transition: 'none' } : {}]) },
+        'data-count-step': (__VLS_ctx.dealerCountStep),
+        'data-count-seat': (__VLS_ctx.dealerCountingSeatId),
+        'aria-label': (`${__VLS_ctx.dealerCountStep}，${__VLS_ctx.dealerCountingName}`),
     });
-    (__VLS_ctx.dealerReveal?.stage === 'picking' ? '由你翻牌' : `${__VLS_ctx.dealerCountStep} · 数到你`);
+    (__VLS_ctx.dealerCountStep);
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div)({
     id: "declaration-guidance-anchor",
@@ -3518,16 +3530,12 @@ if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dealer-reveal-panel" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
-        ...{ class: "dealer-reveal-label" },
-    });
-    (__VLS_ctx.dealerReveal.label);
     if (__VLS_ctx.dealerReveal.stage === 'picking') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
             ...{ class: "dealer-picker-name" },
             'data-testid': "dealer-picker-name",
         });
-        (__VLS_ctx.dealerPickerDescription);
+        (__VLS_ctx.dealerCountingName);
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dealer-reveal-tile" },
@@ -3568,23 +3576,7 @@ if (__VLS_ctx.dealerReveal) {
         });
         (__VLS_ctx.getCardAccessibleText(__VLS_ctx.dealerCeremonyCard));
     }
-    if (__VLS_ctx.dealerReveal.stage === 'revealed' && __VLS_ctx.dealerReveal.pickerId) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "dealer-count-status" },
-            'data-testid': "dealer-count-status",
-            'data-count-step': (__VLS_ctx.dealerCountStep),
-            'data-count-seat': (__VLS_ctx.dealerCountingSeatId),
-        });
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-        (__VLS_ctx.dealerCountColor);
-        (__VLS_ctx.dealerCountTotal);
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
-            key: (__VLS_ctx.dealerCountStep),
-        });
-        (__VLS_ctx.dealerCountStep);
-        (__VLS_ctx.dealerCountingName);
-    }
-    if (__VLS_ctx.dealerReveal.stage === 'revealed' && __VLS_ctx.dealerReveal.dealerName && (!__VLS_ctx.dealerReveal.pickerId || __VLS_ctx.dealerCountStep === __VLS_ctx.dealerCountTotal)) {
+    if (__VLS_ctx.dealerReveal.stage === 'revealed' && __VLS_ctx.dealerReveal.dealerName && (!__VLS_ctx.dealerReveal.pickerId || __VLS_ctx.dealerCountingFinished)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
             ...{ class: "dealer-reveal-result" },
         });
@@ -4097,7 +4089,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-self-marker']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-count-token']} */ ;
 /** @type {__VLS_StyleScopedClasses['declaration-guidance-anchor']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
@@ -4220,13 +4212,11 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['table-notice-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-picker-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-tile']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
-/** @type {__VLS_StyleScopedClasses['dealer-count-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
@@ -4333,6 +4323,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             responseCardPlacement: responseCardPlacement,
             activeTableEvents: activeTableEvents,
             centerCardVisible: centerCardVisible,
+            reducedTableMotion: reducedTableMotion,
             coordinateMotionSuppressed: coordinateMotionSuppressed,
             isMovingCard: isMovingCard,
             movingCardStyle: movingCardStyle,
@@ -4368,12 +4359,11 @@ const __VLS_self = (await import('vue')).defineComponent({
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
             dealerCeremonyCard: dealerCeremonyCard,
-            dealerPickerDescription: dealerPickerDescription,
-            dealerCountTotal: dealerCountTotal,
             dealerCountStep: dealerCountStep,
+            dealerCountingFinished: dealerCountingFinished,
             dealerCountingSeatId: dealerCountingSeatId,
             dealerCountingName: dealerCountingName,
-            dealerCountColor: dealerCountColor,
+            dealerCounterPosition: dealerCounterPosition,
             dealerRevealAccessibleText: dealerRevealAccessibleText,
             showDealerSeatMarker: showDealerSeatMarker,
             seatActionText: seatActionText,
