@@ -1000,7 +1000,9 @@ function updateSelfNameFit(): void {
   const siblings = Array.from(identity.children).filter(
     (child) => child !== nameElement && child !== measure,
   ) as HTMLElement[];
-  const available = identity.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth, 0) - gap * siblings.length;
+  const available = style.display === "grid"
+    ? nameElement.clientWidth
+    : identity.clientWidth - siblings.reduce((sum, child) => sum + child.offsetWidth, 0) - gap * siblings.length;
   useSelfNameFallback.value = measure.scrollWidth > Math.max(24, available);
 }
 

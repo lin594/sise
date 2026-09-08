@@ -15,3 +15,13 @@
 - CI Linux：`npx playwright test --project=webkit-responsive`。当前开发机 macOS 12 不支持此版本 WebKit，不能用 Chrome 结果代替。
 - `appearance.spec.ts` 包含四皮肤 × 三布局 × 手机／平板／桌面，竖屏旋转后的牌堆逻辑垂直中心、可见视口偏移、工具导航、临时静音不写偏好和声明步骤提示。截图输出到 `output/playwright/test-results/`。
 - 实机待验收：iPhone 12 Pro 添加到主屏幕后竖拿打开 PWA，检查右侧桌沿、横拿切换、后台恢复、安全区域与触摸操作。模拟视口和桌面 WebKit 不代表已完成真机验证。
+
+## 截图证据
+
+以下由当前源码构建后使用实际牌面组件及服务端场景生成，不是真机照片。
+
+- [荔城经典桌面与明牌](validation/mobile-table/licheng-water-classic-groups-844.png)
+- [莆仙竖屏旋转桌面](validation/mobile-table/puxian-house-classic-groups-390.png)
+- [湄洲桌面大屏](validation/mobile-table/meizhou-sea-classic-groups-1440.png)
+- [声明鱼引导与完整手牌](validation/mobile-table/declaration-fish.png)
+- [小手机正常出牌](validation/mobile-table/iphone-se-normal-game.png)
