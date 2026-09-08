@@ -264,3 +264,25 @@ test("recovery keeps the presentation timeline and pending terminal action", () 
   assert.equal("pendingPresentationEnd" in publicState, false);
   restored.onDispose();
 });
+
+test("recovery and reconnect preserve a collective deadline and its ten-second total", () => {
+  const source = createRecoverableRoom();
+  source.state.responsePhase = "collective";
+  source.awaitingDiscardOwnerId = null;
+  source.collectiveResponseEndsAt = Date.now() + 8_000;
+  source.state.responseEndsAt = source.collectiveResponseEndsAt;
+  source.responseTimerTotalMs = 10_000;
+  const snapshot = source.exportRecoverySnapshot(Date.now());
+  source.onDispose();
+  const restored = new FourColorGameRoom() as any;
+  restored.roomId = "temporary-id";
+  restored.onCreate({ recoverySnapshot: snapshot });
+  restored.clearRoomIdleTimer();
+  assert.equal(restored.collectiveResponseEndsAt, snapshot.privateState.collectiveResponseEndsAt);
+  assert.equal(restored.responseTimerTotalMs, 10_000);
+  const client = { sessionId: "rejoined", send: () => {}, leave: () => {} };
+  restored.reclaimSeat(client, "seat_0", "room-token", "张阿姨");
+  assert.equal(restored.collectiveResponseEndsAt, snapshot.privateState.collectiveResponseEndsAt);
+  assert.equal(restored.buildDecisionTimerSnapshot("seat_0").totalMs, 10_000);
+  restored.onDispose();
+});

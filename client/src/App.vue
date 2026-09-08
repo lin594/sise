@@ -214,7 +214,7 @@
         :private-hand="privateHand"
         :table-layout="resolvedTableLayout"
         :hand-layout="displayPreferences.handLayout"
-        :listening-hints="listeningHints"
+        :listening-hints="boardListeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
         :my-seat-id="mySeatId"
@@ -681,6 +681,7 @@ import { useGuestProfile } from "@/composables/useGuestProfile";
 import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
+import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
@@ -922,10 +923,20 @@ type LocalTestBridgeWindow = Window & {
     getRoundResult: () => typeof roundResult.value;
     getDecisionTimer: () => typeof decisionTimer.value;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
+    setListeningHintsOverride: (hints: typeof listeningHints.value) => void;
   };
 };
 
 const localTestPrivateHandReadyOverride = ref<boolean | null>(null);
+const localTestListeningHintsOverride = ref<typeof listeningHints.value>(null);
+const boardListeningHints = computed(() => {
+  const override = localTestListeningHintsOverride.value;
+  if (!override || override.decisionKey !== decisionTimer.value.decisionKey) return listeningHints.value;
+  // Local layout fixtures must not invent authoritative revisions or race
+  // real private-state recovery. Their lifetime is one real decision only.
+  return { ...override, stateRevision: acceptedStateRevision.value };
+});
+watch(() => decisionTimer.value.decisionKey, () => { localTestListeningHintsOverride.value = null; });
 
 function installLocalTestBridge(): void {
   const query = new URLSearchParams(window.location.search);
@@ -943,6 +954,9 @@ function installLocalTestBridge(): void {
     getDecisionTimer: () => decisionTimer.value,
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
+    },
+    setListeningHintsOverride: (hints) => {
+      localTestListeningHintsOverride.value = hints;
     },
   };
 }
@@ -1640,13 +1654,15 @@ const settingsDecisionSecondsLeft = computed(() => {
   if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
     return 0;
   }
-  const endsAt = Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0);
+  const endsAt = visibleDecisionEndsAt(state.value?.responsePhase ?? "", Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0), decisionTimer.value.totalMs);
   return endsAt > 0 ? Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000)) : 0;
 });
 const settingsDecisionTimeText = computed(() =>
   decisionTimer.value.untimed
     ? "练习局不限时，查看规则期间牌局仍会继续"
-    : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
+    : state.value?.responsePhase === "collective" && settingsDecisionSecondsLeft.value === 0
+      ? "公共倒计时已结束，仍可响应，请尽快操作"
+      : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`,
 );
 
 function openRules(trigger?: Event | HTMLElement): void {

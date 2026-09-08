@@ -32,6 +32,7 @@ export interface RoomRecoveryPrivateState {
   pendingFishDeclarations: Array<[string, Card[]]>;
   declareTimerTotalMs: number;
   responseTimerTotalMs: number;
+  collectiveResponseEndsAt?: number;
   declareDecisionWindowId: number;
   responseDecisionWindowId: number;
   collectiveQueue: string[];
@@ -108,6 +109,7 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
     isEntryArray(privateState.pendingFishDeclarations) &&
     isFiniteInteger(privateState.declareTimerTotalMs) &&
     isFiniteInteger(privateState.responseTimerTotalMs) &&
+    (privateState.collectiveResponseEndsAt === undefined || isFiniteInteger(privateState.collectiveResponseEndsAt)) &&
     isFiniteInteger(privateState.declareDecisionWindowId) &&
     isFiniteInteger(privateState.responseDecisionWindowId) &&
     Array.isArray(privateState.collectiveQueue) &&

@@ -17,6 +17,7 @@ import { useGuestProfile } from "@/composables/useGuestProfile";
 import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
+import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
@@ -151,6 +152,16 @@ const guestProfileSummary = computed(() => {
         : "还没有完成牌局";
 });
 const localTestPrivateHandReadyOverride = ref(null);
+const localTestListeningHintsOverride = ref(null);
+const boardListeningHints = computed(() => {
+    const override = localTestListeningHintsOverride.value;
+    if (!override || override.decisionKey !== decisionTimer.value.decisionKey)
+        return listeningHints.value;
+    // Local layout fixtures must not invent authoritative revisions or race
+    // real private-state recovery. Their lifetime is one real decision only.
+    return { ...override, stateRevision: acceptedStateRevision.value };
+});
+watch(() => decisionTimer.value.decisionKey, () => { localTestListeningHintsOverride.value = null; });
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
     const localHost = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
@@ -167,6 +178,9 @@ function installLocalTestBridge() {
         getDecisionTimer: () => decisionTimer.value,
         setPrivateHandReadyOverride: (ready) => {
             localTestPrivateHandReadyOverride.value = ready;
+        },
+        setListeningHintsOverride: (hints) => {
+            localTestListeningHintsOverride.value = hints;
         },
     };
 }
@@ -778,12 +792,14 @@ const settingsDecisionSecondsLeft = computed(() => {
     if (!settingsDecisionActive.value || decisionTimer.value.untimed) {
         return 0;
     }
-    const endsAt = Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0);
+    const endsAt = visibleDecisionEndsAt(state.value?.responsePhase ?? "", Number(decisionTimer.value.endsAt || state.value?.responseEndsAt || 0), decisionTimer.value.totalMs);
     return endsAt > 0 ? Math.max(0, Math.ceil((endsAt - nowMs.value) / 1000)) : 0;
 });
 const settingsDecisionTimeText = computed(() => decisionTimer.value.untimed
     ? "练习局不限时，查看规则期间牌局仍会继续"
-    : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`);
+    : state.value?.responsePhase === "collective" && settingsDecisionSecondsLeft.value === 0
+        ? "公共倒计时已结束，仍可响应，请尽快操作"
+        : `还剩 ${settingsDecisionSecondsLeft.value} 秒，查看规则期间计时继续`);
 function openRules(trigger) {
     const explicitTarget = trigger instanceof HTMLElement
         ? trigger
@@ -3336,7 +3352,7 @@ else {
         privateHand: (__VLS_ctx.privateHand),
         tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
-        listeningHints: (__VLS_ctx.listeningHints),
+        listeningHints: (__VLS_ctx.boardListeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
         declarationMarks: (__VLS_ctx.declarationMarks),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -3368,7 +3384,7 @@ else {
         privateHand: (__VLS_ctx.privateHand),
         tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
-        listeningHints: (__VLS_ctx.listeningHints),
+        listeningHints: (__VLS_ctx.boardListeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
         declarationMarks: (__VLS_ctx.declarationMarks),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -4374,7 +4390,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             players: players,
             privateHand: privateHand,
             acceptedStateRevision: acceptedStateRevision,
-            listeningHints: listeningHints,
             quickPhrase: quickPhrase,
             quickPhraseMuted: quickPhraseMuted,
             availableActions: availableActions,
@@ -4394,6 +4409,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendQuickPhrase: sendQuickPhrase,
             setQuickPhraseMuted: setQuickPhraseMuted,
             guestProfileSummary: guestProfileSummary,
+            boardListeningHints: boardListeningHints,
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,

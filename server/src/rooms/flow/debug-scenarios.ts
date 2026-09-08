@@ -256,17 +256,27 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentTurnPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: local_draw_pass#${seq}`;
-  } else if (scenario === "collective_no_actions" || scenario === "collective_passive_wait") {
-    if (scenario === "collective_passive_wait") {
-      // 第二个浏览器需要时间接收自己的状态与私有消息；该场景直接沿用生产的三秒窗口。
-      context.setCollectiveResponseWindowMs(3_000);
+  } else if (scenario === "collective_no_actions" || scenario === "collective_passive_wait" || scenario === "collective_manual_wait") {
+    if (scenario === "collective_passive_wait" || scenario === "collective_manual_wait") {
+      // 双浏览器场景保留真实 3/10 秒窗口，替换手牌时同步清理随机开局的声明。
+      context.setCollectiveResponseWindowMs(scenario === "collective_manual_wait" ? 10_000 : 3_000);
       const selfIndex = context.playerOrder.indexOf(seatId);
       const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length];
       for (const id of context.playerOrder) {
+        const seat = context.state.players.get(id);
+        if (seat) seat.declaredKongs = 0;
         context.playerHands.set(id, [
           { id: `passive-${id}-shi-${seq}`, color: "red", type: "shi" },
           { id: `passive-${id}-xiang-${seq}`, color: "green", type: "xiang" },
           { id: `passive-${id}-zu-${seq}`, color: "white", type: "zu" },
+        ]);
+      }
+      if (scenario === "collective_manual_wait") {
+        const responderId = context.playerOrder[(selfIndex + 1) % context.playerOrder.length];
+        context.playerHands.set(responderId, [
+          { id: `manual-ju1-${seq}`, color: "yellow", type: "ju" },
+          { id: `manual-ju2-${seq}`, color: "yellow", type: "ju" },
+          { id: `manual-spare-${seq}`, color: "green", type: "zu" },
         ]);
       }
       context.setPendingResponse(
@@ -278,7 +288,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       context.state.currentTurnPlayerId = ownerId;
       context.state.pollOriginPlayerId = ownerId;
       context.setResponseCard(context.getPendingResponse()!.card, "upper");
-      context.state.lastAction = `DEBUG: collective_passive_wait#${seq}`;
+      context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
     } else {
     add("d8", "red", "shi");
     add("d9", "green", "xiang");
@@ -591,6 +601,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   if (
     scenario === "collective_no_actions" ||
     scenario === "collective_passive_wait" ||
+    scenario === "collective_manual_wait" ||
     scenario === "early_collective_choice" ||
     scenario === "crowded_collective_actions" ||
     scenario === "chi_collective_zu4" ||
