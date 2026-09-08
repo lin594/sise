@@ -8,6 +8,8 @@
       'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
       'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
+      'many-top-groups': topGroupBlocks.length > 7,
+      'wide-self-groups': selfGroupBlocks.length > 5,
     }"
     data-testid="game-board"
     :data-geometry-busy="Boolean(flights.length || (!coordinateMotionSuppressed && activeTableEvents.length) || dealerReveal)"
@@ -793,7 +795,7 @@
 
 <script setup lang="ts">
 import type { ListeningHints } from "@/types/game";
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
@@ -2296,11 +2298,34 @@ function updateHandLayoutState(): void {
     : { start: 0, end: 0, total: cards.length };
 }
 
+const meldLayoutKeys = new WeakMap<HTMLElement, string>();
+function updateMahjongMeldLayout(): void {
+  if (appliedTableLayout.value !== "mahjong" || flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length)) return;
+  boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => {
+    if (!list.clientWidth || !list.clientHeight) return;
+    const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
+    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
+    if (meldLayoutKeys.get(list) === key && (Number(list.style.getPropertyValue('--meld-scale')) <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1))) return;
+    // Whole groups wrap at their natural size first. The floor preserves 10px
+    // lettering; exceptionally crowded zones remain scrollable at that floor.
+    let scale = 1;
+    list.style.setProperty('--meld-scale', '1');
+    while ((list.scrollWidth > list.clientWidth + 1 || list.scrollHeight > list.clientHeight + 1) && scale > 5 / 6) {
+      scale = Math.max(5 / 6, scale - .025);
+      list.style.setProperty('--meld-scale', String(scale));
+    }
+    meldLayoutKeys.set(list, key);
+  });
+}
+
+onUpdated(updateMahjongMeldLayout);
+
 function scheduleHandLayoutUpdate(): void {
   if (handLayoutFrame !== null) return;
   handLayoutFrame = window.requestAnimationFrame(() => {
     handLayoutFrame = null;
     updateHandLayoutState();
+    updateMahjongMeldLayout();
     updateFlowLayout();
   });
 }
@@ -3161,6 +3186,8 @@ watch(
 );
 
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value],
+  () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
   flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 
@@ -3283,6 +3310,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     if (dealCount || moveCount || revealing) return;
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode) return;
     appliedTableLayout.value = layout ?? "classic";
+    boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear(); tableFlightFaceStyles.clear();

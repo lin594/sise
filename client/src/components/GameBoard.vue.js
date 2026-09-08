@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
@@ -1295,12 +1295,36 @@ function updateHandLayoutState() {
         ? { start: visibleIndexes[0] + 1, end: visibleIndexes.at(-1) + 1, total: cards.length }
         : { start: 0, end: 0, total: cards.length };
 }
+const meldLayoutKeys = new WeakMap();
+function updateMahjongMeldLayout() {
+    if (appliedTableLayout.value !== "mahjong" || flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length))
+        return;
+    boardRef.value?.querySelectorAll('.group-block-list').forEach(list => {
+        if (!list.clientWidth || !list.clientHeight)
+            return;
+        const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
+        const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
+        if (meldLayoutKeys.get(list) === key && (Number(list.style.getPropertyValue('--meld-scale')) <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1)))
+            return;
+        // Whole groups wrap at their natural size first. The floor preserves 10px
+        // lettering; exceptionally crowded zones remain scrollable at that floor.
+        let scale = 1;
+        list.style.setProperty('--meld-scale', '1');
+        while ((list.scrollWidth > list.clientWidth + 1 || list.scrollHeight > list.clientHeight + 1) && scale > 5 / 6) {
+            scale = Math.max(5 / 6, scale - .025);
+            list.style.setProperty('--meld-scale', String(scale));
+        }
+        meldLayoutKeys.set(list, key);
+    });
+}
+onUpdated(updateMahjongMeldLayout);
 function scheduleHandLayoutUpdate() {
     if (handLayoutFrame !== null)
         return;
     handLayoutFrame = window.requestAnimationFrame(() => {
         handLayoutFrame = null;
         updateHandLayoutState();
+        updateMahjongMeldLayout();
         updateFlowLayout();
     });
 }
@@ -2102,6 +2126,7 @@ watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransform
     void nextTick(scheduleHandLayoutUpdate);
 });
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value], () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
     flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => chiSelectionContextKey.value, (contextKey) => {
@@ -2194,6 +2219,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode)
         return;
     appliedTableLayout.value = layout ?? "classic";
+    boardRef.value?.querySelectorAll('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear();
@@ -3155,6 +3181,8 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
             'dealer-ceremony-active': Boolean(__VLS_ctx.dealerReveal),
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
+            'many-top-groups': __VLS_ctx.topGroupBlocks.length > 7,
+            'wide-self-groups': __VLS_ctx.selfGroupBlocks.length > 5,
         }) },
     'data-testid': "game-board",
     'data-geometry-busy': (Boolean(__VLS_ctx.flights.length || (!__VLS_ctx.coordinateMotionSuppressed && __VLS_ctx.activeTableEvents.length) || __VLS_ctx.dealerReveal)),

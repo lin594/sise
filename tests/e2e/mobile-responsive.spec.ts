@@ -1621,6 +1621,7 @@ test.describe("compact landscape gameplay", () => {
     await page.addInitScript(() => {
       localStorage.setItem("sise_game_display_preferences_v2", JSON.stringify({
         ownCards: "adaptive",
+        tableLayout: "classic",
         tableCards: "long",
         seatDirection: "counterclockwise",
         turnAlert: "off",

@@ -1,77 +1,98 @@
-/* A shared centre, with four rivers between the players and the draw pile. */
+/* Names use a narrow rail; the remaining space belongs to complete melds. */
 .board[data-table-layout="mahjong"] {
   --mahjong-card-angle: 0deg;
-  padding: 6px;
+  --mahjong-top-height: 25px;
+  --mahjong-self-height: 25px;
+  padding: 4px;
   gap: 2px;
-  border: 4px solid var(--table-wood, #24303b);
-  border-radius: 18px;
+  border: 3px solid var(--table-wood, #24303b);
+  border-radius: 14px;
   background: radial-gradient(ellipse at 50% 35%, #ffffff12, transparent 75%), var(--table-felt, #1f3448);
   box-shadow: inset 0 0 0 1px #ffffff24, inset 0 3px 12px #0002;
 }
 .board[data-table-layout="mahjong"] .table {
-  grid-template-columns: minmax(0, 16fr) minmax(0, 18fr) minmax(0, 32fr) minmax(0, 18fr) minmax(0, 16fr);
-  grid-template-rows: minmax(44px, .8fr) minmax(30px, 1fr) minmax(40px, 1.2fr) minmax(30px, 1fr) minmax(28px, .6fr);
+  grid-template-columns: minmax(0, 22fr) minmax(0, 14fr) minmax(0, 28fr) minmax(0, 14fr) minmax(0, 22fr);
+  grid-template-rows: minmax(var(--mahjong-top-height), .6fr) minmax(30px, 1fr) minmax(36px, 1fr) minmax(30px, 1fr) minmax(var(--mahjong-self-height), .6fr);
   grid-template-areas:
-    "left top top top right"
+    "top top top top top"
     "left riverleft rivertop riverright right"
     "left riverleft center riverright right"
     "left riverleft riverbottom riverright right"
     "left selfgroups selfgroups selfgroups right";
-  gap: 2px;
-  padding: 2px;
+  gap: 1px 2px;
+  padding: 0;
   border: 0;
   border-radius: 0;
 }
-.board[data-table-layout="mahjong"] :is(.player-card, .flow-card, .self-groups-card, .center, .center-board, .group-block, .self-hand-card, .self-command-row) {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  border-radius: 0;
+.board[data-table-layout="mahjong"].many-top-groups { --mahjong-top-height: 52px; }
+.board[data-table-layout="mahjong"].wide-self-groups { --mahjong-self-height: 52px; }
+.board[data-table-layout="mahjong"].wide-self-groups .table {
+  grid-template-areas:
+    "top top top top top"
+    "left riverleft rivertop riverright right"
+    "left riverleft center riverright right"
+    "left riverleft riverbottom riverright right"
+    "selfgroups selfgroups selfgroups selfgroups selfgroups";
 }
-.board[data-table-layout="mahjong"] .player-card {
-  min-height: 0;
-  min-width: 0;
-  height: 100%;
-  padding: 2px;
+.board[data-table-layout="mahjong"] :is(.player-card, .flow-card, .self-groups-card, .center, .center-board, .group-block, .self-hand-card, .self-command-row) { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+.board[data-table-layout="mahjong"] .player-card { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 1px; gap: 2px; overflow: hidden; }
+.board[data-table-layout="mahjong"] .seat-head { flex: 0 0 auto; width: 100%; min-height: 18px; gap: 2px; }
+.board[data-table-layout="mahjong"] .player-card .seat-identity { display: flex; flex: 1; align-items: center; justify-content: center; flex-wrap: nowrap; gap: 2px; }
+.board[data-table-layout="mahjong"] .player-card .seat-identity > strong { flex: 0 1 auto; font-size: 12px; line-height: 16px; }
+.board[data-table-layout="mahjong"] .player-card .seat-identity-meta { display: flex; flex-wrap: nowrap; gap: 1px; }
+.board[data-table-layout="mahjong"] .player-card :is(.hand-count-badge, .kan-count-badge) { min-width: 0; min-height: 0; padding: 0 1px; border: 0; background: transparent; font-size: 10px; line-height: 14px; }
+.board[data-table-layout="mahjong"] .player-card :is(.dealer-card-mark, .group-score-badge) { display: none; }
+.board[data-table-layout="mahjong"] .player-card .player-status-icon { width: 12px; height: 12px; flex-basis: 12px; }
+.board[data-table-layout="mahjong"] .player-card .dealer-badge { width: 14px; height: 14px; min-width: 14px; min-height: 14px; font-size: 10px; }
+.board[data-table-layout="mahjong"] .player-card.active .seat-head { box-shadow: inset 0 -1px var(--ui-accent-text); }
+.board[data-table-layout="mahjong"] .player-card .seat-tags { display: none; }
+.board[data-table-layout="mahjong"] .player-top { --mahjong-card-angle: 180deg; flex-direction: row; align-items: center; }
+.board[data-table-layout="mahjong"] .player-top .seat-head { width: auto; max-width: 24%; }
+.board[data-table-layout="mahjong"] .player-left { --mahjong-card-angle: 90deg; }
+.board[data-table-layout="mahjong"] .player-right { --mahjong-card-angle: -90deg; }
+
+/* Wrap whole groups. Fit a zone before falling back to scrolling; never overlap cards. */
+.board[data-table-layout="mahjong"] .group-block-list {
+  --meld-scale: 1;
+  position: relative;
   display: flex;
-  gap: 3px;
-  align-items: center;
-  flex-direction: column;
-  justify-content: safe center;
+  flex: 1 1 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+  align-content: flex-start;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 1px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
-.board[data-table-layout="mahjong"] .player-top { justify-content: flex-start; }
-.board[data-table-layout="mahjong"] .seat-head { flex: 0 0 auto; width: 100%; gap: 0; }
-.board[data-table-layout="mahjong"] .seat-identity { justify-content: center; flex-wrap: wrap; gap: 2px; text-align: center; }
-.board[data-table-layout="mahjong"] .seat-identity > strong { font-size: 12px; line-height: 16px; }
-.board[data-table-layout="mahjong"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; gap: 2px; }
-.board[data-table-layout="mahjong"] :is(.hand-count-badge, .kan-count-badge, .group-score-badge) { min-width: 0; min-height: 0; padding: 0 2px; border: 0; font-size: 11px; }
-.board[data-table-layout="mahjong"] .player-card.active .seat-head { border-bottom: 2px solid var(--ui-accent-text); }
-.board[data-table-layout="mahjong"] .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
-.board[data-table-layout="mahjong"] .dealer-badge { width: 16px; height: 16px; min-width: 16px; min-height: 16px; font-size: 11px; }
-.board[data-table-layout="mahjong"] .seat-tags:empty { display: none; }
-.board[data-table-layout="mahjong"] .group-block-list { gap: 4px; justify-content: center; flex: 0 0 auto; max-width: 100%; }
-.board[data-table-layout="mahjong"] .group-block { min-height: 0; padding: 0; gap: 2px; flex-shrink: 0; }
-.board[data-table-layout="mahjong"] .mini-card-strip { gap: 2px; padding: 0; flex-wrap: nowrap; }
+.board[data-table-layout="mahjong"] .player-top .group-block-list { width: auto; }
+.board[data-table-layout="mahjong"] .group-block { position: relative; flex: 0 0 auto; min-height: 0; padding: 0; gap: 1px; }
+.board[data-table-layout="mahjong"] .mini-card-strip { flex-wrap: nowrap; gap: 1px; padding: 0; }
 .board[data-table-layout="mahjong"] :is(.player-card, .self-groups-card) .mini-card {
   box-sizing: border-box;
-  width: 24px;
-  height: 28px;
-  font-size: 11px;
+  width: calc(20px * var(--meld-scale));
+  height: calc(24px * var(--meld-scale));
+  font-size: calc(12px * var(--meld-scale));
+  margin: 0;
   padding: 0;
   border-width: 1px;
-  margin: 0;
   rotate: var(--mahjong-card-angle);
 }
 .board[data-table-layout="mahjong"] .mini-card-strip .mini-card + .mini-card { margin: 0; }
 .board[data-table-layout="mahjong"] .mini-card :deep(.text) { padding: 0; }
-.board[data-table-layout="mahjong"] .group-badge { min-width: 14px; width: 14px; height: 16px; font-size: 10px; }
-.board[data-table-layout="mahjong"] .player-top { --mahjong-card-angle: 180deg; }
-.board[data-table-layout="mahjong"] .player-left { --mahjong-card-angle: 90deg; }
-.board[data-table-layout="mahjong"] .player-right { --mahjong-card-angle: -90deg; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip { flex-direction: column; gap: 6px; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip .mini-card { margin: -2px 2px; }
-.board[data-table-layout="mahjong"] .self-groups-card { padding: 0; min-height: 0; overflow: auto; }
-.board[data-table-layout="mahjong"] .self-groups-card .group-block-list { flex-wrap: nowrap; justify-content: safe center; }
+.board[data-table-layout="mahjong"] .group-badge { min-width: 12px; width: 12px; height: 14px; font-size: 10px; }
+.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip { flex-direction: column; }
+.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip .mini-card { margin: calc(-2px * var(--meld-scale)) calc(2px * var(--meld-scale)); }
+.board[data-table-layout="mahjong"] .self-groups-card { padding: 0; overflow: hidden; }
+.board[data-table-layout="mahjong"].rotated-scroll .group-block-list { touch-action: none; }
+
 .board[data-table-layout="mahjong"] .flow-card { width: 100%; height: 100%; min-width: 0; padding: 0; gap: 0; align-self: stretch; }
 .board[data-table-layout="mahjong"] .flow-card > p { display: none; }
 .board[data-table-layout="mahjong"] .flow-empty { visibility: hidden; }
@@ -79,62 +100,20 @@
 .board[data-table-layout="mahjong"] [data-flow-side="bottom"] { grid-area: riverbottom; }
 .board[data-table-layout="mahjong"] [data-flow-side="left"] { grid-area: riverleft; --mahjong-card-angle: 90deg; }
 .board[data-table-layout="mahjong"] [data-flow-side="right"] { grid-area: riverright; --mahjong-card-angle: -90deg; }
-.board[data-table-layout="mahjong"] .discard-strip { justify-content: center; padding: 4px; }
+.board[data-table-layout="mahjong"] .discard-strip { justify-content: center; padding: 1px; }
 .board[data-table-layout="mahjong"] .discard-token { rotate: var(--mahjong-card-angle); }
-/* Margins allocate the rotated footprint, including rectangular long cards. */
 .board[data-table-layout="mahjong"] :is([data-flow-side="left"], [data-flow-side="right"]) .discard-token.mode-long { margin: calc(-4px * var(--flow-scale, 1)) calc(4px * var(--flow-scale, 1)); }
 .board[data-table-layout="mahjong"] .center { width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0; }
 .board[data-table-layout="mahjong"] .center-board { min-height: 0; width: 100%; height: 100%; padding: 0; }
-.board[data-table-layout="mahjong"] .center-card-pair { gap: 6px; }
-.board[data-table-layout="mahjong"] :is(.deck-slot, .response-slot) { height: 40px; }
-.board[data-table-layout="mahjong"] .response-card-face { width: 28px; height: 40px; font-size: 14px; }
+.board[data-table-layout="mahjong"] .center-card-pair { gap: 4px; }
+.board[data-table-layout="mahjong"] :is(.deck-slot, .response-slot) { height: 36px; }
+.board[data-table-layout="mahjong"] .response-card-face { width: 26px; height: 36px; font-size: 14px; }
 .board[data-table-layout="mahjong"] .response-card-face :deep(.text) { padding: 0; }
-.board[data-table-layout="mahjong"] .deck-stack { height: 34px; }
+.board[data-table-layout="mahjong"] .deck-stack { height: 32px; }
 .board[data-table-layout="mahjong"] .deck-layer { width: 8px; }
 .board[data-table-layout="mahjong"] .self-hand-card { border-top: 1px solid #0002; }
 .board[data-table-layout="mahjong"] .self-turn-outline { box-shadow: none; }
 @media (max-width: 960px), (max-height: 500px) {
-  .board[data-table-layout="mahjong"] { padding: 2px; border-width: 3px; border-radius: 12px; }
-  .board[data-table-layout="mahjong"] .player-top .seat-identity { flex-wrap: nowrap; }
-  .board[data-table-layout="mahjong"] .player-top .seat-identity-meta { flex-wrap: nowrap; }
-  .board[data-table-layout="mahjong"] .player-top .mini-card { height: 22px; width: 20px; font-size: 10px; }
-  .board[data-table-layout="mahjong"] .player-card :is(.dealer-card-mark, .group-score-badge) { display: none; }
-  .board[data-table-layout="mahjong"] .player-top { gap: 2px; }
-}
-/* Keep names attached to their status, and melds on the inward side of seats. */
-.board[data-table-layout="mahjong"] .player-top { width: max-content; max-width: 100%; justify-self: center; }
-.board[data-table-layout="mahjong"] .player-card .seat-identity > strong { flex: 0 1 auto; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .seat-head { grid-column: 1; grid-row: 1; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .seat-identity > strong { flex-basis: 100%; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .group-block-list { grid-column: 2; grid-row: 1; flex-direction: column; flex-wrap: nowrap; max-height: 100%; overflow: auto; padding: 2px; justify-content: flex-start; }
-.board[data-table-layout="mahjong"] .player-right { grid-template-columns: auto minmax(0, 1fr); }
-.board[data-table-layout="mahjong"] .player-right .seat-head { grid-column: 2; }
-.board[data-table-layout="mahjong"] .player-right .group-block-list { grid-column: 1; }
-.board[data-table-layout="mahjong"] [data-flow-side="top"] .discard-strip { align-content: safe flex-end; }
-.board[data-table-layout="mahjong"] :is([data-flow-side="left"], [data-flow-side="right"]) .discard-strip { align-content: safe center; }
-.board[data-table-layout="mahjong"] .discard-strip:is([data-scroll-before="true"], [data-scroll-after="true"]) { align-content: flex-start; }
-
-.board[data-table-layout="mahjong"].rotated-scroll .group-block-list { touch-action: none; }
-.board[data-table-layout="mahjong"] .group-block-list { overscroll-behavior: contain; scrollbar-width: thin; }
-/* Large eats scroll within the public-card zone, keeping the top identity visible. */
-.board[data-table-layout="mahjong"] .player-top .group-block-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1px; align-content: flex-start; }
-.board[data-table-layout="mahjong"] .group-block-list { position: relative; }
-
-/* Reserve a complete public-card row even on the 350px adaptive boundary. */
-@media (max-height: 380px), (max-width: 380px) {
-  .board[data-table-layout="mahjong"] .table { grid-template-rows: minmax(40px, .8fr) minmax(30px, 1fr) minmax(36px, 1.2fr) minmax(30px, 1fr) minmax(28px, .6fr); row-gap: 1px; padding-block: 0; }
-}
-
-@media (max-width: 960px), (max-height: 500px) {
-  .board[data-table-layout="mahjong"].hand-overflow:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
-}
-@media (max-height: 380px), (max-width: 380px) {
-  .board[data-table-layout="mahjong"] .discard-strip { padding: 1px; }
-  .board[data-table-layout="mahjong"] :is(.deck-slot, .response-slot, .response-card-face) { height: 36px; }
-}
-@media (max-height: 380px), (max-width: 380px) {
-  .board[data-table-layout="mahjong"] .player-top { flex-direction: row; width: 100%; }
-  .board[data-table-layout="mahjong"] .player-top .seat-head { width: auto; max-width: 45%; }
-  .board[data-table-layout="mahjong"] .player-top .group-block-list { height: 100%; align-content: safe center; }
+  .board[data-table-layout="mahjong"] { padding: 2px; }
+  .board[data-table-layout="mahjong"]:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 64px; }
 }
