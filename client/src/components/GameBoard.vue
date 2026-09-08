@@ -2305,14 +2305,28 @@ function updateMahjongMeldLayout(): void {
     if (!list.clientWidth || !list.clientHeight) return;
     const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
     const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
-    if (meldLayoutKeys.get(list) === key && (Number(list.style.getPropertyValue('--meld-scale')) <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1))) return;
+    const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
+    const applyScale = (scale: number) => {
+      const value = String(scale);
+      list.style.setProperty('--meld-scale', value);
+      // Apply locally as well: WebKit can retain stale inherited custom-property
+      // values on card components after a viewport change and a seat update.
+      cards.forEach(card => {
+        if (card.style.getPropertyValue('--meld-scale') !== value) card.style.setProperty('--meld-scale', value);
+      });
+    };
+    if (meldLayoutKeys.get(list) === key) {
+      const previousScale = Number(list.style.getPropertyValue('--meld-scale')) || 1;
+      applyScale(previousScale);
+      if (previousScale <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1)) return;
+    }
     // Whole groups wrap at their natural size first. The floor preserves 10px
     // lettering; exceptionally crowded zones remain scrollable at that floor.
     let scale = 1;
-    list.style.setProperty('--meld-scale', '1');
+    applyScale(1);
     while ((list.scrollWidth > list.clientWidth + 1 || list.scrollHeight > list.clientHeight + 1) && scale > 5 / 6) {
       scale = Math.max(5 / 6, scale - .025);
-      list.style.setProperty('--meld-scale', String(scale));
+      applyScale(scale);
     }
     meldLayoutKeys.set(list, key);
   });
@@ -3311,6 +3325,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode) return;
     appliedTableLayout.value = layout ?? "classic";
     boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
+    boardRef.value?.querySelectorAll<HTMLElement>('.mini-card').forEach(card => card.style.removeProperty('--meld-scale'));
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear(); tableFlightFaceStyles.clear();

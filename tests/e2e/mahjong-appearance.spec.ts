@@ -254,7 +254,7 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
       });
       if (overview.overflow || overview.cards.some(card => !card.visible)) {
         console.log('meld overview geometry', JSON.stringify(await area.evaluate(el => ({
-          inline: el.getAttribute('style'), viewport: [el.clientWidth, el.clientHeight], content: [el.scrollWidth, el.scrollHeight], scale: getComputedStyle(el).getPropertyValue('--meld-scale'),
+          cardStyles: [...el.querySelectorAll<HTMLElement>('.mini-card')].slice(0, 3).map(card => ({ inline: card.getAttribute('style'), scale: getComputedStyle(card).getPropertyValue('--meld-scale'), width: getComputedStyle(card).width })), inline: el.getAttribute('style'), viewport: [el.clientWidth, el.clientHeight], content: [el.scrollWidth, el.scrollHeight], scale: getComputedStyle(el).getPropertyValue('--meld-scale'),
           groups: [...el.querySelectorAll<HTMLElement>('.group-block')].map(group => [group.offsetLeft, group.offsetTop, group.offsetWidth, group.offsetHeight]),
           tableRows: getComputedStyle(document.querySelector('.table')!).gridTemplateRows,
         }))));
