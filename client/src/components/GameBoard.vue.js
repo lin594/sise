@@ -2505,6 +2505,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['embedded-actions']} */ ;
@@ -2574,6 +2576,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
         }) },
     'data-testid': "game-board",
+    'data-geometry-busy': (Boolean(__VLS_ctx.flights.length || __VLS_ctx.tableFlights.length || __VLS_ctx.dealerReveal)),
     'data-table-layout': (__VLS_ctx.appliedTableLayout),
     'data-layout-pending': (__VLS_ctx.appliedTableLayout !== props.tableLayout),
     'data-response-phase': (props.responsePhase ?? ''),

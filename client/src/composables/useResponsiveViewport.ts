@@ -21,9 +21,11 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
     if (geometryBusy?.value) return;
     const visual = window.visualViewport;
     // Pinch zoom is magnification, not a request to rotate/reflow the table.
+    // innerWidth may expand to fit the previous rotated canvas on iOS/mobile
+    // emulation; the root client size still describes the new layout viewport.
     const useVisual = visual && Math.abs(visual.scale - 1) < 0.01;
-    viewportWidth.value = useVisual ? visual.width : window.innerWidth;
-    viewportHeight.value = useVisual ? visual.height : window.innerHeight;
+    viewportWidth.value = useVisual ? visual.width : (document.documentElement.clientWidth || window.innerWidth);
+    viewportHeight.value = useVisual ? visual.height : (document.documentElement.clientHeight || window.innerHeight);
     viewportLeft.value = useVisual ? visual.offsetLeft : 0;
     viewportTop.value = useVisual ? visual.offsetTop : 0;
     coarsePointer.value = Boolean(coarsePointerQuery?.matches);
