@@ -3086,7 +3086,7 @@ watch(() => Boolean(flights.value.length || (!coordinateMotionSuppressed.value &
 onUnmounted(() => emit("geometryBusy", false));
 // Geometry changes wait for all visible card transactions, including opening deals.
 const appliedTableLayout = ref<RenderedTableLayoutId>(props.tableLayout ?? "classic");
-watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)] as const,
+watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.value.length, coordinateMotionSuppressed.value ? 0 : activeTableEvents.value.length, Boolean(dealerReveal.value)] as const,
   async ([layout, tableMode, ownMode, dealCount, moveCount, revealing]) => {
     if (dealCount || moveCount || revealing) return;
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode) return;
