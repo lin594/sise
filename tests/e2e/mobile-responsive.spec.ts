@@ -877,7 +877,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("history-effective-viewport-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
   });
 });
 
@@ -1055,7 +1055,7 @@ test.describe("compact landscape gameplay", () => {
     await page.screenshot({ path: testInfo.outputPath("iphone-se-action-history.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
     await revealTool(page, "game-history");
     await gameHistory.click();
     const firstPlayableCard = page.locator(".hand-card.playable").first();
@@ -1067,7 +1067,7 @@ test.describe("compact landscape gameplay", () => {
     await page.mouse.click(playableCardCenter.x, playableCardCenter.y);
     await expect(historyPanel).toHaveCount(0);
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByTestId("game-settings")).toBeFocused();
+    await expect(page.getByTestId("game-history")).toBeFocused();
     await expect.poll(async () => {
       const cards = page.locator("[data-testid^='hand-card-']");
       return await cards.count() > 0

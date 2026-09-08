@@ -391,6 +391,8 @@ test('settings group table placement under layout without a turn reminder', asyn
   await expect(page.getByTestId('hand-layout-single')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  await expect(page.getByTestId('settings-panel')).toHaveCount(0);
   await expect(page.getByTestId('history-panel').getByRole('button', { name: '返回设置' })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('history-667.png') });
   await page.keyboard.press('Escape');
