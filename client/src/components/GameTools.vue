@@ -532,6 +532,16 @@ const settingsCanScrollForward = ref(false);
 let settingsResizeObserver: ResizeObserver | null = null;
 const confirmingAutoPlay = ref(false);
 const autoPlayButtonRef = ref<HTMLButtonElement | null>(null);
+let autoPlayFocusPending = false;
+function restoreAutoPlayFocus(): void {
+  if (!autoPlayFocusPending || props.autoPlayPending) return;
+  autoPlayFocusPending = false;
+  // An async reply must not take focus back after the player chose another control.
+  if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+    autoPlayButtonRef.value?.focus();
+  }
+}
+watch(() => props.autoPlayPending, () => void nextTick(restoreAutoPlayFocus), { flush: "post" });
 const autoPlayDialogRef = ref<HTMLElement | null>(null);
 const cancelAutoPlayButtonRef = ref<HTMLButtonElement | null>(null);
 const confirmingExit = ref(false);
@@ -851,9 +861,12 @@ async function requestAutoPlayChange(): Promise<void> {
   }
   dismissToolPanels();
   if (props.autoPlay) {
+    autoPlayFocusPending = true;
     emit("setAutoPlay", false);
+    void nextTick(restoreAutoPlayFocus);
     return;
   }
+  autoPlayFocusPending = false;
   confirmingAutoPlay.value = true;
   await nextTick();
   installConfirmationFocusGuard();
@@ -870,7 +883,9 @@ async function cancelAutoPlay(): Promise<void> {
 function confirmAutoPlay(): void {
   confirmingAutoPlay.value = false;
   removeConfirmationFocusGuard();
+  autoPlayFocusPending = true;
   emit("setAutoPlay", true);
+  void nextTick(restoreAutoPlayFocus);
 }
 
 function trapAutoPlayFocus(event: KeyboardEvent): void {

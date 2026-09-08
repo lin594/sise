@@ -1604,6 +1604,7 @@ test.describe("compact landscape gameplay", () => {
 
     await expect(dialog).toHaveCount(0);
     await expect(autoPlay).toHaveAttribute("aria-pressed", "true");
+    await expect(autoPlay).toBeFocused();
     await expect(autoPlay).toContainText("取消托管");
     await expect(page.getByTestId("player-self").locator("[data-testid='player-status-icon'][data-status-kind='autoplay']")).toBeVisible();
     await expect(page.getByTestId("player-self")).toHaveAccessibleName(/机器人代打|托管中/);
