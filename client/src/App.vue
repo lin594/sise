@@ -766,7 +766,8 @@ function closePwaInstallGuide(restoreFocus = true): void {
       const returnTarget = pwaInstallReturnFocus?.isConnected
         && !pwaInstallReturnFocus.closest("[data-testid='settings-panel']")
         ? pwaInstallReturnFocus
-        : document.querySelector<HTMLElement>("[data-testid='pwa-install-entry'], [data-testid='game-settings']");
+        : document.querySelector<HTMLElement>("[data-testid='game-settings']")
+          ?? document.querySelector<HTMLElement>("[data-testid='pwa-install-entry']");
       returnTarget?.focus({ preventScroll: true });
       pwaInstallReturnFocus = null;
     });
