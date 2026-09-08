@@ -30,6 +30,9 @@ async function start(page: Page, tableLayout = 'mahjong', mode = 'long', reduceM
   await expect(page.getByTestId('game-board')).toBeVisible();
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ ok: true });
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getRoomState()?.lastAction))
+    .toMatch(/^DEBUG: readable_exposed_groups#/);
+  await expect(page.locator('.hand-card[data-card-id^="readable-hand-"]')).toHaveCount(1);
 }
 
 async function crowd(page: Page) {

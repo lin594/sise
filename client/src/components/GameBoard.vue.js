@@ -1308,8 +1308,8 @@ function updateMahjongMeldLayout() {
         const sideways = Boolean(list.closest('.player-left, .player-right'));
         const applyScale = (scale) => {
             list.style.setProperty('--meld-scale', String(scale));
-            // Write the measured pixel sizes directly. WebKit on Linux can retain
-            // unscaled calc() dimensions even with the updated custom property.
+            // Size the same card boxes measured below; CSS clears their automatic
+            // minimum sizes so intrinsic content cannot clamp the fitted dimensions.
             const sizes = { width: `${20 * scale}px`, height: `${24 * scale}px`,
                 'font-size': `${12 * scale}px`, margin: sideways ? `${-2 * scale}px ${2 * scale}px` : '0px' };
             cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {

@@ -15,6 +15,10 @@ async function start(page: Page, skin = 'puxian-house', ownCards = 'long', table
   await startLobbyAction(page);
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ok:true, scenario:'readable_exposed_groups'});
+  // The scenario acknowledgment can arrive before its private-hand message.
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getRoomState()?.lastAction))
+    .toMatch(/^DEBUG: readable_exposed_groups#/);
+  await expect(page.locator('.hand-card[data-card-id^="readable-hand-"]')).toHaveCount(1);
 }
 
 async function crowdedTable(page: Page) {
