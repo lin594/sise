@@ -77,9 +77,9 @@
 .board[data-table-layout="mahjong"] .mini-card-strip { flex-wrap: nowrap; gap: 1px; padding: 0; }
 .board[data-table-layout="mahjong"] :is(.player-card, .self-groups-card) .mini-card {
   box-sizing: border-box;
-  width: calc(20px * var(--meld-scale));
-  height: calc(24px * var(--meld-scale));
-  font-size: calc(12px * var(--meld-scale));
+  width: 20px;
+  height: 24px;
+  font-size: 12px;
   margin: 0;
   padding: 0;
   border-width: 1px;
@@ -89,7 +89,7 @@
 .board[data-table-layout="mahjong"] .mini-card :deep(.text) { padding: 0; }
 .board[data-table-layout="mahjong"] .group-badge { min-width: 12px; width: 12px; height: 14px; font-size: 10px; }
 .board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip { flex-direction: column; }
-.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip .mini-card { margin: calc(-2px * var(--meld-scale)) calc(2px * var(--meld-scale)); }
+.board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip .mini-card { margin: -2px 2px; }
 .board[data-table-layout="mahjong"] .self-groups-card { padding: 0; overflow: hidden; }
 .board[data-table-layout="mahjong"].rotated-scroll .group-block-list { touch-action: none; }
 

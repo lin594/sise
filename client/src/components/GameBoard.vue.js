@@ -1305,15 +1305,17 @@ function updateMahjongMeldLayout() {
         const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
         const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
         const cards = [...list.querySelectorAll('.mini-card')];
+        const sideways = Boolean(list.closest('.player-left, .player-right'));
         const applyScale = (scale) => {
-            const value = String(scale);
-            list.style.setProperty('--meld-scale', value);
-            // Apply locally as well: WebKit can retain stale inherited custom-property
-            // values on card components after a viewport change and a seat update.
-            cards.forEach(card => {
-                if (card.style.getPropertyValue('--meld-scale') !== value)
-                    card.style.setProperty('--meld-scale', value);
-            });
+            list.style.setProperty('--meld-scale', String(scale));
+            // Write the measured pixel sizes directly. WebKit on Linux can retain
+            // unscaled calc() dimensions even with the updated custom property.
+            const sizes = { width: `${20 * scale}px`, height: `${24 * scale}px`,
+                'font-size': `${12 * scale}px`, margin: sideways ? `${-2 * scale}px ${2 * scale}px` : '0px' };
+            cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {
+                if (card.style.getPropertyValue(property) !== value)
+                    card.style.setProperty(property, value);
+            }));
         };
         if (meldLayoutKeys.get(list) === key) {
             const previousScale = Number(list.style.getPropertyValue('--meld-scale')) || 1;
@@ -2235,7 +2237,9 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
         return;
     appliedTableLayout.value = layout ?? "classic";
     boardRef.value?.querySelectorAll('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
-    boardRef.value?.querySelectorAll('.mini-card').forEach(card => card.style.removeProperty('--meld-scale'));
+    boardRef.value?.querySelectorAll('.mini-card').forEach(card => {
+        ['width', 'height', 'font-size', 'margin'].forEach(property => card.style.removeProperty(property));
+    });
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear();
