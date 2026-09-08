@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
@@ -71,7 +72,13 @@ test("a passive human response keeps the privacy window without exposing a count
       responsePhase: "collective",
       decisionTimer: { totalMs: 3_000 },
     });
-    const [hostClock, guestClock] = await Promise.all([readClock(host), readClock(guest)]);
+    let clocks: Awaited<ReturnType<typeof readClock>>[] = [];
+    await expect.poll(async () => {
+      clocks = await Promise.all([readClock(host), readClock(guest)]);
+      return clocks.every(clock => clock.responsePhase === "collective"
+        && clock.decisionTimer.totalMs === 3_000 && Number(clock.decisionTimer.endsAt) > clock.now);
+    }, { timeout: 2_500, intervals: [20, 50, 100] }).toBe(true);
+    const [hostClock, guestClock] = clocks;
     expect(Number(guestClock.decisionTimer.endsAt) - guestClock.now).toBeGreaterThan(0);
     expect(Math.abs(Number(hostClock.decisionTimer.endsAt) - Number(guestClock.decisionTimer.endsAt))).toBeLessThan(150);
 
@@ -94,6 +101,7 @@ test("a passive human response keeps the privacy window without exposing a count
     await expect(host.getByTestId("settings-decision-reminder")).toHaveCount(0);
     await host.getByRole("button", { name: "关闭设置" }).click();
     await host.getByTestId("game-settings").click();
+    await revealSetting(host, "settings-rules");
     await host.getByTestId("settings-rules").click();
     await expect(host.getByTestId("rules-decision-reminder")).toHaveCount(0);
     await host.getByTestId("close-rules").click();

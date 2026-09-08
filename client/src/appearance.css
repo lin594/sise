@@ -1,0 +1,4 @@
+:root {
+  --card-back: linear-gradient(110deg, #ee6961, #b6242c 55%, #781d27);
+  --long-card-radius: 50% / 18%;
+}

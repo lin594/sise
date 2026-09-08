@@ -1,3 +1,5 @@
+export type SkinId = "cyber-minimal" | "licheng-water" | "puxian-house" | "meizhou-sea";
+export type TableLayoutId = "compact" | "classic";
 export type ActionType = "hu" | "kai" | "peng" | "chi" | "pass";
 export type ResponsePhase = "collective" | "local_upper" | "local_draw";
 export type CardDisplayMode = "large" | "adaptive" | "long";
@@ -33,6 +35,8 @@ export interface ListeningHints {
 }
 
 export interface GameDisplayPreferences {
+  skin: SkinId;
+  tableLayout: TableLayoutId;
   handLayout: "single" | "paged";
   ownCards: CardDisplayMode;
   tableCards: CardDisplayMode;

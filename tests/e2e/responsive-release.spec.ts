@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 type ViewportCase = {
@@ -352,6 +353,7 @@ test.describe("mobile responsive release gate", () => {
 
     await useViewport(page, landscapeViewports.find((viewport) => viewport.width === 844)!);
     await page.getByTestId("game-settings").click();
+    await revealSetting(page, "reduce-motion");
     const reduceMotion = page.getByTestId("reduce-motion");
     await reduceMotion.scrollIntoViewIfNeeded();
     await reduceMotion.click();

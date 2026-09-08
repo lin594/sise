@@ -1,3 +1,4 @@
+import { revealSetting } from "./helpers/settings";
 import { expect, test, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded } from "./helpers/game";
 
@@ -83,6 +84,7 @@ test("optional spoken guidance explains each new decision once and persists", as
   await enterDeclaration(page);
 
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "spoken-turn-guidance");
   const voiceSetting = page.getByTestId("spoken-turn-guidance");
   await expect(voiceSetting).toBeAttached({ timeout: 5_000 });
   await voiceSetting.scrollIntoViewIfNeeded();
@@ -127,6 +129,7 @@ test("unsupported browsers explain why spoken guidance is unavailable", async ({
   });
   await enterDeclaration(page, "/");
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "spoken-turn-guidance");
   const voiceSetting = page.getByTestId("spoken-turn-guidance");
   await expect(voiceSetting).toBeAttached({ timeout: 5_000 });
   await voiceSetting.scrollIntoViewIfNeeded();
@@ -144,6 +147,7 @@ test("insecure or unsupported browsers do not pretend screen wake lock is active
   });
   await enterDeclaration(page, "/");
   await page.getByTestId("game-settings").click();
+  await revealSetting(page, "keep-screen-awake");
   const wakeLockSetting = page.getByTestId("keep-screen-awake");
   await expect(wakeLockSetting).toBeAttached({ timeout: 5_000 });
   await wakeLockSetting.scrollIntoViewIfNeeded();
