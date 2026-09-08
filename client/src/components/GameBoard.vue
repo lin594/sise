@@ -856,6 +856,7 @@ const props = defineProps<{
   canAct?: boolean;
   isCurrentTurn?: boolean;
   responsePhase?: string;
+  deferredChiPending?: boolean;
   interactionPausedMessage?: string;
   decisionUntimed?: boolean;
   decisionTimerTotalMs?: number;
@@ -1884,6 +1885,7 @@ const showDecisionClock = computed(() =>
 );
 
 const flowStatusText = computed(() => {
+  if (props.deferredChiPending) return "已选择吃，等待其他玩家响应";
   if (props.state?.phase === "declaring") {
     return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
       ? "等待其他玩家声明"

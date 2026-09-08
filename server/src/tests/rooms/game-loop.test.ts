@@ -464,7 +464,7 @@ test("a collective responder with a meaningful choice still receives Pass", () =
   assert.equal(actions.some((entry: { action: string }) => entry.action === "pass"), true);
 });
 
-test("the prepared receiver sees Chi only after the collective window becomes local", () => {
+test("the prepared receiver can confirm a deferred Chi before the collective window becomes local", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.playerHands.set("B", [
     mkCard("chi-ju", "yellow", "ju", "upper"),
@@ -484,7 +484,11 @@ test("the prepared receiver sees Chi only after the collective window becomes lo
     room.getAvailableActions("B").find((entry: any) => entry.action === "chi")?.deferred,
     true,
   );
-  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
+  const preview = room.buildClientDecisionView("B").availableActions;
+  assert.equal(preview.find((entry: any) => entry.action === "chi")?.deferred, true);
+  assert.equal(preview.find((entry: any) => entry.action === "chi")?.enabled, false);
+  assert.equal(preview.find((entry: any) => entry.action === "pass")?.enabled, true);
+  assert.equal(room.buildClientDecisionView("C").availableActions.some((entry: any) => entry.action === "chi"), false);
 
   room.enterOwnerLocalPhaseAfterNoResponse("A");
   assert.equal(room.state.responsePhase, "local_upper");
@@ -1022,4 +1026,38 @@ test("manual response fixture discards stale declarations from every replaced ha
   assert.ok(room.getAvailableActions("B", true).some((item: any) => item.action === "peng" && item.enabled));
   assert.equal(room.buildDecisionTimerSnapshot("B").totalMs, 10_000);
   room.clearCollectiveTimer();
+});
+
+
+test("upper receiver sees both Peng and deferred Chi, then no options after passing", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [mkCard("j1", "red", "ju", "upper"), mkCard("j2", "red", "ju", "upper"), mkCard("m", "red", "ma", "upper"), mkCard("p", "red", "pao", "upper"), mkCard("spare", "green", "shi", "upper")]);
+  room.pendingResponse = { ownerId: "A", card: mkCard("target", "red", "ju", "upper"), collectives: new Map() };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveResponderId = "B";
+  const choices = room.buildClientDecisionView("B").availableActions;
+  assert.equal(choices.some((a: any) => a.action === "peng" && a.enabled), true);
+  assert.equal(choices.some((a: any) => a.action === "chi" && a.deferred && !a.enabled), true);
+  room.pendingResponse.collectives.set("B", { action: "pass" });
+  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
+  room.clearCollectiveTimer();
+});
+
+
+test("deferred Chi alone neither extends the public window nor becomes a draw preview", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = undefined;
+  room.state.players.get("A").connected = true;
+  room.state.players.get("B").connected = true;
+  room.playerHands.set("B", [mkCard("ma", "red", "ma", "upper"), mkCard("pao", "red", "pao", "upper"), mkCard("spare", "green", "xiang", "upper")]);
+  room.pendingResponse = { ownerId: "A", card: mkCard("target", "red", "ju", "upper"), collectives: new Map() };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveResponderId = "B";
+  assert.equal(room.buildClientDecisionView("B").availableActions.some((a: any) => a.action === "chi" && a.deferred), true);
+  assert.equal(room.currentCollectiveResponseWindowMs(), 3_000);
+  room.pendingResponse.ownerId = "B";
+  room.pendingResponse.card.source = "draw";
+  assert.equal(room.buildClientDecisionView("B").availableActions.some((a: any) => a.action === "chi"), false);
 });

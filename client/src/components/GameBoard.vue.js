@@ -931,6 +931,8 @@ const showDecisionClock = computed(() => publicCollectiveSeconds.value !== null 
         (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
         (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)));
 const flowStatusText = computed(() => {
+    if (props.deferredChiPending)
+        return "已选择吃，等待其他玩家响应";
     if (props.state?.phase === "declaring") {
         return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
             ? "等待其他玩家声明"
