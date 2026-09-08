@@ -65,7 +65,7 @@ test('adaptive is the default while explicit classic still offers a small-screen
 test('all skins and layouts keep actual cards and actions inside representative viewports', async ({ page }, info) => {
   await startTable(page);
   for (const skin of ['cyber-minimal','licheng-water','puxian-house','meizhou-sea']) {
-    for (const layout of ['compact','classic','adaptive']) {
+    for (const layout of ['compact','mahjong','classic','adaptive']) {
       await page.getByTestId('game-settings').click();
       await revealSetting(page,`skin-${skin}`); await page.getByTestId(`skin-${skin}`).click();
       await revealSetting(page,`layout-${layout}`); await page.getByTestId(`layout-${layout}`).click();
@@ -73,7 +73,7 @@ test('all skins and layouts keep actual cards and actions inside representative 
       for (const [width,height] of [[568,320],[844,390],[390,844],[1024,768],[1440,900]]) {
         await page.setViewportSize({width,height});
         const effectiveWidth=Math.max(width,height), effectiveHeight=Math.min(width,height);
-        const resolved = layout === 'adaptive' ? effectiveWidth<=720 || effectiveHeight<=380 ? 'compact' : 'classic' : layout;
+        const resolved = layout === 'adaptive' ? effectiveWidth < 640 || effectiveHeight < 350 ? 'compact' : effectiveWidth >= 960 && effectiveHeight >= 440 ? 'classic' : 'mahjong' : layout;
         await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout',resolved);
         await expect(page.getByTestId('hand-card-d1')).toBeInViewport({ratio:1});
         await expect(page.getByTestId('action-chi')).toBeInViewport({ratio:1});

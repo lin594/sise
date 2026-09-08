@@ -202,7 +202,7 @@ test('other skins and layouts preserve dense card access', async ({page}, info) 
   await start(page);
   await crowdedTable(page);
   for (const skin of ['cyber-minimal','licheng-water','meizhou-sea']) {
-    for (const layout of ['classic','compact','adaptive']) {
+    for (const layout of ['classic','compact','mahjong','adaptive']) {
       await page.getByTestId('game-settings').click();
       await revealSetting(page, `skin-${skin}`); await page.getByTestId(`skin-${skin}`).click();
       await revealSetting(page, `layout-${layout}`); await page.getByTestId(`layout-${layout}`).click();

@@ -435,6 +435,7 @@ import type {
   CardDisplayMode,
   GameDisplayPreferences,
   ParsedActionLog,
+  RenderedTableLayoutId,
   PlayerState,
   SeatDirection,
   TurnAlertMode,
@@ -445,7 +446,7 @@ const props = withDefaults(
     modelValue: GameDisplayPreferences;
     inRoom?: boolean;
     playingContext?: boolean;
-    resolvedTableLayout?: "classic" | "compact";
+    resolvedTableLayout?: RenderedTableLayoutId;
     declaring?: boolean;
     sessionMuted?: boolean;
     decisionActive?: boolean;
