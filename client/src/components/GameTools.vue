@@ -195,7 +195,7 @@
             <strong>{{ category.label }}</strong><small>{{ category.summary }}</small><span aria-hidden="true">›</span>
           </button>
         </nav>
-        <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
+        <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
           <div class="mode-options" role="radiogroup" aria-label="手牌排列">
@@ -489,6 +489,7 @@ const props = withDefaults(
     modelValue: GameDisplayPreferences;
     inRoom?: boolean;
     playingContext?: boolean;
+    resolvedTableLayout?: "classic" | "compact";
     decisionActive?: boolean;
     decisionUntimed?: boolean;
     decisionSecondsLeft?: number;
@@ -1517,7 +1518,7 @@ onBeforeUnmount(() => {
 
 .mode-sample.adaptive {
   background: linear-gradient(135deg, #facc15 0 48%, #fff7ed 48% 100%);
-  color: var(--ui-panel, #172033);
+  color: var(--ui-ink, #172033);
   border: 1px solid rgba(var(--ui-muted-rgb, 148, 163, 184), 0.65);
 }
 

@@ -2,6 +2,15 @@ import { revealSetting } from "./helpers/settings";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { finishDeclarationIfNeeded, stageDeclarationForTest } from "./helpers/game";
 
+// Keep the established geometry/color baseline explicit; appearance.spec covers all new combinations.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const key = "sise_game_display_preferences_v2";
+    const stored = JSON.parse(localStorage.getItem(key) || "{}");
+    localStorage.setItem(key, JSON.stringify({ skin: "cyber-minimal", tableLayout: "compact", ...stored }));
+  });
+});
+
 async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
   const text = (await locator.textContent())?.trim() ?? "";
   const match = text.match(/^(\d+)–(\d+) \/ (\d+)$/);
@@ -111,8 +120,8 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   expect(centerGeometry.deckCenterX).toBeLessThan(centerGeometry.stageCenterX);
   expect(Math.abs(centerGeometry.deckCenterY - centerGeometry.stageCenterY)).toBeLessThanOrEqual(2);
   expect(centerGeometry.layerHeight / centerGeometry.layerWidth).toBeGreaterThanOrEqual(3.5);
-  expect(centerGeometry.layerRadius).toBe("999px");
-  expect(centerGeometry.layerBackground).toContain("239, 68, 68");
+  expect(centerGeometry.layerRadius).toBe("50% / 18%");
+  expect(centerGeometry.layerBackground).toContain("182, 36, 44");
   if (centerGeometry.pendingCenterX !== null && centerGeometry.pendingCenterY !== null) {
     expect(centerGeometry.pendingCenterX).toBeGreaterThan(centerGeometry.stageCenterX);
     expect(Math.abs(centerGeometry.pendingCenterY - centerGeometry.deckCenterY)).toBeLessThanOrEqual(2);

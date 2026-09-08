@@ -19,7 +19,7 @@ import { useTurnAlert } from "@/composables/useTurnAlert";
 import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
-import { normalizeSkin, normalizeTableLayout } from "@/utils/appearance";
+import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
@@ -698,6 +698,23 @@ const isPendingSpecialCard = computed(() => {
 });
 const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, } = useResponsiveViewport();
 const displayPreferences = ref(readDisplayPreferences());
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
+watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value], ([layout, ultra], _, onCleanup) => {
+    const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+    onCleanup(() => clearTimeout(timer));
+});
+const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
+const showSmallScreenRecommendation = computed(() => isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
+    && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
+    && !isConnectingWithoutState.value && !isEnded.value);
+function dismissLayoutRecommendation() {
+    layoutRecommendationDismissed.value = true;
+    writeStoredValue("sise_compact_recommendation_dismissed_v1", "1");
+}
+function acceptCompactLayout() {
+    displayPreferences.value.tableLayout = "compact";
+    dismissLayoutRecommendation();
+}
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode) {
     if (mode !== "adaptive") {
@@ -2820,6 +2837,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['compact-viewport']} */ ;
 /** @type {__VLS_StyleScopedClasses['rules-decision-reminder']} */ ;
+/** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
+/** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
@@ -2837,6 +2856,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.
             'reduce-motion': __VLS_ctx.displayPreferences.reduceMotion,
             'show-card-color-assist': __VLS_ctx.displayPreferences.showCardColorAssist,
         }) },
+    'data-table-layout': (__VLS_ctx.displayPreferences.tableLayout),
     'data-effective-viewport': (`${__VLS_ctx.effectiveWidth}x${__VLS_ctx.effectiveHeight}`),
     'data-rotated-phone-portrait': (__VLS_ctx.isRotatedPhonePortrait ? 'true' : 'false'),
     'data-reduce-motion': (__VLS_ctx.displayPreferences.reduceMotion ? 'true' : 'false'),
@@ -2949,6 +2969,7 @@ const __VLS_8 = __VLS_asFunctionalComponent(GameTools, new GameTools({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
     decisionActive: (__VLS_ctx.settingsDecisionActive),
@@ -2975,6 +2996,7 @@ const __VLS_9 = __VLS_8({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
     decisionActive: (__VLS_ctx.settingsDecisionActive),
@@ -3115,7 +3137,7 @@ if (__VLS_ctx.showEntry) {
     var __VLS_25;
 }
 else if (__VLS_ctx.showModeLobby) {
-    /** @type {[typeof LobbyPage, ]} */ ;
+    /** @type {[typeof LobbyPage, typeof LobbyPage, ]} */ ;
     // @ts-ignore
     const __VLS_33 = __VLS_asFunctionalComponent(LobbyPage, new LobbyPage({
         ...{ 'onStart': {} },
@@ -3276,6 +3298,27 @@ else if (__VLS_ctx.showModeLobby) {
     };
     /** @type {typeof __VLS_ctx.lobbyPageRef} */ ;
     var __VLS_55 = {};
+    __VLS_35.slots.default;
+    {
+        const { recommendation: __VLS_thisSlot } = __VLS_35.slots;
+        if (__VLS_ctx.showSmallScreenRecommendation) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
+                ...{ class: "small-screen-recommendation" },
+                'data-testid': "small-screen-recommendation",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (__VLS_ctx.acceptCompactLayout) },
+                type: "button",
+                'data-testid': "recommend-compact",
+            });
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (__VLS_ctx.dismissLayoutRecommendation) },
+                type: "button",
+                'data-testid': "dismiss-compact-recommendation",
+            });
+        }
+    }
     var __VLS_35;
 }
 else if (__VLS_ctx.showSyncingScreen) {
@@ -3331,6 +3374,7 @@ else {
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
+        tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
         listeningHints: (__VLS_ctx.listeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
@@ -3362,6 +3406,7 @@ else {
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
         privateHand: (__VLS_ctx.privateHand),
+        tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
         listeningHints: (__VLS_ctx.listeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
@@ -4203,6 +4248,7 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['global-notice']} */ ;
+/** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-shell']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-message']} */ ;
@@ -4397,6 +4443,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             viewportHeight: viewportHeight,
             viewportWidth: viewportWidth,
             displayPreferences: displayPreferences,
+            resolvedTableLayout: resolvedTableLayout,
+            showSmallScreenRecommendation: showSmallScreenRecommendation,
+            dismissLayoutRecommendation: dismissLayoutRecommendation,
+            acceptCompactLayout: acceptCompactLayout,
             resolvedOwnCardMode: resolvedOwnCardMode,
             resolvedTableCardMode: resolvedTableCardMode,
             globalError: globalError,

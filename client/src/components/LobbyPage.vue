@@ -82,6 +82,7 @@
         </button>
       </div>
 
+      <slot v-if="modes.length" name="recommendation" />
       <div v-if="modes.length" class="mode-share-card">
         <div>
           <strong>把四色牌推荐给朋友</strong>
@@ -310,6 +311,7 @@
         </ol>
       </section>
 
+      <slot v-if="!modes.length" name="recommendation" />
       <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
     </div>
 

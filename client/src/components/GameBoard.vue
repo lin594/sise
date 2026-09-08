@@ -7,6 +7,8 @@
       'board-declaring': state?.phase === 'declaring',
     }"
     data-testid="game-board"
+    :data-table-layout="appliedTableLayout"
+    :data-layout-pending="appliedTableLayout !== props.tableLayout"
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
     @keydown.esc="handleBoardEscape"
@@ -27,7 +29,7 @@
             :key="`flow-top-left-${card.id}`"
             :card="card"
             :style="movingCardStyle(card.id)"
-            :mode="props.tableCardMode"
+            :mode="appliedTableCardMode"
             size="xs"
             class="discard-token"
             :class="{ active: isActiveDiscardCard(flowTopLeftPlayer.clientId, card, index) }"
@@ -50,6 +52,9 @@
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
+        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
+          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
+        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
@@ -66,7 +71,7 @@
             <span v-if="showDealerSeatMarker(topPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
-                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="appliedTableCardMode" size="xs" />
               </span>
             </span>
           </div>
@@ -87,7 +92,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
               <template v-if="group.faceDownCount">
                 <span
                   v-for="slot in group.faceDownCount"
@@ -103,7 +108,7 @@
                   :key="`top-group-card-${card.id}`"
                   :card="card"
                   :style="movingCardStyle(card.id)"
-                  :mode="props.tableCardMode"
+                  :mode="appliedTableCardMode"
                   size="xs"
                   class="mini-card"
                   :title="cardLabel(card)"
@@ -129,7 +134,7 @@
             :key="`flow-top-right-${card.id}`"
             :card="card"
             :style="movingCardStyle(card.id)"
-            :mode="props.tableCardMode"
+            :mode="appliedTableCardMode"
             size="xs"
             class="discard-token"
             :class="{ active: isActiveDiscardCard(flowTopRightPlayer.clientId, card, index) }"
@@ -152,6 +157,9 @@
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
+        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
+          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
+        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
@@ -168,7 +176,7 @@
             <span v-if="showDealerSeatMarker(leftPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
-                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="appliedTableCardMode" size="xs" />
               </span>
             </span>
           </div>
@@ -189,7 +197,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
               <template v-if="group.faceDownCount">
                 <span
                   v-for="slot in group.faceDownCount"
@@ -205,7 +213,7 @@
                   :key="`left-group-card-${card.id}`"
                   :card="card"
                   :style="movingCardStyle(card.id)"
-                  :mode="props.tableCardMode"
+                  :mode="appliedTableCardMode"
                   size="xs"
                   class="mini-card"
                   :title="cardLabel(card)"
@@ -257,13 +265,10 @@
                   :class="{ 'draw-pending-hidden': isResponseCardDrawHidden || isMovingCard(responseCard.id) }"
                   data-testid="pending-card"
                 >
-                  <span
-                    class="response-caption"
-                  >待响</span>
                   <CardComp
-                    :key="`resp-${props.tableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
+                    :key="`resp-${appliedTableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
                     :card="responseCard"
-                    :mode="props.tableCardMode"
+                    :mode="appliedTableCardMode"
                     size="lg"
                     class="response-card-face"
                   />
@@ -305,6 +310,9 @@
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
+        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
+          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
+        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
@@ -321,7 +329,7 @@
             <span v-if="showDealerSeatMarker(rightPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
-                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="appliedTableCardMode" size="xs" />
               </span>
             </span>
           </div>
@@ -342,7 +350,7 @@
             :class="group.tone"
           >
             <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
               <template v-if="group.faceDownCount">
                 <span
                   v-for="slot in group.faceDownCount"
@@ -358,7 +366,7 @@
                   :key="`right-group-card-${card.id}`"
                   :card="card"
                   :style="movingCardStyle(card.id)"
-                  :mode="props.tableCardMode"
+                  :mode="appliedTableCardMode"
                   size="xs"
                   class="mini-card"
                   :title="cardLabel(card)"
@@ -384,7 +392,7 @@
             :key="`flow-bottom-left-${card.id}`"
             :card="card"
             :style="movingCardStyle(card.id)"
-            :mode="props.tableCardMode"
+            :mode="appliedTableCardMode"
             size="xs"
             class="discard-token"
             :class="{ active: isActiveDiscardCard(flowBottomLeftPlayer.clientId, card, index) }"
@@ -408,7 +416,7 @@
               :class="group.tone"
             >
               <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-              <div class="mini-card-strip" :class="{ 'mode-long': props.tableCardMode === 'long' }">
+              <div class="mini-card-strip" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
                 <template v-if="group.faceDownCount">
                   <span
                     v-for="slot in group.faceDownCount"
@@ -424,7 +432,7 @@
                     :key="`self-exp-card-${card.id}`"
                     :card="card"
                     :style="movingCardStyle(card.id)"
-                    :mode="props.tableCardMode"
+                    :mode="appliedTableCardMode"
                     size="xs"
                     class="mini-card"
                     :title="cardLabel(card)"
@@ -451,7 +459,7 @@
             :key="`flow-bottom-right-${card.id}`"
             :card="card"
             :style="movingCardStyle(card.id)"
-            :mode="props.tableCardMode"
+            :mode="appliedTableCardMode"
             size="xs"
             class="discard-token"
             :class="{ active: isActiveDiscardCard(flowBottomRightPlayer.clientId, card, index) }"
@@ -511,7 +519,7 @@
                 <span></span><span></span><span></span><span></span>
               </div>
               <div v-else-if="dealerCeremonyCard" class="dealer-reveal-card" data-testid="dealer-reveal-card">
-                <CardComp :card="dealerCeremonyCard" :mode="props.tableCardMode" size="xl" />
+                <CardComp :card="dealerCeremonyCard" :mode="appliedTableCardMode" size="xl" />
               </div>
             </div>
             <strong v-if="dealerCeremonyCard" class="dealer-reveal-card-name">
@@ -551,7 +559,7 @@
             <span v-if="showDealerSeatMarker(selfPlayer.clientId)" class="dealer-seat-lockup" data-testid="self-dealer-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
-                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="props.tableCardMode" size="xs" />
+                <CardComp v-if="dealerInfoCard" :card="dealerInfoCard" :mode="appliedTableCardMode" size="xs" />
               </span>
             </span>
           </div>
@@ -676,8 +684,8 @@
               :data-card-id="card.id"
               class="hand-card"
               :class="{
-                'mode-large': props.ownCardMode === 'large',
-                'mode-long': props.ownCardMode === 'long',
+                'mode-large': appliedOwnCardMode === 'large',
+                'mode-long': appliedOwnCardMode === 'long',
                 'deal-concealed': isDealConcealedCard(card.id),
                 playable: !isDealConcealedCard(card.id) && canSelectHandCard(card),
                 blocked: canDiscard && isDiscardProtectedCard(card),
@@ -718,7 +726,7 @@
                 aria-hidden="true"
               >留</span>
               <CardComp :card="card"
-              :style="movingCardStyle(card.id)" :mode="props.ownCardMode" size="xl" />
+              :style="movingCardStyle(card.id)" :mode="appliedOwnCardMode" size="xl" />
             </button>
           </div>
         </div>
@@ -737,11 +745,11 @@
         :style="flight.style" :data-transition-kind="flight.kind" :data-transition-card-id="flight.card.id"
         :data-transition-stage="flight.stage" :data-transition-to="flight.destinationZone" aria-hidden="true">
         <div class="table-flight-turn" :style="{ transform: `rotateY(${flight.rotation}deg)` }">
-          <CardBack v-if="flight.back" :mode="props.tableCardMode" />
+          <CardBack v-if="flight.back" :mode="appliedTableCardMode" />
           <CardComp
             v-else
             :card="flight.card"
-            :mode="props.tableCardMode"
+            :mode="appliedTableCardMode"
             :size="flight.cardSize"
             :class="flight.cardClass"
           />
@@ -756,8 +764,8 @@
         :class="flight.mode"
         :style="flightStyle(flight)"
       >
-        <CardBack v-if="flight.mode === 'deal'" :mode="ownCardMode" />
-        <CardComp v-else-if="flight.card" :card="flight.card" :mode="props.tableCardMode" size="md" />
+        <CardBack v-if="flight.mode === 'deal'" :mode="appliedOwnCardMode" />
+        <CardComp v-else-if="flight.card" :card="flight.card" :mode="appliedTableCardMode" size="md" />
       </div>
     </div>
   </div>
@@ -778,6 +786,7 @@ import type {
   Card,
   PlayerState,
   RenderedCardMode,
+  RenderedTableLayoutId,
   SeatDirection,
   TableTransition,
   TableLocation,
@@ -835,6 +844,7 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
   acceptedStateRevision?: number;
@@ -950,6 +960,8 @@ const flashActorId = ref("");
 const drawHiddenCardId = ref("");
 
 const tableRef = ref<HTMLElement | null>(null);
+const appliedTableCardMode = ref<RenderedCardMode>(props.tableCardMode ?? "large");
+const appliedOwnCardMode = ref<RenderedCardMode>(props.ownCardMode ?? "large");
 const boardRef = ref<HTMLElement | null>(null);
 const responseLandingRef = ref<HTMLElement | null>(null);
 const deckAnchorRef = ref<HTMLElement | null>(null);
@@ -1455,7 +1467,7 @@ function tableLocationAnchorRect(location: TableLocation, size: Pick<CardRect, "
 }
 
 function defaultTableCardRect(): Pick<CardRect, "width" | "height"> {
-  return props.tableCardMode === "long"
+  return appliedTableCardMode.value === "long"
     ? { width: 32, height: 84 }
     : { width: 44, height: 50 };
 }
@@ -2944,7 +2956,7 @@ watch(
 );
 
 watch(
-  () => [props.ownCardMode, props.handLayout, props.viewportTransformKey],
+  () => [appliedOwnCardMode.value, props.handLayout, props.viewportTransformKey],
   () => void nextTick(scheduleHandLayoutUpdate),
 );
 
@@ -3044,7 +3056,7 @@ watch(
       return;
     }
     void nextTick(() => {
-      if (document.querySelector<HTMLElement>("[aria-modal='true']")) {
+      if (document.querySelector<HTMLElement>("[aria-modal='true']") || document.activeElement?.closest(".game-tools")) {
         return;
       }
       const board = boardRef.value;
@@ -3058,6 +3070,19 @@ watch(
     });
   },
   { immediate: true },
+);
+// Geometry changes wait for all visible card transactions, including opening deals.
+const appliedTableLayout = ref<RenderedTableLayoutId>(props.tableLayout ?? "classic");
+watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)] as const,
+  async ([layout, tableMode, ownMode, dealCount, moveCount, revealing]) => {
+    if (dealCount || moveCount || revealing) return;
+    if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode) return;
+    appliedTableLayout.value = layout ?? "classic";
+    appliedTableCardMode.value = tableMode ?? "large";
+    appliedOwnCardMode.value = ownMode ?? "large";
+    lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear();
+    await nextTick(); scheduleHandLayoutUpdate();
+  },
 );
 </script>
 
@@ -3437,7 +3462,7 @@ watch(
 }
 
 .tag.status {
-  border-color: var(--ui-raised, #334155);
+  border-color: var(--ui-ink, #334155);
 }
 
 .tag.dealer {
@@ -3891,7 +3916,7 @@ watch(
 
 .deck-layer {
   --deck-x: -7px;
-  --deck-y: 3px;
+  --deck-y: 0px;
   position: absolute;
   left: 50%;
   top: 50%;
@@ -3899,22 +3924,20 @@ watch(
   height: calc(100% - 0.2rem);
   transform: translate(calc(-50% + var(--deck-x)), calc(-50% + var(--deck-y)));
   border: 1px solid rgba(254, 202, 202, 0.82);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(254, 226, 226, 0.22), transparent 30% 70%, rgba(69, 10, 10, 0.3)),
-    linear-gradient(180deg, #ef4444 0%, #b91c1c 46%, #7f1d1d 100%);
+  border-radius: var(--long-card-radius);
+  background: var(--card-back);
   box-shadow:
     inset 0 0 0 1px rgba(127, 29, 29, 0.42),
     0 1px 2px rgba(var(--ui-page-rgb, 2, 6, 23), 0.45);
 }
 
-.deck-layer:nth-child(2) { --deck-x: -5px; --deck-y: 2px; }
-.deck-layer:nth-child(3) { --deck-x: -3px; --deck-y: 1px; }
+.deck-layer:nth-child(2) { --deck-x: -5px; --deck-y: 0px; }
+.deck-layer:nth-child(3) { --deck-x: -3px; --deck-y: 0px; }
 .deck-layer:nth-child(4) { --deck-x: -1px; --deck-y: 0px; }
-.deck-layer:nth-child(5) { --deck-x: 1px; --deck-y: -1px; }
-.deck-layer:nth-child(6) { --deck-x: 3px; --deck-y: -2px; }
-.deck-layer:nth-child(7) { --deck-x: 5px; --deck-y: -3px; }
-.deck-layer:nth-child(8) { --deck-x: 7px; --deck-y: -4px; }
+.deck-layer:nth-child(5) { --deck-x: 1px; --deck-y: 0px; }
+.deck-layer:nth-child(6) { --deck-x: 3px; --deck-y: 0px; }
+.deck-layer:nth-child(7) { --deck-x: 5px; --deck-y: 0px; }
+.deck-layer:nth-child(8) { --deck-x: 7px; --deck-y: 0px; }
 
 .deck-number {
   position: absolute;
@@ -4171,7 +4194,7 @@ watch(
 }
 
 .hand-scroll-tools button:disabled {
-  border-color: var(--ui-raised, #334155);
+  border-color: var(--ui-ink, #334155);
   background: var(--ui-raised, #1e293b);
   color: var(--ui-muted, #64748b);
   opacity: 0.72;
@@ -5656,16 +5679,6 @@ watch(
   gap: clamp(0.8rem, 1.8vw, 1.25rem);
 }
 
-/* 八张牌背围绕几何中心对称分布，数字与牌堆都保持垂直居中。 */
-.deck-layer { --deck-y: 3.5px; }
-.deck-layer:nth-child(2) { --deck-y: 2.5px; }
-.deck-layer:nth-child(3) { --deck-y: 1.5px; }
-.deck-layer:nth-child(4) { --deck-y: 0.5px; }
-.deck-layer:nth-child(5) { --deck-y: -0.5px; }
-.deck-layer:nth-child(6) { --deck-y: -1.5px; }
-.deck-layer:nth-child(7) { --deck-y: -2.5px; }
-.deck-layer:nth-child(8) { --deck-y: -3.5px; }
-
 .turn-countdown,
 .self-turn-timer {
   display: none;
@@ -5728,9 +5741,71 @@ watch(
   }
 }
 
+/* Layout owns geometry only. Theme materials are inherited from appearance.css. */
+.board[data-table-layout="classic"] .table {
+  grid-template-columns: minmax(0, 20%) minmax(0, 16%) minmax(0, 28%) minmax(0, 16%) minmax(0, 20%);
+  grid-template-areas:
+    "left flowtl top flowtr right"
+    "left center center center right"
+    "flowbl flowbl selfgroups flowbr flowbr";
+  grid-template-rows: minmax(0, .9fr) minmax(4.4rem, 1.1fr) minmax(0, .8fr);
+  column-gap: 0;
+  padding: clamp(.35rem, 1.2vh, .8rem);
+  border-radius: clamp(.8rem, 3vh, 2rem);
+}
+.board[data-table-layout="classic"] :is(.player-left, .player-right) {
+  align-self: center; height: auto; max-height: 100%; min-height: 0; margin-inline: .15rem; width: calc(100% - .3rem);
+}
+.board[data-table-layout="classic"] .player-top { min-height: 0; }
+.board[data-table-layout="classic"] .center { margin-inline: .3rem; width: calc(100% - .6rem); }
+.board[data-table-layout="classic"] .flow-card { align-self: center; max-height: 100%; }
+.board[data-table-layout="classic"] .player-card .seat-identity-meta { flex-wrap: wrap; }
+.board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: .25rem; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="classic"] .table {
+    grid-template-columns: minmax(0, 22%) minmax(0, 14%) minmax(0, 28%) minmax(0, 14%) minmax(0, 22%);
+    padding: 2px; border-radius: .8rem; row-gap: 1px;
+  }
+  .board[data-table-layout="classic"] :is(.flow-top-left, .flow-top-right) { margin-inline: 1px; padding: 1px; }
+}
+
 .listening-details { grid-row: 1; grid-column: 1; align-self: end; justify-self: end; position: relative; z-index: 20; width: min(32%, 24rem); max-height: min(100%, 7rem); min-height: 0; box-sizing: border-box; margin: .25rem; padding: .3rem; border: 1px solid var(--ui-border, #64748b); border-radius: .6rem; background: var(--ui-panel, #0f172a); color: var(--ui-text, #f8fafc); display: flex; flex-direction: column; box-shadow: 0 3px 12px #0003; }
 .listening-details header { display: flex; align-items: center; justify-content: space-between; gap: .25rem; font-size: 13px; }
 .listening-details header button { background: transparent; border: 0; color: inherit; min-width: 28px; min-height: 28px; }
 .listening-details-cards { display: flex; flex-wrap: wrap; gap: .5rem .3rem; padding: .45rem .15rem .15rem; overflow: auto; min-height: 0; max-height: 5.3rem; }
 .listening-details .current-listening-card :deep(.card) { width: 1.6rem; height: 2.2rem; font-size: .85rem; }
+
+/* A single physical table, with cards placed directly on the felt. */
+.board[data-table-layout="classic"] { isolation: isolate; padding: clamp(4px, 1.2vw, 16px); gap: 3px; }
+.board[data-table-layout="classic"]::before { content: ""; position: absolute; inset: 0; z-index: -1; border: clamp(4px, 1vw, 13px) solid var(--table-wood, #63503b); border-radius: clamp(18px, 4vw, 56px); background: radial-gradient(ellipse at 50% 30%, #ffffff0d, transparent 70%), var(--table-felt, #24384a); box-shadow: inset 0 0 0 2px #0003, inset 0 8px 20px #0002, 0 6px 18px #0003; }
+.board[data-table-layout="classic"]::after { content: ""; position: absolute; inset: 5px; z-index: -1; border-radius: inherit; pointer-events: none; border-bottom: 2px solid #ffffff30; }
+.board[data-table-layout="classic"] .table { border: 0; border-radius: 0; overflow: hidden; padding: 2px; grid-template-rows: minmax(0, .95fr) minmax(3.4rem, 1fr) minmax(0, .85fr); }
+.board[data-table-layout="classic"] :is(.player-card, .flow-card, .self-groups-card, .center, .center-board, .self-hand-card, .self-hand-panel, .group-block, .group-block-list, .seat-head) { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+.board[data-table-layout="classic"] :is(.player-card, .self-groups-card) { padding: 3px; height: auto; min-height: 0; align-self: center; }
+.board[data-table-layout="classic"] .player-top { align-self: start; justify-self: center; width: max-content; max-width: 100%; }
+.board[data-table-layout="classic"] .flow-card { padding: 2px; }
+.board[data-table-layout="classic"] .flow-card > p { display: none; }
+.board[data-table-layout="classic"] .flow-empty { visibility: hidden; }
+.board[data-table-layout="classic"] .seat-identity { gap: 3px; }
+.board[data-table-layout="classic"] .seat-identity-meta { gap: 2px; }
+.board[data-table-layout="classic"] :is(.hand-count-badge, .kan-count-badge, .group-score-badge) { border: 0; background: transparent; padding: 0 2px; min-height: 0; }
+.board[data-table-layout="classic"] .player-card.active { box-shadow: none; }
+.board[data-table-layout="classic"] .player-card.active .seat-head { text-decoration: underline; text-decoration-color: var(--ui-accent); text-underline-offset: 4px; }
+.board[data-table-layout="classic"] .self-command-row { background: rgba(var(--ui-panel-rgb), .88); border: 0; border-radius: .5rem; box-shadow: none; }
+.board[data-table-layout="classic"] .self-hand-card { box-shadow: inset 0 2px #0002; }
+.board[data-table-layout="classic"] .self-turn-outline { border: 0; box-shadow: none; }
+.opponent-card-stack { display: flex; position: relative; width: 3.2rem; height: 2.8rem; margin: 0 auto .25rem; }
+.opponent-card-stack :deep(.card-back) { position: absolute; left: calc(var(--stack-index) * 7px); width: 1.4rem; height: 2.1rem; transform: rotate(calc((var(--stack-index) - 1.5) * 3deg)); box-shadow: 0 2px 3px #0004; }
+.opponent-card-stack.mode-long :deep(.card-back) { width: .85rem; height: 2.6rem; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board[data-table-layout="classic"] { padding: 4px; }
+  .board[data-table-layout="classic"] .opponent-card-stack { height: 1.65rem; width: 2.7rem; margin-bottom: 1px; }
+  .board[data-table-layout="classic"] .opponent-card-stack :deep(.card-back) { height: 1.5rem; width: 1rem; }
+  .board[data-table-layout="classic"] .opponent-card-stack.mode-long :deep(.card-back) { height: 1.65rem; width: .65rem; }
+  .board[data-table-layout="classic"] .seat-identity-meta :is(.kan-count-badge, .group-score-badge) { font-size: 11px; }
+}
+
+.board[data-table-layout="classic"] .seat-identity { justify-content: center; text-align: center; }
+.board[data-table-layout="classic"] .seat-identity > strong { flex: 1 0 100%; }
+.board[data-table-layout="classic"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; }
 </style>

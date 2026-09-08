@@ -9,7 +9,7 @@
     <fieldset v-if="section !== 'appearance'"><legend>牌桌布局</legend><div class="appearance-options">
       <button v-for="layout in tableLayouts" :key="layout.id" type="button" role="radio" :aria-checked="modelValue.tableLayout === layout.id" :data-testid="`layout-${layout.id}`" @click="emit('update:modelValue', { ...modelValue, tableLayout: layout.id })">
         <span class="layout-preview" :class="layout.id" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <strong>{{ layout.name }}</strong><small>{{ layout.description }}</small>
+        <strong>{{ layout.name }}</strong><small>{{ layout.id === "adaptive" ? `当前${resolvedLayout === "compact" ? "紧凑" : "经典"}` : layout.description }}</small>
       </button>
     </div></fieldset>
   </div>
@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import type { GameDisplayPreferences } from "@/types/game";
 import { skins, tableLayouts } from "@/utils/appearance";
-defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "table" }>();
+defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "table"; resolvedLayout?: "classic" | "compact" }>();
 const emit = defineEmits<{ 'update:modelValue': [value: GameDisplayPreferences] }>();
 </script>
 <style scoped>
