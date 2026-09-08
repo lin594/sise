@@ -6081,8 +6081,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board .discard-token { border-width: 1px; }
 .board .discard-token.mode-long :deep(.text-top), .board .discard-token.mode-long :deep(.text-bottom) { padding: 0; }
 @media (max-width: 960px), (max-height: 500px) {
-  .board[data-table-layout="classic"] .table { grid-template-rows: minmax(44px, 1fr) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), 1.3fr) minmax(40px, .9fr); }
-  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(44px, 1fr) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), 1.3fr) minmax(clamp(28px, calc(20 * var(--effective-vh, 1vh) - 34px), 40px), .9fr); }
+  .board[data-table-layout="classic"] .table { grid-template-rows: minmax(44px, var(--classic-top-weight, 1fr)) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), var(--classic-center-weight, 1.3fr)) minmax(40px, var(--classic-bottom-weight, .9fr)); }
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(44px, var(--classic-top-weight, 1fr)) minmax(clamp(64px, calc(20 * var(--effective-vh, 1vh)), 76px), var(--classic-center-weight, 1.3fr)) minmax(clamp(28px, calc(20 * var(--effective-vh, 1vh) - 34px), 40px), var(--classic-bottom-weight, .9fr)); }
   .board[data-table-layout="classic"] .player-top { gap: 2px; }
   .board[data-table-layout="classic"] .player-top .seat-identity { flex-wrap: nowrap; gap: 2px; }
   .board[data-table-layout="classic"] .player-top .seat-identity > strong { font-size: 12px; max-width: 4em; }
@@ -6148,7 +6148,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 /* SE: preserve complete card rows inside the table's finite height. */
 @media (max-height: 340px), (max-width: 340px) {
   .board[data-table-layout="classic"] .table,
-  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(38px, 1fr) minmax(64px, 1.5fr) minmax(28px, .8fr); }
+  .board[data-table-layout="classic"].hand-overflow .table { padding-block: 6px 0; row-gap: 0; grid-template-rows: minmax(38px, var(--classic-top-weight, 1fr)) minmax(64px, var(--classic-center-weight, 1.5fr)) minmax(28px, var(--classic-bottom-weight, .8fr)); }
   .board[data-table-layout="classic"] .player-top .seat-head { gap: 0; }
   .board[data-table-layout="classic"] .player-top .player-status-icon { width: 16px; height: 16px; flex-basis: 16px; }
   .board[data-table-layout="classic"] .player-top .mini-card.mode-long { height: 20px; }
@@ -6158,5 +6158,12 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board[data-table-layout="classic"].hand-overflow:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
   .board[data-table-layout="classic"] .has-toolbar .hand { padding-top: 6px; padding-bottom: 16px; }
   .board[data-table-layout="classic"] .hand-visible-range { height: 16px; }
+}
+/* Use App's settled effective viewport so portrait rotation has identical geometry. */
+.board[data-table-layout="classic"].small-table-viewport .table {
+  grid-template-columns: minmax(0, 28%) minmax(0, 10%) minmax(0, 24%) minmax(0, 10%) minmax(0, 28%);
+  --classic-top-weight: 1.1fr;
+  --classic-center-weight: 1.1fr;
+  --classic-bottom-weight: 1fr;
 }
 </style>

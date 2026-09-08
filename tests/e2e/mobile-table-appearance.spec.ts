@@ -5,7 +5,7 @@ import { revealSetting } from './helpers/settings';
 test.use({hasTouch:true, isMobile:true});
 
 const phones = [[568,320],[667,375],[740,360],[812,375],[844,390],[852,393],[896,414],[915,412],[926,428],
-  [320,568],[375,667],[390,844],[393,852],[412,915],[428,926]];
+  [320,568],[375,667],[360,740],[390,844],[393,852],[412,915],[428,926]];
 const computers = [[1024,768],[1280,720],[1440,900],[1920,1080]];
 
 async function start(page: Page, skin = 'puxian-house', ownCards = 'long', tableLayout = 'classic', handLayout = 'single') {
@@ -93,6 +93,7 @@ async function assertDensity(page: Page, classic = true, paged = false) {
     });
     return {
       flowsInsideFelt, sideGroupsBelowIdentity,
+      columnShares: getComputedStyle(table).gridTemplateColumns.split(' ').map(parseFloat).map((width, _, columns) => width / columns.reduce((sum, value) => sum + value, 0)),
       tableFits: table.scrollHeight <= table.clientHeight + 1,
       firstGroupsVisible: [...board.querySelectorAll<HTMLElement>('.player-left, .player-right, .self-groups-card')].every(area => {
         const card = area.querySelector<HTMLElement>('.mini-card');
@@ -114,12 +115,18 @@ async function assertDensity(page: Page, classic = true, paged = false) {
       hitSizes: cards.every(c => c.offsetWidth >= 28 && c.offsetHeight >= 44),
       fonts: cards.every(c => parseFloat(getComputedStyle(c.querySelector('.text')!).fontSize) >= 13.95),
       flowFonts: [...board.querySelectorAll('.discard-token .text')].every(c => parseFloat(getComputedStyle(c).fontSize) >= 9.95),
-      topWidth: topLeft.clientWidth / table.clientWidth, groupWidth: group.clientWidth / table.clientWidth,
+      topWidth: topLeft.clientWidth / table.clientWidth, groupWidth: group.clientWidth / (table.clientWidth - parseFloat(getComputedStyle(table).paddingLeft) - parseFloat(getComputedStyle(table).paddingRight)),
       topLeftInset: topLeft.offsetLeft, topRightInset: table.clientWidth-topRight.offsetLeft-topRight.offsetWidth,
       railBackground: getComputedStyle(board.querySelector('.self-command-row')!).backgroundColor,
       scrollable: hand.scrollWidth > hand.clientWidth+2,
     };
   });
+  const smallTable = (rotated ? viewport.height : viewport.width) <= 740 && (rotated ? viewport.width : viewport.height) <= 400;
+  if (classic) {
+    const expected = smallTable
+      ? [.28, .10, .24, .10, .28] : [.24, .14, .24, .14, .24];
+    geometry.columnShares.forEach((share, index) => expect(share).toBeCloseTo(expected[index], 2));
+  }
   expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
   expect(geometry.responseOverlapsGroups).toBe(false);
   if (paged) {
@@ -136,7 +143,7 @@ async function assertDensity(page: Page, classic = true, paged = false) {
   if (classic) {
     expect(geometry.seatNamesVisible, JSON.stringify(geometry)).toBe(true);
     expect(geometry.topWidth).toBeGreaterThan(.35);
-    expect(geometry.groupWidth).toBeGreaterThan(.49);
+    expect(geometry.groupWidth).toBeCloseTo(smallTable ? .44 : .52, 2);
     expect(geometry.flowsInsideFelt, JSON.stringify(geometry)).toBe(true);
     expect(geometry.tableFits, JSON.stringify(geometry)).toBe(true);
     expect(geometry.firstGroupsVisible, JSON.stringify(geometry)).toBe(true);
@@ -209,29 +216,32 @@ test('other skins and layouts preserve dense card access', async ({page}, info) 
   }
 });
 
-test('SE single mode fits all cards and paged mode preserves access through switches and rotation', async ({page}, info) => {
-  await page.setViewportSize({width:568,height:320});
-  await start(page, 'puxian-house', 'large');
-  await crowdedTable(page);
-  const ids = await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')));
-  for (const [width,height] of [[568,320],[320,568],[667,375],[375,667]]) {
-    await page.setViewportSize({width,height});
-    for (const mode of ['paged','single']) {
-      await page.getByTestId('game-settings').click();
-      await revealSetting(page, `hand-layout-${mode}`);
-      await page.getByTestId(`hand-layout-${mode}`).click();
-      await page.keyboard.press('Escape');
-      await assertDensity(page, true, mode === 'paged');
-      expect(await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')))).toEqual(ids);
-      if (mode === 'single') {
-        const last = page.locator('.hand-card').last();
-        if (await last.getAttribute('aria-pressed') !== 'true') await last.click();
-        await expect(last).toHaveClass(/discard-selected/);
-        await page.screenshot({path:info.outputPath(`se-${mode}-${width}x${height}.png`)});
+for (const cardMode of ['long', 'large']) {
+  test(`SE single mode fits all cards and paged mode preserves access through switches and rotation: ${cardMode}`, async ({page}, info) => {
+    await page.setViewportSize({width:568,height:320});
+    await start(page, 'puxian-house', cardMode);
+    await crowdedTable(page);
+    const ids = await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')));
+    for (const [width,height] of [[568,320],[320,568],[667,375],[375,667],[740,360],[360,740]]) {
+      await page.setViewportSize({width,height});
+      for (const mode of ['paged','single']) {
+        await page.getByTestId('game-settings').click();
+        await revealSetting(page, `hand-layout-${mode}`);
+        await page.getByTestId(`hand-layout-${mode}`).click();
+        await page.keyboard.press('Escape');
+        await assertDensity(page, true, mode === 'paged');
+        expect(await page.locator('.hand-card').evaluateAll(cards => cards.map(c => c.getAttribute('data-card-id')))).toEqual(ids);
+        if (mode === 'single') {
+          const last = page.locator('.hand-card').last();
+          if (await last.getAttribute('aria-pressed') !== 'true') await last.click();
+          await expect(last).toHaveClass(/discard-selected/);
+          await page.screenshot({path:info.outputPath(`se-${mode}-${width}x${height}.png`)});
+        }
       }
     }
-  }
-});
+  });
+
+}
 
 test('new and invalid settings use Puxian without replacing a saved skin', async ({page}) => {
   await page.goto('/?new=1');
