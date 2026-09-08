@@ -115,5 +115,11 @@
 .board[data-table-layout="mahjong"] .self-turn-outline { box-shadow: none; }
 @media (max-width: 960px), (max-height: 500px) {
   .board[data-table-layout="mahjong"] { padding: 2px; }
+  .board[data-table-layout="mahjong"]:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
+}
+
+/* Short tables reserve the badge/selection clearance inside a smaller hand row. */
+@media (max-height: 359px), (max-width: 359px) {
   .board[data-table-layout="mahjong"]:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 64px; }
+  .board[data-table-layout="mahjong"] .cards.hand { --hand-height: 44px; padding-block: 14px 1px; }
 }

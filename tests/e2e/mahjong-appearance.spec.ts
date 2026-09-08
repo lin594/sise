@@ -338,6 +338,47 @@ test('touch swipes reach overflowing eats after portrait rotation', async ({ pag
   await session.detach();
 });
 
+for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps shorter hands and declaration marks inside short viewports`, async ({ page }) => {
+  await start(page, 'mahjong', mode);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
+  await expect(page.locator('.fish-mark')).toHaveCount(4);
+  for (const [width, height] of [[568, 320], [640, 350], [350, 640], [667, 375]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(250);
+    const marksFit = await page.locator('.hand-viewport').evaluate(el => {
+      const b = el.getBoundingClientRect();
+      return [...el.querySelectorAll('.hand-mark')].every(mark => {
+        const r = mark.getBoundingClientRect();
+        return r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1;
+      });
+    });
+    expect(marksFit, `${mode} ${width}x${height} declaration marks`).toBe(true);
+  }
+  for (const [width, height] of [[568, 320], [640, 350], [350, 640], [667, 375]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(250);
+    for (const count of [21, 14, 5]) {
+      await page.evaluate(count => {
+        const bridge = (window as any).__siseLocalTest;
+        const state = bridge.getRoomState();
+        bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100,
+          privateHand: Array.from({ length: count }, (_, index) => ({ id: `hand-fit-${index}`,
+            color: ['red', 'yellow', 'green', 'white'][index % 4],
+            type: ['jiang', 'shi', 'xiang', 'ju', 'ma', 'pao', 'zu'][Math.floor(index / 4)] })),
+          players: state.players.map((p: any) => p.isBot ? p : { ...p, handCount: count }) }, 'explicit');
+      }, count);
+      await expect(page.locator('.hand-card')).toHaveCount(count);
+      await expect.poll(() => page.locator('.hand-viewport').evaluate(el => {
+        const b = el.getBoundingClientRect();
+        return [...el.querySelectorAll('.hand-card')].every(card => {
+          const r = card.getBoundingClientRect();
+          return r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1;
+        });
+      }), { message: `${mode} ${width}x${height}, ${count} cards` }).toBe(true);
+    }
+  }
+});
+
 test('paged hands retain full touch targets beside many eats', async ({ page }) => {
   await page.setViewportSize({ width: 667, height: 375 });
   await start(page);
