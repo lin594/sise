@@ -1997,7 +1997,8 @@ watch(() => canAct.value || canDiscard.value, (ready, wasReady) => {
         target?.focus({ preventScroll: true });
     });
 }, { immediate: true });
-watch(() => Boolean(flights.value.length || tableFlights.value.length || dealerReveal.value), busy => emit("geometryBusy", busy), { flush: "sync" });
+// Do not evaluate flight geometry before onBeforeUpdate captures source anchors.
+watch(() => Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length) || dealerReveal.value), busy => emit("geometryBusy", busy), { flush: "post" });
 onUnmounted(() => emit("geometryBusy", false));
 // Geometry changes wait for all visible card transactions, including opening deals.
 const appliedTableLayout = ref(props.tableLayout ?? "classic");
@@ -2576,7 +2577,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
         }) },
     'data-testid': "game-board",
-    'data-geometry-busy': (Boolean(__VLS_ctx.flights.length || __VLS_ctx.tableFlights.length || __VLS_ctx.dealerReveal)),
+    'data-geometry-busy': (Boolean(__VLS_ctx.flights.length || (!__VLS_ctx.coordinateMotionSuppressed && __VLS_ctx.activeTableEvents.length) || __VLS_ctx.dealerReveal)),
     'data-table-layout': (__VLS_ctx.appliedTableLayout),
     'data-layout-pending': (__VLS_ctx.appliedTableLayout !== props.tableLayout),
     'data-response-phase': (props.responsePhase ?? ''),
@@ -4253,7 +4254,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             flowTitle: flowTitle,
             flowAccessibleTitle: flowAccessibleTitle,
             responseCardPlacement: responseCardPlacement,
+            activeTableEvents: activeTableEvents,
             centerCardVisible: centerCardVisible,
+            coordinateMotionSuppressed: coordinateMotionSuppressed,
             isMovingCard: isMovingCard,
             movingCardStyle: movingCardStyle,
             tableFlights: tableFlights,
