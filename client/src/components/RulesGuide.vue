@@ -51,16 +51,16 @@ const waitExample = cards('red', ['ju', 'ma', 'pao']);
 </script>
 <style scoped>
 .guide { display: grid; gap: 10px; }
-details { border: 1px solid #334155; border-radius: 10px; padding: 12px; background: #111e30; }
-summary { cursor: pointer; color: #f8fafc; font-weight: 700; font-size: 16px; }
-p, li { color: #cbd5e1; font-size: 15px; line-height: 1.65; }
+details { border: 1px solid var(--ui-raised, #334155); border-radius: 10px; padding: 12px; background: var(--ui-raised, #111e30); }
+summary { cursor: pointer; color: var(--ui-text, #f8fafc); font-weight: 700; font-size: 16px; }
+p, li { color: var(--ui-muted, #cbd5e1); font-size: 15px; line-height: 1.65; }
 li { margin: 8px 0; }
 ol { padding-left: 22px; }
 .example { display: flex; align-items: center; gap: 14px; border-top: 1px solid #26354b; padding: 12px 0; }
 .example:first-of-type { margin-top: 10px; }
 .example-cards { display: flex; gap: 3px; flex-shrink: 0; }
-.example strong { color: #6ee7b7; }
-.example strong.invalid { color: #fda4af; }
+.example strong { color: var(--ui-accent-text, #6ee7b7); }
+.example strong.invalid { color: var(--ui-danger-text, #fda4af); }
 .example p { margin: 3px 0 0; }
 @media (max-width: 500px) { .example { flex-wrap: wrap; gap: 6px; } }
 </style>

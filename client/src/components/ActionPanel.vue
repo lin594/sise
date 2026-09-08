@@ -238,12 +238,12 @@ function onClick(item: PanelAction): void {
 .panel {
   min-height: 0;
   padding: clamp(0.28rem, calc(var(--effective-vh, 1vh) * 0.8), 0.5rem);
-  border-top: 1px solid #1e293b;
-  background: #0f172a;
+  border-top: 1px solid var(--ui-raised, #1e293b);
+  background: var(--ui-panel, #0f172a);
 }
 
 .panel.locked {
-  background: #0b1220;
+  background: var(--ui-panel, #0b1220);
 }
 
 .panel.empty {
@@ -284,7 +284,7 @@ function onClick(item: PanelAction): void {
 }
 
 .compact-status {
-  color: #fde68a;
+  color: var(--ui-gold-text, #fde68a);
   font-size: clamp(0.78rem, calc(var(--effective-vh, 1vh) * 1.5), 0.92rem);
 }
 
@@ -295,21 +295,21 @@ function onClick(item: PanelAction): void {
   min-height: 44px;
   border: 1px solid #475569;
   border-radius: 0.68rem;
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #f8fafc);
   font-size: clamp(1rem, calc(var(--effective-vh, 1vh) * 2.7), 1.25rem);
   font-weight: 900;
 }
 
 .btn.enabled {
-  border-color: #38bdf8;
-  background: #075985;
+  border-color: var(--ui-accent-text, #38bdf8);
+  background: var(--ui-raised, #075985);
   cursor: pointer;
 }
 
 .btn.primary-action.enabled {
   border-color: #f59e0b;
-  background: #b45309;
+  background: var(--ui-raised, #b45309);
 }
 
 .btn:disabled,
@@ -320,7 +320,7 @@ function onClick(item: PanelAction): void {
 
 .btn:focus-visible,
 .more-time-button:focus-visible {
-  outline: 3px solid #bae6fd;
+  outline: 3px solid var(--ui-accent-text, #bae6fd);
   outline-offset: 2px;
 }
 
@@ -337,29 +337,29 @@ function onClick(item: PanelAction): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #dbeafe;
-  background: #172554;
+  color: var(--ui-accent-text, #dbeafe);
+  background: var(--ui-raised, #172554);
   font-size: clamp(0.72rem, calc(var(--effective-vh, 1vh) * 1.55), 0.88rem);
   font-weight: 800;
 }
 
 .timer-chip.urgent,
 .feedback-rejected {
-  color: #fee2e2;
-  background: #7f1d1d;
+  color: var(--ui-text, #fee2e2);
+  background: var(--ui-raised, #7f1d1d);
 }
 
 .feedback-received {
-  color: #dcfce7;
-  background: #14532d;
+  color: var(--ui-text, #dcfce7);
+  background: var(--ui-raised, #14532d);
 }
 
 .more-time-button {
   min-width: 48px;
   padding-inline: 0.4rem;
-  color: #fef3c7;
+  color: var(--ui-gold-text, #fef3c7);
   border-color: #92400e;
-  background: #451a03;
+  background: var(--ui-raised, #451a03);
   font-size: clamp(0.75rem, calc(var(--effective-vh, 1vh) * 1.7), 0.9rem);
 }
 

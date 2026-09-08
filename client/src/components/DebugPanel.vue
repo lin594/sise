@@ -47,11 +47,11 @@ function labelOf(key: string): string {
 
 <style scoped>
 .debug {
-  background: #0b1220;
-  border: 1px solid #1e293b;
+  background: var(--ui-panel, #0b1220);
+  border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 12px;
   padding: 8px;
-  color: #e2e8f0;
+  color: var(--ui-text, #e2e8f0);
 }
 
 .list {
@@ -61,21 +61,21 @@ function labelOf(key: string): string {
 }
 
 .btn {
-  border: 1px solid #334155;
+  border: 1px solid var(--ui-raised, #334155);
   border-radius: 8px;
-  background: #1e293b;
-  color: #e2e8f0;
+  background: var(--ui-raised, #1e293b);
+  color: var(--ui-text, #e2e8f0);
   padding: 8px 10px;
   cursor: pointer;
 }
 
 .btn:hover {
-  background: #334155;
+  background: var(--ui-raised, #334155);
 }
 
 .tips {
   margin: 8px 0 0;
-  color: #93c5fd;
+  color: var(--ui-accent-text, #93c5fd);
 }
 
 .result {
@@ -95,13 +95,13 @@ function labelOf(key: string): string {
 
 .result.ok {
   border: 1px solid #166534;
-  background: #052e16;
-  color: #bbf7d0;
+  background: var(--ui-raised, #052e16);
+  color: var(--ui-text, #bbf7d0);
 }
 
 .result.fail {
   border: 1px solid #991b1b;
-  background: #450a0a;
-  color: #fecaca;
+  background: var(--ui-raised, #450a0a);
+  color: var(--ui-text, #fecaca);
 }
 </style>

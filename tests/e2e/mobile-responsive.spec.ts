@@ -1994,7 +1994,7 @@ test.describe("compact landscape gameplay", () => {
     expect(settingsGeometry.top).toBeGreaterThanOrEqual(settingsGeometry.headerBottom);
     expect(settingsGeometry.bottom).toBeLessThanOrEqual(settingsGeometry.viewportHeight);
     expect(settingsGeometry.overflowY).toBe("auto");
-    expect(settingsGeometry.backgroundColor).toBe("rgb(8, 15, 29)");
+    expect(settingsGeometry.backgroundColor).toBe("rgb(17, 30, 48)");
     expect(settingsGeometry.closeWidth).toBeGreaterThanOrEqual(40);
     expect(settingsGeometry.closeHeight).toBeGreaterThanOrEqual(40);
     expect(settingsGeometry.minimumOptionFontSize).toBeGreaterThanOrEqual(13);

@@ -2,3 +2,86 @@
   --card-back: linear-gradient(110deg, #ee6961, #b6242c 55%, #781d27);
   --long-card-radius: 50% / 18%;
 }
+
+[data-skin="licheng-water"] {
+  --ui-page: #dce3d0; --ui-panel: #f2eedf; --ui-raised: #e3e5d2;
+  --ui-text: #213e34; --ui-muted: #405746; --ui-border: #96aa8f;
+  --ui-accent: #28654f; --ui-accent-text: #235d49; --ui-gold-text: #76501e;
+  --ui-page-rgb: 220,227,208; --ui-panel-rgb: 242,238,223; --ui-raised-rgb: 227,229,210;
+  --ui-border-rgb: 150,170,143; --ui-muted-rgb: 80,105,87; --ui-accent-rgb: 40,101,79;
+  --ui-table: #ccd7b9; --ui-table-center: #e3e8cf; --skin-art: url('/skins/licheng-water.svg');
+  --skin-font: "Kaiti SC", "STKaiti", "KaiTi", serif;
+}
+[data-skin="puxian-house"] {
+  --ui-page: #e2c9aa; --ui-panel: #f7ead7; --ui-raised: #ead7bd;
+  --ui-text: #503326; --ui-muted: #614431; --ui-border: #b99977;
+  --ui-accent: #943e2f; --ui-accent-text: #883525; --ui-gold-text: #744713;
+  --ui-page-rgb: 226,201,170; --ui-panel-rgb: 247,234,215; --ui-raised-rgb: 234,215,189;
+  --ui-border-rgb: 185,153,119; --ui-muted-rgb: 119,84,68; --ui-accent-rgb: 148,62,47;
+  --ui-table: #cead85; --ui-table-center: #e1c6a2; --skin-art: url('/skins/puxian-house.svg');
+  --skin-font: "Kaiti SC", "STKaiti", "KaiTi", serif;
+}
+[data-skin="meizhou-sea"] {
+  --ui-page: #cbdfe0; --ui-panel: #edf3ec; --ui-raised: #d8e7e4;
+  --ui-text: #203e4a; --ui-muted: #3d5961; --ui-border: #89abb0;
+  --ui-accent: #256b82; --ui-accent-text: #235c70; --ui-gold-text: #72541f;
+  --ui-page-rgb: 203,223,224; --ui-panel-rgb: 237,243,236; --ui-raised-rgb: 216,231,228;
+  --ui-border-rgb: 137,171,176; --ui-muted-rgb: 75,104,113; --ui-accent-rgb: 37,107,130;
+  --ui-table: #abcfd0; --ui-table-center: #cce1da; --skin-art: url('/skins/meizhou-sea.svg');
+  --skin-font: "Kaiti SC", "STKaiti", "KaiTi", serif;
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) { color-scheme: light; background: var(--ui-page); color: var(--ui-text); }
+html[data-skin]:not([data-skin="cyber-minimal"]) .layout {
+  background: var(--skin-art) center / cover no-repeat var(--ui-page);
+  color: var(--ui-text);
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.top, .lobby.mode-selection) {
+  background: rgba(var(--ui-panel-rgb), .9);
+  border-color: var(--ui-border);
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) .lobby.mode-selection { background: rgba(var(--ui-panel-rgb), .82); }
+html[data-skin]:not([data-skin="cyber-minimal"]) .table {
+  background: radial-gradient(ellipse at 50% 40%, var(--ui-table-center), transparent 80%), var(--skin-art) center / cover, var(--ui-table);
+  border-color: var(--ui-border);
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(h1,h2,.card .text) { font-family: var(--skin-font); }
+html[data-skin]:not([data-skin="cyber-minimal"]) .card {
+  box-shadow: inset 2px 0 3px #fff7, inset -2px 0 3px #38241122, 0 2px 3px #23170e33;
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) .card.color-yellow { background: #f0cb55; }
+html[data-skin]:not([data-skin="cyber-minimal"]) .card.color-red { background: #e57458; }
+html[data-skin]:not([data-skin="cyber-minimal"]) .card.color-green { background: #62b575; }
+html[data-skin]:not([data-skin="cyber-minimal"]) .card.color-white { background: #fff5df; }
+html[data-skin]:not([data-skin="cyber-minimal"]) .card.response-card { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+.skin-preview { background-image: var(--skin-art); background-size: cover; background-position: center; }
+@media (max-width: 700px), (max-height: 450px) {
+  html[data-skin]:not([data-skin="cyber-minimal"]) .table { background: radial-gradient(ellipse at center, var(--ui-table-center), var(--ui-table)); }
+}
+html .skin-preview { background-image: var(--skin-art, none); background-size: cover; background-position: center; }
+.skin-preview[data-skin="cyber-minimal"] { --ui-table: #14332d; --skin-art: none; }
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active {
+  background: var(--ui-accent); color: #fff9eb;
+}
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.primary, .start-btn, .login-submit) { background: var(--ui-accent); color: #fff9eb; }
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.entry-kicker, .nickname-label) { color: var(--ui-accent-text); }
+
+/* Every application surface follows the selected skin, including native controls. */
+html[data-skin="cyber-minimal"] {
+  color-scheme: dark;
+  --ui-page: #080f1d; --ui-panel: #111e30; --ui-raised: #203149;
+  --ui-text: #f1f5f9; --ui-muted: #c1cddd; --ui-border: #8494aa;
+  --ui-accent: #126481; --ui-accent-text: #a5e4fc; --ui-gold-text: #fde68a; --ui-danger-text: #fecaca;
+  --ui-page-rgb: 8,15,29; --ui-panel-rgb: 17,30,48; --ui-raised-rgb: 32,49,73;
+  --ui-border-rgb: 132,148,170; --ui-muted-rgb: 193,205,221; --ui-accent-rgb: 18,100,129;
+}
+html[data-skin="licheng-water"] { --ui-danger-text: #992b28; --ui-border: #66795f; }
+html[data-skin="puxian-house"] { --ui-danger-text: #962b25; --ui-border: #866347; }
+html[data-skin="meizhou-sea"] { --ui-danger-text: #942d35; --ui-border: #557b83; }
+html[data-skin] :is(input, select, textarea, button) { accent-color: var(--ui-accent); }
+html[data-skin] :is(.primary, .btn.enabled, .start-btn, .login-submit) { background: var(--ui-accent); color: #fffdf4; }
+html[data-skin] :is(.settings-panel, .history-panel, .phrase-panel, .rules-panel, .hu-panel) { background: var(--ui-panel); color: var(--ui-text); }
+html[data-skin] :is(.rules-head, .rules-content, .rules-section, .rules-summary) { color: var(--ui-text); }
+html[data-skin] :is(.tool-button.exit, .danger) { color: var(--ui-danger-text); }
+html[data-skin] :is(button, input, select, textarea):focus-visible { outline: 3px solid var(--ui-accent-text); outline-offset: 2px; }
+html[data-skin] button:disabled:not(.hand-card) { opacity: .7; }
+html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-options, .alert-options) button.active small { color: inherit; }
