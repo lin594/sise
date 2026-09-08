@@ -422,13 +422,13 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
   } else if (
     scenario === "dealer_pick_intro" ||
     scenario === "dealer_reveal_self" ||
-    scenario === "dealer_settled_self"
+    scenario === "dealer_settled_self" || scenario.startsWith("dealer_count_")
   ) {
     add(`dealer-hand-${seq}`, "yellow", "ma");
     const dealerCard: Card = {
       id: `dealer-card-${seq}`,
-      color: "red",
-      type: "xiang",
+      color: scenario.startsWith("dealer_count_") ? scenario.slice(13) as Card["color"] : "red",
+      type: scenario === "dealer_count_gold" ? "gong" : "xiang",
       source: "upper",
     };
     context.setPendingResponse(null);
@@ -438,12 +438,14 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.currentPlayerId = seatId;
     context.state.currentTurnPlayerId = seatId;
     context.state.dealerId = seatId;
-    context.state.dealerPickerId = context.getNextPlayerId(seatId);
+    const offset = ({ yellow: 0, red: 1, green: 2, white: 3, gold: 1 } as Record<string, number>)[dealerCard.color] ?? 0;
+    const dealerIndex = context.playerOrder.indexOf(seatId);
+    context.state.dealerPickerId = context.playerOrder[(dealerIndex - offset + context.playerOrder.length) % context.playerOrder.length]!;
     context.setDealerCard(dealerCard);
     context.state.responseEndsAt = Date.now() + 10_000;
     context.state.lastAction = scenario === "dealer_pick_intro"
       ? `DEALER_PICK ${context.state.dealerPickerId}`
-      : scenario === "dealer_reveal_self"
+      : scenario === "dealer_reveal_self" || scenario.startsWith("dealer_count_")
         ? `DEALER_CARD ${seatId}`
         : `DEALER ${seatId}`;
   } else if (scenario === "readable_exposed_groups") {

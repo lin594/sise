@@ -1,12 +1,16 @@
 <template>
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
+      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" @click="toggleHistory">记录</button>
+      <button v-if="inRoom" class="tool-button" type="button" data-testid="tools-rules" @click="openRules">规则</button>
+      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" @click="togglePhrases">互动</button>
+
       <button
         ref="settingsButtonRef"
         class="tool-button settings"
         type="button"
-        :aria-label="decisionActive ? '牌局工具，当前轮到你操作' : inRoom ? '牌局工具' : '全局设置'"
-        :title="inRoom ? '牌局工具' : '全局设置'"
+        :aria-label="decisionActive ? '全局设置，当前轮到你操作' : '全局设置'"
+        title="全局设置"
         data-testid="game-settings"
         aria-controls="game-settings-panel"
         :aria-expanded="settingsOpen"
@@ -16,7 +20,7 @@
           <path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z" />
           <path d="m19.2 13.4 1.3 1-.1 1.5-1.5 1.8-1.6-.5a7.8 7.8 0 0 1-1.8 1l-.3 1.7-1.4.6h-2.5l-.7-1.5a7.8 7.8 0 0 1-2-.6l-1.4.9-1.3-.8-1.2-2.2.9-1.4a7.8 7.8 0 0 1-.2-2.1L4 11.7l.3-1.5 1.3-2 1.7.1a7.8 7.8 0 0 1 1.7-1.2l.1-1.7 1.4-.7H13l.9 1.4a7.8 7.8 0 0 1 1.9.8l1.5-.7 1.2.9 1 2.3-1 1.3c.2.9.3 1.8.1 2.7h.6Z" />
         </svg>
-        <span>{{ inRoom ? "工具" : "设置" }}</span>
+        <span>设置</span>
       </button>
       <button
         v-if="inRoom"
@@ -52,7 +56,7 @@
 
     <Transition name="popover">
       <section v-if="phraseOpen" ref="phrasePanelRef" class="phrase-panel" data-testid="quick-phrase-panel" role="dialog" aria-modal="true" aria-label="快捷互动" tabindex="-1" @keydown.esc.stop.prevent="closePhrases" @keydown.tab="trapPanelFocus($event, phrasePanelRef)">
-        <button type="button" @click="backToTools">‹ 返回工具</button>
+        <button type="button" @click="backToTools">‹ 返回设置</button>
         <button type="button" @click="closePhrases">关闭互动</button>
         <p v-if="props.quickPhraseBusy" class="phrase-busy" role="status">上一条语音播放中…</p>
         <p v-else-if="quickPhrases.length === 0" class="phrase-busy" role="status">暂无互动音效</p>
@@ -79,7 +83,7 @@
         @keydown.tab="trapHistoryFocus"
       >
         <header>
-          <button type="button" @click="backToTools">‹ 返回工具</button>
+          <button type="button" @click="backToTools">‹ 返回设置</button>
           <div>
             <small>没看清刚才发生了什么？</small>
             <strong id="history-panel-title">最近操作</strong>
@@ -126,7 +130,7 @@
       >
         <header>
           <div>
-            <small>{{ settingsPage === "tools" ? "局内常用" : "全局设置" }}</small>
+            <small>全局设置</small>
             <strong id="settings-panel-title">{{ settingsPageTitle }}</strong>
             <button v-if="settingsPage !== settingsRoot" type="button" data-testid="settings-back" @click="backSettings()">‹ 返回</button>
           </div>
@@ -147,19 +151,15 @@
             {{ declaring ? "返回声明" : "返回出牌" }}
           </button>
         </div>
-        <nav v-if="settingsPage === 'tools'" class="settings-categories" aria-label="牌局工具">
-          <button ref="historyButtonRef" type="button" data-testid="game-history" :aria-label="historyButtonLabel" @click="toggleHistory"><strong>记录</strong><small>回看最近操作</small></button>
-          <button type="button" data-testid="tools-rules" @click="openRules"><strong>规则速查</strong><small>查看玩法与当前操作</small></button>
-          <button type="button" data-testid="game-interaction" :disabled="quickPhraseBusy || quickPhrases.length === 0" @click="togglePhrases"><strong>互动</strong><small>发送快捷语音</small></button>
-          <button type="button" data-testid="session-mute" :aria-pressed="sessionMuted" @click="emit('toggleSessionMute')"><strong>{{ sessionMuted ? '取消临时静音' : '临时静音' }}</strong><small>仅本次会话，不改变声音偏好</small></button>
-          <button type="button" data-testid="settings-all" @click="openSettingsPage('home')"><strong>设置</strong><small>外观、纸牌和长期偏好</small></button>
-          <button ref="exitButtonRef" type="button" data-testid="game-exit" @click="requestExit"><strong>退出牌局</strong></button>
-        </nav>
         <nav v-if="settingsPage === 'home'" class="settings-categories" aria-label="设置分类">
           <button v-for="category in settingsCategories" :key="category.id" type="button" :data-testid="`settings-category-${category.id}`" @click="openSettingsPage(category.id)">
             <strong>{{ category.label }}</strong><small>{{ category.summary }}</small><span aria-hidden="true">›</span>
           </button>
         </nav>
+        <div v-if="settingsPage === 'home' && inRoom" class="settings-categories">
+          <button type="button" data-testid="session-mute" :aria-pressed="sessionMuted" @click="emit('toggleSessionMute')">{{ sessionMuted ? '取消临时静音' : '临时静音' }}</button>
+          <button ref="exitButtonRef" type="button" data-testid="game-exit" @click="requestExit">退出牌局</button>
+        </div>
         <AppearanceSettings v-if="settingsPage === 'appearance' || settingsPage === 'table'" :section="settingsPage" :resolved-layout="resolvedTableLayout" :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" />
         <div v-if="settingsPage === 'table'" class="preference-group">
           <div class="preference-copy"><strong>手牌排列</strong><small>单行看全，或保留原尺寸翻页</small></div>
@@ -510,10 +510,11 @@ const phrasePanelRef = ref<HTMLElement | null>(null);
 const settingsButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsPanelRef = ref<HTMLElement | null>(null);
 const settingsOpen = ref(false);
-type SettingsPage = "tools" | "home" | "appearance" | "table" | "sound" | "assist";
+type SettingsPage = "home" | "appearance" | "table" | "sound" | "assist";
+const interactionButtonRef = ref<HTMLButtonElement | null>(null);
 const settingsRoot = ref<SettingsPage>("home");
 const settingsPage = ref<SettingsPage>("home");
-const settingsPageTitle = computed(() => ({ tools: "牌局工具", home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
+const settingsPageTitle = computed(() => ({ home: "全部设置", appearance: "外观", table: "牌桌与纸牌", sound: "声音与提醒", assist: "辅助功能" }[settingsPage.value]));
 const settingsCategories = computed(() => [
   { id: "appearance" as const, label: "外观", summary: skins.find(s => s.id === props.modelValue.skin)?.name ?? "皮肤" },
   { id: "table" as const, label: "牌桌与纸牌", summary: `${tableLayouts.find(l => l.id === props.modelValue.tableLayout)?.name ?? "布局"} · ${props.modelValue.handLayout === "paged" ? "翻页" : "单行"}` },
@@ -616,7 +617,7 @@ async function toggleSettings(): Promise<void> {
   }
   closeHistory(false);
   phraseOpen.value = false;
-  settingsRoot.value = props.inRoom ? "tools" : "home";
+  settingsRoot.value = "home";
   settingsPage.value = settingsRoot.value;
   settingsOpen.value = true;
   await nextTick();
@@ -658,7 +659,7 @@ function closeOpenPopover(): void {
 
 function closePhrases() {
   phraseOpen.value = false;
-  void nextTick(() => settingsButtonRef.value?.focus());
+  void nextTick(() => interactionButtonRef.value?.focus());
 }
 
 function togglePhrases(): void {

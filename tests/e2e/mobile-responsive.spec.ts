@@ -134,8 +134,8 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   await expect(header.getByRole("heading", { name: "四色牌" })).toBeVisible();
   const settingsButton = header.getByTestId("game-settings");
   await expect(settingsButton).toBeVisible();
-  await expect(settingsButton).toContainText("工具");
-  await expect(settingsButton).toHaveAttribute("aria-label", /牌局工具/);
+  await expect(settingsButton).toContainText("设置");
+  await expect(settingsButton).toHaveAttribute("aria-label", /全局设置/);
   await expect(header.getByTestId("game-auto-play")).toBeVisible();
   await expect(header.getByTestId("game-auto-play")).toContainText(/托管/);
   await expect(header.getByTestId("game-exit")).toHaveCount(0);
@@ -147,7 +147,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
     const brandElement = headerElement?.querySelector<HTMLElement>(".brand-lockup");
     const toolsElement = headerElement?.querySelector<HTMLElement>("[data-testid='game-tools']");
     const toolButtons = Array.from(headerElement?.querySelectorAll<HTMLElement>(".tool-button") ?? []);
-    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 2) {
+    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 5) {
       throw new Error("Game header or board is missing");
     }
     const headerRect = headerElement.getBoundingClientRect();
@@ -775,12 +775,12 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
 
     await page.keyboard.press("Shift+Tab");
-    const rulesEntry = page.getByTestId("tools-rules");
-    await expect(page.getByTestId("game-exit")).toBeFocused();
+    const rulesEntry = page.getByTestId("settings-rules");
+    await expect(page.getByTestId("settings-rules")).toBeFocused();
     const bottomGeometry = await settingsPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();
-      const rules = panel.querySelector<HTMLElement>("[data-testid='game-exit']")!;
-      const allSettings = panel.querySelector<HTMLElement>("[data-testid='settings-all']")!;
+      const rules = panel.querySelector<HTMLElement>("[data-testid='settings-rules']")!;
+      const allSettings = panel.querySelector<HTMLElement>("[data-testid='settings-install-app']")!;
       const isInside = (element: HTMLElement) => {
         const rect = element.getBoundingClientRect();
         return (
@@ -1304,9 +1304,9 @@ test.describe("compact landscape gameplay", () => {
     await expect(discardConfirm).toHaveAttribute("aria-label", "出牌");
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toHaveText("工具");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
-    await expect(gameSettings).toHaveAttribute("title", "牌局工具");
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "全局设置，当前轮到你操作");
+    await expect(gameSettings).toHaveAttribute("title", "全局设置");
     await gameSettings.click();
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
@@ -1479,7 +1479,7 @@ test.describe("compact landscape gameplay", () => {
     const ceremony = page.getByTestId("dealer-ceremony");
     await expect(page.getByRole("dialog", { name: "开局确认" })).toHaveCount(0);
     await expect(ceremony).toBeVisible();
-    await expect(ceremony).toHaveAccessibleName("正在翻定庄牌");
+    await expect(ceremony).toHaveAccessibleName(/由.+翻定庄牌/);
     await expect(page.getByTestId("dealer-reveal-back")).toHaveAttribute("data-card-back", "red-four-color");
     await expect(page.getByTestId("dealer-reveal-card")).toHaveCount(0);
     await expect(page.getByTestId("dealer-badge")).toHaveCount(0);
@@ -1769,8 +1769,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-pass")).toBeEnabled();
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toHaveText("工具");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "全局设置，当前轮到你操作");
     await gameSettings.click();
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("轮到你操作");
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
@@ -1847,7 +1847,7 @@ test.describe("compact landscape gameplay", () => {
       .toBeGreaterThanOrEqual(1);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toContainText("工具");
+    await expect(gameSettings).toContainText("设置");
     await gameSettings.click();
 
     const settingsPanel = page.getByTestId("settings-panel");
@@ -1860,7 +1860,7 @@ test.describe("compact landscape gameplay", () => {
     await gameSettings.click();
     await expect(settingsPanel).toBeFocused();
     await page.keyboard.press("Shift+Tab");
-    await expect(page.getByTestId("game-exit")).toBeFocused();
+    await expect(page.getByTestId("settings-rules")).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "关闭设置" })).toBeFocused();
     await page.waitForTimeout(200);
@@ -1994,8 +1994,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(rulesDialog).toBeVisible();
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("练习局不限时");
-    await expect(gameSettings).toHaveText("工具");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
+    await expect(gameSettings).toHaveText("设置");
+    await expect(gameSettings).toHaveAttribute("aria-label", "全局设置，当前轮到你操作");
     await page.getByTestId("rules-return-to-decision").click();
     await expect(rulesDialog).toHaveCount(0);
     await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);

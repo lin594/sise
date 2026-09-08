@@ -979,11 +979,36 @@ const dealerCeremonyCard = computed(() => {
     }
     return dealerInfoCard.value ?? reveal.card;
 });
+const dealerPickerDescription = computed(() => {
+    const id = dealerReveal.value?.pickerId;
+    if (id === props.mySeatId)
+        return "你（本家）";
+    const name = props.players.find(player => player.clientId === id)?.name || "牌友";
+    const position = topPlayer.value?.clientId === id ? "对家" : leftPlayer.value?.clientId === id ? "左侧" : "右侧";
+    return `${name}（${position}）`;
+});
+const dealerCountTotal = computed(() => ({ yellow: 1, red: 2, green: 3, white: 4, gold: 2 }[dealerCeremonyCard.value?.color ?? "yellow"] ?? 1));
+const dealerCountStep = computed(() => dealerReveal.value?.stage === "revealed"
+    ? Math.min(dealerCountTotal.value, 1 + Math.floor(Math.max(0, nowMs.value - dealerReveal.value.startedAt - 450) / 650)) : 0);
+const dealerCountingSeatId = computed(() => {
+    const reveal = dealerReveal.value;
+    if (!reveal)
+        return "";
+    if (reveal.stage === "picking")
+        return reveal.pickerId;
+    if (!reveal.pickerId)
+        return reveal.dealerId;
+    const players = orderedPlayers.value;
+    const first = players.findIndex(player => player.clientId === reveal.pickerId);
+    return first < 0 ? "" : players[(first + dealerCountStep.value - 1) % players.length]?.clientId ?? "";
+});
+const dealerCountingName = computed(() => dealerCountingSeatId.value === props.mySeatId ? "你" : props.players.find(player => player.clientId === dealerCountingSeatId.value)?.name || "牌友");
+const dealerCountColor = computed(() => ({ yellow: "黄", red: "红", green: "绿", white: "白", gold: "金条按红色" }[dealerCeremonyCard.value?.color ?? "yellow"]));
 const dealerRevealAccessibleText = computed(() => {
     const reveal = dealerReveal.value;
     const card = dealerCeremonyCard.value;
     if (!reveal || reveal.stage === "picking" || !card) {
-        return "正在翻定庄牌";
+        return `由${dealerPickerDescription.value}翻定庄牌`;
     }
     return `定庄牌为${getCardAccessibleText(card)}，${reveal.dealerName || "庄家"}坐庄`;
 });
@@ -1762,11 +1787,13 @@ function triggerDealerReveal(stage, label, card, dealerId = "") {
         card: card ?? null,
         dealerId,
         dealerName,
+        startedAt: Date.now(),
+        pickerId: stage === "picking" ? dealerId : String(props.state?.dealerPickerId ?? ""),
     };
     dealerTimer = setTimeout(() => {
         dealerReveal.value = null;
         dealerTimer = null;
-    }, 2400);
+    }, stage === "picking" ? 3000 : 4200);
 }
 onMounted(() => {
     scheduleHandLayoutUpdate();
@@ -1844,7 +1871,7 @@ watch(() => [
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
         prepareOpeningRound(roundKey);
-        triggerDealerReveal("picking", "正在翻定庄牌");
+        triggerDealerReveal("picking", "翻定庄牌", null, dealerPickMatch[1]);
         return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
@@ -2022,8 +2049,14 @@ debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
+/** @type {__VLS_StyleScopedClasses['dealer-count-status']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-picker-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-flight-turn']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['player-card']} */ ;
@@ -2557,6 +2590,9 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-hand-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['crowded-action-dock']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
@@ -2591,6 +2627,13 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "tableRef",
 });
 /** @type {typeof __VLS_ctx.tableRef} */ ;
+if (__VLS_ctx.dealerCountingSeatId === __VLS_ctx.mySeatId) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "dealer-self-marker" },
+        'data-testid': "dealer-self-marker",
+    });
+    (__VLS_ctx.dealerReveal?.stage === 'picking' ? '由你翻牌' : `${__VLS_ctx.dealerCountStep} · 数到你`);
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div)({
     id: "declaration-guidance-anchor",
     ...{ class: "declaration-guidance-anchor" },
@@ -2641,6 +2684,7 @@ if (__VLS_ctx.topPlayer) {
         ref: ((el) => __VLS_ctx.topPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.topPlayer.clientId, el)),
         ...{ class: "player-card player-top" },
         'data-testid': "player-top",
+        'data-dealer-count': (__VLS_ctx.dealerCountingSeatId === __VLS_ctx.topPlayer.clientId ? (__VLS_ctx.dealerReveal?.stage === 'picking' ? '翻' : __VLS_ctx.dealerCountStep) : undefined),
         'data-player-id': (__VLS_ctx.topPlayer.clientId),
         role: "group",
         'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.topPlayer, __VLS_ctx.topGroupBlocks.length)),
@@ -2648,6 +2692,7 @@ if (__VLS_ctx.topPlayer) {
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.topPlayer.clientId),
                 dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.topPlayer.clientId),
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.topPlayer.clientId,
+                'dealer-picker-active': __VLS_ctx.dealerCountingSeatId === __VLS_ctx.topPlayer.clientId,
             }) },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
@@ -2829,6 +2874,7 @@ if (__VLS_ctx.leftPlayer) {
         ref: ((el) => __VLS_ctx.leftPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.leftPlayer.clientId, el)),
         ...{ class: "player-card player-left" },
         'data-testid': "player-left",
+        'data-dealer-count': (__VLS_ctx.dealerCountingSeatId === __VLS_ctx.leftPlayer.clientId ? (__VLS_ctx.dealerReveal?.stage === 'picking' ? '翻' : __VLS_ctx.dealerCountStep) : undefined),
         'data-player-id': (__VLS_ctx.leftPlayer.clientId),
         role: "group",
         'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.leftPlayer, __VLS_ctx.leftGroupBlocks.length)),
@@ -2836,6 +2882,7 @@ if (__VLS_ctx.leftPlayer) {
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.leftPlayer.clientId),
                 dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.leftPlayer.clientId),
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.leftPlayer.clientId,
+                'dealer-picker-active': __VLS_ctx.dealerCountingSeatId === __VLS_ctx.leftPlayer.clientId,
             }) },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
@@ -3104,6 +3151,7 @@ if (__VLS_ctx.rightPlayer) {
         ref: ((el) => __VLS_ctx.rightPlayer && __VLS_ctx.setSeatRef(__VLS_ctx.rightPlayer.clientId, el)),
         ...{ class: "player-card player-right" },
         'data-testid': "player-right",
+        'data-dealer-count': (__VLS_ctx.dealerCountingSeatId === __VLS_ctx.rightPlayer.clientId ? (__VLS_ctx.dealerReveal?.stage === 'picking' ? '翻' : __VLS_ctx.dealerCountStep) : undefined),
         'data-player-id': (__VLS_ctx.rightPlayer.clientId),
         role: "group",
         'aria-label': (__VLS_ctx.playerAccessibleSummary(__VLS_ctx.rightPlayer, __VLS_ctx.rightGroupBlocks.length)),
@@ -3111,6 +3159,7 @@ if (__VLS_ctx.rightPlayer) {
                 active: __VLS_ctx.isCurrentTurn(__VLS_ctx.rightPlayer.clientId),
                 dealer: __VLS_ctx.showDealerSeatMarker(__VLS_ctx.rightPlayer.clientId),
                 'actor-flash': __VLS_ctx.flashActorId === __VLS_ctx.rightPlayer.clientId,
+                'dealer-picker-active': __VLS_ctx.dealerCountingSeatId === __VLS_ctx.rightPlayer.clientId,
             }) },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
@@ -3473,6 +3522,13 @@ if (__VLS_ctx.dealerReveal) {
         ...{ class: "dealer-reveal-label" },
     });
     (__VLS_ctx.dealerReveal.label);
+    if (__VLS_ctx.dealerReveal.stage === 'picking') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
+            ...{ class: "dealer-picker-name" },
+            'data-testid': "dealer-picker-name",
+        });
+        (__VLS_ctx.dealerPickerDescription);
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dealer-reveal-tile" },
     });
@@ -3512,7 +3568,23 @@ if (__VLS_ctx.dealerReveal) {
         });
         (__VLS_ctx.getCardAccessibleText(__VLS_ctx.dealerCeremonyCard));
     }
-    if (__VLS_ctx.dealerReveal.dealerName) {
+    if (__VLS_ctx.dealerReveal.stage === 'revealed' && __VLS_ctx.dealerReveal.pickerId) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "dealer-count-status" },
+            'data-testid': "dealer-count-status",
+            'data-count-step': (__VLS_ctx.dealerCountStep),
+            'data-count-seat': (__VLS_ctx.dealerCountingSeatId),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+        (__VLS_ctx.dealerCountColor);
+        (__VLS_ctx.dealerCountTotal);
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
+            key: (__VLS_ctx.dealerCountStep),
+        });
+        (__VLS_ctx.dealerCountStep);
+        (__VLS_ctx.dealerCountingName);
+    }
+    if (__VLS_ctx.dealerReveal.stage === 'revealed' && __VLS_ctx.dealerReveal.dealerName && (!__VLS_ctx.dealerReveal.pickerId || __VLS_ctx.dealerCountStep === __VLS_ctx.dealerCountTotal)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({
             ...{ class: "dealer-reveal-result" },
         });
@@ -4025,6 +4097,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-self-marker']} */ ;
 /** @type {__VLS_StyleScopedClasses['declaration-guidance-anchor']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['flow-top-left']} */ ;
@@ -4148,10 +4221,12 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-label']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-picker-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-tile']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-count-status']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
 /** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
@@ -4293,6 +4368,12 @@ const __VLS_self = (await import('vue')).defineComponent({
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
             dealerCeremonyCard: dealerCeremonyCard,
+            dealerPickerDescription: dealerPickerDescription,
+            dealerCountTotal: dealerCountTotal,
+            dealerCountStep: dealerCountStep,
+            dealerCountingSeatId: dealerCountingSeatId,
+            dealerCountingName: dealerCountingName,
+            dealerCountColor: dealerCountColor,
             dealerRevealAccessibleText: dealerRevealAccessibleText,
             showDealerSeatMarker: showDealerSeatMarker,
             seatActionText: seatActionText,

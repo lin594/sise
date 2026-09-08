@@ -538,7 +538,7 @@
               aria-live="polite"
             >整桌请求已发送，请稍候</p>
           </template>
-          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用工具中的退出牌局个人离开。</p>
+          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用设置中的退出牌局个人离开。</p>
         </div>
       </div>
     </div>
@@ -645,7 +645,7 @@
             <h2 id="rules-panel-title">四色牌规则</h2>
             <p class="rules-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
           </div>
-          <button v-if="showGameTools" type="button" class="ghost" @click="backRulesToTools">返回工具</button>
+          <button v-if="showGameTools" type="button" class="ghost" @click="backRulesToTools">返回设置</button>
           <button ref="rulesCloseButtonRef" class="ghost" data-testid="close-rules" @click="closeRules()">关闭</button>
         </div>
 
@@ -5135,17 +5135,7 @@ watch(
   display: none;
 }
 
-.layout.ultra-compact-viewport :deep(.game-tools .tool-button > span:not(.history-count)) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+.layout.ultra-compact-viewport :deep(.game-tools .tool-button svg) { display: none; }
 
 .layout.ultra-compact-viewport .rules-slogan {
   display: none;
