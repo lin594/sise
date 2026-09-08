@@ -8,7 +8,7 @@
       'board-declaring': state?.phase === 'declaring',
     }"
     data-testid="game-board"
-    :data-geometry-busy="Boolean(flights.length || tableFlights.length || dealerReveal)"
+    :data-geometry-busy="Boolean(flights.length || (!coordinateMotionSuppressed && activeTableEvents.length) || dealerReveal)"
     :data-table-layout="appliedTableLayout"
     :data-layout-pending="appliedTableLayout !== props.tableLayout"
     :data-response-phase="props.responsePhase ?? ''"
@@ -3081,7 +3081,8 @@ watch(
   },
   { immediate: true },
 );
-watch(() => Boolean(flights.value.length || tableFlights.value.length || dealerReveal.value), busy => emit("geometryBusy", busy), { flush: "sync" });
+// Do not evaluate flight geometry before onBeforeUpdate captures source anchors.
+watch(() => Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length) || dealerReveal.value), busy => emit("geometryBusy", busy), { flush: "post" });
 onUnmounted(() => emit("geometryBusy", false));
 // Geometry changes wait for all visible card transactions, including opening deals.
 const appliedTableLayout = ref<RenderedTableLayoutId>(props.tableLayout ?? "classic");
