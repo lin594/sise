@@ -106,8 +106,10 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await expect.poll(() => playedPhraseAudio(host)).toEqual([PHRASE.url]);
     await expect.poll(() => playedPhraseAudio(guest)).toEqual([PHRASE.url]);
     await revealTool(host, "game-interaction");
-    await expect(hostInteraction).toBeDisabled();
-    await expect(guestInteraction).toBeDisabled();
+    await expect(hostInteraction).toBeEnabled();
+    await expect(guestInteraction).toBeEnabled();
+    await hostInteraction.click();
+    await expect(host.getByRole("button", { name: PHRASE.label, exact: true })).toBeDisabled();
     await host.waitForTimeout(500);
     await expect.poll(() => playedPhraseAudio(host)).toHaveLength(1);
     await expect.poll(() => playedPhraseAudio(guest)).toHaveLength(1);

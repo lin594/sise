@@ -175,7 +175,7 @@ test('mobile tools keep habits nested and session mute never changes saved prefe
   await page.setViewportSize({ width: 390, height: 844 });
   await startTable(page);
   await page.getByTestId('game-settings').click();
-  await expect(page.getByTestId('settings-panel')).toContainText('牌局工具');
+  await expect(page.getByTestId('settings-panel')).toContainText('全部设置');
   await expect(page.getByTestId('card-mode-own-large')).toHaveCount(0);
   const saved = await page.evaluate(() => localStorage.getItem('sise_game_display_preferences_v2'));
   await page.getByTestId('session-mute').click();
@@ -183,7 +183,7 @@ test('mobile tools keep habits nested and session mute never changes saved prefe
   expect(await page.evaluate(() => localStorage.getItem('sise_game_display_preferences_v2'))).toBe(saved);
   await page.getByTestId('game-history').click();
   await expect(page.getByTestId('history-panel')).toBeVisible();
-  await page.getByRole('button', { name: '返回工具' }).click();
+  await page.getByRole('button', { name: '返回设置' }).click();
   await expect(page.getByTestId('session-mute')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('session-mute').click();
   await page.keyboard.press('Escape');
@@ -255,5 +255,27 @@ test('classic table places actual exposed groups around the felt', async ({ page
       await page.waitForTimeout(250);
       await page.screenshot({ path: info.outputPath(`${skin}-classic-groups-${width}.png`) });
     }
+  }
+});
+
+test('dealer ceremony counts from the picker to the authoritative dealer for every color', async ({ page }, info) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  for (const [color, total] of [['yellow', 1], ['red', 2], ['green', 3], ['white', 4], ['gold', 2]] as const) {
+    await page.evaluate(scenario => (window as any).__siseLocalTest.setupScenario(scenario), `dealer_count_${color}`);
+    const status = page.getByTestId('dealer-count-status');
+    await expect(status).toHaveAttribute('data-count-step', '1');
+    const state = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState());
+    const seats = [...state.players].sort((a: any,b: any) => a.seatIndex - b.seatIndex);
+    const first = seats.findIndex((p: any) => p.clientId === state.dealerPickerId);
+    for (let step = 1; step <= total; step++) {
+      await expect(status).toHaveAttribute('data-count-step', String(step));
+      await expect(status).toHaveAttribute('data-count-seat', seats[(first + step - 1) % seats.length].clientId);
+    }
+    await expect(status).toHaveAttribute('data-count-seat', state.dealerId);
+    await expect(page.locator('.dealer-reveal-result')).toBeVisible();
+    await expect(page.getByTestId('game-interaction')).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId('game-auto-play')).toBeInViewport({ ratio: 1 });
+    if (color === 'white') await page.screenshot({ path: info.outputPath('dealer-count-white-4.png') });
   }
 });

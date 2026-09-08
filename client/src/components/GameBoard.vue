@@ -16,6 +16,7 @@
     @keydown.esc="handleBoardEscape"
   >
     <div class="table" ref="tableRef">
+      <div v-if="dealerCountingSeatId === mySeatId" class="dealer-self-marker" data-testid="dealer-self-marker">{{ dealerReveal?.stage === 'picking' ? '由你翻牌' : `${dealerCountStep} · 数到你` }}</div>
       <div id="declaration-guidance-anchor" class="declaration-guidance-anchor" :style="{ visibility: dealerReveal || flights.length || tableFlights.length ? 'hidden' : undefined }" />
       <section
         v-if="flowTopLeftPlayer"
@@ -46,6 +47,7 @@
         :ref="(el) => topPlayer && setSeatRef(topPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-top"
         data-testid="player-top"
+        :data-dealer-count="dealerCountingSeatId === topPlayer.clientId ? (dealerReveal?.stage === 'picking' ? '翻' : dealerCountStep) : undefined"
         :data-player-id="topPlayer.clientId"
         role="group"
         :aria-label="playerAccessibleSummary(topPlayer, topGroupBlocks.length)"
@@ -53,6 +55,7 @@
           active: isCurrentTurn(topPlayer.clientId),
           dealer: showDealerSeatMarker(topPlayer.clientId),
           'actor-flash': flashActorId === topPlayer.clientId,
+          'dealer-picker-active': dealerCountingSeatId === topPlayer.clientId,
         }"
       >
         <header class="seat-head">
@@ -148,6 +151,7 @@
         :ref="(el) => leftPlayer && setSeatRef(leftPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-left"
         data-testid="player-left"
+        :data-dealer-count="dealerCountingSeatId === leftPlayer.clientId ? (dealerReveal?.stage === 'picking' ? '翻' : dealerCountStep) : undefined"
         :data-player-id="leftPlayer.clientId"
         role="group"
         :aria-label="playerAccessibleSummary(leftPlayer, leftGroupBlocks.length)"
@@ -155,6 +159,7 @@
           active: isCurrentTurn(leftPlayer.clientId),
           dealer: showDealerSeatMarker(leftPlayer.clientId),
           'actor-flash': flashActorId === leftPlayer.clientId,
+          'dealer-picker-active': dealerCountingSeatId === leftPlayer.clientId,
         }"
       >
         <header class="seat-head">
@@ -298,6 +303,7 @@
         :ref="(el) => rightPlayer && setSeatRef(rightPlayer.clientId, el as HTMLElement | null)"
         class="player-card player-right"
         data-testid="player-right"
+        :data-dealer-count="dealerCountingSeatId === rightPlayer.clientId ? (dealerReveal?.stage === 'picking' ? '翻' : dealerCountStep) : undefined"
         :data-player-id="rightPlayer.clientId"
         role="group"
         :aria-label="playerAccessibleSummary(rightPlayer, rightGroupBlocks.length)"
@@ -305,6 +311,7 @@
           active: isCurrentTurn(rightPlayer.clientId),
           dealer: showDealerSeatMarker(rightPlayer.clientId),
           'actor-flash': flashActorId === rightPlayer.clientId,
+          'dealer-picker-active': dealerCountingSeatId === rightPlayer.clientId,
         }"
       >
         <header class="seat-head">
@@ -502,6 +509,7 @@
       >
         <div class="dealer-reveal-panel">
             <span class="dealer-reveal-label">{{ dealerReveal.label }}</span>
+            <strong v-if="dealerReveal.stage === 'picking'" class="dealer-picker-name" data-testid="dealer-picker-name">由{{ dealerPickerDescription }}翻定庄牌</strong>
             <div class="dealer-reveal-tile">
               <div
                 v-if="dealerReveal.stage === 'picking'"
@@ -519,7 +527,11 @@
             <strong v-if="dealerCeremonyCard" class="dealer-reveal-card-name">
               {{ getCardAccessibleText(dealerCeremonyCard) }}
             </strong>
-            <small v-if="dealerReveal.dealerName" class="dealer-reveal-result">
+            <div v-if="dealerReveal.stage === 'revealed' && dealerReveal.pickerId" class="dealer-count-status" data-testid="dealer-count-status" :data-count-step="dealerCountStep" :data-count-seat="dealerCountingSeatId">
+              <span>{{ dealerCountColor }}数{{ dealerCountTotal }}，从翻牌者数起</span>
+              <strong :key="dealerCountStep">{{ dealerCountStep }} · {{ dealerCountingName }}</strong>
+            </div>
+            <small v-if="dealerReveal.stage === 'revealed' && dealerReveal.dealerName && (!dealerReveal.pickerId || dealerCountStep === dealerCountTotal)" class="dealer-reveal-result">
               {{ dealerReveal.dealerName }}坐庄
             </small>
         </div>
@@ -839,6 +851,8 @@ type DealerReveal = {
   card: Card | null;
   dealerId: string;
   dealerName: string;
+  pickerId: string;
+  startedAt: number;
 };
 
 const props = defineProps<{
@@ -1944,11 +1958,32 @@ const dealerCeremonyCard = computed<Card | null>(() => {
   return dealerInfoCard.value ?? reveal.card;
 });
 
+const dealerPickerDescription = computed(() => {
+  const id = dealerReveal.value?.pickerId;
+  if (id === props.mySeatId) return "你（本家）";
+  const name = props.players.find(player => player.clientId === id)?.name || "牌友";
+  const position = topPlayer.value?.clientId === id ? "对家" : leftPlayer.value?.clientId === id ? "左侧" : "右侧";
+  return `${name}（${position}）`;
+});
+const dealerCountTotal = computed(() => ({ yellow: 1, red: 2, green: 3, white: 4, gold: 2 }[dealerCeremonyCard.value?.color ?? "yellow"] ?? 1));
+const dealerCountStep = computed(() => dealerReveal.value?.stage === "revealed"
+  ? Math.min(dealerCountTotal.value, 1 + Math.floor(Math.max(0, nowMs.value - dealerReveal.value.startedAt - 450) / 650)) : 0);
+const dealerCountingSeatId = computed(() => {
+  const reveal = dealerReveal.value;
+  if (!reveal) return "";
+  if (reveal.stage === "picking") return reveal.pickerId;
+  if (!reveal.pickerId) return reveal.dealerId;
+  const players = orderedPlayers.value;
+  const first = players.findIndex(player => player.clientId === reveal.pickerId);
+  return first < 0 ? "" : players[(first + dealerCountStep.value - 1) % players.length]?.clientId ?? "";
+});
+const dealerCountingName = computed(() => dealerCountingSeatId.value === props.mySeatId ? "你" : props.players.find(player => player.clientId === dealerCountingSeatId.value)?.name || "牌友");
+const dealerCountColor = computed(() => ({ yellow: "黄", red: "红", green: "绿", white: "白", gold: "金条按红色" }[dealerCeremonyCard.value?.color ?? "yellow"]));
 const dealerRevealAccessibleText = computed(() => {
   const reveal = dealerReveal.value;
   const card = dealerCeremonyCard.value;
   if (!reveal || reveal.stage === "picking" || !card) {
-    return "正在翻定庄牌";
+    return `由${dealerPickerDescription.value}翻定庄牌`;
   }
   return `定庄牌为${getCardAccessibleText(card)}，${reveal.dealerName || "庄家"}坐庄`;
 });
@@ -2790,11 +2825,13 @@ function triggerDealerReveal(
     card: card ?? null,
     dealerId,
     dealerName,
+    startedAt: Date.now(),
+    pickerId: stage === "picking" ? dealerId : String(props.state?.dealerPickerId ?? ""),
   };
   dealerTimer = setTimeout(() => {
     dealerReveal.value = null;
     dealerTimer = null;
-  }, 2400);
+  }, stage === "picking" ? 3000 : 4200);
 }
 
 onMounted(() => {
@@ -2878,7 +2915,7 @@ watch(
     const dealerPickMatch = String(action ?? "").match(/^DEALER_PICK\s+(\S+)/);
     if (dealerPickMatch) {
       prepareOpeningRound(roundKey);
-      triggerDealerReveal("picking", "正在翻定庄牌");
+      triggerDealerReveal("picking", "翻定庄牌", null, dealerPickMatch[1]);
       return;
     }
     const dealerCardMatch = String(action ?? "").match(/^DEALER_CARD\s+(\S+)/);
@@ -3102,6 +3139,13 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 </script>
 
 <style scoped>
+.dealer-count-status { display: grid; text-align: center; gap: 3px; color: var(--ui-text); font-size: 13px; }
+.dealer-count-status strong { font-size: 20px; color: var(--ui-gold-text); }
+.dealer-self-marker { position: absolute; bottom: 6px; left: 12px; z-index: 31; padding: 4px 12px; border: 2px solid var(--ui-gold-text); border-radius: 12px; background: var(--ui-panel); color: var(--ui-text); }
+.dealer-picker-name { color: var(--ui-text); font-size: clamp(1rem, 3vh, 1.4rem); max-width: 22rem; overflow-wrap: anywhere; }
+.board .player-card.dealer-picker-active::after { content: attr(data-dealer-count); position: absolute; top: -8px; right: -8px; display: grid; place-items: center; min-width: 24px; height: 24px; border-radius: 50%; background: var(--ui-gold-text, #b87912); color: var(--ui-panel, #fff7df); font-size: 16px; font-weight: 800; }
+.board .player-card.dealer-picker-active { z-index: 11; outline: 3px solid var(--ui-gold-text, #b87912); outline-offset: 3px; background: rgba(var(--ui-raised-rgb, 255, 247, 220), .8); }
+
 .table-flight {
   position: fixed;
   left: 0;
@@ -5846,7 +5890,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] .flow-top-left { justify-self: start; margin-left: 0; }
 .board[data-table-layout="classic"] .flow-top-right { justify-self: end; margin-right: 0; }
 .declaration-guidance-anchor { grid-area: center; align-self: start; justify-self: center; z-index: 21; width: min(100%, 25rem); pointer-events: none; }
-.board.dealer-ceremony-active { grid-template-rows: minmax(0, 1fr) 0 minmax(0, 76px); }
+.board.dealer-ceremony-active { grid-template-rows: minmax(0, 1fr) 0 0; gap: 0; }
+.board.dealer-ceremony-active > .self-hand-card { visibility: hidden; min-height: 0; padding: 0; border: 0; overflow: hidden; }
 @media (max-width: 960px), (max-height: 500px) {
   .board:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) 44px 76px; gap: 2px; }
   .board.crowded-action-dock:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }

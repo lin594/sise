@@ -3,7 +3,6 @@ import { expect, type Page } from "@playwright/test";
 export async function revealSetting(page: Page, testId: string) {
   const control = page.getByTestId(testId);
   if (await control.isVisible()) return;
-  if (await page.getByTestId("settings-all").isVisible()) await page.getByTestId("settings-all").click();
   const category = testId.startsWith("skin-") ? "appearance"
     : /^(turn-alert-|spoken-turn)/.test(testId) ? "sound"
     : /^(reduce-motion|card-color-assist|keep-screen)/.test(testId) ? "assist" : "table";
@@ -14,8 +13,11 @@ export async function revealSetting(page: Page, testId: string) {
   await expect(control).toBeVisible();
 }
 
-/** Open an in-game tool through the user-facing tools home. */
+/** Persistent actions are direct; infrequent actions live on the settings home. */
 export async function revealTool(page: Page, testId: string) {
+  if (['game-history', 'game-interaction', 'tools-rules'].includes(testId)) {
+    await expect(page.getByTestId(testId)).toBeVisible(); return;
+  }
   if (await page.getByTestId('game-settings').getAttribute('aria-expanded') !== 'true') {
     await expect(page.getByTestId('settings-panel')).toHaveCount(0);
     await page.getByTestId('game-settings').click();
