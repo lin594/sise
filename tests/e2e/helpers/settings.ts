@@ -13,3 +13,13 @@ export async function revealSetting(page: Page, testId: string) {
   if (testId !== "settings-rules" && testId !== "settings-install-app") await page.getByTestId(`settings-category-${category}`).click();
   await expect(control).toBeVisible();
 }
+
+/** Open an in-game tool through the user-facing tools home. */
+export async function revealTool(page: Page, testId: string) {
+  if (await page.getByTestId(testId).isVisible()) return;
+  if (!await page.getByTestId('settings-panel').isVisible()) await page.getByTestId('game-settings').click();
+  while (!await page.getByTestId(testId).isVisible() && await page.getByTestId('settings-back').isVisible()) {
+    await page.getByTestId('settings-back').click();
+  }
+  await expect(page.getByTestId(testId)).toBeVisible();
+}

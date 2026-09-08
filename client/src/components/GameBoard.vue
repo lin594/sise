@@ -4,6 +4,7 @@
     class="board"
     :class="{
       'crowded-action-dock': crowdedActionDock,
+      'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
     }"
     data-testid="game-board"
@@ -14,6 +15,7 @@
     @keydown.esc="handleBoardEscape"
   >
     <div class="table" ref="tableRef">
+      <div id="declaration-guidance-anchor" class="declaration-guidance-anchor" :style="{ visibility: dealerReveal || flights.length || tableFlights.length ? 'hidden' : undefined }" />
       <section
         v-if="flowTopLeftPlayer"
         class="flow-card flow-top-left"
@@ -52,9 +54,6 @@
           'actor-flash': flashActorId === topPlayer.clientId,
         }"
       >
-        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
-          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
-        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ topPlayer.name }}</strong>
@@ -157,9 +156,6 @@
           'actor-flash': flashActorId === leftPlayer.clientId,
         }"
       >
-        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
-          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
-        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ leftPlayer.name }}</strong>
@@ -310,9 +306,6 @@
           'actor-flash': flashActorId === rightPlayer.clientId,
         }"
       >
-        <div v-if="appliedTableLayout === 'classic'" class="opponent-card-stack" :class="`mode-${appliedTableCardMode}`" aria-hidden="true">
-          <CardBack v-for="i in 4" :key="i" :mode="appliedTableCardMode" :style="{ '--stack-index': i - 1 }" />
-        </div>
         <header class="seat-head">
           <div class="seat-identity">
             <strong>{{ rightPlayer.name }}</strong>
@@ -534,7 +527,7 @@
     </div>
 
     <section
-      v-if="selfPlayer"
+      v-if="selfPlayer && !dealerReveal"
       class="self-command-row"
       :class="{ dealer: showDealerSeatMarker(selfPlayer.clientId), 'actor-flash': flashActorId === selfPlayer.clientId }"
       data-testid="player-self"
@@ -543,6 +536,14 @@
       :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
       ref="selfZoneRef"
     >
+      <div class="clock-slot">
+        <span
+          v-if="showDecisionClock"
+          class="fixed-clock"
+          :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }"
+          data-testid="decision-countdown"
+        >{{ fixedClockText }}</span>
+      </div>
       <div class="self-info-card">
         <header class="self-head">
           <div ref="selfIdentityRef" class="seat-identity">
@@ -588,12 +589,7 @@
           @confirm-discard="confirmDiscard"
           @submit="onSubmitAction"
         />
-        <span
-          v-if="showDecisionClock"
-          class="fixed-clock"
-          :class="{ urgent: /^\d+秒$/.test(fixedClockText) && parseInt(fixedClockText) <= 5 }"
-          data-testid="decision-countdown"
-        >{{ fixedClockText }}</span>
+
       </div>
     </section>
 
@@ -734,7 +730,7 @@
     </section>
 
     <div
-      v-if="isMyTurn"
+      v-if="isMyTurn && !dealerReveal"
       class="self-turn-outline"
       data-testid="self-turn-outline"
       aria-hidden="true"
@@ -876,6 +872,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  geometryBusy: [busy: boolean];
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
 }>();
@@ -3081,6 +3078,8 @@ watch(
   },
   { immediate: true },
 );
+watch(() => Boolean(flights.value.length || tableFlights.value.length || dealerReveal.value), busy => emit("geometryBusy", busy), { flush: "sync" });
+onUnmounted(() => emit("geometryBusy", false));
 // Geometry changes wait for all visible card transactions, including opening deals.
 const appliedTableLayout = ref<RenderedTableLayoutId>(props.tableLayout ?? "classic");
 watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.value.length, tableFlights.value.length, Boolean(dealerReveal.value)] as const,
@@ -5817,4 +5816,35 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] .seat-identity { justify-content: center; text-align: center; }
 .board[data-table-layout="classic"] .seat-identity > strong { flex: 1 0 100%; }
 .board[data-table-layout="classic"] .seat-identity-meta { justify-content: center; flex-wrap: wrap; }
+
+/* Stable controls share one rail; the clock never participates in scrolling. */
+.board .self-command-row { grid-template-columns: 56px minmax(110px, 25%) minmax(0, 1fr); }
+.clock-slot { grid-column: 1; grid-row: 1; display: grid; place-items: center; min-width: 0; }
+.board .fixed-clock { position: static; min-width: 0; width: 52px; padding-inline: 1px; }
+.board .embedded-actions :deep(.btn) { flex: 0 1 96px; min-width: 44px; max-width: 96px; min-height: 44px; }
+.board .embedded-actions :deep(.action-row) { flex-wrap: wrap; }
+.board .dynamic-action-track { grid-column: 3; grid-row: 1; overflow: visible; min-width: 0; }
+.board .self-info-card { grid-column: 2; grid-row: 1; min-width: 0; padding-block: 0; }
+.board .self-info-card .seat-identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 20px 22px; gap: 0 3px; }
+.board .self-info-card .seat-identity > h3 { grid-column: 1; grid-row: 1; margin: 0; line-height: 1.1; }
+.board .self-info-card .seat-identity-meta { grid-column: 1; grid-row: 2; flex-wrap: nowrap; }
+.board .self-info-card .dealer-seat-lockup { grid-column: 2; grid-row: 1 / 3; height: 42px; }
+.board .self-info-card .dealer-card-mark :deep(.card) { width: 16px; height: 24px; font-size: 12px; }
+.board .self-info-card .dealer-badge { width: 19px; height: 19px; min-width: 19px; min-height: 19px; }
+.board .self-head { gap: 1px; padding-block: 0; }
+.board .self-hand-panel { padding-block: 1px; }
+.board[data-table-layout="classic"] .player-top .seat-identity { flex-wrap: wrap; gap: 2px 5px; }
+.board[data-table-layout="classic"] .player-top .seat-identity > strong { flex: 0 1 auto; min-width: 0; }
+.board[data-table-layout="classic"] .player-top .seat-identity-meta { flex-wrap: nowrap; }
+.board[data-table-layout="classic"] .flow-top-left { justify-self: start; margin-left: 0; }
+.board[data-table-layout="classic"] .flow-top-right { justify-self: end; margin-right: 0; }
+.declaration-guidance-anchor { grid-area: center; align-self: start; justify-self: center; z-index: 21; width: min(100%, 25rem); pointer-events: none; }
+.board.dealer-ceremony-active { grid-template-rows: minmax(0, 1fr) 0 minmax(0, 76px); }
+@media (max-width: 960px), (max-height: 500px) {
+  .board:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) 44px 76px; gap: 2px; }
+  .board.crowded-action-dock:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 76px; }
+  .board .self-command-row { grid-template-columns: 56px minmax(100px, 25%) minmax(0, 1fr); }
+  .board .dynamic-action-track { padding-block: 0; }
+  .board .self-info-card .group-score-badge { display: none; }
+}
 </style>

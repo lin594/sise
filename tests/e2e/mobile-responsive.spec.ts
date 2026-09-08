@@ -1,5 +1,5 @@
 import { openGameAs, startLobbyAction, stageDeclarationForTest } from "./helpers/game";
-import { revealSetting } from "./helpers/settings";
+import { revealSetting, revealTool } from "./helpers/settings";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // Keep the established geometry/color baseline explicit; appearance.spec covers all new combinations.
@@ -134,14 +134,11 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
   await expect(header.getByRole("heading", { name: "四色牌" })).toBeVisible();
   const settingsButton = header.getByTestId("game-settings");
   await expect(settingsButton).toBeVisible();
-  await expect(settingsButton).toContainText("设置");
-  await expect(settingsButton).toHaveAttribute("aria-label", /牌局设置|完成当前操作后可打开设置/);
-  await expect(header.getByTestId("game-history")).toBeVisible();
-  await expect(header.getByTestId("game-history")).toContainText("记录");
-  await expect(header.getByTestId("game-history")).toHaveAttribute("aria-label", /最近操作/);
+  await expect(settingsButton).toContainText("工具");
+  await expect(settingsButton).toHaveAttribute("aria-label", /牌局工具/);
   await expect(header.getByTestId("game-auto-play")).toBeVisible();
   await expect(header.getByTestId("game-auto-play")).toContainText(/托管/);
-  await expect(header.getByRole("button", { name: "退出牌局" })).toContainText("退出");
+  await expect(header.getByTestId("game-exit")).toHaveCount(0);
   await expect(header.getByText(/座位ID|房主|已连接|同步中/)).toHaveCount(0);
 
   const geometry = await page.evaluate(() => {
@@ -150,7 +147,7 @@ async function expectDedicatedGameHeader(page: Page): Promise<void> {
     const brandElement = headerElement?.querySelector<HTMLElement>(".brand-lockup");
     const toolsElement = headerElement?.querySelector<HTMLElement>("[data-testid='game-tools']");
     const toolButtons = Array.from(headerElement?.querySelectorAll<HTMLElement>(".tool-button") ?? []);
-    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 5) {
+    if (!headerElement || !boardElement || !brandElement || !toolsElement || toolButtons.length !== 2) {
       throw new Error("Game header or board is missing");
     }
     const headerRect = headerElement.getBoundingClientRect();
@@ -604,13 +601,14 @@ test.describe("phone portrait landscape canvas", () => {
     const layout = page.locator(".layout");
     await expect(layout).toHaveAttribute("data-effective-viewport", "568x320");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "true");
+    await revealTool(page, "game-exit");
     const exitButton = page.getByTestId("game-exit");
     await exitButton.click();
 
     const dialog = page.getByRole("dialog", { name: "退出当前牌局？" });
     await expect(dialog).toBeVisible();
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
-    await exitButton.evaluate((button) => button.focus());
+    await page.getByTestId("game-settings").evaluate((button) => button.focus());
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
     const geometry = await page.evaluate(() => {
       const layoutElement = document.querySelector<HTMLElement>(".layout")!;
@@ -661,7 +659,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("in-game-exit-confirm-rotated-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
-    await expect(exitButton).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
   });
 
   test("keeps settings and history reachable inside the rotated effective viewport", async ({ page }, testInfo) => {
@@ -777,11 +775,11 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("settings-effective-viewport-top-320x568.png") });
 
     await page.keyboard.press("Shift+Tab");
-    const rulesEntry = page.getByTestId("settings-rules");
-    await expect(rulesEntry).toBeFocused();
+    const rulesEntry = page.getByTestId("tools-rules");
+    await expect(page.getByTestId("game-exit")).toBeFocused();
     const bottomGeometry = await settingsPanel.evaluate((panel) => {
       const panelRect = panel.getBoundingClientRect();
-      const rules = panel.querySelector<HTMLElement>("[data-testid='settings-rules']")!;
+      const rules = panel.querySelector<HTMLElement>("[data-testid='game-exit']")!;
       const allSettings = panel.querySelector<HTMLElement>("[data-testid='settings-all']")!;
       const isInside = (element: HTMLElement) => {
         const rect = element.getBoundingClientRect();
@@ -839,6 +837,7 @@ test.describe("phone portrait landscape canvas", () => {
       (document.activeElement as HTMLElement | null)?.dataset.testid ?? "",
     )).toMatch(/^(game-settings|confirm-declaration)$/);
 
+    await revealTool(page, "game-history");
     const historyButton = page.getByTestId("game-history");
     await historyButton.click();
     const historyPanel = page.getByTestId("history-panel");
@@ -878,7 +877,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.screenshot({ path: testInfo.outputPath("history-effective-viewport-320x568.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(historyButton).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
   });
 });
 
@@ -911,7 +910,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("declare-hand-preview")).toHaveCount(0);
     const sharedHand = page.locator(".cards.hand");
     await expect(sharedHand.locator("[data-card-mode='large']").first()).toBeVisible();
-    await expect(confirmDeclaration.locator("span")).toHaveText(/^(确认鱼|开始游戏)$/);
+    await expect(confirmDeclaration.locator("span")).toHaveText(/^(确认鱼|确认坎数)$/);
     await expect(confirmDeclaration).toBeFocused();
     await expect(page.getByTestId("decision-countdown")).toHaveText("不限时");
     await page.getByTestId("game-settings").click();
@@ -980,7 +979,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(maximumKong).toHaveAttribute("aria-checked", "true");
     await zeroKong.click();
     await expect(zeroKong).toHaveAttribute("aria-checked", "true");
-    await expect(confirmDeclaration.locator("span")).toHaveText("开始游戏");
+    await expect(confirmDeclaration.locator("span")).toHaveText("确认坎数");
     await confirmDeclaration.click();
     await expect(page.locator(".layout.compact-landscape")).toBeVisible({ timeout: 15_000 });
     await expectSimplifiedTableCenter(page);
@@ -1015,6 +1014,7 @@ test.describe("compact landscape gameplay", () => {
     const fixedDeckPosition = await page.getByTestId("deck-stack").boundingBox();
     expect(fixedDeckPosition).not.toBeNull();
     await expectCompactActionDock(page);
+    await revealTool(page, "game-history");
     const gameHistory = page.getByTestId("game-history");
     await expect.poll(async () => Number((await gameHistory.getAttribute("aria-label"))?.match(/共(\d+)条/)?.[1] ?? 0))
       .toBeGreaterThan(0);
@@ -1054,7 +1054,7 @@ test.describe("compact landscape gameplay", () => {
     await page.screenshot({ path: testInfo.outputPath("iphone-se-action-history.png") });
     await page.keyboard.press("Escape");
     await expect(historyPanel).toHaveCount(0);
-    await expect(gameHistory).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
     await gameHistory.click();
     const firstPlayableCard = page.locator(".hand-card.playable").first();
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
@@ -1065,7 +1065,7 @@ test.describe("compact landscape gameplay", () => {
     await page.mouse.click(playableCardCenter.x, playableCardCenter.y);
     await expect(historyPanel).toHaveCount(0);
     await expect(firstPlayableCard).toHaveAttribute("aria-pressed", "false");
-    await expect(gameHistory).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
     await expect.poll(async () => {
       const cards = page.locator("[data-testid^='hand-card-']");
       return await cards.count() > 0
@@ -1302,9 +1302,9 @@ test.describe("compact landscape gameplay", () => {
     await expect(discardConfirm).toHaveAttribute("aria-label", "出牌");
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
-    await expect(gameSettings).toHaveAttribute("title", "牌局设置");
+    await expect(gameSettings).toHaveText("工具");
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
+    await expect(gameSettings).toHaveAttribute("title", "牌局工具");
     await gameSettings.click();
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
     await expect(selectedCard).toHaveAttribute("aria-pressed", "true");
@@ -1426,6 +1426,8 @@ test.describe("compact landscape gameplay", () => {
     expect(pageOverflow.width).toBeLessThanOrEqual(pageOverflow.viewportWidth);
     expect(pageOverflow.height).toBeLessThanOrEqual(pageOverflow.viewportHeight);
 
+    await revealTool(page, "game-exit");
+
     await page.getByTestId("game-exit").click();
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toBeVisible();
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
@@ -1437,13 +1439,16 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("cancel-exit")).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "退出当前牌局？" })).toHaveCount(0);
-    await expect(page.getByTestId("game-exit")).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
+
+    await revealTool(page, "game-exit");
 
     await page.getByTestId("game-exit").click();
     await page.getByTestId("cancel-exit").click();
-    await expect(page.getByTestId("game-exit")).toBeFocused();
+    await expect(page.getByTestId("game-settings")).toBeFocused();
     await expect(page.getByTestId("game-board")).toBeVisible();
     const departingRoomId = await page.evaluate(() => localStorage.getItem("four_room_id"));
+    await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();
@@ -1762,8 +1767,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.getByTestId("action-guidance")).toContainText("该你操作了");
     await expect(page.getByTestId("action-pass")).toBeEnabled();
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
+    await expect(gameSettings).toHaveText("工具");
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
     await gameSettings.click();
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("轮到你操作");
     await expect(page.getByTestId("settings-decision-reminder")).toContainText("练习局不限时");
@@ -1840,7 +1845,7 @@ test.describe("compact landscape gameplay", () => {
       .toBeGreaterThanOrEqual(1);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
-    await expect(gameSettings).toContainText("设置");
+    await expect(gameSettings).toContainText("工具");
     await gameSettings.click();
 
     const settingsPanel = page.getByTestId("settings-panel");
@@ -1853,7 +1858,7 @@ test.describe("compact landscape gameplay", () => {
     await gameSettings.click();
     await expect(settingsPanel).toBeFocused();
     await page.keyboard.press("Shift+Tab");
-    await expect(page.getByTestId("settings-rules")).toBeFocused();
+    await expect(page.getByTestId("game-exit")).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "关闭设置" })).toBeFocused();
     await page.waitForTimeout(200);
@@ -1987,8 +1992,8 @@ test.describe("compact landscape gameplay", () => {
     await expect(rulesDialog).toBeVisible();
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("练习局不限时");
-    await expect(gameSettings).toHaveText("设置");
-    await expect(gameSettings).toHaveAttribute("aria-label", "牌局设置，当前轮到你操作");
+    await expect(gameSettings).toHaveText("工具");
+    await expect(gameSettings).toHaveAttribute("aria-label", "牌局工具，当前轮到你操作");
     await page.getByTestId("rules-return-to-decision").click();
     await expect(rulesDialog).toHaveCount(0);
     await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);

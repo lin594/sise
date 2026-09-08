@@ -1,3 +1,4 @@
+import { revealTool } from "./helpers/settings";
 import { openGameAs, startLobbyAction } from "./helpers/game";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { quickPhrases } from "../../client/src/generated/quickPhrases";
@@ -79,7 +80,9 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await expect(host.getByTestId("lobby-start")).toBeEnabled();
     await startLobbyAction(host);
 
+    await revealTool(host, "game-interaction");
     const hostInteraction = host.getByTestId("game-interaction");
+    await revealTool(guest, "game-interaction");
     const guestInteraction = guest.getByTestId("game-interaction");
     await expect(hostInteraction).toBeEnabled({ timeout: 20_000 });
     await expect(guestInteraction).toBeEnabled({ timeout: 20_000 });
@@ -102,6 +105,7 @@ test("folder-driven quick phrases are visible and played once for sender and tab
     await expect(guestToast).toContainText(PHRASE.label);
     await expect.poll(() => playedPhraseAudio(host)).toEqual([PHRASE.url]);
     await expect.poll(() => playedPhraseAudio(guest)).toEqual([PHRASE.url]);
+    await revealTool(host, "game-interaction");
     await expect(hostInteraction).toBeDisabled();
     await expect(guestInteraction).toBeDisabled();
     await host.waitForTimeout(500);

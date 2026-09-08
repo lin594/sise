@@ -1,3 +1,4 @@
+import { revealTool } from "./helpers/settings";
 import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 import { expect, test } from "@playwright/test";
 
@@ -40,6 +41,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 20_000 });
     await finishDeclarationIfNeeded(page);
+    await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();

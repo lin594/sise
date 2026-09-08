@@ -224,7 +224,7 @@ test.describe("mobile responsive release gate", () => {
     await expect(declarationButton.locator("span")).toHaveText("确认鱼");
     await declarationButton.click();
     await expect(page.locator(".pending-fish-back")).toHaveCount(4);
-    await expect(declarationButton.locator("span")).toHaveText("开始游戏");
+    await expect(declarationButton.locator("span")).toHaveText("确认坎数");
     await expect(page.getByTestId("kong-count-0")).toBeVisible();
     await expect(page.getByTestId("kong-count-1")).toHaveAttribute("aria-checked", "true");
     await finishOpeningDeclaration(page);
