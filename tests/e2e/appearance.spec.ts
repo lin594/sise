@@ -284,3 +284,34 @@ test('dealer ceremony counts from the picker to the authoritative dealer for eve
     if (color === 'white') await page.screenshot({ path: info.outputPath('dealer-count-white-4.png') });
   }
 });
+
+test('a clock-only snapshot cannot leave rotation waiting on an expired animation', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  const board = page.getByTestId('game-board');
+  await expect(board).toHaveAttribute('data-geometry-busy', 'false');
+  // This rendering-only fixture reserves a revision range against late real
+  // snapshots; it submits no gameplay actions after installing the transition.
+  // An already completed transition leaves the RAF loop idle. A same-revision
+  // snapshot may then correct only serverNow, without replacing public state.
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    const now = Date.now();
+    bridge.applyRoomSnapshot({ ...state, stateRevision: state.stateRevision + 1000, serverNow: now, tableTransitions: [{
+      id: 98765, round: 1, kind: 'draw', startsAt: now - 2000, endsAt: now - 100,
+      moves: [{ card: { id: 'clock-regression-card', color: 'red', type: 'ma' }, from: { zone: 'deck' }, to: { zone: 'center' } }],
+    }] }, 'explicit');
+  });
+  await expect(board).toHaveAttribute('data-geometry-busy', 'false');
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    bridge.applyRoomSnapshot({ ...state, serverNow: state.tableTransitions[0].endsAt - 1200 }, 'explicit');
+  });
+  await expect(board).toHaveAttribute('data-geometry-busy', 'true');
+  await page.setViewportSize({ width: 320, height: 568 });
+  await expect(page.locator('main.layout')).toHaveAttribute('data-rotated-phone-portrait', 'true', { timeout: 5000 });
+  await expect(board).toHaveAttribute('data-geometry-busy', 'false');
+  await expect(page.locator('main.layout')).toHaveAttribute('data-effective-viewport', '568x320');
+});

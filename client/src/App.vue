@@ -230,6 +230,7 @@
         :is-current-turn="isMyTurn"
         :response-phase="state?.responsePhase || ''"
         :interaction-paused-message="interactionPausedMessage"
+        :deferred-chi-pending="Boolean(pendingDeferredChiIntent)"
         :decision-untimed="decisionTimer.untimed"
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
@@ -931,6 +932,7 @@ type LocalTestBridgeWindow = Window & {
     getRoomState: () => RoomStateSnapshot | null;
     getRoundResult: () => typeof roundResult.value;
     getDecisionTimer: () => typeof decisionTimer.value;
+    getDeferredChiDebug: () => unknown;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
     setListeningHintsOverride: (hints: typeof listeningHints.value) => void;
   };
@@ -961,6 +963,7 @@ function installLocalTestBridge(): void {
     getRoomState: () => state.value,
     getRoundResult: () => roundResult.value,
     getDecisionTimer: () => decisionTimer.value,
+    getDeferredChiDebug: () => ({ intent: pendingDeferredChiIntent.value, actions: availableActions.value, handReady: privateHandSynchronized.value, feedback: actionFeedback.value, stateRevision: acceptedStateRevision.value }),
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
     },
@@ -1501,6 +1504,7 @@ const canAct = computed(() => pendingActionDecision.value && privateHandSynchron
 const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
 const interactionPausedMessage = computed(() => {
   if (connected.value) {
+    if (pendingDeferredChiIntent.value) return "已选择吃，等待其他玩家响应";
     if (mePlayer.value?.isAutoPlay && (isDeclaring.value || isPlaying.value)) {
       return "机器人正在替你操作，可在顶部取消托管";
     }
@@ -2421,7 +2425,8 @@ function onPanelSubmit(request: ActionRequest) {
     sendAction("pass");
     return;
   }
-  if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
+  if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source === "upper") {
+    if (pendingDeferredChiIntent.value) return;
     const candidateId = candidateIdFromRequest(request);
     const targetCardId = String(candidateTargetCard.value?.id ?? "");
     if (!candidateId || !targetCardId) return;
@@ -2431,7 +2436,7 @@ function onPanelSubmit(request: ActionRequest) {
       candidateId,
       collectiveDecisionKey: decisionTimer.value.decisionKey,
     };
-    sendAction("pass");
+    if (sendAction("pass") !== "sent") pendingDeferredChiIntent.value = null;
     return;
   }
   pendingDeferredChiIntent.value = null;
@@ -2463,6 +2468,7 @@ function submitDeferredChiIfReady() {
     pendingDeferredChiIntent.value = null;
     return;
   }
+  if (!connected.value || !privateHandSynchronized.value || !targetCardId) return;
   const decisionKey = decisionTimer.value.decisionKey;
   if (!decisionKey || decisionKey === intent.collectiveDecisionKey) return;
   const chiEntry = availableActions.value.find((item) => item.action === "chi");
@@ -2533,7 +2539,7 @@ watch(
 );
 
 watch(
-  () => decisionTimer.value.decisionKey,
+  () => [decisionTimer.value.decisionKey, privateHandSynchronized.value, acceptedStateRevision.value] as const,
   () => submitDeferredChiIfReady(),
 );
 
@@ -2641,6 +2647,8 @@ watch(connectionState, (nextState) => {
 
 watch(connected, (isConnected) => {
   if (!isConnected) {
+    pendingDeferredChiIntent.value = null;
+    pendingDeferredGrab.value = false;
     if (roundStartPending.value) {
       clearRoundStartPending();
     }

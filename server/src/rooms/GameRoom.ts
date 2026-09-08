@@ -3354,16 +3354,21 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         !this.pendingResponse.collectives.has(seatId) &&
         (this.collectiveResponderId === seatId || this.canSeatPreselectCollective(seatId)),
       );
+      // Preview only the next receiver's eat of an upper discard. It remains
+      // deferred: the wire action is Pass now, Chi in the later local window.
+      const isDeferredChi = (entry: AvailableActionEntry) =>
+        this.pendingResponse?.card.source === "upper" && entry.action === "chi"
+        && Boolean(entry.deferred) && Boolean(entry.candidates?.length);
       const hasMeaningfulChoice = internalActions.some(
-        (entry) => this.isCollectiveInterruptAction(entry.action) && entry.enabled,
+        (entry) => (this.isCollectiveInterruptAction(entry.action) && entry.enabled) || isDeferredChi(entry),
       );
       if (!canStillChoose || !hasMeaningfulChoice) {
         return { availableActions: [], decisionTimer };
       }
       return {
         availableActions: internalActions.filter((entry) =>
-          entry.action === "pass" || this.isCollectiveInterruptAction(entry.action),
-        ).filter((entry) => entry.enabled),
+          isDeferredChi(entry) || ((entry.action === "pass" || this.isCollectiveInterruptAction(entry.action)) && entry.enabled),
+        ),
         decisionTimer,
       };
     }

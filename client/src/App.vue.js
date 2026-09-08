@@ -178,6 +178,7 @@ function installLocalTestBridge() {
         getRoomState: () => state.value,
         getRoundResult: () => roundResult.value,
         getDecisionTimer: () => decisionTimer.value,
+        getDeferredChiDebug: () => ({ intent: pendingDeferredChiIntent.value, actions: availableActions.value, handReady: privateHandSynchronized.value, feedback: actionFeedback.value, stateRevision: acceptedStateRevision.value }),
         setPrivateHandReadyOverride: (ready) => {
             localTestPrivateHandReadyOverride.value = ready;
         },
@@ -672,6 +673,8 @@ const canAct = computed(() => pendingActionDecision.value && privateHandSynchron
 const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
 const interactionPausedMessage = computed(() => {
     if (connected.value) {
+        if (pendingDeferredChiIntent.value)
+            return "已选择吃，等待其他玩家响应";
         if (mePlayer.value?.isAutoPlay && (isDeclaring.value || isPlaying.value)) {
             return "机器人正在替你操作，可在顶部取消托管";
         }
@@ -1470,7 +1473,9 @@ function onPanelSubmit(request) {
         sendAction("pass");
         return;
     }
-    if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source !== "draw") {
+    if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source === "upper") {
+        if (pendingDeferredChiIntent.value)
+            return;
         const candidateId = candidateIdFromRequest(request);
         const targetCardId = String(candidateTargetCard.value?.id ?? "");
         if (!candidateId || !targetCardId)
@@ -1481,7 +1486,8 @@ function onPanelSubmit(request) {
             candidateId,
             collectiveDecisionKey: decisionTimer.value.decisionKey,
         };
-        sendAction("pass");
+        if (sendAction("pass") !== "sent")
+            pendingDeferredChiIntent.value = null;
         return;
     }
     pendingDeferredChiIntent.value = null;
@@ -1511,6 +1517,8 @@ function submitDeferredChiIfReady() {
         pendingDeferredChiIntent.value = null;
         return;
     }
+    if (!connected.value || !privateHandSynchronized.value || !targetCardId)
+        return;
     const decisionKey = decisionTimer.value.decisionKey;
     if (!decisionKey || decisionKey === intent.collectiveDecisionKey)
         return;
@@ -1570,7 +1578,7 @@ watch(() => availableActions.value, () => {
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();
 }, { deep: true });
-watch(() => decisionTimer.value.decisionKey, () => submitDeferredChiIfReady());
+watch(() => [decisionTimer.value.decisionKey, privateHandSynchronized.value, acceptedStateRevision.value], () => submitDeferredChiIfReady());
 watch(() => `${connectionState.value}|${actionFeedback.value?.decisionKey ?? ""}|${actionFeedback.value?.status ?? ""}`, () => submitDeferredChiIfReady());
 watch(() => Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay), (automatic) => {
     if (automatic)
@@ -1659,6 +1667,8 @@ watch(connectionState, (nextState) => {
 });
 watch(connected, (isConnected) => {
     if (!isConnected) {
+        pendingDeferredChiIntent.value = null;
+        pendingDeferredGrab.value = false;
         if (roundStartPending.value) {
             clearRoundStartPending();
         }
@@ -3386,6 +3396,7 @@ else {
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
+        deferredChiPending: (Boolean(__VLS_ctx.pendingDeferredChiIntent)),
         decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
@@ -3419,6 +3430,7 @@ else {
         isCurrentTurn: (__VLS_ctx.isMyTurn),
         responsePhase: (__VLS_ctx.state?.responsePhase || ''),
         interactionPausedMessage: (__VLS_ctx.interactionPausedMessage),
+        deferredChiPending: (Boolean(__VLS_ctx.pendingDeferredChiIntent)),
         decisionUntimed: (__VLS_ctx.decisionTimer.untimed),
         decisionTimerTotalMs: (__VLS_ctx.decisionTimer.totalMs),
         decisionTimerEndsAt: (__VLS_ctx.decisionTimer.endsAt),
@@ -4492,6 +4504,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             canAct: canAct,
             canDiscard: canDiscard,
             interactionPausedMessage: interactionPausedMessage,
+            pendingDeferredChiIntent: pendingDeferredChiIntent,
             viewportGeometryBusy: viewportGeometryBusy,
             effectiveHeight: effectiveHeight,
             effectiveWidth: effectiveWidth,

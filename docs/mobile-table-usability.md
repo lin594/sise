@@ -29,3 +29,7 @@
 - [小手机正常出牌](validation/mobile-table/iphone-se-normal-game.png)
 
 - [最新小屏顶栏与白色数 4 定庄结果](validation/mobile-table/dealer-count-white-4.png)
+
+## 时钟校准后的旋转恢复
+
+同一状态版本的快照也可能校准 `presentationClockOffsetMs`。动画帧循环必须观察此校准：否则已停止的循环可能把已结束动画重新判为活跃，导致视口几何一直等待。浏览器回归先安装已结束动画，再发送同版本的时钟校准快照，确认横屏到旋转竖屏能够在动画自然结束后恢复。该用例在修复前稳定复现旋转超时；修复后与旧机型旋转用例各连续通过三次。

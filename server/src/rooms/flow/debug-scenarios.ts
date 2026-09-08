@@ -200,6 +200,31 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.pollOriginPlayerId = originId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_collective_confirm" || scenario === "chi_collective_only") {
+    const selfIndex = context.playerOrder.indexOf(seatId);
+    const originId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id);
+      if (seat) seat.declaredKongs = 0;
+      if (id !== seatId) context.playerHands.set(id, [{ id: `chi-spare-${id}-${seq}`, color: "green", type: "shi" }]);
+    }
+    add("confirm-ma", "red", "ma"); add("confirm-pao", "red", "pao"); add("confirm-spare", "green", "xiang");
+    if (scenario === "chi_collective_confirm") {
+      add("confirm-ju1", "red", "ju"); add("confirm-ju2", "red", "ju");
+      const competitor = context.getNextPlayerId(seatId);
+      context.playerHands.set(competitor, [
+        { id: "competitor-ju1", color: "red", type: "ju" },
+        { id: "competitor-ju2", color: "red", type: "ju" },
+        { id: "competitor-spare", color: "green", type: "xiang" },
+      ]);
+    }
+    context.setCollectiveResponseWindowMs(scenario === "chi_collective_confirm" ? 10_000 : 3_000);
+    context.setPendingResponse(createPendingResponse(originId, { id: "confirm-target", color: "red", type: "ju" }, "upper"));
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.pollOriginPlayerId = originId;
+    context.setResponseCard(context.getPendingResponse()!.card, "upper");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_collective_zu4" || scenario === "chi_local_upper_zu4") {
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
@@ -607,6 +632,8 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "early_collective_choice" ||
     scenario === "crowded_collective_actions" ||
     scenario === "chi_collective_zu4" ||
+    scenario === "chi_collective_confirm" ||
+    scenario === "chi_collective_only" ||
     scenario === "hu_fail_case"
   ) {
     alignCollectivePublicTurn();

@@ -408,7 +408,9 @@ watch(() => props.viewportTransformKey, () => {
     flights.value = [];
     lastPresentationPaintAt = 0;
 }, { flush: "sync" });
-watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.phase, props.state?.tableTransitions], () => {
+// Same-revision snapshots can correct the clock after the RAF loop went idle.
+// Restart it so revived transitions expire and release deferred viewport changes.
+watch(() => [props.state?.roomId, props.state?.completedRounds, props.state?.phase, props.state?.tableTransitions, props.state?.presentationClockOffsetMs], () => {
     if (presentationFrame !== null)
         cancelAnimationFrame(presentationFrame);
     const nextScopeKey = getRoundKey(props.state?.roomId, props.state?.completedRounds, props.state?.phase);
@@ -933,6 +935,8 @@ const showDecisionClock = computed(() => publicCollectiveSeconds.value !== null 
         (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
         (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)));
 const flowStatusText = computed(() => {
+    if (props.deferredChiPending)
+        return "已选择吃，等待其他玩家响应";
     if (props.state?.phase === "declaring") {
         return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
             ? "等待其他玩家声明"
