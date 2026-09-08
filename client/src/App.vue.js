@@ -152,6 +152,16 @@ const guestProfileSummary = computed(() => {
         : "还没有完成牌局";
 });
 const localTestPrivateHandReadyOverride = ref(null);
+const localTestListeningHintsOverride = ref(null);
+const boardListeningHints = computed(() => {
+    const override = localTestListeningHintsOverride.value;
+    if (!override || override.decisionKey !== decisionTimer.value.decisionKey)
+        return listeningHints.value;
+    // Local layout fixtures must not invent authoritative revisions or race
+    // real private-state recovery. Their lifetime is one real decision only.
+    return { ...override, stateRevision: acceptedStateRevision.value };
+});
+watch(() => decisionTimer.value.decisionKey, () => { localTestListeningHintsOverride.value = null; });
 function installLocalTestBridge() {
     const query = new URLSearchParams(window.location.search);
     const localHost = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
@@ -168,6 +178,9 @@ function installLocalTestBridge() {
         getDecisionTimer: () => decisionTimer.value,
         setPrivateHandReadyOverride: (ready) => {
             localTestPrivateHandReadyOverride.value = ready;
+        },
+        setListeningHintsOverride: (hints) => {
+            localTestListeningHintsOverride.value = hints;
         },
     };
 }
@@ -3339,7 +3352,7 @@ else {
         privateHand: (__VLS_ctx.privateHand),
         tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
-        listeningHints: (__VLS_ctx.listeningHints),
+        listeningHints: (__VLS_ctx.boardListeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
         declarationMarks: (__VLS_ctx.declarationMarks),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -3371,7 +3384,7 @@ else {
         privateHand: (__VLS_ctx.privateHand),
         tableLayout: (__VLS_ctx.resolvedTableLayout),
         handLayout: (__VLS_ctx.displayPreferences.handLayout),
-        listeningHints: (__VLS_ctx.listeningHints),
+        listeningHints: (__VLS_ctx.boardListeningHints),
         acceptedStateRevision: (__VLS_ctx.acceptedStateRevision),
         declarationMarks: (__VLS_ctx.declarationMarks),
         mySeatId: (__VLS_ctx.mySeatId),
@@ -4377,7 +4390,6 @@ const __VLS_self = (await import('vue')).defineComponent({
             players: players,
             privateHand: privateHand,
             acceptedStateRevision: acceptedStateRevision,
-            listeningHints: listeningHints,
             quickPhrase: quickPhrase,
             quickPhraseMuted: quickPhraseMuted,
             availableActions: availableActions,
@@ -4397,6 +4409,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             sendQuickPhrase: sendQuickPhrase,
             setQuickPhraseMuted: setQuickPhraseMuted,
             guestProfileSummary: guestProfileSummary,
+            boardListeningHints: boardListeningHints,
             entryName: entryName,
             nicknameHistory: nicknameHistory,
             enteringLobby: enteringLobby,

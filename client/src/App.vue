@@ -214,7 +214,7 @@
         :private-hand="privateHand"
         :table-layout="resolvedTableLayout"
         :hand-layout="displayPreferences.handLayout"
-        :listening-hints="listeningHints"
+        :listening-hints="boardListeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
         :my-seat-id="mySeatId"
@@ -923,10 +923,20 @@ type LocalTestBridgeWindow = Window & {
     getRoundResult: () => typeof roundResult.value;
     getDecisionTimer: () => typeof decisionTimer.value;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
+    setListeningHintsOverride: (hints: typeof listeningHints.value) => void;
   };
 };
 
 const localTestPrivateHandReadyOverride = ref<boolean | null>(null);
+const localTestListeningHintsOverride = ref<typeof listeningHints.value>(null);
+const boardListeningHints = computed(() => {
+  const override = localTestListeningHintsOverride.value;
+  if (!override || override.decisionKey !== decisionTimer.value.decisionKey) return listeningHints.value;
+  // Local layout fixtures must not invent authoritative revisions or race
+  // real private-state recovery. Their lifetime is one real decision only.
+  return { ...override, stateRevision: acceptedStateRevision.value };
+});
+watch(() => decisionTimer.value.decisionKey, () => { localTestListeningHintsOverride.value = null; });
 
 function installLocalTestBridge(): void {
   const query = new URLSearchParams(window.location.search);
@@ -944,6 +954,9 @@ function installLocalTestBridge(): void {
     getDecisionTimer: () => decisionTimer.value,
     setPrivateHandReadyOverride: (ready) => {
       localTestPrivateHandReadyOverride.value = ready;
+    },
+    setListeningHintsOverride: (hints) => {
+      localTestListeningHintsOverride.value = hints;
     },
   };
 }

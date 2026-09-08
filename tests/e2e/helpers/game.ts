@@ -62,6 +62,11 @@ export async function startLobbyAction(page: Page): Promise<void> {
   await expect.poll(async () =>
     await page.getByTestId("mode-practice_bots").isVisible() || await page.getByTestId("lobby-start").isVisible(),
   ).toBe(true);
-  if (await page.getByTestId("mode-practice_bots").isVisible()) await page.getByTestId("mode-practice_bots").click();
-  else await page.getByTestId("lobby-start").click();
+  if (await page.getByTestId("mode-practice_bots").isVisible()) {
+    await page.getByTestId("mode-practice_bots").click();
+    // The board can mount during initial room synchronization, before the
+    // auto-start request has filled the three computer seats. A debug scenario
+    // applied in that gap changes phase and prevents the real start entirely.
+    await expect(page.getByTestId("opponent-hand-count")).toHaveCount(3, { timeout: 20_000 });
+  } else await page.getByTestId("lobby-start").click();
 }
