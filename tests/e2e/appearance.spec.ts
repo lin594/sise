@@ -403,3 +403,91 @@ test('settings group table placement under layout without a turn reminder', asyn
   await expect(page.getByTestId('seat-direction-clockwise')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('layout-classic')).toHaveAttribute('aria-checked', 'true');
 });
+
+test('opening auto play from interaction leaves no hidden modal behind', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-interaction').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+  await page.getByTestId('game-auto-play').click();
+  await expect(page.getByTestId('cancel-auto-play')).toBeFocused();
+  await expect(page.getByTestId('quick-phrase-panel')).toHaveCount(0);
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+  await expect(page.getByTestId('game-auto-play')).toBeFocused();
+});
+
+test('interaction dismisses on a header outside click and restores its entry', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-interaction').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+  await page.locator('.top-brand').click();
+  await expect(page.getByTestId('quick-phrase-panel')).toHaveCount(0);
+  await expect(page.getByTestId('game-interaction')).toBeFocused();
+  await page.getByTestId('game-settings').click();
+  await expect(page.getByTestId('settings-panel')).toBeVisible();
+});
+
+test('a newer toolbar choice cancels a pending rules transition', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.getByTestId('game-history').click();
+  await expect(page.getByTestId('history-panel')).toBeVisible();
+  // Two quick toolbar choices while the old panel is still leaving.
+  await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>('[data-testid="tools-rules"]')!.click();
+    document.querySelector<HTMLButtonElement>('[data-testid="game-settings"]')!.click();
+  });
+  await expect(page.getByTestId('settings-panel')).toBeVisible();
+  await expect(page.getByTestId('history-panel')).toHaveCount(0);
+  await expect(page.getByTestId('settings-panel')).toBeFocused();
+  await expect(page.getByTestId('rules-panel')).toHaveCount(0);
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+});
+
+for (const viewport of [{ width: 568, height: 320 }, { width: 320, height: 568 }]) {
+  test(`toolbar panels switch, trap focus and dismiss without selecting cards ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await startTable(page);
+    const entries = [
+      ['game-history', 'history-panel'],
+      ['game-interaction', 'quick-phrase-panel'],
+      ['game-settings', 'settings-panel'],
+    ];
+    for (const [source] of entries) {
+      for (const [entry, panelId] of entries) {
+        if (entry === source) continue;
+        await page.getByTestId(source).click();
+        await expect(page.getByTestId(source)).toHaveAttribute('aria-expanded', 'true');
+        await page.getByTestId(entry).click();
+        const panel = page.getByTestId(panelId);
+        await expect(panel).toBeFocused();
+        await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
+        await expect(page.getByTestId(source)).toHaveAttribute('aria-expanded', 'false');
+        await expect(page.getByTestId(entry)).toHaveAttribute('aria-expanded', 'true');
+        const buttons = panel.locator('button:visible:enabled');
+        await page.keyboard.press('Shift+Tab');
+        await expect(buttons.last()).toBeFocused();
+        await page.keyboard.press('Tab');
+        await expect(buttons.first()).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+        await expect(page.getByTestId(entry)).toBeFocused();
+        await expect(page.getByTestId(entry)).toHaveAttribute('aria-expanded', 'false');
+      }
+    }
+    for (const [entry, panelId] of entries) {
+      const cards = page.locator('.hand-card');
+      const selection = await cards.evaluateAll(nodes => nodes.map(el => el.getAttribute('aria-pressed')));
+      const card = await cards.first().boundingBox();
+      await page.getByTestId(entry).click();
+      await expect(page.getByTestId(panelId)).toBeVisible();
+      await page.mouse.click(card!.x + card!.width / 2, card!.y + card!.height / 2);
+      await expect(page.getByTestId(panelId)).toHaveCount(0);
+      expect(await cards.evaluateAll(nodes => nodes.map(el => el.getAttribute('aria-pressed')))).toEqual(selection);
+      await expect(page.getByTestId(entry)).toBeFocused();
+    }
+  });
+}

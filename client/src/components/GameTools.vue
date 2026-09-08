@@ -1,7 +1,7 @@
 <template>
   <div ref="gameToolsRef" class="game-tools" data-testid="game-tools">
     <div class="tool-buttons">
-      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" title="最近操作" @click="toggleHistory">
+      <button v-if="inRoom" ref="historyButtonRef" class="tool-button" type="button" data-testid="game-history" :aria-label="historyButtonLabel" :aria-expanded="historyOpen" aria-controls="game-history-panel" title="最近操作" @click="toggleHistory">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6M12 7v5l3 2" /></svg>
         <span class="tool-label">记录</span>
       </button>
@@ -9,7 +9,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v15M12 5C9 3 5 3 3 4v14c3-1 6-1 9 2 3-3 6-3 9-2V4c-2-1-6-1-9 1Z" /></svg>
         <span class="tool-label">规则</span>
       </button>
-      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" aria-label="快捷互动" title="快捷互动" @click="togglePhrases">
+      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" aria-controls="quick-phrase-panel" aria-label="快捷互动" title="快捷互动" @click="togglePhrases">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM8 10h.01M12 10h.01M16 10h.01" /></svg>
         <span class="tool-label">互动</span>
       </button>
@@ -64,7 +64,7 @@
     </Transition>
 
     <Transition name="popover" @after-leave="finishOpeningRules">
-      <section v-if="phraseOpen" ref="phrasePanelRef" class="phrase-panel" data-testid="quick-phrase-panel" role="dialog" aria-modal="true" aria-label="快捷互动" tabindex="-1" @keydown.esc.stop.prevent="closePhrases" @keydown.tab="trapPanelFocus($event, phrasePanelRef)">
+      <section v-if="phraseOpen" id="quick-phrase-panel" ref="phrasePanelRef" class="phrase-panel" data-testid="quick-phrase-panel" role="dialog" aria-modal="true" aria-label="快捷互动" tabindex="-1" @keydown.esc.stop.prevent="closePhrases" @keydown.tab="trapPanelFocus($event, phrasePanelRef)">
         <button type="button" @click="closePhrases">关闭互动</button>
         <p v-if="props.quickPhraseBusy" class="phrase-busy" role="status">上一条语音播放中…</p>
         <p v-else-if="quickPhrases.length === 0" class="phrase-busy" role="status">暂无互动音效</p>
@@ -604,12 +604,12 @@ function formattedHistoryAction(log: ParsedActionLog): string {
 }
 
 async function toggleSettings(): Promise<void> {
+  rulesOpeningPending = false;
   if (settingsOpen.value) {
     closeSettings();
     return;
   }
-  closeHistory(false);
-  phraseOpen.value = false;
+  dismissToolPanels();
   settingsRoot.value = "home";
   settingsPage.value = settingsRoot.value;
   settingsOpen.value = true;
@@ -620,12 +620,12 @@ async function toggleSettings(): Promise<void> {
 }
 
 async function toggleHistory(): Promise<void> {
+  rulesOpeningPending = false;
   if (historyOpen.value) {
     closeHistory();
     return;
   }
-  closeSettings(false);
-  phraseOpen.value = false;
+  dismissToolPanels();
   historyOpen.value = true;
   await nextTick();
   historyPanelRef.value?.focus();
@@ -644,17 +644,25 @@ function closeOpenPopover(): void {
   closeSettings();
 }
 
-function closePhrases() {
+function closePhrases(): void {
+  rulesOpeningPending = false;
+  if (!phraseOpen.value) return;
+  removeSettingsOutsideListener();
   phraseOpen.value = false;
   void nextTick(() => interactionButtonRef.value?.focus());
 }
 
-function togglePhrases(): void {
-  const opening = !phraseOpen.value;
-  closeHistory(false);
-  closeSettings(false);
-  phraseOpen.value = opening;
-  if (opening) void nextTick(() => phrasePanelRef.value?.focus());
+async function togglePhrases(): Promise<void> {
+  rulesOpeningPending = false;
+  if (phraseOpen.value) {
+    closePhrases();
+    return;
+  }
+  dismissToolPanels();
+  phraseOpen.value = true;
+  await nextTick();
+  phrasePanelRef.value?.focus();
+  document.addEventListener("pointerdown", handleSettingsOutsidePointer);
 }
 
 function sendPhrase(phraseId: string): void {
@@ -663,6 +671,7 @@ function sendPhrase(phraseId: string): void {
 }
 
 function closeHistory(restoreFocus = true): void {
+  rulesOpeningPending = false;
   if (!historyOpen.value) {
     return;
   }
@@ -674,6 +683,7 @@ function closeHistory(restoreFocus = true): void {
 }
 
 function closeSettings(restoreFocus = true): void {
+  rulesOpeningPending = false;
   if (!settingsOpen.value) {
     return;
   }
@@ -699,13 +709,7 @@ function handleSettingsOutsidePointer(event: PointerEvent): void {
   };
   document.addEventListener("click", consumeClick, true);
   window.setTimeout(() => document.removeEventListener("click", consumeClick, true), 500);
-  if (settingsOpen.value) {
-    closeSettings();
-  }
-  if (historyOpen.value) {
-    closeHistory();
-  }
-  phraseOpen.value = false;
+  closeOpenPopover();
 }
 
 function removeSettingsOutsideListener(): void {
@@ -811,6 +815,16 @@ function requestInstallApp(): void {
 }
 
 let rulesOpeningPending = false;
+// Every new destination closes all tools and cancels an older delayed rule entry.
+function dismissToolPanels(): void {
+  rulesOpeningPending = false;
+  removeSettingsOutsideListener();
+  stopObservingSettingsScroll();
+  settingsOpen.value = false;
+  historyOpen.value = false;
+  phraseOpen.value = false;
+}
+
 function finishOpeningRules(): void {
   if (!rulesOpeningPending) return;
   rulesOpeningPending = false;
@@ -819,12 +833,8 @@ function finishOpeningRules(): void {
 
 function openRules(): void {
   const leavingPanel = settingsOpen.value || historyOpen.value || phraseOpen.value;
+  dismissToolPanels();
   rulesOpeningPending = true;
-  removeSettingsOutsideListener();
-  stopObservingSettingsScroll();
-  settingsOpen.value = false;
-  historyOpen.value = false;
-  phraseOpen.value = false;
   // A direct toolbar entry has no panel leave transition to wait for.
   if (!leavingPanel) finishOpeningRules();
 }
@@ -839,10 +849,7 @@ async function requestAutoPlayChange(): Promise<void> {
   if (props.autoPlayPending) {
     return;
   }
-  removeSettingsOutsideListener();
-  stopObservingSettingsScroll();
-  settingsOpen.value = false;
-  historyOpen.value = false;
+  dismissToolPanels();
   if (props.autoPlay) {
     emit("setAutoPlay", false);
     return;
@@ -898,10 +905,7 @@ async function requestExit(): Promise<void> {
   exitReturnFocus = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : settingsButtonRef.value;
-  removeSettingsOutsideListener();
-  stopObservingSettingsScroll();
-  settingsOpen.value = false;
-  historyOpen.value = false;
+  dismissToolPanels();
   confirmingExit.value = true;
   await nextTick();
   installConfirmationFocusGuard();
@@ -951,6 +955,10 @@ function confirmExit(): void {
 }
 
 function handleNavigationBack(): boolean {
+  if (rulesOpeningPending) {
+    rulesOpeningPending = false;
+    return true;
+  }
   if (confirmingExit.value) {
     void cancelExit();
     return true;
