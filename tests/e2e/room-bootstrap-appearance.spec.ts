@@ -62,3 +62,48 @@ for (const format of ['blob', 'view', 'mixed'] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+for (const stop of ['socket-close', 'pagehide'] as const) {
+  test(`queued Blob frames stop decoding after ${stop}`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const state = { socket: null as WebSocket | null, reads: 0, release: null as (() => void) | null };
+      (window as any).__blobReadTest = state;
+      const read = Blob.prototype.arrayBuffer;
+      Blob.prototype.arrayBuffer = function () {
+        state.reads += 1;
+        if (state.reads === 1) {
+          return new Promise<ArrayBuffer>((resolve, reject) => {
+            state.release = () => read.call(this).then(resolve, reject);
+          });
+        }
+        return read.call(this);
+      };
+      const descriptor = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage')!;
+      Object.defineProperty(WebSocket.prototype, 'onmessage', {
+        ...descriptor,
+        set(handler) {
+          state.socket = this;
+          descriptor.set!.call(this, typeof handler !== 'function' ? handler : function (event: MessageEvent) {
+            handler.call(this, new MessageEvent('message', {
+              data: event.data instanceof ArrayBuffer ? new Blob([event.data]) : event.data,
+            }));
+          });
+        },
+      });
+    });
+    await page.goto('/');
+    await page.getByTestId('mode-practice_bots').click();
+    await page.waitForFunction(() => (window as any).__blobReadTest.release !== null);
+    const result = await page.evaluate(async stop => {
+      const state = (window as any).__blobReadTest;
+      const socket = state.socket as WebSocket;
+      for (let i = 0; i < 3; i++) socket.dispatchEvent(new MessageEvent('message', { data: new Blob([new Uint8Array([0])]) }));
+      if (stop === 'pagehide') window.dispatchEvent(new PageTransitionEvent('pagehide'));
+      else socket.close();
+      state.release();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return { reads: state.reads, stopped: socket.readyState !== WebSocket.OPEN };
+    }, stop);
+    expect(result).toEqual({ reads: 1, stopped: true });
+  });
+}

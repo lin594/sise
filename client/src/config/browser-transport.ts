@@ -8,6 +8,20 @@ WebSocketTransport.prototype.connect = function (url: string): void {
     : new WebSocket(url, this.protocols);
   this.ws = socket;
   socket.binaryType = 'arraybuffer';
+  let stopped = false;
+  const stopReading = () => {
+    stopped = true;
+    window.removeEventListener('pagehide', handlePageHide);
+  };
+  const handlePageHide = () => {
+    stopReading();
+    socket.close();
+  };
+  // WebKit invalidates a document's Blob URLs during navigation. Cancel the
+  // queue before it tries to decode frames belonging to the departing page.
+  window.addEventListener('pagehide', handlePageHide, { once: true });
+  socket.addEventListener('close', stopReading, { once: true });
+  const canRead = () => !stopped && this.ws === socket && socket.readyState === WebSocket.OPEN;
   socket.onopen = event => this.events.onopen?.(event);
   socket.onclose = event => this.events.onclose?.(event);
   socket.onerror = event => this.events.onerror?.(event);
@@ -17,16 +31,16 @@ WebSocketTransport.prototype.connect = function (url: string): void {
   let incoming = Promise.resolve();
   socket.onmessage = event => {
     incoming = incoming.then(async () => {
-      if (this.ws !== socket) return;
+      if (!canRead()) return;
       const raw: unknown = event.data;
       const data = raw instanceof Blob ? await raw.arrayBuffer()
         : ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength).slice().buffer
         : raw;
-      if (this.ws !== socket) return;
+      if (!canRead()) return;
       if (!(data instanceof ArrayBuffer)) throw new Error('Invalid binary room message');
       this.events.onmessage?.(new MessageEvent('message', { data }));
     }).catch(() => {
-      if (this.ws === socket) {
+      if (canRead()) {
         this.events.onerror?.({ code: 1002, reason: '房间消息读取失败，正在重新连接。' });
         socket.close();
       }
