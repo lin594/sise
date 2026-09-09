@@ -3,8 +3,12 @@ import test from "node:test";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 
-test("a new round snapshot reaches clients before the legacy private hand event", () => {
+test("a new round snapshot reaches clients before the legacy private hand event", (t) => {
   const room = new FourColorGameRoom() as any;
+  t.after(() => {
+    room.clearDeclareIntroTimer();
+    for (const seatId of room.playerOrder) room.clearSeatReleaseTimer(seatId);
+  });
   room.state = new GameState();
   room.roomId = "round-presentation-room";
   room.state.roomMode = "practice";
@@ -80,4 +84,23 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.equal(room.state.previousWinnerId, "");
   assert.equal(room.state.previousHuType, "");
   room.clearDeclareIntroTimer();
+
+  room.lastRoundResult = { winnerId: "seat_0", players: [{ clientId: "seat_0", name: "玩家", huType: "small" }] };
+  room.state.completedRounds = 1;
+  room.state.previousWinnerId = "seat_0";
+  room.state.previousWinnerName = "玩家";
+  room.state.previousHuType = "small";
+  room.backToLobby();
+  assert.equal(room.state.completedRounds, 0);
+  assert.equal(room.lastRoundResult, null, "practice restart must discard the previous session result");
+  assert.equal(room.state.previousWinnerId, "");
+  assert.equal(room.state.previousWinnerName, "");
+  assert.equal(room.state.previousHuType, "");
+  room.bootstrapRound();
+  try {
+    const restarted = sent.filter(message => message.event === "room_snapshot").at(-1)!.payload;
+    assert.equal(restarted.previousWinnerId, "", "the first round after returning to lobby has no previous winner");
+  } finally {
+    room.clearDeclareIntroTimer();
+  }
 });

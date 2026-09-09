@@ -2024,9 +2024,18 @@ const dealerCeremonyCard = computed<Card | null>(() => {
 const previousRoundSummary = computed(() => {
   if (!props.state?.previousWinnerId) return "";
   const name = props.state.previousWinnerName || props.players.find(player => player.clientId === props.state?.previousWinnerId)?.name || "牌友";
-  return props.state.previousHuType === "big"
-    ? `上局${name}大胡，由对家翻牌定庄`
-    : props.state.previousHuType === "small" ? `上局${name}小胡，本局继续坐庄` : `上局赢家：${name}`;
+  const result = props.state.previousHuType === "big" ? `上局${name}大胡`
+    : props.state.previousHuType === "small" ? `上局${name}小胡` : `上局赢家：${name}`;
+  const pickerId = props.state.dealerPickerId;
+  if (pickerId) {
+    const seats = [...props.players].sort((a, b) => a.seatIndex - b.seatIndex);
+    const winnerIndex = seats.findIndex(player => player.clientId === props.state?.previousWinnerId);
+    const opposite = seats.length === 4 && winnerIndex >= 0 && seats[(winnerIndex + 2) % 4]?.clientId === pickerId;
+    const picker = opposite ? "对家" : props.players.find(player => player.clientId === pickerId)?.name || "牌友";
+    return `${result}，由${picker}翻牌定庄`;
+  }
+  return props.state.previousHuType === "small" && props.state.dealerId === props.state.previousWinnerId
+    ? `${result}，本局继续坐庄` : result;
 });
 const previousWinnerLabel = (id: string) => id === props.state?.previousWinnerId
   ? props.state.previousHuType === "big" ? "上局大胡" : props.state.previousHuType === "small" ? "上局小胡" : "上局赢家"

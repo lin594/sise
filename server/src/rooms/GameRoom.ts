@@ -3196,6 +3196,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         this.dealerCard = null;
         this.dealerPickerId = null;
         this.nextRoundSetup = null;
+        this.state.previousWinnerId = "";
+        this.state.previousWinnerName = "";
+        this.state.previousHuType = "";
+        if (this.state.roomMode === "practice") {
+          this.lastRoundResult = null;
+        }
         this.awaitingDiscardOwnerId = null;
         this.lastTerminalFingerprint = "";
         this.huLogDedup.clear();
