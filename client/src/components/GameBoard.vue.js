@@ -971,11 +971,18 @@ const showDecisionClock = computed(() => publicCollectiveSeconds.value !== null 
         (canDiscard.value || canAct.value) &&
         (props.state?.responsePhase !== "collective" || hasMeaningfulCollectiveAction.value) &&
         (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)));
+// Public/private polling and clock ticks do not count as player activity.
+const lastTableActivityAt = ref(Date.now());
+watch(() => [props.state?.phase, props.state?.completedRounds, props.state?.lastAction,
+    props.state?.tableEventSeq, props.state?.currentPlayerId, props.state?.activeResponderId,
+    props.state?.responsePhase, props.state?.targetCard?.id,
+    props.players.map(player => `${player.clientId}:${player.declaredReady}:${player.declarationStep}`).join("|")].join(";"), () => { lastTableActivityAt.value = Date.now(); }, { immediate: true });
+const passiveWaitVisible = computed(() => nowMs.value - lastTableActivityAt.value >= 3000);
 const flowStatusText = computed(() => {
     if (props.deferredChiPending)
         return "已选择吃，等待其他玩家响应";
     if (props.state?.phase === "declaring") {
-        return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
+        return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
             ? "等待其他玩家声明"
             : "";
     }
@@ -983,7 +990,7 @@ const flowStatusText = computed(() => {
         return "正在提交";
     }
     if (props.state?.phase === "playing" && props.state?.responsePhase === "collective") {
-        return canAct.value ? "" : publicCollectiveSeconds.value === 0 ? "等待其他玩家操作" : "等待其他玩家响应";
+        return !canAct.value && passiveWaitVisible.value ? "等待其他玩家操作" : "";
     }
     return "";
 });
@@ -1020,6 +1027,26 @@ const dealerCeremonyCard = computed(() => {
     }
     return dealerInfoCard.value ?? reveal.card;
 });
+const previousRoundSummary = computed(() => {
+    if (!props.state?.previousWinnerId)
+        return "";
+    const name = props.state.previousWinnerName || props.players.find(player => player.clientId === props.state?.previousWinnerId)?.name || "牌友";
+    const result = props.state.previousHuType === "big" ? `上局${name}大胡`
+        : props.state.previousHuType === "small" ? `上局${name}小胡` : `上局赢家：${name}`;
+    const pickerId = props.state.dealerPickerId;
+    if (pickerId) {
+        const seats = [...props.players].sort((a, b) => a.seatIndex - b.seatIndex);
+        const winnerIndex = seats.findIndex(player => player.clientId === props.state?.previousWinnerId);
+        const opposite = seats.length === 4 && winnerIndex >= 0 && seats[(winnerIndex + 2) % 4]?.clientId === pickerId;
+        const picker = opposite ? "对家" : props.players.find(player => player.clientId === pickerId)?.name || "牌友";
+        return `${result}，由${picker}翻牌定庄`;
+    }
+    return props.state.previousHuType === "small" && props.state.dealerId === props.state.previousWinnerId
+        ? `${result}，本局继续坐庄` : result;
+});
+const previousWinnerLabel = (id) => id === props.state?.previousWinnerId
+    ? props.state.previousHuType === "big" ? "上局大胡" : props.state.previousHuType === "small" ? "上局小胡" : "上局赢家"
+    : "";
 const dealerPickerDescription = computed(() => {
     const id = dealerReveal.value?.pickerId;
     if (id === props.mySeatId)
@@ -3335,6 +3362,14 @@ if (__VLS_ctx.topPlayer) {
         'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.topPlayer.visibleGroupScore} 分`),
     });
     (__VLS_ctx.topPlayer.visibleGroupScore);
+    if (__VLS_ctx.previousWinnerLabel(__VLS_ctx.topPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "previous-winner-badge" },
+            'data-testid': "previous-winner",
+            title: (__VLS_ctx.previousRoundSummary),
+        });
+        (__VLS_ctx.previousWinnerLabel(__VLS_ctx.topPlayer.clientId));
+    }
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.topPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -3530,6 +3565,14 @@ if (__VLS_ctx.leftPlayer) {
         'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.leftPlayer.visibleGroupScore} 分`),
     });
     (__VLS_ctx.leftPlayer.visibleGroupScore);
+    if (__VLS_ctx.previousWinnerLabel(__VLS_ctx.leftPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "previous-winner-badge" },
+            'data-testid': "previous-winner",
+            title: (__VLS_ctx.previousRoundSummary),
+        });
+        (__VLS_ctx.previousWinnerLabel(__VLS_ctx.leftPlayer.clientId));
+    }
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.leftPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -3809,6 +3852,14 @@ if (__VLS_ctx.rightPlayer) {
         'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.rightPlayer.visibleGroupScore} 分`),
     });
     (__VLS_ctx.rightPlayer.visibleGroupScore);
+    if (__VLS_ctx.previousWinnerLabel(__VLS_ctx.rightPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "previous-winner-badge" },
+            'data-testid': "previous-winner",
+            title: (__VLS_ctx.previousRoundSummary),
+        });
+        (__VLS_ctx.previousWinnerLabel(__VLS_ctx.rightPlayer.clientId));
+    }
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.rightPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -4139,6 +4190,13 @@ if (__VLS_ctx.dealerReveal) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dealer-reveal-panel" },
     });
+    if (__VLS_ctx.previousRoundSummary) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+            ...{ class: "previous-round-summary" },
+            'data-testid': "previous-round-summary",
+        });
+        (__VLS_ctx.previousRoundSummary);
+    }
     if (__VLS_ctx.dealerReveal.stage === 'picking') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({
             ...{ class: "dealer-picker-name" },
@@ -4268,6 +4326,14 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
         'aria-label': (`当前明示牌组基础分 ${__VLS_ctx.selfPlayer.visibleGroupScore} 分`),
     });
     (__VLS_ctx.selfPlayer.visibleGroupScore);
+    if (__VLS_ctx.previousWinnerLabel(__VLS_ctx.selfPlayer.clientId)) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+            ...{ class: "previous-winner-badge" },
+            'data-testid': "previous-winner",
+            title: (__VLS_ctx.previousRoundSummary),
+        });
+        (__VLS_ctx.previousWinnerLabel(__VLS_ctx.selfPlayer.clientId));
+    }
     if (__VLS_ctx.showDealerSeatMarker(__VLS_ctx.selfPlayer.clientId)) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "dealer-seat-lockup" },
@@ -4714,6 +4780,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['previous-winner-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -4740,6 +4807,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['previous-winner-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -4788,6 +4856,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['previous-winner-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -4823,6 +4892,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['table-notice-toast']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-panel']} */ ;
+/** @type {__VLS_StyleScopedClasses['previous-round-summary']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-picker-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-tile']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-back']} */ ;
@@ -4840,6 +4910,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['hand-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['kan-count-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['group-score-badge']} */ ;
+/** @type {__VLS_StyleScopedClasses['previous-winner-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-seat-lockup']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-badge']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-card-mark']} */ ;
@@ -4973,6 +5044,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             centerPointerDirection: centerPointerDirection,
             dealerInfoCard: dealerInfoCard,
             dealerCeremonyCard: dealerCeremonyCard,
+            previousRoundSummary: previousRoundSummary,
+            previousWinnerLabel: previousWinnerLabel,
             dealerCountStep: dealerCountStep,
             dealerCountingFinished: dealerCountingFinished,
             dealerCountingSeatId: dealerCountingSeatId,

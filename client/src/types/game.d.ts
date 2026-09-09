@@ -85,6 +85,9 @@ export interface RoomStateSnapshot {
     hostPlayerId: string;
     dealerId: string;
     dealerPickerId?: string;
+    previousWinnerId?: string;
+    previousWinnerName?: string;
+    previousHuType?: string;
     currentPlayerId: string;
     currentTurnPlayerId: string;
     previousPlayerId: string;

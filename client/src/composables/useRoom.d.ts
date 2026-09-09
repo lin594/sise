@@ -32,6 +32,9 @@ export declare function useRoom(playerName?: string): {
         hostPlayerId: string;
         dealerId: string;
         dealerPickerId?: string | undefined;
+        previousWinnerId?: string | undefined;
+        previousWinnerName?: string | undefined;
+        previousHuType?: string | undefined;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
@@ -273,6 +276,9 @@ export declare function useRoom(playerName?: string): {
         hostPlayerId: string;
         dealerId: string;
         dealerPickerId?: string | undefined;
+        previousWinnerId?: string | undefined;
+        previousWinnerName?: string | undefined;
+        previousHuType?: string | undefined;
         currentPlayerId: string;
         currentTurnPlayerId: string;
         previousPlayerId: string;
