@@ -2972,6 +2972,11 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['rules-decision-reminder']} */ ;
 /** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
 /** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-friend-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-friend-tools']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.main, __VLS_intrinsicElements.main)({
@@ -4260,7 +4265,7 @@ if (__VLS_ctx.showEndPanel) {
             'data-testid': "quick-rematch",
             disabled: (!__VLS_ctx.settlementReady || __VLS_ctx.quickRematchPending),
         });
-        (__VLS_ctx.quickRematchPending ? "正在重新配桌…" : "再来一局（重新配桌）");
+        (__VLS_ctx.quickRematchPending ? "正在重新配桌…" : "重新配桌");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "host-actions-hint" },
         });
@@ -4310,7 +4315,7 @@ if (__VLS_ctx.showEndPanel) {
             ? "正在结算…"
             : __VLS_ctx.settlementTransitionPending === "next_round"
                 ? "正在开始下一局…"
-                : "下一局（房主）");
+                : "同桌下一局");
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.requestReturnLobby) },
             ref: "returnLobbyTriggerRef",
@@ -4333,7 +4338,40 @@ if (__VLS_ctx.showEndPanel) {
     else {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
             ...{ class: "host-actions-hint" },
+            'data-testid': "settlement-waiting-host",
+            role: "status",
         });
+    }
+    if (__VLS_ctx.state?.roomMode === 'friends') {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "settlement-friend-tools" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.showEndPanel))
+                        return;
+                    if (!(__VLS_ctx.state?.roomMode === 'friends'))
+                        return;
+                    __VLS_ctx.shareInviteLink();
+                } },
+            ...{ class: "ghost" },
+            type: "button",
+            'data-testid': "settlement-invite",
+            disabled: (__VLS_ctx.inviteActionPending !== null),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.showEndPanel))
+                        return;
+                    if (!(__VLS_ctx.state?.roomMode === 'friends'))
+                        return;
+                    __VLS_ctx.gameToolsRef?.requestExit();
+                } },
+            ...{ class: "ghost" },
+            type: "button",
+            'data-testid': "settlement-exit",
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.small, __VLS_intrinsicElements.small)({});
     }
 }
 if (__VLS_ctx.confirmingNextRound) {
@@ -4686,6 +4724,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
+/** @type {__VLS_StyleScopedClasses['settlement-friend-tools']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-mask']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-dialog']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-return-symbol']} */ ;

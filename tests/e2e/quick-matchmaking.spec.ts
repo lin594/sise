@@ -187,7 +187,7 @@ test("quick-match players rematch independently without pulling others from sett
     await applyDebugScenario(owner, "settlement_hu");
     await expect(first.getByTestId("settlement-panel")).toBeVisible();
     await expect(second.getByTestId("settlement-panel")).toBeVisible();
-    await expect(first.getByTestId("quick-rematch")).toHaveText("再来一局（重新配桌）");
+    await expect(first.getByTestId("quick-rematch")).toHaveText("重新配桌");
 
     await first.getByTestId("quick-rematch").click();
     await expect(first.getByTestId("match-human-count")).toHaveText("真人 1 / 4");
