@@ -46,6 +46,7 @@ assert.equal(
 assert.equal(server.environment?.PUBLIC_WEB_ORIGIN, expectedHttpOrigin);
 assert.equal(web.build?.args?.VITE_SERVER_HTTP_URL, expectedHttpOrigin);
 assert.equal(web.build?.args?.VITE_SERVER_URL, "ws://imac.tajuren.cn");
+assert.equal(web.build?.args?.VITE_SERVER_SAME_ORIGIN, "1");
 
 const publishedPorts = (web.ports ?? [])
   .map((entry) => String(typeof entry === "object" ? entry.published : entry).split(":")[0])

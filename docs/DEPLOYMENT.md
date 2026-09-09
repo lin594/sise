@@ -106,6 +106,8 @@ Web 镜像会同源提供 `/site.webmanifest`、favicon、手机主屏图标和�
 - 兼容旧书签：`http://imac.tajuren.cn:3000/`
 - 同源健康检查：`http://imac.tajuren.cn/health`
 
+iMac 构建启用 `VITE_SERVER_SAME_ORIGIN=1`：页面、HTTP API 和 WebSocket 都使用浏览器当前主机及端口。访问 `:3000` 时连接也走 `:3000`，不会再隐式跨到 80 端口；访问标准 80 端口时则保持在 80。该开关只由 iMac 覆盖配置启用，不改变独立 API 的正式部署。
+
 无端口在这里表示标准 HTTP 80 端口，不代表 HTTPS。服务端 2567 不映射到宿主机，只允许 Web 容器通过 Compose 内网访问。Web 镜像使用 Nginx 1.27（实际版本不得低于 1.27.3），通过 Docker DNS 动态跟踪 `server` 容器地址；单独强制重建服务端后不需要重启 Web 网关。正式环境仍必须按上一节配置 HTTPS/WSS；不要把 iMac 的 HTTP/WS 构建参数复制到公网部署，也不要使用自签证书制造浏览器安全警告。
 
 确认本地 commit 已推送后执行：

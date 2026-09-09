@@ -9,6 +9,7 @@ services:
   web:
     build:
       args:
+        VITE_SERVER_SAME_ORIGIN: "1"
         VITE_SERVER_URL: "${IMAC_VITE_SERVER_URL:-ws://imac.tajuren.cn}"
         VITE_SERVER_HTTP_URL: "${IMAC_VITE_SERVER_HTTP_URL:-http://imac.tajuren.cn}"
     ports: !override

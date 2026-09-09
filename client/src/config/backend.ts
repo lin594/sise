@@ -6,6 +6,8 @@ const browserLocation: BackendLocationInput = typeof window === "undefined"
 const resolvedBackendUrls = resolveBackendUrls({
   protocol: browserLocation.protocol,
   hostname: browserLocation.hostname,
+  host: browserLocation.host,
+  sameOrigin: import.meta.env?.VITE_SERVER_SAME_ORIGIN === "1",
   httpUrl: import.meta.env?.VITE_SERVER_HTTP_URL,
   wsUrl: import.meta.env?.VITE_SERVER_URL,
 });

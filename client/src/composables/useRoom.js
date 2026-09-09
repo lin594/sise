@@ -1,4 +1,5 @@
 import { sessionAudioMuted } from "@/composables/sessionAudio";
+import "@/config/browser-transport";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { Client, ErrorCode, MatchMakeError, Protocol } from "@colyseus/sdk";
 import { sortHandCards } from "@/utils/cardSort";

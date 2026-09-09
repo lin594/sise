@@ -3,9 +3,11 @@ const DEFAULT_BACKEND_PORT = "2567";
 export interface BackendLocationInput {
   protocol?: string;
   hostname?: string;
+  host?: string;
 }
 
 export interface BackendUrlInput extends BackendLocationInput {
+  sameOrigin?: boolean;
   httpUrl?: unknown;
   wsUrl?: unknown;
   port?: string;
@@ -48,6 +50,9 @@ export function resolveBackendUrls(input: BackendUrlInput): { httpUrl: string; w
   const pageProtocol = input.protocol === "https:" ? "https:" : "http:";
   const wsProtocol = pageProtocol === "https:" ? "wss:" : "ws:";
   const hostname = hostForUrl(normalizedValue(input.hostname) || "localhost");
+  if (input.sameOrigin && input.host) {
+    return { httpUrl: `${pageProtocol}//${input.host}`, wsUrl: `${wsProtocol}//${input.host}` };
+  }
   const port = normalizedValue(input.port) || DEFAULT_BACKEND_PORT;
   const explicitHttp = normalizedBaseUrl(input.httpUrl, ["http:", "https:"]);
   const explicitWs = normalizedBaseUrl(input.wsUrl, ["ws:", "wss:"]);

@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { resolveBackendUrls } from "../../client/src/config/backend-urls";
 
+test('same-origin gateway keeps the page port for both HTTP and WebSocket', () => {
+  expect(resolveBackendUrls({ sameOrigin: true, protocol: 'http:', hostname: 'imac.tajuren.cn', host: 'imac.tajuren.cn:3000',
+    httpUrl: 'http://imac.tajuren.cn', wsUrl: 'ws://imac.tajuren.cn' }))
+    .toEqual({ httpUrl: 'http://imac.tajuren.cn:3000', wsUrl: 'ws://imac.tajuren.cn:3000' });
+  expect(resolveBackendUrls({ sameOrigin: true, protocol: 'https:', host: 'game.example:8443' }))
+    .toEqual({ httpUrl: 'https://game.example:8443', wsUrl: 'wss://game.example:8443' });
+});
+
 test("secure pages default both backend channels to encrypted transport", () => {
   expect(resolveBackendUrls({ protocol: "https:", hostname: "cards.example.com" })).toEqual({
     httpUrl: "https://cards.example.com:2567",

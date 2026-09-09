@@ -1,4 +1,5 @@
 import { sessionAudioMuted } from "@/composables/sessionAudio";
+import "@/config/browser-transport";
 import type { ListeningHints } from "@/types/game";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
 import { Client, ErrorCode, MatchMakeError, Protocol, Room } from "@colyseus/sdk";
