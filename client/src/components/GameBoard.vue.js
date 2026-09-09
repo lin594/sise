@@ -640,6 +640,9 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
         const angle = tableLocationRotation(move.to);
         const sideways = Math.abs(angle) === 90;
         cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+            '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
+            '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
+            '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
             '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
             '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
         tableFlightFaceStyles.set(key, cardStyle);

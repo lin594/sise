@@ -41,6 +41,8 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['size-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['text']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;

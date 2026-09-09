@@ -95,11 +95,19 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
         handsVisible: [...board.querySelectorAll<HTMLElement>('.hand-card')].every(el => within(el.getBoundingClientRect(), board.querySelector('.hand')!.getBoundingClientRect())),
         sides: flows.map(el => el.dataset.flowSide).sort(),
         angles: Object.fromEntries(flows.map(el => [el.dataset.flowSide, getComputedStyle(el.querySelector('.discard-token')!).rotate])),
+        textUpright: [...board.querySelectorAll<HTMLElement>('.card .text, .card .color-seal')].every(text => {
+          const card = text.closest('.card')!;
+          const cardAngle = parseFloat(getComputedStyle(card).rotate) || 0;
+          const textStyle = getComputedStyle(text);
+          const matrix = new DOMMatrix(textStyle.transform);
+          const total = cardAngle + (parseFloat(textStyle.rotate) || 0) + Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+          return Math.abs(total % 360) < 0.01;
+        }),
         flowCount: flows.map(el => el.querySelectorAll('.discard-token').length),
       };
     });
     expect(geometry, `${width}x${height}`).toMatchObject({ contained: true, noOverlap: true, tableFits: true, handsVisible: true,
-      sides: ['bottom', 'left', 'right', 'top'], angles: { bottom: '0deg', left: '90deg', right: '-90deg', top: '180deg' }, flowCount: [15, 15, 15, 15] });
+      textUpright: true, sides: ['bottom', 'left', 'right', 'top'], angles: { bottom: '0deg', left: '90deg', right: '-90deg', top: '180deg' }, flowCount: [15, 15, 15, 15] });
     // Every river can expose its final card without scrolling the whole table.
     for (const flow of await page.locator('.flow-card').all()) {
       await flow.locator('.discard-strip').evaluate(el => { el.scrollTop = el.scrollHeight; });
@@ -111,6 +119,30 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
       expect(visible).toBe(true);
     }
     await page.screenshot({ path: info.outputPath(`mahjong-${mode}-${width}x${height}.png`) });
+  }
+});
+
+for (const mode of ['long', 'large']) test(`mahjong ${mode} color labels stay upright and classic restores its lettering`, async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await start(page, 'mahjong', mode);
+  await crowd(page);
+  await page.evaluate(() => document.documentElement.classList.add('show-card-color-assist'));
+  for (const side of ['bottom', 'left', 'top', 'right']) {
+    const seal = page.locator(`[data-flow-side="${side}"] .color-seal`).first();
+    await expect(seal).toBeVisible();
+    expect(await seal.evaluate(el => {
+      const card = el.closest('.card')!;
+      return (parseFloat(getComputedStyle(card).rotate) || 0) + (parseFloat(getComputedStyle(el).rotate) || 0);
+    })).toBe(0);
+  }
+  await page.getByTestId('game-settings').click();
+  await revealSetting(page, 'layout-classic');
+  await page.getByTestId('layout-classic').click();
+  await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', 'classic');
+  if (mode === 'long') {
+    await expect.poll(() => page.locator('.hand-card .text-bottom').first().evaluate(el =>
+      new DOMMatrix(getComputedStyle(el).transform).a)).toBe(-1);
   }
 });
 
@@ -145,8 +177,17 @@ test('rotated river flights land on the exact face and defer layout changes unti
       const landing = document.querySelector<HTMLElement>(`.flow-card [data-face-id="${id}"]`)!;
       const a = face.getBoundingClientRect(), b = landing.getBoundingClientRect();
       return { delta: Math.max(Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)),
-        transform: getComputedStyle(face).transform };
+        transform: getComputedStyle(face).transform,
+        textUpright: [...face.querySelectorAll('.text, .color-seal')].every(text => {
+          const matrix = new DOMMatrix(getComputedStyle(face).transform);
+          const textStyle = getComputedStyle(text);
+          const textMatrix = new DOMMatrix(textStyle.transform);
+          const total = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI + (parseFloat(textStyle.rotate) || 0)
+            + Math.atan2(textMatrix.b, textMatrix.a) * 180 / Math.PI;
+          return Math.abs(total % 360) < 0.01;
+        }) };
     }, card.id);
+    expect(match.textUpright).toBe(true);
     expect(match.delta).toBeLessThanOrEqual(1);
     expect(match.transform).not.toBe('none');
     if (side === 'right') {

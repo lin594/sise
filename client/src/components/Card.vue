@@ -196,11 +196,15 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   }
 }
 
+.text, .color-seal {
+  rotate: var(--card-text-angle, 0deg);
+}
+
 .text {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  width: var(--card-text-width, 100%);
   line-height: 1;
   letter-spacing: 0.03em;
 }
@@ -212,7 +216,7 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 
 .text-bottom {
   align-self: end;
-  transform: rotate(180deg);
+  transform: rotate(var(--card-bottom-text-angle, 180deg));
   padding-bottom: 3px;
 }
 

@@ -1,6 +1,8 @@
 /* Names use a narrow rail; the remaining space belongs to complete melds. */
 .board[data-table-layout="mahjong"] {
   --mahjong-card-angle: 0deg;
+  --card-bottom-text-angle: 0deg;
+  --card-text-width: max-content;
   --mahjong-top-height: 25px;
   --mahjong-self-height: 25px;
   padding: 4px;
@@ -129,4 +131,9 @@
 @media (max-height: 359px), (max-width: 359px) {
   .board[data-table-layout="mahjong"]:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(44px, auto) 64px; }
   .board[data-table-layout="mahjong"] .cards.hand { --hand-height: 44px; padding-block: 14px 1px; }
+}
+
+/* Keep the writing upright while the card boxes still face their seats. */
+.board[data-table-layout="mahjong"] :is(.mini-card, .discard-token) {
+  --card-text-angle: calc(-1 * var(--mahjong-card-angle));
 }
