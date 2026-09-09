@@ -50,6 +50,9 @@ export class GameState extends Schema {
   @type("string") hostPlayerId: string = "";
   @type("string") dealerId: string = "";
   @type("string") dealerPickerId: string = "";
+  @type("string") previousWinnerId: string = "";
+  @type("string") previousWinnerName: string = "";
+  @type("string") previousHuType: string = "";
   @type("string") currentPlayerId: string = "";
   @type("string") responsePhase: "collective" | "local_upper" | "local_draw" = "collective";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();

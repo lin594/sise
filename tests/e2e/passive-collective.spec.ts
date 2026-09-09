@@ -83,7 +83,7 @@ test("a shared three-second public clock preserves the ten-second manual respons
       expect(host.getByTestId("decision-countdown")).toHaveText(/^[0-3]秒$/),
       expect(host.locator(".action-dock .btn")).toHaveCount(0),
       expect(host.getByTestId("action-guidance")).toHaveCount(0),
-      expect(host.getByTestId("decision-status")).toHaveText("等待其他玩家响应"),
+      expect(host.getByTestId("decision-status")).toHaveCount(0),
       expect(host.getByTestId("self-turn-outline")).toBeVisible(),
       expect(host.locator(".center-pointer.pointer-down")).toBeVisible(),
       expect(host).not.toHaveTitle(/轮到你/),

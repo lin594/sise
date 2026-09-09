@@ -83,6 +83,7 @@
             <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${topPlayer.declaredKongs} 个`">{{ topPlayer.declaredKongs }}坎</span>
             <span class="group-score-badge" :class="{ positive: topPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${topPlayer.visibleGroupScore} 分`">牌面{{ topPlayer.visibleGroupScore }}分</span>
             </span>
+            <span v-if="previousWinnerLabel(topPlayer.clientId)" class="previous-winner-badge" data-testid="previous-winner" :title="previousRoundSummary">{{ previousWinnerLabel(topPlayer.clientId) }}</span>
             <span v-if="showDealerSeatMarker(topPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -188,6 +189,7 @@
             <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${leftPlayer.declaredKongs} 个`">{{ leftPlayer.declaredKongs }}坎</span>
             <span class="group-score-badge" :class="{ positive: leftPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${leftPlayer.visibleGroupScore} 分`">牌面{{ leftPlayer.visibleGroupScore }}分</span>
             </span>
+            <span v-if="previousWinnerLabel(leftPlayer.clientId)" class="previous-winner-badge" data-testid="previous-winner" :title="previousRoundSummary">{{ previousWinnerLabel(leftPlayer.clientId) }}</span>
             <span v-if="showDealerSeatMarker(leftPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -340,6 +342,7 @@
             <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${rightPlayer.declaredKongs} 个`">{{ rightPlayer.declaredKongs }}坎</span>
             <span class="group-score-badge" :class="{ positive: rightPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${rightPlayer.visibleGroupScore} 分`">牌面{{ rightPlayer.visibleGroupScore }}分</span>
             </span>
+            <span v-if="previousWinnerLabel(rightPlayer.clientId)" class="previous-winner-badge" data-testid="previous-winner" :title="previousRoundSummary">{{ previousWinnerLabel(rightPlayer.clientId) }}</span>
             <span v-if="showDealerSeatMarker(rightPlayer.clientId)" class="dealer-seat-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -525,6 +528,7 @@
         :aria-label="dealerRevealAccessibleText"
       >
         <div class="dealer-reveal-panel">
+            <p v-if="previousRoundSummary" class="previous-round-summary" data-testid="previous-round-summary">{{ previousRoundSummary }}</p>
             <strong v-if="dealerReveal.stage === 'picking'" class="dealer-picker-name" data-testid="dealer-picker-name">{{ dealerCountingName }}</strong>
             <div class="dealer-reveal-tile">
               <div
@@ -582,6 +586,7 @@
               <span class="kan-count-badge" :aria-label="`开局声明暗坎 ${selfPlayer.declaredKongs} 个`">{{ selfPlayer.declaredKongs }}坎</span>
               <span class="group-score-badge" :class="{ positive: selfPlayer.visibleGroupScore > 0 }" :aria-label="`当前明示牌组基础分 ${selfPlayer.visibleGroupScore} 分`">牌面{{ selfPlayer.visibleGroupScore }}分</span>
             </span>
+            <span v-if="previousWinnerLabel(selfPlayer.clientId)" class="previous-winner-badge" data-testid="previous-winner" :title="previousRoundSummary">{{ previousWinnerLabel(selfPlayer.clientId) }}</span>
             <span v-if="showDealerSeatMarker(selfPlayer.clientId)" class="dealer-seat-lockup" data-testid="self-dealer-lockup">
               <span class="dealer-badge" data-testid="dealer-badge">庄</span>
               <span class="dealer-card-mark" data-testid="dealer-card">
@@ -1951,10 +1956,18 @@ const showDecisionClock = computed(() =>
       (Boolean(props.decisionUntimed) || seatCountdownSeconds.value !== null)),
 );
 
+// Public/private polling and clock ticks do not count as player activity.
+const lastTableActivityAt = ref(Date.now());
+watch(() => [props.state?.phase, props.state?.completedRounds, props.state?.lastAction,
+  props.state?.tableEventSeq, props.state?.currentPlayerId, props.state?.activeResponderId,
+  props.state?.responsePhase, props.state?.targetCard?.id,
+  props.players.map(player => `${player.clientId}:${player.declaredReady}:${player.declarationStep}`).join("|")].join(";"),
+() => { lastTableActivityAt.value = Date.now(); }, { immediate: true });
+const passiveWaitVisible = computed(() => nowMs.value - lastTableActivityAt.value >= 3000);
 const flowStatusText = computed(() => {
   if (props.deferredChiPending) return "已选择吃，等待其他玩家响应";
   if (props.state?.phase === "declaring") {
-    return selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done"
+    return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
       ? "等待其他玩家声明"
       : "";
   }
@@ -1962,7 +1975,7 @@ const flowStatusText = computed(() => {
     return "正在提交";
   }
   if (props.state?.phase === "playing" && props.state?.responsePhase === "collective") {
-    return canAct.value ? "" : publicCollectiveSeconds.value === 0 ? "等待其他玩家操作" : "等待其他玩家响应";
+    return !canAct.value && passiveWaitVisible.value ? "等待其他玩家操作" : "";
   }
   return "";
 });
@@ -2009,6 +2022,25 @@ const dealerCeremonyCard = computed<Card | null>(() => {
   return dealerInfoCard.value ?? reveal.card;
 });
 
+const previousRoundSummary = computed(() => {
+  if (!props.state?.previousWinnerId) return "";
+  const name = props.state.previousWinnerName || props.players.find(player => player.clientId === props.state?.previousWinnerId)?.name || "牌友";
+  const result = props.state.previousHuType === "big" ? `上局${name}大胡`
+    : props.state.previousHuType === "small" ? `上局${name}小胡` : `上局赢家：${name}`;
+  const pickerId = props.state.dealerPickerId;
+  if (pickerId) {
+    const seats = [...props.players].sort((a, b) => a.seatIndex - b.seatIndex);
+    const winnerIndex = seats.findIndex(player => player.clientId === props.state?.previousWinnerId);
+    const opposite = seats.length === 4 && winnerIndex >= 0 && seats[(winnerIndex + 2) % 4]?.clientId === pickerId;
+    const picker = opposite ? "对家" : props.players.find(player => player.clientId === pickerId)?.name || "牌友";
+    return `${result}，由${picker}翻牌定庄`;
+  }
+  return props.state.previousHuType === "small" && props.state.dealerId === props.state.previousWinnerId
+    ? `${result}，本局继续坐庄` : result;
+});
+const previousWinnerLabel = (id: string) => id === props.state?.previousWinnerId
+  ? props.state.previousHuType === "big" ? "上局大胡" : props.state.previousHuType === "small" ? "上局小胡" : "上局赢家"
+  : "";
 const dealerPickerDescription = computed(() => {
   const id = dealerReveal.value?.pickerId;
   if (id === props.mySeatId) return "你（本家）";
@@ -3346,6 +3378,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 </script>
 
 <style scoped>
+.previous-winner-badge { font-size: 10px; line-height: 14px; white-space: nowrap; color: var(--ui-accent-text); }
+.previous-round-summary { margin: 0; max-width: 240px; font-size: 12px; text-align: center; }
 .dealer-count-token { position: absolute; z-index: 32; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--ui-gold-text, #b87912); background: var(--ui-panel, #fff7df); color: var(--ui-text); box-shadow: 0 0 16px rgba(210, 163, 55, .55); font-size: 25px; font-weight: 850; transform: translate(-50%, -50%); transition: left 480ms ease-in-out, top 480ms ease-in-out; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .dealer-count-token { transition: none; } }
 .dealer-picker-name { color: var(--ui-text); font-size: clamp(1rem, 3vh, 1.4rem); max-width: 22rem; overflow-wrap: anywhere; }
