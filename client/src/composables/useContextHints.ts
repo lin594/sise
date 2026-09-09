@@ -38,7 +38,7 @@ export function useContextHints(concepts: Ref<HintConcept[]>, decisionKey: Ref<s
     if (!value) trackProductEvent("context_hint_disabled");
   };
   return {
-    enabled, current, text: computed(() => current.value ? COPY[current.value] : ""),
+    enabled, current, text: computed<string>(() => current.value ? COPY[current.value] : ""),
     dismiss: () => { current.value = null; }, setEnabled,
     reset: () => { seen.clear(); enabled.value = true; resetEpoch.value++; persist(); },
   };
