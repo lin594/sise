@@ -3222,6 +3222,11 @@ if (!__VLS_ctx.hasLobbySession && !__VLS_ctx.isConnectingWithoutState) {
         (__VLS_ctx.entryName);
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
     }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+        ...{ class: "ghost reset-btn culture-entry" },
+        href: "/culture.html",
+        'data-testid': "culture-entry",
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.openRules) },
         ...{ class: "ghost reset-btn" },
@@ -4643,6 +4648,9 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['change-name']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['culture-entry']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['reset-btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;

@@ -1,5 +1,6 @@
 <template>
   <div class="guide">
+    <a href="/culture.html" target="_blank" rel="noopener noreferrer" data-testid="rules-culture-entry">认识四色牌：牌组、术语与地方玩法（新窗口）</a>
     <details :open="phase !== 'playing'">
       <summary>现在怎么操作</summary>
       <ol>

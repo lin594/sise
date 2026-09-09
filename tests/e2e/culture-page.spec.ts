@@ -1,0 +1,23 @@
+import { test, expect } from '@playwright/test';
+import { openGameAs } from './helpers/game';
+for (const viewport of [{width:568,height:320},{width:375,height:667},{width:1024,height:768},{width:1440,height:900}]) test(`culture page is reachable, readable and returns to practice at ${viewport.width}`, async ({page}) => {
+  await page.setViewportSize(viewport);
+  await openGameAs(page,'/','认牌');
+  await expect(page.getByTestId('culture-entry')).toBeVisible();
+  await page.getByTestId('culture-entry').click();
+  await expect(page).toHaveURL(/\/culture.html$/);
+  await expect(page.getByRole('heading',{name:'把 117 张牌认清楚'})).toBeVisible();
+  await expect(page.locator('body')).toContainText('尚未最终确认');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.getByTestId('culture-practice').click();
+  await expect(page.getByTestId('mode-practice_bots')).toBeVisible();
+  await page.getByTestId('open-rules').click();
+  const culture = page.getByTestId('rules-culture-entry');
+  await expect(culture).toHaveAttribute('target','_blank');
+  const popupPromise = page.waitForEvent('popup'); await culture.click(); const popup = await popupPromise;
+  await expect(popup).toHaveURL(/\/culture.html$/); await popup.close();
+  await expect(page.getByTestId('rules-panel')).toBeVisible();
+  await page.getByTestId('close-rules').click();
+  await page.getByTestId('mode-practice_bots').click();
+  await expect(page.getByTestId('game-control-header')).toBeVisible();
+});
