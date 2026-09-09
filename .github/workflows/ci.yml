@@ -48,8 +48,10 @@ jobs:
       - name: Check contributor documentation
         run: npm run check:docs
 
-      - name: Verify generated files are committed
-        run: git diff --exit-code
+      - name: Verify source-only client and unchanged tracked build inputs
+        run: |
+          npm run check:generated
+          git diff --exit-code
 
       - name: Package this checkout's build for regression jobs
         run: tar -czf build-output.tar.gz server/dist client/dist

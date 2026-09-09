@@ -25,7 +25,7 @@ npm run dev
 | 文档与贡献流程 | `README.md`、`CONTRIBUTING.md`、`docs/`、`.github/` | `npm run check:docs` |
 | 快捷互动素材 | `assets/audio/quick-phrases/` | `npm run build`，提交同步生成的清单与资源 |
 
-修改 `.ts` / `.vue` 源文件。仓库当前仍跟踪 TypeScript 生成的客户端 `.js` / `.d.ts`；用 `npm run build` 更新并一起提交，不手改这些生成文件。`dist/`、`node_modules/`、本地 `.env`、浏览器 trace 不提交。锁文件使用 npm 维护，依赖变更同步对应 `package-lock.json`。
+修改 `.ts` / `.vue` 源文件。客户端使用 `vue-tsc --noEmit` 检查类型，再由 Vite 构建 `client/dist`；不跟踪旁置编译生成的 `.js` / `.d.ts`，保留手写 `client/src/env.d.ts`。`npm run check:generated` 检查误跟踪副本，完整构建仍会验证音频同步资源。`dist/`、`node_modules/`、本地 `.env`、浏览器 trace 不提交。锁文件使用 npm 维护，依赖变更同步对应 `package-lock.json`。
 
 ## 提交一个可审阅的 PR
 
@@ -38,6 +38,7 @@ npm run dev
 ```bash
 npm run build
 npm run test:server
+npm run check:generated
 npm run check:docs
 npx playwright install chromium webkit
 npx playwright test --project=chromium tests/e2e/appearance.spec.ts

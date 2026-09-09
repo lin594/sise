@@ -364,3 +364,5 @@ WebKit 回归与 Chromium 一样使用独立 runner 分片：三片分别运行 
 `replay-product.spec.ts` 验证三种模式入口中的练习/好友部分、重复点击仅发一次请求与 play_again、旧结算快照不能覆盖新局，以及好友邀请取消和个人退出。该文件与 quick-matchmaking 同列入 WebKit。服务端 cumulative-scoring 测试新增重复 endRound 与已结束恢复快照均不重复累分/发完成指标的断言；既有 Redis 去重和档案去重测试继续保留。
 
 文化页：`tests/e2e/culture-page.spec.ts` 覆盖 568×320、375×667、平板与桌面，从大厅和规则打开、无横向溢出、规则新窗口保留状态以及返回实际练习。同步纳入 WebKit。
+
+客户端生成文件治理：`npm run check:generated` 检查版本控制中是否误加入有对应源码的编译副本。先 `npm run build` 再运行 E2E；CI 使用当前提交的 dist，保留服务端、Chromium、WebKit 与生产镜像完整门禁。旧工作树的未知本地文件不会被自动删除。
