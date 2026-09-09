@@ -712,6 +712,7 @@ import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue"
 import LobbyPage from "@/components/LobbyPage.vue";
 import NicknameDialog from "@/components/NicknameDialog.vue";
 import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
+import { useDisplayPreferences } from "@/composables/useDisplayPreferences";
 import { useInstallGuide } from "@/composables/useInstallGuide";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
@@ -723,18 +724,16 @@ import { BACKEND_HTTP_URL } from "@/config/backend";
 import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
-import { normalizeSkin, normalizeTableLayout, resolveTableLayout } from "@/utils/appearance";
+import { resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import type {
   ActionRequest,
   AvailableAction,
   Card,
   CardDisplayMode,
-  GameDisplayPreferences,
   RenderedCardMode,
   RoomStateSnapshot,
   RoundResultPlayer,
-  TurnAlertMode,
 } from "@/types/game";
 import { getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
@@ -759,61 +758,12 @@ type LobbyMode = {
   enabled: boolean;
 };
 const HTTP_URL = BACKEND_HTTP_URL;
-const DISPLAY_PREFERENCES_KEY = "sise_game_display_preferences_v2";
-const LEGACY_TABLE_CARD_MODE_KEY = "sise_table_card_mode";
 const browserStoragePersistent = hasPersistentBrowserStorage();
 const { canOfferPwaInstall, pwaInstallGuide, requestPwaInstall, closePwaInstallGuide } = useInstallGuide({
   onError: message => { globalError.value = message; },
   onNotice: showGlobalNotice,
   onGuideClosed: () => { decisionControlFocusPending = false; },
 });
-
-function normalizeCardDisplayMode(value: unknown): CardDisplayMode | null {
-  return value === "large" || value === "adaptive" || value === "long" ? value : null;
-}
-
-function normalizeTurnAlertMode(value: unknown): TurnAlertMode {
-  return value === "sound" || value === "off" || value === "sound-vibration" ? value : "sound-vibration";
-}
-
-function readDisplayPreferences(): GameDisplayPreferences {
-  try {
-    const stored = readStoredValue(DISPLAY_PREFERENCES_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
-      return {
-        skin: normalizeSkin(parsed.skin),
-        tableLayout: normalizeTableLayout(parsed.tableLayout),
-        handLayout: parsed.handLayout === "paged" ? "paged" : "single",
-        ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
-        tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
-        seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
-        turnAlert: normalizeTurnAlertMode(parsed.turnAlert),
-        spokenTurnGuidance: parsed.spokenTurnGuidance === true,
-        showCardColorAssist: parsed.showCardColorAssist === true,
-        reduceMotion: parsed.reduceMotion === true,
-        keepScreenAwake: parsed.keepScreenAwake !== false,
-      };
-    }
-  } catch {
-    // Invalid local preferences fall back to the compatible defaults below.
-  }
-
-  const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
-  return {
-    skin: normalizeSkin(null),
-    tableLayout: normalizeTableLayout(null),
-    handLayout: "single",
-    ownCards: "adaptive",
-    tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
-    seatDirection: "counterclockwise",
-    turnAlert: "sound-vibration",
-    spokenTurnGuidance: false,
-    showCardColorAssist: false,
-    reduceMotion: false,
-    keepScreenAwake: true,
-  };
-}
 
 const { guestProfile, refreshGuestProfileAfterSettlement, updateGuestProfileNickname, guestProfileSummary, storedEntryNameAtBoot, nicknameHistoryAtBoot, entryName, nicknameHistory, nicknameDialogOpen, nicknameDraftRandom, generateRandomNickname, writeNicknameHistory, openNicknameDialog, closeNicknameDialog, saveNickname } = useEntryProfile({ browserStoragePersistent, canChangeName: () => !hasLobbySession.value && !enteringLobby.value });
 
@@ -1525,7 +1475,7 @@ const {
   viewportLeft,
   viewportTop,
 } = useResponsiveViewport(viewportGeometryBusy);
-const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
+const displayPreferences = useDisplayPreferences();
 const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value));
 watch(() => [displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value] as const, ([layout, width, height], _, onCleanup) => {
   const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, width, height); }, 180);
@@ -2546,13 +2496,10 @@ onMounted(() => {
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 500);
-  writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(displayPreferences.value));
-  document.documentElement.classList.toggle("show-card-color-assist", displayPreferences.value.showCardColorAssist);
   void bootstrapRoomEntry();
 });
 
 onUnmounted(() => {
-  document.documentElement.classList.remove("show-card-color-assist");
   roomNavigationGuardMounted = false;
   window.removeEventListener("popstate", handleRoomNavigationPopState);
   if (roomNavigationReleaseTimer !== null) {
@@ -2665,15 +2612,6 @@ watch(
       clearLobbyReadyPending();
     }
   },
-);
-
-watch(
-  displayPreferences,
-  (preferences) => {
-    writeStoredValue(DISPLAY_PREFERENCES_KEY, JSON.stringify(preferences));
-    document.documentElement.classList.toggle("show-card-color-assist", preferences.showCardColorAssist);
-  },
-  { deep: true },
 );
 
 function clearRoundStartPending(): void {
