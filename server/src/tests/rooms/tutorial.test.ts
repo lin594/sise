@@ -46,6 +46,11 @@ test("progress is private, survives recovery, and restart invalidates old decisi
   restored.restoreRecoveryPrivateState(snapshot);
   assert.deepEqual(restored.tutorial, { seatId: "A", step: "discard_chi" });
   assert.equal(restored.collectiveResponseWindowMs, 120000);
+  restored.tickBots = () => {};
+  restored.resumeRecoveredRoom();
+  assert.equal(restored.takeoverTimers.has("A"), false);
+  restored.activateTemporaryTakeover("A");
+  assert.equal(restored.botIds.has("A"), false);
   const key = room.buildDecisionTimerSnapshot("A").decisionKey;
   room.bootstrapRound();
   assert.notEqual(room.buildDecisionTimerSnapshot("A").decisionKey, key);

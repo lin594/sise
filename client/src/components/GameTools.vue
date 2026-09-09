@@ -32,7 +32,7 @@
         <span class="tool-label">设置</span>
       </button>
       <button
-        v-if="inRoom"
+        v-if="inRoom && !props.tutorial"
         ref="autoPlayButtonRef"
         class="tool-button auto-play"
         :class="{ active: props.autoPlay }"

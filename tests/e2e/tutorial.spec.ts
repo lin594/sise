@@ -7,6 +7,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await page.getByTestId('tutorial-entry').click();
     const guide = page.getByTestId('tutorial-guide');
     await expect(guide).toHaveAttribute('data-step', 'intro');
+    await expect(page.getByTestId('game-auto-play')).toHaveCount(0);
     const box = await guide.boundingBox();
     expect(box && box.y >= 0 && box.y + box.height <= viewport.height).toBeTruthy();
     await page.getByRole('button', { name: '开始演练', exact: true }).press('Enter');

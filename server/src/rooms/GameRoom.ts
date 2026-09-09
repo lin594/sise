@@ -1432,6 +1432,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private scheduleTemporaryTakeover(seatId: string): void {
     this.clearTakeoverTimer(seatId);
+    if (this.tutorial?.seatId === seatId) return;
     if (this.reconnectGraceMs === 0) {
       this.activateTemporaryTakeover(seatId);
       return;
@@ -1444,6 +1445,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private activateTemporaryTakeover(seatId: string): void {
     this.clearTakeoverTimer(seatId);
+    if (this.tutorial?.seatId === seatId) return;
     const player = this.state.players.get(seatId);
     if (!player || player.connected || player.isConfiguredBot) {
       return;
@@ -2179,6 +2181,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private handleSetAutoPlay(client: Client, payload?: { enabled?: unknown }): void {
     const seatId = this.seatBySession.get(client.sessionId);
+    if (seatId && this.tutorial?.seatId === seatId && payload?.enabled === true) {
+      this.rejectAction(client, "action_unavailable", seatId); return;
+    }
     const player = seatId ? this.state.players.get(seatId) : undefined;
     if (
       !seatId ||
