@@ -66,6 +66,18 @@ jobs:
     name: "2 · Server regression"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      analytics-test-redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      ANALYTICS_TEST_REDIS_URL: redis://127.0.0.1:6379
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

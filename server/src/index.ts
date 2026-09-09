@@ -1,3 +1,6 @@
+import { ProductAnalytics, configureProductAnalytics } from "./analytics/runtime.js";
+import { RedisProductEventStore } from "./analytics/redis-store.js";
+import { receiveProductEvent } from "./http/product-events.js";
 import express from "express";
 import http from "http";
 import { randomBytes } from "node:crypto";
@@ -33,6 +36,9 @@ import {
 const port = Number(process.env.PORT ?? 2567);
 const runtimeEnv = process.env.NODE_ENV;
 const originPolicy = createOriginPolicy(process.env.CORS_ALLOWED_ORIGINS, runtimeEnv);
+const analytics = process.env.PRODUCT_ANALYTICS_ENABLED === "1" && process.env.REDIS_URL && (process.env.PRODUCT_ANALYTICS_SECRET?.length ?? 0) >= 32
+  ? new ProductAnalytics(new RedisProductEventStore(process.env.REDIS_URL), process.env.PRODUCT_ANALYTICS_SECRET!) : null;
+configureProductAnalytics(analytics);
 const app = express();
 app.disable("x-powered-by");
 const trustedProxyHops = parseBoundedInteger(process.env.TRUST_PROXY_HOPS, 0, 0, 5);
@@ -108,6 +114,8 @@ app.get("/health", (_req, res) => {
 app.get("/share", createPublicSharePageHandler(process.env.PUBLIC_WEB_ORIGIN));
 app.get("/invite/:roomId", createInvitePageHandler(process.env.PUBLIC_WEB_ORIGIN));
 
+app.post("/product-events", createRateLimitMiddleware({ maxRequests: 120, windowMs: 60_000, message: "Too many product events" }), receiveProductEvent);
+
 app.get("/guest-profile", guestProfileLimit, guestProfileHandlers.get);
 app.put("/guest-profile", guestProfileLimit, guestProfileHandlers.put);
 
@@ -182,6 +190,7 @@ gameServer.onBeforeShutdown(async () => {
 
 gameServer.onShutdown(async () => {
   await Promise.all([
+    analytics?.close() ?? Promise.resolve(),
     closeRoomSnapshotRuntime(),
     guestProfileStore.close?.() ?? Promise.resolve(),
   ]);

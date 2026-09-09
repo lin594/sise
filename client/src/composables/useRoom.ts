@@ -1,3 +1,4 @@
+import { productVisitId } from "@/utils/productAnalytics";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import "@/config/browser-transport";
 import type { ListeningHints } from "@/types/game";
@@ -1642,6 +1643,7 @@ export function useRoom(playerName = "Player") {
               name: desiredName,
               playerToken: desiredToken,
               profileToken,
+              analyticsVisitId: productVisitId(),
               roomMode: "match",
               matchOpen: true,
             })
@@ -1649,6 +1651,7 @@ export function useRoom(playerName = "Player") {
               name: desiredName,
               playerToken: desiredToken,
               profileToken,
+              analyticsVisitId: productVisitId(),
               hostKey: resolvedOptions.hostKey,
             });
       } catch (error) {
@@ -1673,6 +1676,7 @@ export function useRoom(playerName = "Player") {
           name: desiredName,
           playerToken: desiredToken,
           profileToken,
+          analyticsVisitId: productVisitId(),
           hostKey: resolvedOptions.hostKey,
         });
       }
