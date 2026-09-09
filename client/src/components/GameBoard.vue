@@ -3,6 +3,7 @@
     ref="boardRef"
     class="board"
     :class="{
+      'has-guidance': Boolean(props.guidanceActive),
       'crowded-action-dock': crowdedActionDock,
       'hand-overflow': handHasOverflow,
       'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
@@ -565,6 +566,7 @@
       :aria-label="playerAccessibleSummary(selfPlayer, selfGroupBlocks.length)"
       ref="selfZoneRef"
     >
+      <div v-if="props.guidanceActive" class="board-guidance"><slot name="guidance" /></div>
       <div class="clock-slot">
         <span
           v-if="showDecisionClock"
@@ -598,7 +600,6 @@
       </div>
 
       <div class="dynamic-action-track" data-testid="dynamic-action-track">
-        <slot name="guidance" />
         <slot name="declaration" />
         <ActionPanel
           v-if="props.state?.phase === 'playing' && (canAct || canDiscard)"
@@ -875,6 +876,7 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  guidanceActive?: boolean;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
@@ -6297,6 +6299,15 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   --classic-top-weight: 1.1fr;
   --classic-center-weight: 1.1fr;
   --classic-bottom-weight: 1fr;
+}
+
+/* Guidance owns a complete row, preserving horizontal space for legal actions. */
+.board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) clamp(7rem, 21vh, 10rem); }
+.board.has-guidance .self-command-row { grid-template-rows: auto minmax(44px, auto); row-gap: 2px; align-content: center; }
+.board-guidance { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+.board.has-guidance :is(.clock-slot, .self-info-card, .dynamic-action-track) { grid-row: 2; }
+@media (max-width: 960px), (max-height: 500px) {
+  .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
 }
 </style>
 

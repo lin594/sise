@@ -3224,6 +3224,19 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3237,6 +3250,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "boardRef",
     ...{ class: "board" },
     ...{ class: ({
+            'has-guidance': Boolean(props.guidanceActive),
             'crowded-action-dock': __VLS_ctx.crowdedActionDock,
             'hand-overflow': __VLS_ctx.handHasOverflow,
             'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
@@ -4269,6 +4283,12 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
+    if (props.guidanceActive) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "board-guidance" },
+        });
+        var __VLS_60 = {};
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "clock-slot" },
     });
@@ -4312,12 +4332,12 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
     /** @type {typeof __VLS_ctx.selfIdentityMetaRef} */ ;
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_62 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
     }));
-    const __VLS_61 = __VLS_60({
+    const __VLS_63 = __VLS_62({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_62));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'aria-label': (`剩余手牌 ${__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer)} 张`),
@@ -4358,23 +4378,22 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_64 = __VLS_63({
+            const __VLS_66 = __VLS_65({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_65));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dynamic-action-track" },
         'data-testid': "dynamic-action-track",
     });
-    var __VLS_66 = {};
     var __VLS_68 = {};
     if (props.state?.phase === 'playing' && (__VLS_ctx.canAct || __VLS_ctx.canDiscard)) {
         /** @type {[typeof ActionPanel, ]} */ ;
@@ -4909,6 +4928,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['board-guidance']} */ ;
 /** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
@@ -4956,7 +4976,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 // @ts-ignore
-var __VLS_67 = __VLS_66, __VLS_69 = __VLS_68;
+var __VLS_61 = __VLS_60, __VLS_69 = __VLS_68;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
