@@ -29,6 +29,7 @@ export function summarizeMetrics(rows: Array<{ day: number; counts: Record<strin
   }));
   return {
     daysWithData: rows.length, through: dayLabel(today), timezone: "Asia/Shanghai",
+    contextHints: { shown: events("context_hint_shown", "client"), disabled: events("context_hint_disabled", "client") },
     tutorialCompletion: ratio(sum("events:server:round_complete:tutorial:started"), sum("events:server:round_start:tutorial:started")),
     firstRoundActivation: ratio(sum("activated"), sum("visitors")),
     firstRoundCompletion: ratio(sum("first_completed"), sum("activated")),

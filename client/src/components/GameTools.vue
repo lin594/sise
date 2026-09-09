@@ -288,6 +288,8 @@
         </div>
         </div>
         <div v-if="settingsPage === 'assist'">
+        <button class="setting-switch" type="button" role="switch" data-testid="context-hints-setting" :aria-checked="Boolean(props.contextHintsEnabled)" @click="emit('setContextHints', !props.contextHintsEnabled)"><span><strong>新手提示</strong><small>每个概念默认提示一次</small></span><span>{{ props.contextHintsEnabled ? '开启' : '关闭' }}</span></button>
+        <button class="setting-switch" type="button" data-testid="context-hints-reset" @click="emit('resetContextHints')">重新学习：重置已读提示</button>
         <button
           class="setting-switch"
           type="button"
@@ -446,6 +448,7 @@ const props = withDefaults(
     modelValue: GameDisplayPreferences;
     inRoom?: boolean;
     tutorial?: boolean;
+    contextHintsEnabled?: boolean;
     playingContext?: boolean;
     resolvedTableLayout?: RenderedTableLayoutId;
     declaring?: boolean;
@@ -491,6 +494,8 @@ const emit = defineEmits<{
   returnToDecision: [];
   exit: [];
   setAutoPlay: [enabled: boolean];
+  setContextHints: [enabled: boolean];
+  resetContextHints: [];
   quickPhrase: [phraseId: string];
   setQuickPhraseMuted: [muted: boolean];
 }>();

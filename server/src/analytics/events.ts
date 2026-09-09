@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { normalizeGuestProfileToken } from "../profiles/guest-profile-store.js";
 
-export const EVENT_NAMES = ["app_open", "lobby_view", "practice_start", "quick_match_start", "friend_room_create", "invite_open", "invite_join_success", "round_start", "round_complete", "play_again", "room_exit", "join_failed", "reconnect_started", "reconnect_success", "reconnect_failed", "action_rejected", "join_success"] as const;
+export const EVENT_NAMES = ["context_hint_shown", "context_hint_disabled", "app_open", "lobby_view", "practice_start", "quick_match_start", "friend_room_create", "invite_open", "invite_join_success", "round_start", "round_complete", "play_again", "room_exit", "join_failed", "reconnect_started", "reconnect_success", "reconnect_failed", "action_rejected", "join_success"] as const;
 export type EventName = typeof EVENT_NAMES[number];
 export type RoomMode = "practice" | "match" | "friends" | "tutorial";
 export const AUTHORITY_EVENTS = new Set<EventName>(["round_start", "round_complete", "invite_join_success", "action_rejected", "join_success"]);

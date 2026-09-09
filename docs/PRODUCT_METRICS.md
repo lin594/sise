@@ -79,3 +79,5 @@ npm --prefix server run metrics -- purge --all
 ## 教学隔离
 
 统计固定 mode 枚举新增 `tutorial`（不改变普通房间 roomMode）。教学沿用 practice_start、round_start、round_complete 等事件；CLI 单独返回 tutorialCompletion 与 tutorial 耗时。教学 round_start/complete 不贡献普通 activated、first_completed、replay_started 或档案战绩，普通事件汇总不纳入 tutorial 模式。教学完成率以去重服务端完成 / 开局计算，30 天去重窗口与 90 天汇总到期不变。教学重试属于同一演练，开局事件去重；完成后新建普通房或好友房。
+
+上下文提示新增固定客户端事件 `context_hint_shown` / `context_hint_disabled`，只汇总出现或关闭次数；不发送提示文本、手牌、概念自定义属性或错误对象。它们不改变首局激活、邀请、复玩与留存分母。
