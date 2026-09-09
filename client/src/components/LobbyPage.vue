@@ -104,21 +104,12 @@
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
-          <p>复制链接发给牌友，打开后沿用本机昵称即可选座。</p>
+          <p>不用注册，打开链接即可选座；首次取个昵称，不满四人可电脑补位。</p>
         </div>
         <div class="invite-actions">
           <button
-            class="ghost invite-button"
-            type="button"
-            data-testid="copy-invite"
-            :disabled="invitePending !== null"
-            @click="$emit('copy-invite')"
-          >
-            {{ invitePending === "copy" ? "正在复制…" : "复制邀请链接" }}
-          </button>
-          <button
             v-if="canShareInvite"
-            class="ghost invite-button"
+            class="primary invite-button"
             type="button"
             data-testid="share-invite"
             :disabled="invitePending !== null"
@@ -126,6 +117,16 @@
           >
             {{ invitePending === "share" ? "正在打开…" : "邀请牌友" }}
           </button>
+          <button
+            :class="['invite-button', canShareInvite ? 'ghost' : 'primary']"
+            type="button"
+            data-testid="copy-invite"
+            :disabled="invitePending !== null"
+            @click="$emit('copy-invite')"
+          >
+            {{ invitePending === "copy" ? "正在复制…" : "复制邀请链接" }}
+          </button>
+
           <button
             class="ghost invite-button show-qr-button"
             type="button"
@@ -190,7 +191,8 @@
               >{{ slot.player.lobbyReady ? "已准备" : "未准备" }}</strong>
             </small>
 
-            <template v-if="roomMode === 'friends' && slot.player.isConfiguredBot && isHost">
+            <details v-if="roomMode === 'friends' && slot.player.isConfiguredBot && isHost" class="bot-settings">
+              <summary :data-testid="`bot-settings-${slot.seatIndex}`">电脑设置</summary>
               <div
                 class="bot-level-group"
                 role="group"
@@ -215,7 +217,7 @@
                 </div>
               </div>
               <button class="danger mini" type="button" @click="$emit('remove-seat', slot.seatIndex)">移除机器人</button>
-            </template>
+            </details>
             <button
               v-else-if="roomMode === 'friends' && isHost && slot.player.clientId !== hostPlayerId"
               class="danger mini"
@@ -261,6 +263,8 @@
         aria-live="polite"
       >正在确认 {{ seatNames[seatClaimPending] }}，请稍候</p>
 
+      <details v-if="roomMode === 'friends' && roomId" class="friend-table-settings" :open="completedRounds > 0" data-testid="friend-table-settings">
+        <summary data-testid="friend-table-settings-toggle">计分设置 · {{ currentScoringOption.label }}</summary>
       <section v-if="roomMode === 'friends' && roomId" class="scoring-card" data-testid="scoring-mode-card">
         <div class="scoring-copy">
           <strong>计分方式</strong>
@@ -315,6 +319,7 @@
           </li>
         </ol>
       </section>
+      </details>
 
       <slot v-if="!modes.length" name="recommendation" />
       <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
@@ -1753,7 +1758,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     display: none;
   }
 
-  .invite-card .ghost {
+  .invite-card .invite-button {
     min-height: 42px;
     padding: 0.5rem 0.7rem;
   }
@@ -1871,4 +1876,9 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .mode-enter { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--ui-border, #475569); color: var(--ui-accent-text, #bae6fd); font-weight: 800; }
 .mode-selection .mode-card { min-height: 9rem; }
 @media (max-height: 450px) { .mode-selection .mode-card { min-height: 0; padding: .65rem; } .mode-enter { margin-top: .5rem; padding-top: .4rem; } }
+
+.friend-table-settings > summary, .bot-settings > summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; background: rgba(128, 104, 70, .1); }
+.friend-table-settings > summary::before, .bot-settings > summary::before { content: "▸"; }
+.friend-table-settings[open] > summary::before, .bot-settings[open] > summary::before { content: "▾"; }
+.friend-table-settings { margin-top: 8px; }
 </style>

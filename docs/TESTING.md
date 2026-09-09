@@ -358,3 +358,5 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 
 WebKit 回归与 Chromium 一样使用独立 runner 分片：三片分别运行 `--project=webkit-responsive --shard=1/3`、`2/3`、`3/3`，每片仍为单 worker 和独立服务端进程。测试匹配范围、超时、错误断言、失败 trace、容器检查及 CI gate 均保留。
 `context-hints.spec.ts`（Chromium / WebKit）验证小屏合法吃牌解释、键盘关闭、同概念去重、设置重置、开关持久化以及存储禁用后照常出牌。自动化检查 aria-live 文本；实际读屏仍列为真机待验证。
+
+`invite-product.spec.ts` 纳入 Chromium / WebKit，覆盖 568×320 与 375×667 的邀请优先级、首次昵称、明确入座、刷新原座恢复和键盘打开计分设置。既有 friend-room、lobby-ready、cumulative-scoring 回归继续覆盖分享取消/复制/二维码、满房、无效房、重试与累计分。真实微信路径仍由发布清单记录，不把自动化浏览器当作微信实测。

@@ -253,6 +253,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
     await expect(host.getByTestId("fill-bots")).toHaveText("补齐 1 位电脑");
     await expect(host.getByTestId("seat-0")).toContainText("机器人 · 标准");
     await expect(host.getByTestId("bot-level-0-standard")).toHaveAttribute("aria-pressed", "true");
+    await host.getByTestId("bot-settings-0").click();
     await host.getByTestId("bot-level-0-expert").click();
     await expect(host.getByTestId("seat-0")).toContainText("机器人 · 高手");
     await expect(host.getByTestId("bot-level-0-expert")).toHaveAttribute("aria-pressed", "true");
@@ -822,7 +823,7 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   const inviteUrl = invitationUrlFromRoomPage(page);
   expect(shared).toEqual({
     title: "邀请你一起传承四色牌文化",
-    text: `好友房 ${roomId} · 点击进入四色牌同桌相聚`,
+    text: `好友房 ${roomId} · 不用注册，打开选座；不满四人可电脑补位`,
     url: inviteUrl,
   });
   expect(shared.url).not.toContain("playerToken");
@@ -985,7 +986,7 @@ test.describe("all invitation buttons on mobile", () => {
             : Math.min(seat.bottom, scroll.bottom) - Math.max(seat.top, scroll.top),
         };
       }, { rotated });
-      expect(metrics.labels).toEqual(["复制邀请链接", "邀请牌友", "出示二维码"]);
+      expect(metrics.labels).toEqual(["邀请牌友", "复制邀请链接", "出示二维码"]);
       for (const control of metrics.controls) {
         expect(control.inside, JSON.stringify({ viewport, metrics })).toBe(true);
         expect(control.readable).toBe(true);
