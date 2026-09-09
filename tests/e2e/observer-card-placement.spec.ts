@@ -126,7 +126,34 @@ test("a player's own discard stays centered without adding a waiting prompt", as
     }, "explicit");
   });
   await expect(page.getByTestId("pending-card")).toBeVisible();
-  await expect(page.getByTestId("decision-status")).toHaveText("等待其他玩家响应");
+  await expect(page.getByTestId("decision-status")).toHaveCount(0);
+  await page.waitForTimeout(2000);
+  await expect(page.getByTestId("decision-status")).toHaveCount(0);
+  await expect(page.getByTestId("decision-status")).toHaveText("等待其他玩家操作", { timeout: 2000 });
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 1, lastAction: "NEXT_PLAYER_ACTION" }, "explicit");
+  });
+  await expect(page.getByTestId("decision-status")).toHaveCount(0);
   await expect(page.locator(".action-dock .action-row")).toHaveCount(0);
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
+});
+
+
+test("previous winner and Hu type remain visible after dealing", async ({ page }) => {
+  await enterDebugPractice(page);
+  await setupLocalUpperChi(page);
+  await expect(page.getByTestId("previous-winner")).toHaveCount(0);
+  for (const huType of ["small", "big"]) {
+    await page.evaluate((huType) => {
+      const bridge = (window as any).__siseLocalTest;
+      const state = bridge.getRoomState();
+      const winner = state.players[1];
+      bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100,
+        previousWinnerId: winner.clientId, previousWinnerName: winner.name, previousHuType: huType }, "explicit");
+    }, huType);
+    await expect(page.getByTestId("previous-winner")).toHaveText(huType === "big" ? "上局大胡" : "上局小胡");
+    await expect(page.getByTestId("previous-winner")).toHaveAttribute("title", huType === "big" ? /由对家翻牌定庄/ : /本局继续坐庄/);
+  }
 });

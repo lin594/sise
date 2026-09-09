@@ -36,6 +36,8 @@ test("a new round snapshot reaches clients before the legacy private hand event"
     send: (event: string, payload: unknown) => sent.push({ event, payload }),
   }];
 
+  room.lastRoundResult = { winnerId: "seat_0", players: [{ clientId: "seat_0", name: "玩家", huType: "small" }] };
+  room.prepareNextRoundSetup("seat_0", "small");
   room.bootstrapRound();
 
   const snapshotIndex = sent.findIndex((message) => message.event === "room_snapshot");
@@ -47,6 +49,11 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.equal(snapshot.stateRevision, 1);
   assert.equal(room.state.stateRevision, 1);
   assert.equal(snapshot.phase, "declaring");
+  assert.equal(snapshot.previousWinnerId, "seat_0");
+  assert.equal(snapshot.previousWinnerName, "玩家");
+  assert.equal(snapshot.previousHuType, "small");
+  assert.equal(snapshot.dealerId, "seat_0");
+  assert.equal(snapshot.dealerPickerId, "");
   assert.equal(
     snapshot.privateHand.length,
     snapshot.players.find((player: { clientId: string }) => player.clientId === "seat_0")?.handCount,
@@ -59,5 +66,18 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.equal(room.state.stateRevision, 2);
   assert.equal(publishedSnapshots.at(-1)?.payload.stateRevision, 2);
 
+  room.clearDeclareIntroTimer();
+  room.lastRoundResult = { winnerId: "seat_1", players: [{ clientId: "seat_1", name: "机器人1", huType: "big" }] };
+  room.prepareNextRoundSetup("seat_1", "big");
+  room.bootstrapRound();
+  const next = sent.filter(message => message.event === "room_snapshot").at(-1)!.payload;
+  assert.equal(next.previousWinnerId, "seat_1");
+  assert.equal(next.previousHuType, "big");
+  assert.equal(next.dealerPickerId, "seat_3");
+  room.clearDeclareIntroTimer();
+  room.lastRoundResult = { winnerId: null, players: [] };
+  room.bootstrapRound();
+  assert.equal(room.state.previousWinnerId, "");
+  assert.equal(room.state.previousHuType, "");
   room.clearDeclareIntroTimer();
 });
