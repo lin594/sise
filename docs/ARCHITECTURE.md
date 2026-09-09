@@ -271,3 +271,5 @@ server/src/schema/                    公开同步 Schema
 `useSettlement` 集中公开结算拆组/分数解释、结算焦点、好友整桌确认和有收据超时的下一局操作；继续只展示服务端计分结果，不在客户端记账。App 在连接、房间和阶段变化时调用清理方法，保留原幂等边界。
 
 `useLobbyPresentation` 拥有三种模式目录、房间准备条件、等待/开始文案和服务端配桌时钟映射。App 通过已有 useRoom 的状态与请求收据字段驱动该投影，LobbyPage 继续负责座位和邀请 UI。
+
+`useRoomLifecycle` 复用 useRoom，集中练习/教学/好友房创建、快速配桌、模式切换及离房清理；`useRoomNavigation` 独立维护浏览器历史保护、监听器和释放计时器。App 仅组合当前最上层弹窗的返回优先级，保持各领域关闭/确认入口。

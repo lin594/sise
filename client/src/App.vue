@@ -712,6 +712,8 @@ import InviteLinkFallbackDialog from "@/components/InviteLinkFallbackDialog.vue"
 import LobbyPage from "@/components/LobbyPage.vue";
 import NicknameDialog from "@/components/NicknameDialog.vue";
 import PwaInstallDialog from "@/components/PwaInstallDialog.vue";
+import { useRoomNavigation } from "@/composables/useRoomNavigation";
+import { useRoomLifecycle, type StartingRoomMode } from "@/composables/useRoomLifecycle";
 import { useLobbyPresentation, lobbyModes, type LobbyModeId } from "@/composables/useLobbyPresentation";
 import { useSettlement } from "@/composables/useSettlement";
 import { useDisplayPreferences } from "@/composables/useDisplayPreferences";
@@ -722,9 +724,7 @@ import { useRoom } from "@/composables/useRoom";
 import { useEntryProfile, ENTRY_NAME_KEY } from "@/composables/useEntryProfile";
 import { isScreenWakeLockSupported, useScreenWakeLock } from "@/composables/useScreenWakeLock";
 import { useTurnAlert } from "@/composables/useTurnAlert";
-import { BACKEND_HTTP_URL } from "@/config/backend";
 import { visibleDecisionEndsAt } from "@/utils/decisionClock";
-import { apiErrorMessage } from "@/utils/http";
 import { isPrivateHandSynchronized } from "@/utils/privateHandReadiness";
 import { resolveTableLayout } from "@/utils/appearance";
 import { hasPersistentBrowserStorage, readStoredValue, writeStoredValue } from "@/utils/safeStorage";
@@ -743,7 +743,6 @@ const FriendInviteQrDialog = defineAsyncComponent(
   () => import("@/components/FriendInviteQrDialog.vue"),
 );
 
-const HTTP_URL = BACKEND_HTTP_URL;
 const browserStoragePersistent = hasPersistentBrowserStorage();
 const { canOfferPwaInstall, pwaInstallGuide, requestPwaInstall, closePwaInstallGuide } = useInstallGuide({
   onError: message => { globalError.value = message; },
@@ -872,7 +871,6 @@ const enteringLobby = ref(false);
 const enteredFrontLobby = ref(false);
 const restoringStoredSession = ref(false);
 const joiningFriendInvite = ref(false);
-type StartingRoomMode = "practice" | "friends" | "quick_match" | null;
 const startingRoomMode = ref<StartingRoomMode>(null);
 const pendingPracticeAutoStart = ref(false);
 const roundStartPending = ref(false);
@@ -957,20 +955,6 @@ async function bootstrapRoomEntry(): Promise<void> {
   entryName.value = entryName.value.trim() || nicknameHistory.value[0] || generateRandomNickname();
   if (entryInviteRoomId.value && !storedEntryNameAtBoot && nicknameHistoryAtBoot.length === 0) return;
   await enterLobby();
-}
-
-async function returnToModeSelectionFromRoom(): Promise<void> {
-  const departingRoomId = entryInviteRoomId.value || activeRoomId.value;
-  restoringStoredSession.value = false;
-  joiningFriendInvite.value = false;
-  startingRoomMode.value = null;
-  entryInviteRoomId.value = "";
-  enteringLobby.value = false;
-  globalError.value = "";
-  await leaveRoom(departingRoomId);
-  enteredFrontLobby.value = true;
-  await nextTick();
-  document.querySelector<HTMLButtonElement>("[data-testid='mode-practice_bots']")?.focus();
 }
 
 const isWaiting = computed(() => state.value?.phase === "waiting");
@@ -1367,16 +1351,12 @@ const {
   cancelReturnLobby,
   confirmReturnLobby,
   trapReturnLobbyFocus
-} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode, resolvedTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom, generateRandomNickname, cardLabel });
+} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode, resolvedTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom: () => handleLeaveRoom(), generateRandomNickname, cardLabel });
 const confirmingResumeAbandon = ref(false);
 const syncExitButtonRef = ref<HTMLButtonElement | null>(null);
 const resumeAbandonDialogRef = ref<HTMLElement | null>(null);
 const resumeAbandonCancelRef = ref<HTMLButtonElement | null>(null);
-const ROOM_HISTORY_GUARD_KEY = "__siseRoomGuard";
-let roomNavigationGuardMounted = false;
-let roomNavigationGuardArmed = false;
-let roomNavigationGuardReleasing = false;
-let roomNavigationReleaseTimer: number | null = null;
+useRoomNavigation({ roomNavigationProtected, activeRoomId, state, connectionState, showEntry, hasFriendInvite, hasLobbySession, confirmingResumeAbandon, requestRoomExitFromBrowserBack });
 let rulesReturnFocus: HTMLElement | null = null;
 const isDeclareSubmitted = computed(() => Boolean(mePlayer.value?.declaredReady));
 const shouldShowDeclarePanel = computed(
@@ -1535,83 +1515,6 @@ function trapResumeAbandonFocus(event: KeyboardEvent): void {
   }
 }
 
-function historyStateWithoutRoomGuard(): unknown {
-  const current = window.history.state;
-  if (!current || typeof current !== "object" || Array.isArray(current)) {
-    return current;
-  }
-  const clean = { ...(current as Record<string, unknown>) };
-  delete clean[ROOM_HISTORY_GUARD_KEY];
-  return Object.keys(clean).length ? clean : null;
-}
-
-function isCurrentRoomHistoryGuard(): boolean {
-  const current = window.history.state;
-  return Boolean(
-    current &&
-      typeof current === "object" &&
-      !Array.isArray(current) &&
-      (current as Record<string, unknown>)[ROOM_HISTORY_GUARD_KEY] === true,
-  );
-}
-
-function cleanRoomUrl(preserveInviteRoomId = false): string {
-  const url = new URL(window.location.href);
-  if (!preserveInviteRoomId) {
-    url.searchParams.delete("roomId");
-  }
-  url.searchParams.delete("playerToken");
-  url.searchParams.delete("new");
-  return url.toString();
-}
-
-function sanitizeCurrentHistoryEntry(): void {
-  const preserveInviteRoomId = showEntry.value && hasFriendInvite.value && !hasLobbySession.value;
-  window.history.replaceState(historyStateWithoutRoomGuard(), "", cleanRoomUrl(preserveInviteRoomId));
-}
-
-function armRoomNavigationGuard(): void {
-  if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
-    return;
-  }
-  if (isCurrentRoomHistoryGuard()) {
-    roomNavigationGuardArmed = true;
-    return;
-  }
-  const current = window.history.state;
-  const base = current && typeof current === "object" && !Array.isArray(current)
-    ? current as Record<string, unknown>
-    : {};
-  window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
-  roomNavigationGuardArmed = true;
-}
-
-function finishRoomNavigationGuardRelease(): void {
-  roomNavigationGuardReleasing = false;
-  if (roomNavigationReleaseTimer !== null) {
-    window.clearTimeout(roomNavigationReleaseTimer);
-    roomNavigationReleaseTimer = null;
-  }
-  sanitizeCurrentHistoryEntry();
-}
-
-function releaseRoomNavigationGuard(): void {
-  const shouldStepBack = roomNavigationGuardArmed && isCurrentRoomHistoryGuard();
-  roomNavigationGuardArmed = false;
-  confirmingResumeAbandon.value = false;
-  if (!shouldStepBack) {
-    sanitizeCurrentHistoryEntry();
-    return;
-  }
-  sanitizeCurrentHistoryEntry();
-  roomNavigationGuardReleasing = true;
-  window.history.back();
-  if (roomNavigationReleaseTimer !== null) {
-    window.clearTimeout(roomNavigationReleaseTimer);
-  }
-  roomNavigationReleaseTimer = window.setTimeout(finishRoomNavigationGuardRelease, 500);
-}
-
 function closeTopmostRoomLayerForBack(): boolean {
   if (confirmingResumeAbandon.value) {
     cancelResumeAbandon();
@@ -1674,24 +1577,6 @@ async function requestRoomExitFromBrowserBack(): Promise<void> {
     }
     await requestResumeAbandon();
   }
-}
-
-function handleRoomNavigationPopState(): void {
-  if (roomNavigationGuardReleasing) {
-    finishRoomNavigationGuardRelease();
-    return;
-  }
-  if (!roomNavigationGuardMounted || !roomNavigationProtected.value) {
-    roomNavigationGuardArmed = false;
-    return;
-  }
-  const current = window.history.state;
-  const base = current && typeof current === "object" && !Array.isArray(current)
-    ? current as Record<string, unknown>
-    : {};
-  window.history.pushState({ ...base, [ROOM_HISTORY_GUARD_KEY]: true }, "", window.location.href);
-  roomNavigationGuardArmed = true;
-  void requestRoomExitFromBrowserBack();
 }
 
 let decisionControlFocusPending = false;
@@ -1943,18 +1828,6 @@ function requestLobbyReady(ready: boolean): boolean {
   return true;
 }
 
-async function handleLeaveRoom(): Promise<void> {
-  trackProductEvent("room_exit", { mode: tutorial.value ? "tutorial" : state.value?.roomMode });
-  globalError.value = "";
-  pendingPracticeAutoStart.value = false;
-  clearRoundStartPending();
-  clearSeatClaimPending();
-  clearLobbyReadyPending();
-  clearSettlementTransitionPending();
-  await leaveRoom();
-  entryInviteRoomId.value = "";
-}
-
 function actionFromRequest(request: ActionRequest): string {
   return typeof request === "string" ? request : request.action;
 }
@@ -2101,31 +1974,8 @@ watch(
   },
 );
 
-watch(
-  () => [
-    roomNavigationProtected.value,
-    activeRoomId.value,
-    state.value?.phase ?? "",
-    connectionState.value,
-  ] as const,
-  ([protectedNow]) => {
-    if (!roomNavigationGuardMounted) {
-      return;
-    }
-    if (protectedNow) {
-      armRoomNavigationGuard();
-    } else {
-      releaseRoomNavigationGuard();
-    }
-  },
-  { flush: "post" },
-);
-
 onMounted(() => {
   openProductSession(Boolean(new URLSearchParams(window.location.search).get("roomId")));
-  roomNavigationGuardMounted = true;
-  window.addEventListener("popstate", handleRoomNavigationPopState);
-  armRoomNavigationGuard();
   installLocalTestBridge();
   declareTick = window.setInterval(() => {
     nowMs.value = Date.now();
@@ -2134,12 +1984,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  roomNavigationGuardMounted = false;
-  window.removeEventListener("popstate", handleRoomNavigationPopState);
-  if (roomNavigationReleaseTimer !== null) {
-    window.clearTimeout(roomNavigationReleaseTimer);
-    roomNavigationReleaseTimer = null;
-  }
   removeLocalTestBridge();
   if (declareTick !== null) {
     window.clearInterval(declareTick);
@@ -2386,156 +2230,10 @@ async function enterLobby() {
   }
 }
 
-function startLobbyMode(mode: string) {
-  if (enteringLobby.value || hasLobbySession.value) return;
-  selectedLobbyMode.value = mode as LobbyModeId;
-  startSelectedMode();
-}
-
-function startSelectedMode() {
-  globalError.value = "";
-  if (!hasLobbySession.value) {
-    if (selectedLobbyMode.value === "friends") {
-      void startFriendLobby();
-    } else if (selectedLobbyMode.value === "quick_match") {
-      void startQuickMatchLobby();
-    } else {
-      void startPracticeLobby();
-    }
-    return;
-  }
-  if (state.value?.roomMode === "friends" || state.value?.roomMode === "match") {
-    requestRoundStart();
-  } else {
-    requestPracticeAutoStart();
-  }
-}
-
-async function startQuickMatchLobby() {
-  if (enteringLobby.value) {
-    return;
-  }
-  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
-  entryName.value = nickname;
-  startingRoomMode.value = "quick_match";
-  enteringLobby.value = true;
-  beginProductMode("match");
-  try {
-    const ok = await connect({
-      nameOverride: nickname,
-      forceNew: true,
-      matchmaking: true,
-    });
-    if (!ok) {
-      throw new Error(joinError.value || "暂时无法快速配桌，请稍后重试。");
-    }
-  } catch (error) {
-    failProductMode();
-    globalError.value = error instanceof Error ? error.message : "暂时无法快速配桌，请稍后重试。";
-  } finally {
-    enteringLobby.value = false;
-    if (!connected.value) {
-      startingRoomMode.value = null;
-    }
-  }
-}
-
-function requestPracticeAutoStart() {
-  pendingPracticeAutoStart.value = true;
-  maybeAutoStartPractice();
-}
-
-async function finishTutorial(invite: boolean) {
-  if (enteringLobby.value) return;
-  await leaveRoom();
-  if (invite) await startFriendLobby();
-  else await startPracticeLobby();
-}
-
-async function startPracticeLobby(tutorial = false) {
-  if (enteringLobby.value) {
-    return;
-  }
-  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
-  entryName.value = nickname;
-  startingRoomMode.value = "practice";
-  enteringLobby.value = true;
-  beginProductMode(tutorial ? "tutorial" : "practice");
-  try {
-    const response = await fetch(`${HTTP_URL}/rooms`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "practice", tutorial }),
-    });
-    if (!response.ok) {
-      throw new Error(await apiErrorMessage(response, "创建单人练习房间失败，请稍后重试。"));
-    }
-    const payload = (await response.json()) as { ok?: boolean; roomId?: string; hostKey?: string; message?: string };
-    if (!payload?.ok || !payload.roomId) {
-      throw new Error(payload?.message || "创建单人练习房间失败");
-    }
-    const ok = await connect({
-      nameOverride: nickname,
-      roomId: payload.roomId,
-      hostKey: payload.hostKey,
-      forceNew: true,
-    });
-    if (!ok) {
-      throw new Error(joinError.value || "进入大厅失败");
-    }
-    requestPracticeAutoStart();
-  } catch (error) {
-    failProductMode();
-    globalError.value = error instanceof Error ? error.message : "进入大厅失败";
-  } finally {
-    enteringLobby.value = false;
-    if (!connected.value) {
-      startingRoomMode.value = null;
-    }
-  }
-}
-
-async function startFriendLobby() {
-  if (enteringLobby.value) {
-    return;
-  }
-  const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
-  startingRoomMode.value = "friends";
-  enteringLobby.value = true;
-  beginProductMode("friends");
-  try {
-    const response = await fetch(`${HTTP_URL}/rooms`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "friends" }),
-    });
-    if (!response.ok) {
-      throw new Error(await apiErrorMessage(response, "创建好友房失败，请稍后重试。"));
-    }
-    const payload = (await response.json()) as { ok?: boolean; roomId?: string; hostKey?: string; message?: string };
-    if (!payload.ok || !payload.roomId || !payload.hostKey) {
-      throw new Error(payload.message || "创建好友房失败");
-    }
-    const ok = await connect({
-      nameOverride: nickname,
-      roomId: payload.roomId,
-      hostKey: payload.hostKey,
-      forceNew: true,
-      exposeRoomIdInUrl: true,
-    });
-    if (!ok) {
-      throw new Error(joinError.value || "进入好友房失败");
-    }
-  } catch (error) {
-    failProductMode();
-    globalError.value = error instanceof Error ? error.message : "创建好友房失败";
-  } finally {
-    enteringLobby.value = false;
-    if (!connected.value) {
-      startingRoomMode.value = null;
-    }
-  }
-}
+const { returnToModeSelectionFromRoom, handleLeaveRoom, startLobbyMode, startSelectedMode, finishTutorial, startPracticeLobby } = useRoomLifecycle({
+  state, tutorial, connected, connect, leaveRoom, joinError, activeRoomId,
+  entryName, entryInviteRoomId, globalError, enteredFrontLobby, enteringLobby, restoringStoredSession, joiningFriendInvite, startingRoomMode, pendingPracticeAutoStart, selectedLobbyMode, hasLobbySession, generateRandomNickname, clearRoundStartPending, clearSeatClaimPending, clearLobbyReadyPending, clearSettlementTransitionPending, requestRoundStart, maybeAutoStartPractice
+});
 
 function clearGlobalNotice(): void {
   if (globalNoticeTimer !== null) {
