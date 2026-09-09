@@ -8,9 +8,16 @@ export const skins: { id: SkinId; name: string; description: string }[] = [
 export const tableLayouts: { id: TableLayoutId; name: string; description: string }[] = [
   { id: "adaptive", name: "自适应布局", description: "随屏幕调整" },
   { id: "compact", name: "紧凑布局", description: "紧凑分区，适合小屏" },
+  { id: "mahjong", name: "麻将布局", description: "四方围桌，流水居中" },
   { id: "classic", name: "经典布局", description: "围桌而坐，中央开阔" },
 ];
 export const normalizeSkin = (value: unknown): SkinId => skins.find(item => item.id === value)?.id ?? "puxian-house";
 export const normalizeTableLayout = (value: unknown): TableLayoutId => tableLayouts.find(item => item.id === value)?.id ?? "adaptive";
 
-export const resolveTableLayout = (layout: TableLayoutId, ultraCompact: boolean): RenderedTableLayoutId => layout === "adaptive" ? ultraCompact ? "compact" : "classic" : layout;
+// Compare both available dimensions after the phone portrait transform.
+export const resolveTableLayout = (layout: TableLayoutId, width: number, height: number): RenderedTableLayoutId => {
+  if (layout !== "adaptive") return layout;
+  if (width < 640 || height < 350) return "compact";
+  if (width >= 960 && height >= 440) return "classic";
+  return "mahjong";
+};

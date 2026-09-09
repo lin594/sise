@@ -1,3 +1,4 @@
+import "@/config/browser-transport";
 import type { ListeningHints } from "@/types/game";
 import type { ActionFeedback, ActionRequest, ActionSendResult, ActionType, AvailableAction, Card, DecisionTimerState, ParsedActionLog, PlayerState, RoomStateSnapshot, RoomConnectionState, RoundResultPayload } from "@/types/game";
 type ConnectOptions = {

@@ -9,15 +9,15 @@
     <fieldset v-if="section !== 'appearance'"><legend>牌桌布局</legend><div class="appearance-options" role="radiogroup" aria-label="牌桌布局">
       <button v-for="layout in tableLayouts" :key="layout.id" type="button" role="radio" :aria-checked="modelValue.tableLayout === layout.id" :data-testid="`layout-${layout.id}`" @click="emit('update:modelValue', { ...modelValue, tableLayout: layout.id })">
         <span class="layout-preview" :class="layout.id" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <strong>{{ layout.name }}</strong><small>{{ layout.id === "adaptive" ? `当前${resolvedLayout === "compact" ? "紧凑" : "经典"}` : layout.description }}</small>
+        <strong>{{ layout.name }}</strong><small>{{ layout.id === "adaptive" ? `当前${tableLayouts.find(item => item.id === resolvedLayout)?.name ?? "经典布局"}` : layout.description }}</small>
       </button>
     </div></fieldset>
   </div>
 </template>
 <script setup lang="ts">
-import type { GameDisplayPreferences } from "@/types/game";
+import type { GameDisplayPreferences, RenderedTableLayoutId } from "@/types/game";
 import { skins, tableLayouts } from "@/utils/appearance";
-defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "layout"; resolvedLayout?: "classic" | "compact" }>();
+defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "layout"; resolvedLayout?: RenderedTableLayoutId }>();
 const emit = defineEmits<{ 'update:modelValue': [value: GameDisplayPreferences] }>();
 </script>
 <style scoped>
@@ -33,4 +33,10 @@ strong, small { display: block; } small { font-size: 13px; margin-top: .2rem; }
 .layout-preview i { position: absolute; width: 24%; height: 10px; background: currentColor; border-radius: 2px; }
 .layout-preview i:nth-child(1) { left: 38%; top: 3px; }.layout-preview i:nth-child(2) { left: 3%; top: 16px; }.layout-preview i:nth-child(3) { right: 3%; top: 16px; }.layout-preview i:nth-child(4) { left: 25%; width: 50%; bottom: 3px; }
 .layout-preview.classic { border-radius: 35%; }.layout-preview.classic i:nth-child(2), .layout-preview.classic i:nth-child(3) { width: 16%; height: 18px; top: 12px; }
+.layout-preview.mahjong { border-width: 2px; }
+.layout-preview.mahjong::after { content: ""; position: absolute; inset: 16px 44%; border: 1px solid currentColor; }
+.layout-preview.mahjong i:nth-child(1) { left: 37%; width: 26%; top: 7px; height: 6px; }
+.layout-preview.mahjong i:nth-child(2) { left: 24%; top: 14px; width: 7%; height: 17px; }
+.layout-preview.mahjong i:nth-child(3) { right: 24%; top: 14px; width: 7%; height: 17px; }
+.layout-preview.mahjong i:nth-child(4) { left: 37%; width: 26%; bottom: 7px; height: 6px; }
 </style>

@@ -242,6 +242,7 @@
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
+        :show-card-color-assist="displayPreferences.showCardColorAssist"
         :viewport-transformed="isRotatedPhonePortrait"
         :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${viewportLeft},${viewportTop}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         :quick-phrase="quickPhrase"
@@ -1563,14 +1564,14 @@ const {
   viewportTop,
 } = useResponsiveViewport(viewportGeometryBusy);
 const displayPreferences = ref<GameDisplayPreferences>(readDisplayPreferences());
-const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
-watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value] as const, ([layout, ultra], _, onCleanup) => {
-  const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value));
+watch(() => [displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value] as const, ([layout, width, height], _, onCleanup) => {
+  const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, width, height); }, 180);
   onCleanup(() => clearTimeout(timer));
 });
 const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
 const showSmallScreenRecommendation = computed(() =>
-  isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
+  resolveTableLayout("adaptive", effectiveWidth.value, effectiveHeight.value) === "compact" && displayPreferences.value.tableLayout === "classic"
   && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
   && !isConnectingWithoutState.value && !isEnded.value,
 );

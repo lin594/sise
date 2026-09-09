@@ -8,6 +8,9 @@
       'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
       'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
+      'many-top-groups': topGroupBlocks.length > 7,
+      'wide-self-groups': selfGroupBlocks.length > 5,
+      'meld-color-assist': props.showCardColorAssist,
     }"
     data-testid="game-board"
     :data-geometry-busy="Boolean(flights.length || (!coordinateMotionSuppressed && activeTableEvents.length) || dealerReveal)"
@@ -33,6 +36,7 @@
         :class="{ 'flow-empty': flowCardCount(flowTopLeftPlayer.clientId) === 0 }"
         data-flow-lane="top-left"
         :data-flow-receiver-id="flowTopLeftPlayer.clientId"
+        :data-flow-side="flowSide(flowTopLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
@@ -96,7 +100,7 @@
             </span>
           </div>
         </header>
-        <div v-if="topGroupBlocks.length" class="group-block-list compact">
+        <div v-if="topGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
           <div
             v-for="group in topGroupBlocks"
             :key="`top-group-${group.id}`"
@@ -137,6 +141,7 @@
         :class="{ 'flow-empty': flowCardCount(flowTopRightPlayer.clientId) === 0 }"
         data-flow-lane="top-right"
         :data-flow-receiver-id="flowTopRightPlayer.clientId"
+        :data-flow-side="flowSide(flowTopRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
@@ -200,7 +205,7 @@
             </span>
           </div>
         </header>
-        <div v-if="leftGroupBlocks.length" class="group-block-list compact">
+        <div v-if="leftGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
           <div
             v-for="group in leftGroupBlocks"
             :key="`left-group-${group.id}`"
@@ -352,7 +357,7 @@
             </span>
           </div>
         </header>
-        <div v-if="rightGroupBlocks.length" class="group-block-list compact">
+        <div v-if="rightGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
           <div
             v-for="group in rightGroupBlocks"
             :key="`right-group-${group.id}`"
@@ -393,6 +398,7 @@
         :class="{ 'flow-empty': flowCardCount(flowBottomLeftPlayer.clientId) === 0 }"
         data-flow-lane="bottom-left"
         :data-flow-receiver-id="flowBottomLeftPlayer.clientId"
+        :data-flow-side="flowSide(flowBottomLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
@@ -416,6 +422,8 @@
         class="self-groups-card"
         :class="{ empty: !selfGroupBlocks.length }"
         ref="selfOpenRef"
+        :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined"
+        aria-label="自己的明示牌组，可滚动查看"
       >
         <template v-if="selfGroupBlocks.length">
           <div class="group-block-list">
@@ -460,6 +468,7 @@
         :class="{ 'flow-empty': flowCardCount(flowBottomRightPlayer.clientId) === 0 }"
         data-flow-lane="bottom-right"
         :data-flow-receiver-id="flowBottomRightPlayer.clientId"
+        :data-flow-side="flowSide(flowBottomRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
@@ -787,7 +796,7 @@
 
 <script setup lang="ts">
 import type { ListeningHints } from "@/types/game";
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
@@ -887,6 +896,7 @@ const props = defineProps<{
   tableCardMode?: RenderedCardMode;
   seatDirection?: SeatDirection;
   reduceMotion?: boolean;
+  showCardColorAssist?: boolean;
   viewportTransformed?: boolean;
   viewportTransformKey?: string;
   quickPhrase?: { seatId: string; phraseId: string; text: string; sequence: number } | null;
@@ -1246,6 +1256,22 @@ function flowOwner(playerId: string): PlayerState | null {
   return getPreviousPlayer(playerId);
 }
 
+function playerSide(playerId: string): "bottom" | "left" | "top" | "right" {
+  if (playerId === leftPlayer.value?.clientId) return "left";
+  if (playerId === topPlayer.value?.clientId) return "top";
+  if (playerId === rightPlayer.value?.clientId) return "right";
+  return "bottom";
+}
+
+function flowSide(receiverId: string) {
+  return playerSide(flowOwner(receiverId)?.clientId ?? "");
+}
+
+function tableLocationRotation(location: TableLocation): number {
+  if (appliedTableLayout.value !== "mahjong" || location.zone !== "flow") return 0;
+  return { bottom: 0, left: 90, top: 180, right: -90 }[playerSide(location.playerId ?? "")];
+}
+
 function flowTitle(playerId: string): string {
   const receiver = props.players.find((player) => player.clientId === playerId);
   const sender = flowOwner(playerId);
@@ -1565,7 +1591,12 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
     const style = getComputedStyle(destinationElement);
     const top = destinationElement.querySelector('.text-top');
     const bottom = destinationElement.querySelector('.text-bottom');
-    cardStyle = { width: '100%', height: '100%', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+    const angle = tableLocationRotation(move.to);
+    const sideways = Math.abs(angle) === 90;
+    cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+      '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
+      '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
+      '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
       '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
       '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
     tableFlightFaceStyles.set(key, cardStyle);
@@ -2272,11 +2303,52 @@ function updateHandLayoutState(): void {
     : { start: 0, end: 0, total: cards.length };
 }
 
+const meldLayoutKeys = new WeakMap<HTMLElement, string>();
+function updateMahjongMeldLayout(): void {
+  if (appliedTableLayout.value !== "mahjong" || flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length)) return;
+  boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => {
+    if (!list.clientWidth || !list.clientHeight) return;
+    const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
+    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}:${props.showCardColorAssist}`;
+    const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
+    // Preserve two 12px names and the fixed 9px seal, even at the 10px
+    // readability floor. Large faces need room for one 1.32em name plus seal.
+    const height = props.showCardColorAssist ? (appliedTableCardMode.value === 'long' ? 40 : 32) : 24;
+    const applyScale = (scale: number) => {
+      list.style.setProperty('--meld-scale', String(scale));
+      // Size the same card boxes measured below; CSS clears their automatic
+      // minimum sizes so intrinsic content cannot clamp the fitted dimensions.
+      const sizes = { width: `${20 * scale}px`, height: `${height * scale}px`,
+        'font-size': `${12 * scale}px`, margin: '0px' };
+      cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {
+        if (card.style.getPropertyValue(property) !== value) card.style.setProperty(property, value);
+      }));
+    };
+    if (meldLayoutKeys.get(list) === key) {
+      const previousScale = Number(list.style.getPropertyValue('--meld-scale')) || 1;
+      applyScale(previousScale);
+      if (previousScale <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1)) return;
+    }
+    // Whole groups wrap at their natural size first. The floor preserves 10px
+    // lettering; exceptionally crowded zones remain scrollable at that floor.
+    let scale = 1;
+    applyScale(1);
+    while ((list.scrollWidth > list.clientWidth + 1 || list.scrollHeight > list.clientHeight + 1) && scale > 5 / 6) {
+      scale = Math.max(5 / 6, scale - .025);
+      applyScale(scale);
+    }
+    meldLayoutKeys.set(list, key);
+  });
+}
+
+onUpdated(updateMahjongMeldLayout);
+
 function scheduleHandLayoutUpdate(): void {
   if (handLayoutFrame !== null) return;
   handLayoutFrame = window.requestAnimationFrame(() => {
     handLayoutFrame = null;
     updateHandLayoutState();
+    updateMahjongMeldLayout();
     updateFlowLayout();
   });
 }
@@ -2318,8 +2390,18 @@ function startRotatedScroll(event: PointerEvent): void {
   scrollDragged = false;
   rotatedScroll = null;
   if (event.pointerType !== 'touch' || !props.viewportTransformKey?.endsWith(':rotated')) return;
-  const element = (event.target as Element).closest<HTMLElement>('.hand, .discard-strip, .self-groups-card, .player-card');
-  if (!element || (element.scrollWidth <= element.clientWidth + 2 && element.scrollHeight <= element.clientHeight + 2)) return;
+  const selector = '.hand, .discard-strip, .group-block-list, .self-groups-card, .player-card';
+  let element = (event.target as Element).closest<HTMLElement>(selector);
+  // A meld list may sit inside a scrolling seat or self group section. Skip
+  // non-scrolling inner lists so they do not swallow the parent's touch drag.
+  while (element) {
+    const style = getComputedStyle(element);
+    const scrollX = /auto|scroll/.test(style.overflowX) && element.scrollWidth > element.clientWidth + 2;
+    const scrollY = /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 2;
+    if (scrollX || scrollY) break;
+    element = element.parentElement?.closest<HTMLElement>(selector) ?? null;
+  }
+  if (!element) return;
   rotatedScroll = { element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop };
 }
 function moveRotatedScroll(event: PointerEvent): void {
@@ -2362,9 +2444,10 @@ function updateFlowLayout(): void {
     const cards = strip.querySelectorAll<HTMLElement>('.discard-token');
     const count = cards.length;
     const latestId = cards[count - 1]?.dataset.faceId ?? '';
-    const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && strip.dataset.scrollAfter !== 'true');
+    const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && (appliedTableLayout.value === 'mahjong' || strip.dataset.scrollAfter !== 'true'));
     const long = appliedTableCardMode.value === 'long';
-    const width = long ? 24 : 30, height = long ? 32 : 30;
+    const sideways = appliedTableLayout.value === 'mahjong' && ['left', 'right'].includes(zone.dataset.flowSide ?? '');
+    const width = long ? sideways ? 32 : 24 : 30, height = long ? sideways ? 24 : 32 : 30;
     const availableWidth = strip.clientWidth - 8, availableHeight = strip.clientHeight - 8;
     let scale = 1;
     // The lower bound retains a 10px font. Full rows wrap before scrolling.
@@ -3126,6 +3209,8 @@ watch(
 );
 
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value],
+  () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
   flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 
@@ -3248,6 +3333,10 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     if (dealCount || moveCount || revealing) return;
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode) return;
     appliedTableLayout.value = layout ?? "classic";
+    boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
+    boardRef.value?.querySelectorAll<HTMLElement>('.mini-card').forEach(card => {
+      ['width', 'height', 'font-size', 'margin'].forEach(property => card.style.removeProperty(property));
+    });
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear(); tableFlightSources.clear(); tableFlightDestinations.clear(); tableFlightFaceStyles.clear();
@@ -6167,3 +6256,5 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   --classic-bottom-weight: 1fr;
 }
 </style>
+
+<style scoped src="../mahjong.css"></style>

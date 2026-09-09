@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
@@ -313,6 +313,23 @@ function getNextPlayer(playerId) {
 function flowOwner(playerId) {
     return getPreviousPlayer(playerId);
 }
+function playerSide(playerId) {
+    if (playerId === leftPlayer.value?.clientId)
+        return "left";
+    if (playerId === topPlayer.value?.clientId)
+        return "top";
+    if (playerId === rightPlayer.value?.clientId)
+        return "right";
+    return "bottom";
+}
+function flowSide(receiverId) {
+    return playerSide(flowOwner(receiverId)?.clientId ?? "");
+}
+function tableLocationRotation(location) {
+    if (appliedTableLayout.value !== "mahjong" || location.zone !== "flow")
+        return 0;
+    return { bottom: 0, left: 90, top: 180, right: -90 }[playerSide(location.playerId ?? "")];
+}
 function flowTitle(playerId) {
     const receiver = props.players.find((player) => player.clientId === playerId);
     const sender = flowOwner(playerId);
@@ -620,7 +637,12 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
         const style = getComputedStyle(destinationElement);
         const top = destinationElement.querySelector('.text-top');
         const bottom = destinationElement.querySelector('.text-bottom');
-        cardStyle = { width: '100%', height: '100%', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+        const angle = tableLocationRotation(move.to);
+        const sideways = Math.abs(angle) === 90;
+        cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
+            '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
+            '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
+            '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
             '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
             '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
         tableFlightFaceStyles.set(key, cardStyle);
@@ -1276,12 +1298,55 @@ function updateHandLayoutState() {
         ? { start: visibleIndexes[0] + 1, end: visibleIndexes.at(-1) + 1, total: cards.length }
         : { start: 0, end: 0, total: cards.length };
 }
+const meldLayoutKeys = new WeakMap();
+function updateMahjongMeldLayout() {
+    if (appliedTableLayout.value !== "mahjong" || flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length))
+        return;
+    boardRef.value?.querySelectorAll('.group-block-list').forEach(list => {
+        if (!list.clientWidth || !list.clientHeight)
+            return;
+        const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
+        const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}:${props.showCardColorAssist}`;
+        const cards = [...list.querySelectorAll('.mini-card')];
+        // Preserve two 12px names and the fixed 9px seal, even at the 10px
+        // readability floor. Large faces need room for one 1.32em name plus seal.
+        const height = props.showCardColorAssist ? (appliedTableCardMode.value === 'long' ? 40 : 32) : 24;
+        const applyScale = (scale) => {
+            list.style.setProperty('--meld-scale', String(scale));
+            // Size the same card boxes measured below; CSS clears their automatic
+            // minimum sizes so intrinsic content cannot clamp the fitted dimensions.
+            const sizes = { width: `${20 * scale}px`, height: `${height * scale}px`,
+                'font-size': `${12 * scale}px`, margin: '0px' };
+            cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {
+                if (card.style.getPropertyValue(property) !== value)
+                    card.style.setProperty(property, value);
+            }));
+        };
+        if (meldLayoutKeys.get(list) === key) {
+            const previousScale = Number(list.style.getPropertyValue('--meld-scale')) || 1;
+            applyScale(previousScale);
+            if (previousScale <= 5 / 6 || (list.scrollWidth <= list.clientWidth + 1 && list.scrollHeight <= list.clientHeight + 1))
+                return;
+        }
+        // Whole groups wrap at their natural size first. The floor preserves 10px
+        // lettering; exceptionally crowded zones remain scrollable at that floor.
+        let scale = 1;
+        applyScale(1);
+        while ((list.scrollWidth > list.clientWidth + 1 || list.scrollHeight > list.clientHeight + 1) && scale > 5 / 6) {
+            scale = Math.max(5 / 6, scale - .025);
+            applyScale(scale);
+        }
+        meldLayoutKeys.set(list, key);
+    });
+}
+onUpdated(updateMahjongMeldLayout);
 function scheduleHandLayoutUpdate() {
     if (handLayoutFrame !== null)
         return;
     handLayoutFrame = window.requestAnimationFrame(() => {
         handLayoutFrame = null;
         updateHandLayoutState();
+        updateMahjongMeldLayout();
         updateFlowLayout();
     });
 }
@@ -1318,8 +1383,19 @@ function startRotatedScroll(event) {
     rotatedScroll = null;
     if (event.pointerType !== 'touch' || !props.viewportTransformKey?.endsWith(':rotated'))
         return;
-    const element = event.target.closest('.hand, .discard-strip, .self-groups-card, .player-card');
-    if (!element || (element.scrollWidth <= element.clientWidth + 2 && element.scrollHeight <= element.clientHeight + 2))
+    const selector = '.hand, .discard-strip, .group-block-list, .self-groups-card, .player-card';
+    let element = event.target.closest(selector);
+    // A meld list may sit inside a scrolling seat or self group section. Skip
+    // non-scrolling inner lists so they do not swallow the parent's touch drag.
+    while (element) {
+        const style = getComputedStyle(element);
+        const scrollX = /auto|scroll/.test(style.overflowX) && element.scrollWidth > element.clientWidth + 2;
+        const scrollY = /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 2;
+        if (scrollX || scrollY)
+            break;
+        element = element.parentElement?.closest(selector) ?? null;
+    }
+    if (!element)
         return;
     rotatedScroll = { element, pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: element.scrollLeft, top: element.scrollTop };
 }
@@ -1368,9 +1444,10 @@ function updateFlowLayout() {
         const cards = strip.querySelectorAll('.discard-token');
         const count = cards.length;
         const latestId = cards[count - 1]?.dataset.faceId ?? '';
-        const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && strip.dataset.scrollAfter !== 'true');
+        const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && (appliedTableLayout.value === 'mahjong' || strip.dataset.scrollAfter !== 'true'));
         const long = appliedTableCardMode.value === 'long';
-        const width = long ? 24 : 30, height = long ? 32 : 30;
+        const sideways = appliedTableLayout.value === 'mahjong' && ['left', 'right'].includes(zone.dataset.flowSide ?? '');
+        const width = long ? sideways ? 32 : 24 : 30, height = long ? sideways ? 24 : 32 : 30;
         const availableWidth = strip.clientWidth - 8, availableHeight = strip.clientHeight - 8;
         let scale = 1;
         // The lower bound retains a 10px font. Full rows wrap before scrolling.
@@ -2071,6 +2148,7 @@ watch(() => [appliedOwnCardMode.value, props.handLayout, props.viewportTransform
     void nextTick(scheduleHandLayoutUpdate);
 });
 watch(handViewportRef, observeHandViewport, { immediate: true });
+watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value], () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
     flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => chiSelectionContextKey.value, (contextKey) => {
@@ -2163,6 +2241,10 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
     if (appliedTableLayout.value === layout && appliedTableCardMode.value === tableMode && appliedOwnCardMode.value === ownMode)
         return;
     appliedTableLayout.value = layout ?? "classic";
+    boardRef.value?.querySelectorAll('.group-block-list').forEach(list => meldLayoutKeys.delete(list));
+    boardRef.value?.querySelectorAll('.mini-card').forEach(card => {
+        ['width', 'height', 'font-size', 'margin'].forEach(property => card.style.removeProperty(property));
+    });
     appliedTableCardMode.value = tableMode ?? "large";
     appliedOwnCardMode.value = ownMode ?? "large";
     lastCardRects.clear();
@@ -3124,6 +3206,9 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
             'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
             'dealer-ceremony-active': Boolean(__VLS_ctx.dealerReveal),
             'board-declaring': __VLS_ctx.state?.phase === 'declaring',
+            'many-top-groups': __VLS_ctx.topGroupBlocks.length > 7,
+            'wide-self-groups': __VLS_ctx.selfGroupBlocks.length > 5,
+            'meld-color-assist': props.showCardColorAssist,
         }) },
     'data-testid': "game-board",
     'data-geometry-busy': (Boolean(__VLS_ctx.flights.length || (!__VLS_ctx.coordinateMotionSuppressed && __VLS_ctx.activeTableEvents.length) || __VLS_ctx.dealerReveal)),
@@ -3161,6 +3246,7 @@ if (__VLS_ctx.flowTopLeftPlayer) {
         ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowTopLeftPlayer.clientId) === 0 }) },
         'data-flow-lane': "top-left",
         'data-flow-receiver-id': (__VLS_ctx.flowTopLeftPlayer.clientId),
+        'data-flow-side': (__VLS_ctx.flowSide(__VLS_ctx.flowTopLeftPlayer.clientId)),
         'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowTopLeftPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -3288,6 +3374,8 @@ if (__VLS_ctx.topPlayer) {
     if (__VLS_ctx.topGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
+            tabindex: (__VLS_ctx.appliedTableLayout === 'mahjong' ? 0 : undefined),
+            'aria-label': "明示牌组，可滚动查看",
         });
         for (const [group] of __VLS_getVForSourceType((__VLS_ctx.topGroupBlocks))) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3353,6 +3441,7 @@ if (__VLS_ctx.flowTopRightPlayer) {
         ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowTopRightPlayer.clientId) === 0 }) },
         'data-flow-lane': "top-right",
         'data-flow-receiver-id': (__VLS_ctx.flowTopRightPlayer.clientId),
+        'data-flow-side': (__VLS_ctx.flowSide(__VLS_ctx.flowTopRightPlayer.clientId)),
         'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowTopRightPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -3480,6 +3569,8 @@ if (__VLS_ctx.leftPlayer) {
     if (__VLS_ctx.leftGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
+            tabindex: (__VLS_ctx.appliedTableLayout === 'mahjong' ? 0 : undefined),
+            'aria-label': "明示牌组，可滚动查看",
         });
         for (const [group] of __VLS_getVForSourceType((__VLS_ctx.leftGroupBlocks))) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3757,6 +3848,8 @@ if (__VLS_ctx.rightPlayer) {
     if (__VLS_ctx.rightGroupBlocks.length) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
             ...{ class: "group-block-list compact" },
+            tabindex: (__VLS_ctx.appliedTableLayout === 'mahjong' ? 0 : undefined),
+            'aria-label': "明示牌组，可滚动查看",
         });
         for (const [group] of __VLS_getVForSourceType((__VLS_ctx.rightGroupBlocks))) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3822,6 +3915,7 @@ if (__VLS_ctx.flowBottomLeftPlayer) {
         ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowBottomLeftPlayer.clientId) === 0 }) },
         'data-flow-lane': "bottom-left",
         'data-flow-receiver-id': (__VLS_ctx.flowBottomLeftPlayer.clientId),
+        'data-flow-side': (__VLS_ctx.flowSide(__VLS_ctx.flowBottomLeftPlayer.clientId)),
         'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowBottomLeftPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -3863,6 +3957,8 @@ if (__VLS_ctx.selfPlayer) {
         ...{ class: "self-groups-card" },
         ...{ class: ({ empty: !__VLS_ctx.selfGroupBlocks.length }) },
         ref: "selfOpenRef",
+        tabindex: (__VLS_ctx.appliedTableLayout === 'mahjong' ? 0 : undefined),
+        'aria-label': "自己的明示牌组，可滚动查看",
     });
     /** @type {typeof __VLS_ctx.selfOpenRef} */ ;
     if (__VLS_ctx.selfGroupBlocks.length) {
@@ -3933,6 +4029,7 @@ if (__VLS_ctx.flowBottomRightPlayer) {
         ...{ class: ({ 'flow-empty': __VLS_ctx.flowCardCount(__VLS_ctx.flowBottomRightPlayer.clientId) === 0 }) },
         'data-flow-lane': "bottom-right",
         'data-flow-receiver-id': (__VLS_ctx.flowBottomRightPlayer.clientId),
+        'data-flow-side': (__VLS_ctx.flowSide(__VLS_ctx.flowBottomRightPlayer.clientId)),
         'aria-label': (__VLS_ctx.flowAccessibleTitle(__VLS_ctx.flowBottomRightPlayer.clientId)),
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
@@ -4834,6 +4931,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             leftGroupBlocks: leftGroupBlocks,
             rightGroupBlocks: rightGroupBlocks,
             responseCard: responseCard,
+            flowSide: flowSide,
             flowTitle: flowTitle,
             flowAccessibleTitle: flowAccessibleTitle,
             responseCardPlacement: responseCardPlacement,

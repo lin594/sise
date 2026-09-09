@@ -714,13 +714,13 @@ const isPendingSpecialCard = computed(() => {
 const viewportGeometryBusy = ref(false);
 const { effectiveHeight, effectiveWidth, isCompactViewport, isLegacyCompactViewport, isRotatedPhonePortrait, isUltraCompactViewport, viewportHeight, viewportWidth, viewportLeft, viewportTop, } = useResponsiveViewport(viewportGeometryBusy);
 const displayPreferences = ref(readDisplayPreferences());
-const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, isUltraCompactViewport.value));
-watch(() => [displayPreferences.value.tableLayout, isUltraCompactViewport.value], ([layout, ultra], _, onCleanup) => {
-    const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, ultra); }, 180);
+const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value));
+watch(() => [displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value], ([layout, width, height], _, onCleanup) => {
+    const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, width, height); }, 180);
     onCleanup(() => clearTimeout(timer));
 });
 const layoutRecommendationDismissed = ref(readStoredValue("sise_compact_recommendation_dismissed_v1") === "1");
-const showSmallScreenRecommendation = computed(() => isUltraCompactViewport.value && displayPreferences.value.tableLayout === "classic"
+const showSmallScreenRecommendation = computed(() => resolveTableLayout("adaptive", effectiveWidth.value, effectiveHeight.value) === "compact" && displayPreferences.value.tableLayout === "classic"
     && !layoutRecommendationDismissed.value && (showEntry.value || showModeLobby.value)
     && !isConnectingWithoutState.value && !isEnded.value);
 function dismissLayoutRecommendation() {
@@ -3410,6 +3410,7 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
+        showCardColorAssist: (__VLS_ctx.displayPreferences.showCardColorAssist),
         viewportTransformed: (__VLS_ctx.isRotatedPhonePortrait),
         viewportTransformKey: (`${__VLS_ctx.viewportWidth}x${__VLS_ctx.viewportHeight}:${__VLS_ctx.viewportLeft},${__VLS_ctx.viewportTop}:${__VLS_ctx.isRotatedPhonePortrait ? 'rotated' : 'native'}`),
         quickPhrase: (__VLS_ctx.quickPhrase),
@@ -3445,6 +3446,7 @@ else {
         tableCardMode: (__VLS_ctx.resolvedTableCardMode),
         seatDirection: (__VLS_ctx.displayPreferences.seatDirection),
         reduceMotion: (__VLS_ctx.displayPreferences.reduceMotion),
+        showCardColorAssist: (__VLS_ctx.displayPreferences.showCardColorAssist),
         viewportTransformed: (__VLS_ctx.isRotatedPhonePortrait),
         viewportTransformKey: (`${__VLS_ctx.viewportWidth}x${__VLS_ctx.viewportHeight}:${__VLS_ctx.viewportLeft},${__VLS_ctx.viewportTop}:${__VLS_ctx.isRotatedPhonePortrait ? 'rotated' : 'native'}`),
         quickPhrase: (__VLS_ctx.quickPhrase),
