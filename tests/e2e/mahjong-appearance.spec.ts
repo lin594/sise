@@ -521,17 +521,23 @@ for (const mode of ['long', 'large']) test(`color assistance keeps ${mode} meld 
 });
 
 
-for (const layout of ['classic', 'compact', 'mahjong', 'adaptive']) {
+for (const layout of ['classic', 'compact', 'mahjong', 'adaptive'] as const) {
   for (const mode of ['long', 'large']) test(`global assistance ${layout} ${mode} fits fixed faces and short tables`, async ({ page }, info) => {
     await start(page, layout, mode);
     await crowd(page);
     await page.evaluate(() => document.documentElement.classList.add('show-card-color-assist'));
     for (const [width, height] of [[640, 350], [568, 320], [667, 375], [375, 667], [844, 390], [1024, 768], [1440, 900]]) {
       await page.setViewportSize({ width, height });
-      // Resize is debounced before adaptive layout and card geometry settle.
-      await page.waitForTimeout(250);
+      // WebKit can deliver visualViewport changes after setViewportSize returns.
+      // Wait for the actual app viewport, then its debounced layout, before
+      // attributing a geometry change to the assistance switch.
+      const [effectiveWidth, effectiveHeight] = width < height ? [height, width] : [width, height];
+      await expect(page.locator('main.layout')).toHaveAttribute('data-effective-viewport', `${effectiveWidth}x${effectiveHeight}`);
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', resolveTableLayout(layout, effectiveWidth, effectiveHeight));
       await expect(page.getByTestId('game-board')).toHaveAttribute('data-layout-pending', 'false');
       await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
+      // Let WebKit flush container-query layout before reading card rectangles.
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       await expect.poll(() => page.getByTestId('game-board').evaluate(board => {
         const inside = (a: DOMRect, b: DOMRect) => a.left >= b.left - .6 && a.right <= b.right + .6 && a.top >= b.top - .6 && a.bottom <= b.bottom + .6;
         const overlaps = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > .5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > .5;
@@ -562,8 +568,9 @@ for (const layout of ['classic', 'compact', 'mahjong', 'adaptive']) {
         document.documentElement.classList.remove('show-card-color-assist');
         const plain = geometry();
         document.documentElement.classList.add('show-card-color-assist');
-        return Math.max(...plain.flatMap((size, i) => size.map((value, axis) => Math.abs(value - assisted[i]![axis]!))));
-      })).toBeLessThanOrEqual(.1);
+        return cards.flatMap((card, i) => plain[i]!.some((value, axis) => Math.abs(value - assisted[i]![axis]!) > .1)
+          ? [{ id: (card as HTMLElement).dataset.faceId, className: card.className, assisted: assisted[i], plain: plain[i] }] : []);
+      })).toEqual([]);
       if (width === 568 || width === 375 || width === 1440) await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}x${height}.png`) });
     }
   });
