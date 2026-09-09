@@ -10,7 +10,6 @@
       'board-declaring': state?.phase === 'declaring',
       'many-top-groups': topGroupBlocks.length > 7,
       'wide-self-groups': selfGroupBlocks.length > 5,
-      'meld-color-assist': props.showCardColorAssist,
     }"
     data-testid="game-board"
     :data-geometry-busy="Boolean(flights.length || (!coordinateMotionSuppressed && activeTableEvents.length) || dealerReveal)"
@@ -1601,6 +1600,8 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
     cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
       '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
       '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
+      '--card-ink-width': style.getPropertyValue('--card-ink-width') || '100cqw',
+      '--card-ink-height': style.getPropertyValue('--card-ink-height') || '100cqh',
       '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
       '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
       '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
@@ -2341,11 +2342,10 @@ function updateMahjongMeldLayout(): void {
   boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => {
     if (!list.clientWidth || !list.clientHeight) return;
     const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
-    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}:${props.showCardColorAssist}`;
+    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
     const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
-    // Preserve two 12px names and the fixed 9px seal, even at the 10px
-    // readability floor. Large faces need room for one 1.32em name plus seal.
-    const height = props.showCardColorAssist ? (appliedTableCardMode.value === 'long' ? 40 : 32) : 24;
+    // Assistance is contained inside the face and never changes group geometry.
+    const height = 24;
     const applyScale = (scale: number) => {
       list.style.setProperty('--meld-scale', String(scale));
       // Size the same card boxes measured below; CSS clears their automatic
@@ -3929,6 +3929,11 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 
 .mini-card-strip.stacked:not(.mode-long) .mini-card + .mini-card {
   margin-left: -0.28rem;
+}
+
+/* Assisted names and corner labels must remain visible between adjacent cards. */
+:global(html.show-card-color-assist .board .mini-card-strip .card.mini-card + .card.mini-card) {
+  margin-left: 0;
 }
 
 .mini-card {

@@ -132,7 +132,8 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} color labels stay up
     await expect(seal).toBeVisible();
     expect(await seal.evaluate(el => {
       const card = el.closest('.card')!;
-      return (parseFloat(getComputedStyle(card).rotate) || 0) + (parseFloat(getComputedStyle(el).rotate) || 0);
+      const face = new DOMMatrix(getComputedStyle(el.parentElement!).transform);
+      return Math.abs(((parseFloat(getComputedStyle(card).rotate) || 0) + Math.atan2(face.b, face.a) * 180 / Math.PI) % 360);
     })).toBe(0);
   }
   await page.getByTestId('game-settings').click();
@@ -146,9 +147,10 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} color labels stay up
   }
 });
 
-for (const zone of ['flow', 'meld'] as const) test(`${zone === 'flow' ? 'rotated river' : 'horizontal meld'} flights land on the exact face and defer layout changes until finished`, async ({ page }) => {
+for (const assist of [false, true]) for (const zone of ['flow', 'meld'] as const) test(`${assist ? 'assisted ' : ''}${zone === 'flow' ? 'rotated river' : 'horizontal meld'} flights land on the exact face and defer layout changes until finished`, async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await start(page, 'mahjong', zone === 'meld' ? 'large' : 'long', false);
+  if (assist) await page.evaluate(() => document.documentElement.classList.add('show-card-color-assist'));
   const destination = zone === 'meld' ? '.group-block-list' : '.flow-card';
   for (const side of ['left', 'top', 'right']) {
     const playerId = await page.getByTestId(`player-${side}`).getAttribute('data-player-id');
@@ -180,18 +182,22 @@ for (const zone of ['flow', 'meld'] as const) test(`${zone === 'flow' ? 'rotated
       const landing = document.querySelector<HTMLElement>(`${destination} [data-face-id="${id}"]`)!;
       const a = face.getBoundingClientRect(), b = landing.getBoundingClientRect();
       return { delta: Math.max(Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)),
+        sealDelta: Math.max(...['left', 'top', 'width', 'height'].map(key => Math.abs((face.querySelector('.color-seal')!.getBoundingClientRect() as any)[key] - (landing.querySelector('.color-seal')!.getBoundingClientRect() as any)[key]))),
         transform: getComputedStyle(face).transform,
         textUpright: [...face.querySelectorAll('.text, .color-seal')].every(text => {
+          if (!text.getClientRects().length) return true;
+          const inkMatrix = new DOMMatrix(getComputedStyle(text.parentElement!).transform);
           const matrix = new DOMMatrix(getComputedStyle(face).transform);
           const textStyle = getComputedStyle(text);
           const textMatrix = new DOMMatrix(textStyle.transform);
           const total = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI + (parseFloat(textStyle.rotate) || 0)
-            + Math.atan2(textMatrix.b, textMatrix.a) * 180 / Math.PI;
+            + Math.atan2(textMatrix.b, textMatrix.a) * 180 / Math.PI + Math.atan2(inkMatrix.b, inkMatrix.a) * 180 / Math.PI;
           return Math.abs(total % 360) < 0.01;
         }) };
     }, { id: card.id, destination });
     expect(match.textUpright).toBe(true);
     expect(match.delta).toBeLessThanOrEqual(1);
+    if (assist) expect(match.sealDelta).toBeLessThanOrEqual(1);
     expect(match.transform).not.toBe('none');
     if (side === 'right') {
       await page.getByTestId('game-settings').click();
@@ -487,13 +493,13 @@ for (const mode of ['long', 'large']) test(`color assistance keeps ${mode} meld 
         && Math.min(r.bottom, seal.bottom) - Math.max(r.top, seal.top) > .5;
       return inside(seal) && [...card.querySelectorAll('.text')].every(text => {
         const rect = text.getBoundingClientRect();
-        return inside(rect) && !overlap(rect);
+        return !text.getClientRects().length || (inside(rect) && !overlap(rect));
       }) && parseFloat(getComputedStyle(card).fontSize) >= 9.99;
     }))).toBe(true);
   };
   await assertFaces();
   await page.screenshot({ path: info.outputPath(`color-assist-${mode}.png`) });
-  for (const [width, height] of [[667, 375], [375, 667], [1440, 900]]) {
+  for (const [width, height] of [[640, 350], [568, 320], [667, 375], [375, 667], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     for (const side of ['self', 'left', 'top', 'right']) {
       const area = await manyMelds(page, side, 28);
@@ -513,3 +519,97 @@ for (const mode of ['long', 'large']) test(`color assistance keeps ${mode} meld 
   await toggleAssist();
   await assertFaces();
 });
+
+
+for (const layout of ['classic', 'compact', 'mahjong', 'adaptive'] as const) {
+  for (const mode of ['long', 'large']) test(`global assistance ${layout} ${mode} fits fixed faces and short tables`, async ({ page }, info) => {
+    await start(page, layout, mode);
+    await crowd(page);
+    await page.evaluate(() => document.documentElement.classList.add('show-card-color-assist'));
+    for (const [width, height] of [[640, 350], [568, 320], [667, 375], [375, 667], [844, 390], [1024, 768], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      // WebKit can deliver visualViewport changes after setViewportSize returns.
+      // Wait for the actual app viewport, then its debounced layout, before
+      // attributing a geometry change to the assistance switch.
+      const [effectiveWidth, effectiveHeight] = width < height ? [height, width] : [width, height];
+      await expect(page.locator('main.layout')).toHaveAttribute('data-effective-viewport', `${effectiveWidth}x${effectiveHeight}`);
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', resolveTableLayout(layout, effectiveWidth, effectiveHeight));
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-layout-pending', 'false');
+      await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
+      // Let WebKit flush container-query layout before reading card rectangles.
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect.poll(() => page.getByTestId('game-board').evaluate(board => {
+        const inside = (a: DOMRect, b: DOMRect) => a.left >= b.left - .6 && a.right <= b.right + .6 && a.top >= b.top - .6 && a.bottom <= b.bottom + .6;
+        const overlaps = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > .5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > .5;
+        const cards = [...board.querySelectorAll<HTMLElement>('.card')].filter(card => card.getClientRects().length && getComputedStyle(card).visibility !== 'hidden');
+        const bad = cards.flatMap(card => {
+          const bounds = card.getBoundingClientRect();
+          const seal = card.querySelector<HTMLElement>('.color-seal')!;
+          const label = card.querySelector<HTMLElement>('.text-top')!;
+          const range = document.createRange(); range.selectNodeContents(label);
+          const text = range.getBoundingClientRect(), badge = seal.getBoundingClientRect();
+          range.selectNodeContents(seal);
+          const badgeText = range.getBoundingClientRect();
+          const siblings = [...card.parentElement!.children];
+          const covered = siblings.slice(siblings.indexOf(card) + 1).filter(el => el.classList.contains('card'))
+            .some(el => overlaps(el.getBoundingClientRect(), text) || overlaps(el.getBoundingClientRect(), badgeText));
+          return !covered && inside(text, bounds) && inside(badge, bounds) && inside(badgeText, bounds) && !overlaps(text, badgeText) && parseFloat(getComputedStyle(seal).fontSize) >= 7
+            ? [] : [{ id: card.dataset.faceId, class: card.className, covered, text: text.toJSON(), badge: badge.toJSON(), badgeText: badgeText.toJSON(), bounds: bounds.toJSON() }];
+        });
+        const command = board.querySelector('.self-command-row')!.getBoundingClientRect();
+        const zones = [...board.querySelectorAll('.player-card, .self-groups-card')];
+        return { bad, commandsClear: zones.every(zone => !overlaps(zone.getBoundingClientRect(), command)) };
+      }), { message: `${layout} ${mode} ${width}x${height}` }).toEqual({ bad: [], commandsClear: true });
+      // Measure both styles in one frame so unrelated resize animation cannot
+      // masquerade as a size change caused by the assistance switch.
+      expect(await page.locator('.card').evaluateAll(cards => {
+        const geometry = () => cards.map(card => { const r = card.getBoundingClientRect(); return [r.width, r.height]; });
+        const assisted = geometry();
+        document.documentElement.classList.remove('show-card-color-assist');
+        const plain = geometry();
+        document.documentElement.classList.add('show-card-color-assist');
+        return cards.flatMap((card, i) => plain[i]!.some((value, axis) => Math.abs(value - assisted[i]![axis]!) > .1)
+          ? [{ id: (card as HTMLElement).dataset.faceId, className: card.className, assisted: assisted[i], plain: plain[i] }] : []);
+      })).toEqual([]);
+      if (width === 568 || width === 375 || width === 1440) {
+        // Paint the restored assisted face before capturing visual evidence.
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}x${height}.png`) });
+      }
+    }
+  });
+}
+
+for (const layout of ['classic', 'compact']) for (const mode of ['long', 'large']) {
+  test(`meld spacing ${layout} ${mode} keeps first cards aligned across assistance toggles`, async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await start(page, layout, mode);
+    await crowd(page);
+    for (const assisted of [false, true, false]) {
+      if (assisted || await page.locator('html').evaluate(el => el.classList.contains('show-card-color-assist'))) {
+        await page.getByTestId('game-settings').click();
+        await revealSetting(page, 'card-color-assist');
+        await page.getByTestId('card-color-assist').click();
+        await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+      }
+      await expect(async () => {
+        const strips = await page.locator('.mini-card-strip').evaluateAll(elements => elements.map(strip => {
+          const cards = [...strip.querySelectorAll<HTMLElement>('.mini-card')];
+          const first = cards[0]!;
+          return {
+            firstMargin: parseFloat(getComputedStyle(first).marginLeft),
+            firstOffset: first.getBoundingClientRect().left - strip.getBoundingClientRect().left,
+            followingMargins: cards.slice(1).map(card => parseFloat(getComputedStyle(card).marginLeft)),
+            stacked: strip.classList.contains('stacked') || strip.classList.contains('mode-long'),
+          };
+        }));
+        expect(strips.length).toBeGreaterThan(0);
+        for (const strip of strips) {
+          expect(strip.firstMargin).toBe(0);
+          expect(strip.firstOffset).toBeGreaterThanOrEqual(-.1);
+          expect(strip.followingMargins.every(margin => assisted || !strip.stacked ? margin === 0 : margin < 0), JSON.stringify({ assisted, strip })).toBe(true);
+        }
+      }).toPass();
+    }
+  });
+}
