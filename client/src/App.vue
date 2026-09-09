@@ -117,6 +117,7 @@
           :disabled="enteringLobby"
           @click="openNicknameDialog"
         ><strong>{{ entryName }}</strong><span> · 修改昵称</span></button>
+        <a class="ghost reset-btn culture-entry" href="/culture.html" data-testid="culture-entry">认识四色牌</a>
         <button class="ghost reset-btn" type="button" data-testid="open-rules" @click="openRules">查看规则</button>
       </div>
     </header>
@@ -3710,6 +3711,7 @@ watch(
 </script>
 
 <style scoped>
+.culture-entry { display: inline-flex; align-items: center; text-decoration: none; }
 .layout {
   --effective-viewport-width: var(--physical-viewport-width, 100vw);
   --effective-viewport-height: var(--physical-viewport-height, 100vh);
