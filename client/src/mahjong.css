@@ -93,9 +93,6 @@
 .board[data-table-layout="mahjong"] .mini-card-strip .mini-card + .mini-card { margin: 0; }
 .board[data-table-layout="mahjong"] .mini-card :deep(.text) { padding: 0; }
 .board[data-table-layout="mahjong"] .group-badge { min-width: 12px; width: 12px; height: 14px; font-size: 10px; }
-.board[data-table-layout="mahjong"].meld-color-assist { --mahjong-top-height: 44px; --mahjong-self-height: 44px; }
-.board[data-table-layout="mahjong"].meld-color-assist .mini-card.mode-long { height: 40px; }
-.board[data-table-layout="mahjong"].meld-color-assist .mini-card.mode-large { height: 32px; }
 .board[data-table-layout="mahjong"] .self-groups-card { padding: 0; overflow: hidden; }
 .board[data-table-layout="mahjong"].rotated-scroll .group-block-list { touch-action: none; }
 
@@ -133,4 +130,10 @@
 /* Keep the writing upright while the card boxes still face their seats. */
 .board[data-table-layout="mahjong"] :is(.mini-card, .discard-token) {
   --card-text-angle: calc(-1 * var(--mahjong-card-angle));
+}
+
+/* Side river boxes turn by a quarter turn; swap the internal reading dimensions. */
+.board[data-table-layout="mahjong"] :is([data-flow-side="left"], [data-flow-side="right"]) .discard-token {
+  --card-ink-width: 100cqh;
+  --card-ink-height: 100cqw;
 }
