@@ -227,6 +227,9 @@ test("keeps installation discoverable in game settings without occupying the tab
   await expect(settingsInstall).toBeVisible();
   await settingsInstall.click();
   await expect(page.getByTestId("pwa-install-guide-mask")).toBeVisible();
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("hu_ready_mode2"));
   await page.getByTestId("close-pwa-install-guide").click();
+  await expect(page.getByTestId("game-settings")).toBeFocused();
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("eat_mode1"));
   await expect(page.getByTestId("game-settings")).toBeFocused();
 });
