@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resolveTableLayout, normalizeTableLayout } from '../../client/src/utils/appearance';
-import { startLobbyAction } from './helpers/game';
+import { finishDeclarationIfNeeded, startLobbyAction } from './helpers/game';
 import { revealSetting } from './helpers/settings';
 
 test.use({ hasTouch: true });
@@ -28,6 +28,12 @@ async function start(page: Page, tableLayout = 'mahjong', mode = 'long', reduceM
   await page.goto('/?new=1&e2eDebug=1');
   await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible();
+  // Static crowd geometry must not race the real opening's delayed animation.
+  // Opening animation geometry has separate frame-level regression coverage.
+  await finishDeclarationIfNeeded(page);
+  await expect(page.locator('.deal-overlay')).toBeHidden();
+  await expect(page.getByTestId('dealer-ceremony')).toBeHidden();
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ ok: true });
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getRoomState()?.lastAction))
