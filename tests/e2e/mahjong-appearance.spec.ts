@@ -571,7 +571,45 @@ for (const layout of ['classic', 'compact', 'mahjong', 'adaptive'] as const) {
         return cards.flatMap((card, i) => plain[i]!.some((value, axis) => Math.abs(value - assisted[i]![axis]!) > .1)
           ? [{ id: (card as HTMLElement).dataset.faceId, className: card.className, assisted: assisted[i], plain: plain[i] }] : []);
       })).toEqual([]);
-      if (width === 568 || width === 375 || width === 1440) await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}x${height}.png`) });
+      if (width === 568 || width === 375 || width === 1440) {
+        // Paint the restored assisted face before capturing visual evidence.
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}x${height}.png`) });
+      }
+    }
+  });
+}
+
+for (const layout of ['classic', 'compact']) for (const mode of ['long', 'large']) {
+  test(`meld spacing ${layout} ${mode} keeps first cards aligned across assistance toggles`, async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await start(page, layout, mode);
+    await crowd(page);
+    for (const assisted of [false, true, false]) {
+      if (assisted || await page.locator('html').evaluate(el => el.classList.contains('show-card-color-assist'))) {
+        await page.getByTestId('game-settings').click();
+        await revealSetting(page, 'card-color-assist');
+        await page.getByTestId('card-color-assist').click();
+        await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+      }
+      await expect(async () => {
+        const strips = await page.locator('.mini-card-strip').evaluateAll(elements => elements.map(strip => {
+          const cards = [...strip.querySelectorAll<HTMLElement>('.mini-card')];
+          const first = cards[0]!;
+          return {
+            firstMargin: parseFloat(getComputedStyle(first).marginLeft),
+            firstOffset: first.getBoundingClientRect().left - strip.getBoundingClientRect().left,
+            followingMargins: cards.slice(1).map(card => parseFloat(getComputedStyle(card).marginLeft)),
+            stacked: strip.classList.contains('stacked') || strip.classList.contains('mode-long'),
+          };
+        }));
+        expect(strips.length).toBeGreaterThan(0);
+        for (const strip of strips) {
+          expect(strip.firstMargin).toBe(0);
+          expect(strip.firstOffset).toBeGreaterThanOrEqual(-.1);
+          expect(strip.followingMargins.every(margin => assisted || !strip.stacked ? margin === 0 : margin < 0), JSON.stringify({ assisted, strip })).toBe(true);
+        }
+      }).toPass();
     }
   });
 }

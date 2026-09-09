@@ -14,9 +14,9 @@
 
 ```bash
 npm run build
-PLAYWRIGHT_CHANNEL=chrome npx playwright test --project=chromium tests/e2e/mahjong-appearance.spec.ts -g 'global assistance|color assistance keeps|assisted .*flights'
+PLAYWRIGHT_CHANNEL=chrome npx playwright test --project=chromium tests/e2e/mahjong-appearance.spec.ts -g 'global assistance|color assistance keeps|assisted .*flights|meld spacing'
 ```
 
-12/12 通过。覆盖四种布局、两种牌型及 640×350、568×320、667×375、375×667、844×390、1024×768、1440×900；测量牌名与颜色字实际字形的边界、相邻牌遮挡、操作栏遮挡、同帧辅助开关尺寸和旋转飞牌落点。另覆盖 28 组明示牌在各席位的滚动可达性。
+16 项通过（颜色辅助 / 密集牌组 / 飞牌 12 项，另加真实开关边距回归 4 项）。覆盖四种布局、两种牌型及 640×350、568×320、667×375、375×667、844×390、1024×768、1440×900；测量牌名与颜色字实际字形的边界、相邻牌遮挡、操作栏遮挡、同帧辅助开关尺寸和旋转飞牌落点。另覆盖 28 组明示牌在各席位的滚动可达性，以及经典 / 紧凑布局中首张牌对齐、开启辅助取消叠压、关闭后恢复原有叠放。
 
 这些截图仅代表所列场景；完整 Chromium / WebKit 回归结果以 PR 当前提交的 CI 为准。
