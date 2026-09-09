@@ -9,8 +9,10 @@ WebSocketTransport.prototype.connect = function (url: string): void {
   this.ws = socket;
   socket.binaryType = 'arraybuffer';
   let stopped = false;
+  let activeReader: FileReader | null = null;
   const stopReading = () => {
     stopped = true;
+    activeReader?.abort();
     window.removeEventListener('pagehide', handlePageHide);
   };
   const handlePageHide = () => {
@@ -22,6 +24,19 @@ WebSocketTransport.prototype.connect = function (url: string): void {
   window.addEventListener('pagehide', handlePageHide, { once: true });
   socket.addEventListener('close', stopReading, { once: true });
   const canRead = () => !stopped && this.ws === socket && socket.readyState === WebSocket.OPEN;
+  const readBlob = (blob: Blob) => new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    activeReader = reader;
+    const finish = () => { if (activeReader === reader) activeReader = null; };
+    reader.onload = () => {
+      finish();
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new Error('Invalid binary room message'));
+    };
+    reader.onerror = () => { finish(); reject(reader.error); };
+    reader.onabort = () => { finish(); reject(new DOMException('Room connection closed', 'AbortError')); };
+    reader.readAsArrayBuffer(blob);
+  });
   socket.onopen = event => this.events.onopen?.(event);
   socket.onclose = event => this.events.onclose?.(event);
   socket.onerror = event => this.events.onerror?.(event);
@@ -33,7 +48,7 @@ WebSocketTransport.prototype.connect = function (url: string): void {
     incoming = incoming.then(async () => {
       if (!canRead()) return;
       const raw: unknown = event.data;
-      const data = raw instanceof Blob ? await raw.arrayBuffer()
+      const data = raw instanceof Blob ? await readBlob(raw)
         : ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength).slice().buffer
         : raw;
       if (!canRead()) return;

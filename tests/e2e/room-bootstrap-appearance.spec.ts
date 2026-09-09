@@ -66,7 +66,7 @@ for (const format of ['blob', 'view', 'mixed'] as const) {
 for (const stop of ['socket-close', 'pagehide'] as const) {
   test(`queued Blob frames stop decoding after ${stop}`, async ({ page }) => {
     await page.addInitScript(() => {
-      const state = { socket: null as WebSocket | null, reads: 0, release: null as (() => void) | null };
+      const state = { socket: null as WebSocket | null, reads: 0, aborts: 0, release: null as (() => void) | null };
       (window as any).__blobReadTest = state;
       const read = Blob.prototype.arrayBuffer;
       Blob.prototype.arrayBuffer = function () {
@@ -78,6 +78,37 @@ for (const stop of ['socket-close', 'pagehide'] as const) {
         }
         return read.call(this);
       };
+      const NativeReader = FileReader;
+      // Hold one read in progress so teardown is deterministic in either engine.
+      class HeldReader {
+        result: string | ArrayBuffer | null = null;
+        error: DOMException | null = null;
+        readyState = 0;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onabort: (() => void) | null = null;
+        private reader = new NativeReader();
+        readAsArrayBuffer(blob: Blob) {
+          this.readyState = 1;
+          state.reads += 1;
+          const begin = () => {
+            if (this.readyState !== 1) return;
+            this.reader.onload = () => { this.result = this.reader.result; this.readyState = 2; this.onload?.(); };
+            this.reader.onerror = () => { this.error = this.reader.error; this.readyState = 2; this.onerror?.(); };
+            this.reader.readAsArrayBuffer(blob);
+          };
+          if (state.reads === 1) state.release = begin;
+          else begin();
+        }
+        abort() {
+          if (this.readyState !== 1) return;
+          state.aborts += 1;
+          this.readyState = 2;
+          this.reader.abort();
+          this.onabort?.();
+        }
+      }
+      window.FileReader = HeldReader as unknown as typeof FileReader;
       const descriptor = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage')!;
       Object.defineProperty(WebSocket.prototype, 'onmessage', {
         ...descriptor,
@@ -99,11 +130,14 @@ for (const stop of ['socket-close', 'pagehide'] as const) {
       const socket = state.socket as WebSocket;
       for (let i = 0; i < 3; i++) socket.dispatchEvent(new MessageEvent('message', { data: new Blob([new Uint8Array([0])]) }));
       if (stop === 'pagehide') window.dispatchEvent(new PageTransitionEvent('pagehide'));
-      else socket.close();
+      else await new Promise<void>(resolve => {
+        socket.addEventListener('close', () => resolve(), { once: true });
+        socket.close();
+      });
       state.release();
       await new Promise(resolve => setTimeout(resolve, 100));
-      return { reads: state.reads, stopped: socket.readyState !== WebSocket.OPEN };
+      return { reads: state.reads, aborts: state.aborts, stopped: socket.readyState !== WebSocket.OPEN };
     }, stop);
-    expect(result).toEqual({ reads: 1, stopped: true });
+    expect(result).toEqual({ reads: 1, aborts: 1, stopped: true });
   });
 }
