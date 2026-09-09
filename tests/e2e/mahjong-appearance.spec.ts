@@ -544,8 +544,11 @@ for (const layout of ['classic', 'compact', 'mahjong', 'adaptive']) {
           const text = range.getBoundingClientRect(), badge = seal.getBoundingClientRect();
           range.selectNodeContents(seal);
           const badgeText = range.getBoundingClientRect();
-          return inside(text, bounds) && inside(badge, bounds) && inside(badgeText, bounds) && !overlaps(text, badgeText) && parseFloat(getComputedStyle(seal).fontSize) >= 7
-            ? [] : [{ id: card.dataset.faceId, class: card.className, text: text.toJSON(), badge: badge.toJSON(), badgeText: badgeText.toJSON(), bounds: bounds.toJSON() }];
+          const siblings = [...card.parentElement!.children];
+          const covered = siblings.slice(siblings.indexOf(card) + 1).filter(el => el.classList.contains('card'))
+            .some(el => overlaps(el.getBoundingClientRect(), text) || overlaps(el.getBoundingClientRect(), badgeText));
+          return !covered && inside(text, bounds) && inside(badge, bounds) && inside(badgeText, bounds) && !overlaps(text, badgeText) && parseFloat(getComputedStyle(seal).fontSize) >= 7
+            ? [] : [{ id: card.dataset.faceId, class: card.className, covered, text: text.toJSON(), badge: badge.toJSON(), badgeText: badgeText.toJSON(), bounds: bounds.toJSON() }];
         });
         const command = board.querySelector('.self-command-row')!.getBoundingClientRect();
         const zones = [...board.querySelectorAll('.player-card, .self-groups-card')];

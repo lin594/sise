@@ -3889,7 +3889,12 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   padding-right: 0.22rem;
 }
 
-.mini-card-strip.mode-long .mini-card + .mini-card {
+.mini-card-strip.mode-long .mini-card + /* Assisted names and corner labels must remain visible between adjacent cards. */
+:global(html.show-card-color-assist .board .mini-card-strip .card.mini-card + .card.mini-card) {
+  margin-left: 0;
+}
+
+.mini-card {
   margin-left: -0.32rem;
 }
 
