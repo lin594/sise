@@ -269,3 +269,5 @@ server/src/schema/                    公开同步 Schema
 `useDisplayPreferences` 集中设置默认值、旧牌面模式迁移、安全存储持久化与全局色彩辅助 class 的挂载/清理。App 继续将同一响应式设置对象传给现有 GameTools；布局解析与对局提醒仍使用原 composable。
 
 `useSettlement` 集中公开结算拆组/分数解释、结算焦点、好友整桌确认和有收据超时的下一局操作；继续只展示服务端计分结果，不在客户端记账。App 在连接、房间和阶段变化时调用清理方法，保留原幂等边界。
+
+`useLobbyPresentation` 拥有三种模式目录、房间准备条件、等待/开始文案和服务端配桌时钟映射。App 通过已有 useRoom 的状态与请求收据字段驱动该投影，LobbyPage 继续负责座位和邀请 UI。
