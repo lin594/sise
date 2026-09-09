@@ -1,3 +1,4 @@
+import { countHiddenKans } from "../../rules/declared-kans.js";
 import type { MapSchema } from "@colyseus/schema";
 import { CardSchema, GameState, PlayerState } from "../../schema/game-state.schema.js";
 import { explainHu, explainHand } from "../../rules/hu.js";
@@ -449,14 +450,6 @@ export function buildFishGroupSizes(cards: Card[]): number[] {
   return sizes;
 }
 
-function countHiddenKansFromCards(cards: Card[]): number {
-  const counter = new Map<string, number>();
-  for (const card of cards) {
-    const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
-    counter.set(key, (counter.get(key) ?? 0) + 1);
-  }
-  return [...counter.values()].reduce((sum, count) => sum + Math.floor(count / 3), 0);
-}
 
 function pickCardsByIdsFromHand(hand: Card[], ids: string[]): Card[] {
   const wanted = new Set(ids);
@@ -518,7 +511,7 @@ export function buildDeclarationSelection(hand: Card[], payload: { declaredKongs
   const fishValid = validateFishSelection(selectedCards);
   const selectedIds = new Set(selectedCards.map((card) => card.id));
   const remainingAfterFish = hand.filter((card) => !selectedIds.has(card.id));
-  const maxKongs = countHiddenKansFromCards(remainingAfterFish);
+  const maxKongs = countHiddenKans(remainingAfterFish);
   const declaredKongs = Math.min(Math.max(0, Number(payload?.declaredKongs) || 0), maxKongs);
   return {
     declaredKongs,
@@ -532,7 +525,7 @@ export function buildDeclarationSelection(hand: Card[], payload: { declaredKongs
 export function buildDefaultDeclarationPayload(hand: Card[]): { declaredKongs: number; fishCardIds: string[] } {
   const selectedCards = buildDefaultFishCards(hand);
   const selectedIds = new Set(selectedCards.map((card) => card.id));
-  const declaredKongs = countHiddenKansFromCards(hand.filter((card) => !selectedIds.has(card.id)));
+  const declaredKongs = countHiddenKans(hand.filter((card) => !selectedIds.has(card.id)));
   return {
     declaredKongs,
     fishCardIds: selectedCards.map((card) => card.id),

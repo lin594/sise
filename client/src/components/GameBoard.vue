@@ -894,6 +894,7 @@ const props = defineProps<{
   decisionTimerTotalMs?: number;
   decisionTimerEndsAt?: number;
   decisionKey?: string;
+  legalDiscardCardIds?: string[];
   actionFeedback?: ActionFeedback | null;
   ultraCompact?: boolean;
   ownCardMode?: RenderedCardMode;
@@ -2023,7 +2024,8 @@ const dealerCeremonyCard = computed<Card | null>(() => {
 });
 
 const previousRoundSummary = computed(() => {
-  if (!props.state?.previousWinnerId) return "";
+  if (!props.state?.previousWinnerId) return Number(props.state?.completedRounds ?? 0) > 0 && props.state?.dealerPickerId
+    ? "上局流局，由原庄对家翻牌定庄" : "";
   const name = props.state.previousWinnerName || props.players.find(player => player.clientId === props.state?.previousWinnerId)?.name || "牌友";
   const result = props.state.previousHuType === "big" ? `上局${name}大胡`
     : props.state.previousHuType === "small" ? `上局${name}小胡` : `上局赢家：${name}`;
@@ -2185,7 +2187,8 @@ function canSelectHandCard(card: Card): boolean {
 }
 
 function isDiscardProtectedCard(card: Card): boolean {
-  return card.type === "jiang" || card.color === "gold";
+  return card.type === "jiang" || card.color === "gold" ||
+    (canDiscard.value && props.legalDiscardCardIds !== undefined && !props.legalDiscardCardIds.includes(card.id));
 }
 
 function selectDiscardCard(cardId: string): void {

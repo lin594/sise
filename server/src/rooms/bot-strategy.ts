@@ -1,3 +1,4 @@
+import { canDiscardPreservingKans } from "../rules/declared-kans.js";
 import { isDiscardRestricted } from "../rules/deck.js";
 import { analyzeCardGrouping } from "../rules/hu.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -24,6 +25,7 @@ export interface BotDiscardInput {
   hand: Card[];
   visibleCards: Card[];
   declaredKongs?: number;
+  enforceDeclaredKans?: boolean;
   strength: number;
   random?: RandomSource;
 }
@@ -155,7 +157,7 @@ export function chooseBotDiscard(input: BotDiscardInput): Card | null {
   const s = normalizedStrength(input.strength);
   const defenseWeight = 0.8 * s * s;
   let choices: Array<ScoredChoice<Card>> = input.hand
-    .filter((card) => !isDiscardRestricted(card))
+    .filter((card) => canDiscardPreservingKans(input.hand, card.id, input.enforceDeclaredKans === false ? 0 : input.declaredKongs ?? 0))
     .map((card) => ({
       choice: card,
       score:

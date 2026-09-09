@@ -292,3 +292,20 @@ test("recovery and reconnect preserve a collective deadline and its ten-second t
   assert.equal(restored.buildDecisionTimerSnapshot("seat_0").totalMs, 10_000);
   restored.onDispose();
 });
+
+test("recovery retains v1 kan enforcement and treats unversioned active snapshots as legacy", () => {
+  const source = createRecoverableRoom();
+  const snapshot = source.exportRecoverySnapshot();
+  source.onDispose();
+  assert.equal(snapshot.privateState.ruleVersion, "1.0");
+  for (const version of ["1.0", undefined]) {
+    const copy = structuredClone(snapshot);
+    if (version === undefined) delete copy.privateState.ruleVersion;
+    const restored = new FourColorGameRoom() as any;
+    restored.onCreate({ recoverySnapshot: copy });
+    try {
+      assert.equal(restored.ruleVersion, version ?? "legacy");
+      assert.equal(restored.exportRecoverySnapshot().privateState.ruleVersion, version ?? "legacy");
+    } finally { restored.onDispose(); }
+  }
+});

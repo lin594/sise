@@ -903,11 +903,13 @@ export declare function useRoom(playerName?: string): {
         offsetMs: number;
     }>;
     decisionTimer: import("vue").Ref<{
+        legalDiscardCardIds?: string[] | undefined;
         untimed: boolean;
         totalMs: number;
         endsAt: number;
         decisionKey: string;
     }, DecisionTimerState | {
+        legalDiscardCardIds?: string[] | undefined;
         untimed: boolean;
         totalMs: number;
         endsAt: number;

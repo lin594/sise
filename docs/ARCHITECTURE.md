@@ -241,3 +241,7 @@ server/src/schema/                    公开同步 Schema
 `GameDisplayPreferences` 分开保存 `skin`、`tableLayout`；默认 `licheng-water` 和 `adaptive`。皮肤由根 `data-skin` 和 CSS 语义变量控制，包括挂到根布局或 body 的浮层；牌桌通过自己的 `data-table-layout` 控制几何。切换布局等待发牌／飞牌结束，清理旧矩形并重新测量手牌，不重建房间或清除选牌。SVG 装饰为本地资源。
 
 大厅直接使用安全存储中的昵称／历史名或生成昵称；编辑采用独立草稿弹窗。启动先尝试旧会话恢复（`new=1` 除外），再处理邀请或普通大厅；不会为普通大厅自动创建游戏房间。三个模式入口直接触发已有启动处理函数，其重复提交锁和服务端权威保持不变。
+
+## 规则 v1.0 私有决策
+
+`decisionTimer.legalDiscardCardIds` 由服务端统一保坎校验生成，仅通过本人的私有决策、快照和受保护恢复接口传送，不进入公开 Schema。新客户端用该列表禁用不合法弃牌，缺少字段时兼容旧服务端。`declaredKongs` 继续表示尚未转为开的暗坎义务，成功开牌减一，不能重复扣减或重复结算。恢复快照的可选 `privateState.ruleVersion` 区分旧局与 v1.0，新局始终升级。
