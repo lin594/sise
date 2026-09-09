@@ -7,9 +7,11 @@
     role="img"
     :aria-label="accessibleLabel"
   >
-    <span class="color-seal" aria-hidden="true">{{ colorSeal }}</span>
-    <span class="text text-top">{{ label }}</span>
-    <span v-if="modeClass === 'long'" class="text text-bottom">{{ label }}</span>
+    <div class="card-face">
+      <span class="color-seal" aria-hidden="true">{{ colorSeal }}</span>
+      <span class="text text-top">{{ label }}</span>
+      <span v-if="modeClass === 'long'" class="text text-bottom">{{ label }}</span>
+    </div>
   </div>
 </template>
 
@@ -40,7 +42,10 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
 </script>
 
 <style scoped>
+.card-face { display: contents; }
+
 .card {
+  container-type: size;
   position: relative;
   border-radius: 10px;
   border: 1px solid #111;
@@ -69,64 +74,79 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   font-weight: 900;
 }
 
-.color-seal {
-  position: relative;
-  z-index: 1;
+/* A fixed internal reading area keeps assistance independent of table geometry.
+   Counter-rotate the whole area so its badge stays at the reader's lower right. */
+.color-seal { display: none; }
+:global(html.show-card-color-assist .card-face) {
+  --seal-size: 9px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-ink-width, 100cqw);
+  height: var(--card-ink-height, 100cqh);
+  transform: translate(-50%, -50%) rotate(var(--card-text-angle, 0deg));
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) calc(var(--seal-size) * 1.5);
+  gap: 1px;
+  padding: 0 2px 2px;
+  box-sizing: border-box;
+}
+:global(html.show-card-color-assist .size-xs .card-face) { --seal-size: 7px; padding: 0 1px 1px; }
+:global(html.show-card-color-assist .size-xl .card-face) { --seal-size: 11px; }
+:global(html.show-card-color-assist .card-face .text-top) {
   grid-row: 1;
-  justify-self: start;
-  min-width: 13px;
-  height: 13px;
-  margin: 1px 0 0 2px;
-  padding: 0 2px;
-  border: 1px solid rgba(15, 23, 42, 0.72);
-  border-radius: 999px;
-  background: rgba(255, 253, 247, 0.92);
-  color: #111827;
-  display: none;
+  align-self: center;
+  justify-self: center;
+  width: max-content;
+  padding: 0;
+  rotate: 0deg;
+  line-height: 1.35;
+  font-size: min(1.32em, calc((var(--card-ink-height, 100cqh) - var(--seal-size) * 1.5 - 3px) / 1.35), calc(var(--card-ink-width, 100cqw) - 4px));
+}
+:global(html.show-card-color-assist .card-face .text-bottom) { display: none; }
+:global(html.show-card-color-assist .card-face .color-seal) {
+  display: grid;
+  grid-row: 2;
+  justify-self: end;
   place-items: center;
+  width: var(--seal-size);
+  height: calc(var(--seal-size) * 1.5);
+  border-radius: 2px;
+  background: #fffdf7;
+  color: #111827;
   font-family: "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
-  font-size: 9px;
+  font-size: var(--seal-size);
   font-weight: 900;
-  line-height: 1;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
+  line-height: 1.5;
+  rotate: 0deg;
   pointer-events: none;
 }
-
-:global(html.show-card-color-assist .color-seal) {
-  display: grid;
+/* On very short faces, use the free corner beside the name instead of
+   shrinking the name to squeeze two lines into the same card. */
+@container (max-height: 28px) {
+  :global(html.show-card-color-assist .card-face) {
+    width: var(--card-ink-width, 100cqw);
+    height: var(--card-ink-height, 100cqh);
+    grid-template-columns: minmax(0, 1fr) var(--seal-size);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    padding: 0 1px 1px;
+  }
+  :global(html.show-card-color-assist .card-face .text-top) {
+    grid-column: 1;
+    align-self: start;
+    padding-top: 1px;
+    font-size: min(1em, calc(var(--card-ink-width, 100cqw) - var(--seal-size) - 2px));
+  }
+  :global(html.show-card-color-assist .card-face .color-seal) {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
 }
-
-.mode-long .color-seal {
-  grid-row: 2;
-  margin-top: 0;
-}
-
-.mode-long {
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
-}
-
-.mode-long .text-top {
-  grid-row: 1;
-}
-
-.mode-long .text-bottom {
-  grid-row: 3;
-}
-
-.size-xs .color-seal {
-  min-width: 9px;
-  height: 9px;
-  margin-left: 1px;
-  padding: 0 1px;
-  border-width: 0.5px;
-  font-size: 6px;
-}
-
-.size-xl .color-seal {
-  min-width: 15px;
-  height: 15px;
-  font-size: 10px;
-}
+.mode-long { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.mode-long .text-top { grid-row: 1; }
+.mode-long .text-bottom { grid-row: 2; }
 
 .size-xs.mode-long {
   width: 1.3rem;

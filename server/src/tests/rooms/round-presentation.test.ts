@@ -3,8 +3,12 @@ import test from "node:test";
 import { FourColorGameRoom } from "../../rooms/GameRoom.js";
 import { GameState, PlayerState } from "../../schema/game-state.schema.js";
 
-test("a new round snapshot reaches clients before the legacy private hand event", () => {
+test("a new round snapshot reaches clients before the legacy private hand event", (t) => {
   const room = new FourColorGameRoom() as any;
+  t.after(() => {
+    room.clearDeclareIntroTimer();
+    for (const seatId of room.playerOrder) room.clearSeatReleaseTimer(seatId);
+  });
   room.state = new GameState();
   room.roomId = "round-presentation-room";
   room.state.roomMode = "practice";
@@ -36,6 +40,8 @@ test("a new round snapshot reaches clients before the legacy private hand event"
     send: (event: string, payload: unknown) => sent.push({ event, payload }),
   }];
 
+  room.lastRoundResult = { winnerId: "seat_0", players: [{ clientId: "seat_0", name: "玩家", huType: "small" }] };
+  room.prepareNextRoundSetup("seat_0", "small");
   room.bootstrapRound();
 
   const snapshotIndex = sent.findIndex((message) => message.event === "room_snapshot");
@@ -47,6 +53,11 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.equal(snapshot.stateRevision, 1);
   assert.equal(room.state.stateRevision, 1);
   assert.equal(snapshot.phase, "declaring");
+  assert.equal(snapshot.previousWinnerId, "seat_0");
+  assert.equal(snapshot.previousWinnerName, "玩家");
+  assert.equal(snapshot.previousHuType, "small");
+  assert.equal(snapshot.dealerId, "seat_0");
+  assert.equal(snapshot.dealerPickerId, "");
   assert.equal(
     snapshot.privateHand.length,
     snapshot.players.find((player: { clientId: string }) => player.clientId === "seat_0")?.handCount,
@@ -60,4 +71,36 @@ test("a new round snapshot reaches clients before the legacy private hand event"
   assert.equal(publishedSnapshots.at(-1)?.payload.stateRevision, 2);
 
   room.clearDeclareIntroTimer();
+  room.lastRoundResult = { winnerId: "seat_1", players: [{ clientId: "seat_1", name: "机器人1", huType: "big" }] };
+  room.prepareNextRoundSetup("seat_1", "big");
+  room.bootstrapRound();
+  const next = sent.filter(message => message.event === "room_snapshot").at(-1)!.payload;
+  assert.equal(next.previousWinnerId, "seat_1");
+  assert.equal(next.previousHuType, "big");
+  assert.equal(next.dealerPickerId, "seat_3");
+  room.clearDeclareIntroTimer();
+  room.lastRoundResult = { winnerId: null, players: [] };
+  room.bootstrapRound();
+  assert.equal(room.state.previousWinnerId, "");
+  assert.equal(room.state.previousHuType, "");
+  room.clearDeclareIntroTimer();
+
+  room.lastRoundResult = { winnerId: "seat_0", players: [{ clientId: "seat_0", name: "玩家", huType: "small" }] };
+  room.state.completedRounds = 1;
+  room.state.previousWinnerId = "seat_0";
+  room.state.previousWinnerName = "玩家";
+  room.state.previousHuType = "small";
+  room.backToLobby();
+  assert.equal(room.state.completedRounds, 0);
+  assert.equal(room.lastRoundResult, null, "practice restart must discard the previous session result");
+  assert.equal(room.state.previousWinnerId, "");
+  assert.equal(room.state.previousWinnerName, "");
+  assert.equal(room.state.previousHuType, "");
+  room.bootstrapRound();
+  try {
+    const restarted = sent.filter(message => message.event === "room_snapshot").at(-1)!.payload;
+    assert.equal(restarted.previousWinnerId, "", "the first round after returning to lobby has no previous winner");
+  } finally {
+    room.clearDeclareIntroTimer();
+  }
 });

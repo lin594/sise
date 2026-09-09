@@ -1845,6 +1845,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.pendingResponse = null;
     this.pendingFishDeclarations.clear();
     this.awaitingDiscardOwnerId = null;
+    const previousWinner = this.lastRoundResult?.players.find(
+      (player) => player.clientId === this.lastRoundResult?.winnerId,
+    );
+    this.state.previousWinnerId = previousWinner?.clientId ?? "";
+    this.state.previousWinnerName = previousWinner?.name ?? "";
+    this.state.previousHuType = previousWinner?.huType ?? "";
     this.lastRoundResult = null;
     this.huLogDedup.clear();
     this.huChecksTotal = 0;
@@ -3190,6 +3196,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         this.dealerCard = null;
         this.dealerPickerId = null;
         this.nextRoundSetup = null;
+        this.state.previousWinnerId = "";
+        this.state.previousWinnerName = "";
+        this.state.previousHuType = "";
+        if (this.state.roomMode === "practice") {
+          this.lastRoundResult = null;
+        }
         this.awaitingDiscardOwnerId = null;
         this.lastTerminalFingerprint = "";
         this.huLogDedup.clear();
@@ -3472,6 +3484,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       hostPlayerId: this.state.hostPlayerId,
       dealerId: this.state.dealerId,
       dealerPickerId: this.state.dealerPickerId,
+      previousWinnerId: this.state.previousWinnerId,
+      previousWinnerName: this.state.previousWinnerName,
+      previousHuType: this.state.previousHuType,
       currentPlayerId: this.state.currentPlayerId,
       currentTurnPlayerId: this.state.currentTurnPlayerId,
       previousPlayerId: this.state.previousPlayerId,

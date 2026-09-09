@@ -19,14 +19,31 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['mode-large']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
 /** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-top']} */ ;
+/** @type {__VLS_StyleScopedClasses['show-card-color-assist']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
 /** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
-/** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
-/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
-/** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-bottom']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xs']} */ ;
 /** @type {__VLS_StyleScopedClasses['mode-long']} */ ;
 /** @type {__VLS_StyleScopedClasses['size-xs']} */ ;
@@ -61,6 +78,9 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     role: "img",
     'aria-label': (__VLS_ctx.accessibleLabel),
 });
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card-face" },
+});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "color-seal" },
     'aria-hidden': "true",
@@ -77,6 +97,7 @@ if (__VLS_ctx.modeClass === 'long') {
     (__VLS_ctx.label);
 }
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card-face']} */ ;
 /** @type {__VLS_StyleScopedClasses['color-seal']} */ ;
 /** @type {__VLS_StyleScopedClasses['text']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-top']} */ ;

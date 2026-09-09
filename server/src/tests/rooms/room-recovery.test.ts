@@ -43,6 +43,9 @@ function createRecoverableRoom(roomMode: "practice" | "friends" = "friends") {
   room.state.phase = "playing";
   room.state.hostPlayerId = "seat_0";
   room.state.dealerId = "seat_0";
+  room.state.previousWinnerId = "seat_1";
+  room.state.previousWinnerName = "常乐";
+  room.state.previousHuType = "big";
   room.state.currentPlayerId = "seat_0";
   room.state.currentTurnPlayerId = "seat_0";
   room.state.previousPlayerId = "seat_1";
@@ -104,6 +107,9 @@ test("active room recovery preserves authoritative and private state", () => {
   assert.equal(restored.state.lastAction, "seat_0 DRAW");
   assert.equal(restored.state.hostPlayerId, "seat_0");
   assert.equal(restored.state.dealerId, "seat_0");
+  assert.equal(restored.state.previousWinnerId, "seat_1");
+  assert.equal(restored.state.previousWinnerName, "常乐");
+  assert.equal(restored.state.previousHuType, "big");
   assert.equal(restored.state.currentTurnPlayerId, "seat_0");
   assert.equal(restored.state.deckCount, 2);
   assert.deepEqual(
