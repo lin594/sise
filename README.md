@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lin594/sise/actions/workflows/ci.yml/badge.svg)](https://github.com/lin594/sise/actions/workflows/ci.yml)
 
-基于 Vue 3、TypeScript 与 Colyseus 的四色牌游戏。目前支持单人练习、快速真人配桌和好友同桌：在线人数不足时快速桌会自动补电脑，好友也可以通过房间链接自由选座。
+基于 Vue 3、TypeScript 与 Colyseus 的莆田四色牌地方玩法游戏。支持服务端教学演练、单人练习、快速真人配桌和好友同桌；在线人数不足时快速桌会自动补电脑。大厅提供“第一次玩？3 分钟学会”，结算按房间模式提供继续练习、重新配桌或同桌下一局。
 
 ## 快速开始
 
@@ -58,10 +58,15 @@ docs/         当前权威文档与历史档案
 
 从 [docs/README.md](docs/README.md) 开始阅读：
 
+- [产品化进度与交付证据](docs/PRODUCT_ROADMAP.md)
 - [游戏规则](docs/GAME_RULES.md)
+- [教学演练](docs/TUTORIAL.md)
+- [静态文化页源码](client/public/culture.html)
 - [产品与体验](docs/PRODUCT_UX.md)
 - [系统架构](docs/ARCHITECTURE.md)
 - [测试与验收](docs/TESTING.md)
+- [真实设备发布清单](docs/RELEASE_CHECKLIST.md)
+- [匿名指标与隐私边界](docs/PRODUCT_METRICS.md)
 - [部署与运行](docs/DEPLOYMENT.md)
 - [尚待决定的问题](docs/OPEN_QUESTIONS.md)
 
@@ -69,7 +74,7 @@ docs/         当前权威文档与历史档案
 
 ### 外观与快捷进入
 
-打开即进入大厅，自动沿用本机昵称（首次生成）；点击昵称可以修改。单人练习、快速配桌、好友开桌均可直接点击进入。
+普通入口进入大厅，自动沿用本机昵称（首次生成）；点击昵称可以修改。好友邀请首次访客先确认昵称，已有昵称直接进入加入流程，同房身份优先恢复原座。单人练习、快速配桌、好友开桌均可直接点击进入；文化页从首页和规则入口可达。
 
 默认 **莆仙古厝 + 自适应布局**。设置可独立选择四套皮肤（赛博极简、荔城水乡、莆仙古厝、湄洲海韵）与四种布局偏好（自适应、紧凑、麻将、经典）。只有明确选择经典布局的超小屏用户会在大厅收到紧凑推荐。局内顶栏常驻记录、规则、互动、托管和设置；设置按分类整理长期习惯，并提供临时静音。详见 [外观与布局说明](docs/APPEARANCE.md)，含 electroxiao 贡献记录。
 
