@@ -74,6 +74,9 @@
         ref="gameToolsRef"
         :in-room="showGameTools"
         :tutorial="Boolean(tutorial)"
+        :context-hints-enabled="contextHintsEnabled"
+        @set-context-hints="setContextHintsEnabled"
+        @reset-context-hints="resetContextHints"
         :resolved-table-layout="resolvedTableLayout"
         :playing-context="state?.phase === 'playing' || state?.phase === 'declaring'"
         v-model="displayPreferences"
@@ -216,7 +219,7 @@
 
     <template v-else>
       <GameBoard
-        :guidance-active="Boolean(tutorial)"
+        :guidance-active="Boolean(tutorial || currentHint)"
         :class="{ 'small-table-viewport': effectiveWidth <= 740 && effectiveHeight <= 400 }"
         @geometry-busy="viewportGeometryBusy = $event"
         :state="state"
@@ -254,6 +257,7 @@
         @submit-action="onPanelSubmit"
       >
         <template #guidance>
+          <ContextHint v-if="currentHint && !tutorial" :concept="currentHint" :text="contextHintText" @dismiss="dismissContextHint" @disable="setContextHintsEnabled(false)" />
           <TutorialGuide v-if="tutorial" :step="tutorial.step" :actions="availableActions" @next="sendTutorialCommand('next')" @restart="sendTutorialCommand('restart')" />
         </template>
         <template #declaration>
@@ -683,6 +687,8 @@
 </template>
 
 <script setup lang="ts">
+import ContextHint from "./components/ContextHint.vue";
+import { useContextHints, type HintConcept } from "./composables/useContextHints";
 import TutorialGuide from "./components/TutorialGuide.vue";
 import { openProductSession, beginProductMode, readyProductMode, failProductMode, trackProductEvent, productVisitId } from "@/utils/productAnalytics";
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
@@ -1520,6 +1526,21 @@ const privateHandSynchronized = computed(() => {
 });
 const canAct = computed(() => pendingActionDecision.value && privateHandSynchronized.value);
 const canDiscard = computed(() => pendingDiscardDecision.value && privateHandSynchronized.value);
+const hintConcepts = computed<HintConcept[]>(() => {
+  if (tutorial.value || !connected.value || !privateHandSynchronized.value || openingDealActive.value || tablePresentationActive.value) return [];
+  if (isDeclaring.value && !mePlayer.value?.declaredReady) return [mePlayer.value?.declarationStep === "fish" ? "fish" : "kan"];
+  if (!isPlaying.value) return [];
+  const concepts: HintConcept[] = [];
+  for (const action of ["hu", "kai", "peng", "chi"] as const) {
+    if (availableActions.value.some(item => item.action === action && item.enabled && !item.deferred)) concepts.push(action);
+  }
+  if (availableActions.value.some(item => item.action === "pass" && item.enabled && !item.deferred)) concepts.push(state.value?.responsePhase === "local_upper" ? "grab" : "pass");
+  if (canDiscard.value && (mePlayer.value?.declaredKongs ?? 0) > 0) concepts.push("kan");
+  if (canDiscard.value && (mePlayer.value?.generalArea?.length ?? 0) > 0) concepts.push("general");
+  return concepts;
+});
+const { enabled: contextHintsEnabled, current: currentHint, text: contextHintText, dismiss: dismissContextHint, setEnabled: setContextHintsEnabled, reset: resetContextHints } = useContextHints(hintConcepts, computed(() => decisionTimer.value.decisionKey));
+
 const interactionPausedMessage = computed(() => {
   if (connected.value) {
     if (pendingDeferredChiIntent.value) return "已选择吃，等待其他玩家响应";

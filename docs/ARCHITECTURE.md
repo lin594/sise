@@ -255,3 +255,5 @@ server/src/schema/                    公开同步 Schema
 `POST /rooms` 只新增 practice 模式的布尔 `tutorial` 选项，拒绝额外 seed、hand 或调试字段。固定牌序定义于 `rooms/tutorial.ts`，由正常规则动作推进。`room_snapshot` 与认证 `/private-state` 仅向学习者返回 `tutorial.step`；恢复快照保存 seatId 与 step。消息 `tutorial_next` / `tutorial_restart` 仅允许该学习者操作。普通房间无教学上下文。
 
 公共 Colyseus matchmaking 仅允许正常 match 的 joinOrCreate，以及既有按 ID 加入/重连；禁止客户端 create/join 建房替代路径，拒绝快速配桌选项中的教学、恢复快照或任意调试字段。服务端直接 createRoom 与受验证的 HTTP 建房不受此限制。
+
+`useContextHints` 管理固定概念的本地已读状态，与房间生命周期分开。App 只传入权威 availableActions（enabled 且非 deferred）、公开声明步骤、公将区和私有弃牌决策是否可用；提示组件不能发送牌局动作或修改候选。

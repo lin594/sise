@@ -1,5 +1,5 @@
 type Mode = "practice" | "match" | "friends" | "tutorial";
-type ClientEvent = "app_open" | "lobby_view" | "practice_start" | "quick_match_start" | "friend_room_create" | "invite_open" | "play_again" | "room_exit" | "join_failed" | "reconnect_started" | "reconnect_success" | "reconnect_failed";
+type ClientEvent = "context_hint_shown" | "context_hint_disabled" | "app_open" | "lobby_view" | "practice_start" | "quick_match_start" | "friend_room_create" | "invite_open" | "play_again" | "room_exit" | "join_failed" | "reconnect_started" | "reconnect_success" | "reconnect_failed";
 export declare function productVisitId(): string;
 export declare function trackProductEvent(name: ClientEvent, fields?: {
     id?: string;
