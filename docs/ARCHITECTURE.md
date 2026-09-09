@@ -273,3 +273,5 @@ server/src/schema/                    公开同步 Schema
 `useLobbyPresentation` 拥有三种模式目录、房间准备条件、等待/开始文案和服务端配桌时钟映射。App 通过已有 useRoom 的状态与请求收据字段驱动该投影，LobbyPage 继续负责座位和邀请 UI。
 
 `useRoomLifecycle` 复用 useRoom，集中练习/教学/好友房创建、快速配桌、模式切换及离房清理；`useRoomNavigation` 独立维护浏览器历史保护、监听器和释放计时器。App 仅组合当前最上层弹窗的返回优先级，保持各领域关闭/确认入口。
+
+`useRoomRecovery` 复用 useRoom 的恢复连接，集中旧房间凭证读取、首次入口选择、恢复/取消说明与焦点，以及以新权威 revision 和私有同步为条件的恢复指标。App 提供返回玩法入口；凭证仍只用于原身份验证，不进入指标。
