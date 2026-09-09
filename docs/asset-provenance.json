@@ -1,0 +1,536 @@
+{
+  "auditedAt": "2026-09-10",
+  "baseline": "34042e6367ff63b47fef2f8061eccd4c29db781b",
+  "assets": [
+    {
+      "path": "client/public/favicon.ico",
+      "sha256": "12293384f602427f8bfe70b824a47d11251f77e4ba88f9ee1ea3b6e5ce8c1767",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/favicon.svg",
+      "sha256": "7dff2a9f2fac673f0a512e5237a9c7eec6344fe2782a2e542957559ea0e775ad",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/icons/sise-180.png",
+      "sha256": "63fa2767b5b3329dc699ef30752c73dd25d60ff2008d9903878a1c3852c474ec",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/icons/sise-192.png",
+      "sha256": "3aedbe7b5b216405b06280d6ead8d4be8cec411ed7b519f8ec945be099538072",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/icons/sise-512.png",
+      "sha256": "d3f759e4765a5224d576e2cb308ed41a1189b40c4e0e753a3377c8b763ef3bbb",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/icons/sise-maskable-512.png",
+      "sha256": "d3f759e4765a5224d576e2cb308ed41a1189b40c4e0e753a3377c8b763ef3bbb",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/quick-phrases/06acf9ac04d57ea2.m4a",
+      "sha256": "00eb2f1e0822cdadd82b3888c0487c96be55e56b1688f439d4a1e6cff9458731",
+      "source": "assets/audio/quick-phrases/下枝牌打倒转动.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/quick-phrases/41b4413af834fb8e.m4a",
+      "sha256": "e0f17bceba9dadda54f346731690c666a111641e66c7bb1f30861a6c37c23c70",
+      "source": "assets/audio/quick-phrases/阿紧阿紧.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/quick-phrases/5ee619d9cd717865.m4a",
+      "sha256": "25a7058e9227fface4fb116dab306e7bea95ce7b3122cc76d5b93aeeaa84b2b5",
+      "source": "assets/audio/quick-phrases/软软食快活.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/quick-phrases/8fedb2a687637c41.m4a",
+      "sha256": "3335566d5c811eedb75ad2710e8bb651fe4d55c14bfa0b54f8847f503c9748e3",
+      "source": "assets/audio/quick-phrases/就墘勿会输钱.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/quick-phrases/b17a2eb95759f38d.m4a",
+      "sha256": "3f1308658c1c5b9b0335efacd5601226346cb2f2ced89da8ba812c39286ec28b",
+      "source": "assets/audio/quick-phrases/远远笃会来.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/quick-phrases/da5a888842dff400.m4a",
+      "sha256": "8b058e0a05d5df45d253cba715652a1d5d91c44bf4b51d4e307ee61ab5ce1042",
+      "source": "assets/audio/quick-phrases/摝摝卡拉OK.m4a",
+      "author": "未确认",
+      "originality": "生成副本",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "scripts/sync-quick-phrases.mjs 按原文件名 SHA-256 前 16 位命名；内容与原文件相同。"
+    },
+    {
+      "path": "client/public/share-thumbnail-v3.png",
+      "sha256": "69187e55c0f2eb0d0c76de65518312e838070f05e58e02f6b4ff4b1e9e6e5d60",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/share-thumbnail-v3.svg",
+      "sha256": "4affb5ecad03b9e46d7f2f2776ad487d4203174c28017f8b0147bb8d12dc449a",
+      "source": "项目图标/分享视觉资源",
+      "author": "未确认",
+      "originality": "未确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "Git 历史见 7284429、33a3aec、fccb01d；PNG 与 SVG 的生成关系待确认。"
+    },
+    {
+      "path": "client/public/skins/licheng-water.svg",
+      "sha256": "1df0fbfc2c523aba9491e33916b865d667befd5c188529b3e2bbc6b24832c390",
+      "source": "本项目 SVG 装饰",
+      "author": "未确认",
+      "originality": "项目文档声明原创，待权利人确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "docs/APPEARANCE.md；设计参考 electroxiao 提交 156a6ba，不能据此推定许可。"
+    },
+    {
+      "path": "client/public/skins/meizhou-sea.svg",
+      "sha256": "e0f9d7593467ada0036761b5f3c535c4a16ba3f6d15aeee71c407119d1eedb2d",
+      "source": "本项目 SVG 装饰",
+      "author": "未确认",
+      "originality": "项目文档声明原创，待权利人确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "docs/APPEARANCE.md；设计参考 electroxiao 提交 156a6ba，不能据此推定许可。"
+    },
+    {
+      "path": "client/public/skins/puxian-house.svg",
+      "sha256": "6fdf9a7cc3099b09d93c195e35dbf1207f9172460dda1bb45e5f724a2beb2e26",
+      "source": "本项目 SVG 装饰",
+      "author": "未确认",
+      "originality": "项目文档声明原创，待权利人确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "docs/APPEARANCE.md；设计参考 electroxiao 提交 156a6ba，不能据此推定许可。"
+    },
+    {
+      "path": "docs/validation/color-assistance/adaptive-long-1440x900.png",
+      "sha256": "01dce7dc6dbf5f0f086fe3fb0fea8418aa4c4f7d1cfb728b6f161d102ce7e002",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/color-assistance/classic-long-568x320.png",
+      "sha256": "a84049e66d4b2737d0c7157e76999f883871b4051a5e01c18e3b55f16d0cd29a",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/color-assistance/compact-large-568x320.png",
+      "sha256": "c75d2de4a579c52730b565badafc4b6ea33e8dc5353d51d3d884bc9954d7ce9f",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/color-assistance/mahjong-large-375x667.png",
+      "sha256": "12c8912b25e971530908c4b3555fd07f4240191f887303e18f07a6e5dd762134",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/color-assistance/mahjong-long-568x320.png",
+      "sha256": "bd7122c52014025272c90fc647b836c867d30930d7949e4ae45992edc3d5b1a2",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/adaptive-classic-desktop.png",
+      "sha256": "33539995f1167340913779e2b40af6249b34b08053388e08b1f2cb3a9b72620e",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/mahjong-large-1440x900.png",
+      "sha256": "b98f98f4617bc4c3a4013c20d24ada5e1064653b70afc5f40ac91cf13b89af20",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/mahjong-large-390x844.png",
+      "sha256": "550a449fbfd648f0cdf7f73c386c5c7bafbc79c0289fc0229e04f894675e56bf",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/mahjong-large-844x390.png",
+      "sha256": "c0a9f7de036110921c03072cc999c108f1446e9bc9339bbe62c4ab3cd298c4e5",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/mahjong-long-1440x900.png",
+      "sha256": "59d4d6e1d8f5382f49d2e95abafdfcbbdaa4b947ec06c58d14190b0a3077dcec",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/mahjong-long-844x390.png",
+      "sha256": "682c698f1a9bd78dac75f462d5bd43bcecc2c7c05b8bc07e4fc953834587c125",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-left-large-390x844.png",
+      "sha256": "3adf3046878681572dccc78daab2bf84d8b6789cfcce730aa7a2e45127addcc3",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-left-large-667x375.png",
+      "sha256": "5bce113ffe2f59912d47eacd3ae4110596f5930efebedb3ef6af3a5bfe16bf84",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-left-long-390x844.png",
+      "sha256": "0caad4361c186962dbaa61299948bfaa11d1aa55207235d38fa5635da0f00bf6",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-left-long-667x375.png",
+      "sha256": "7b464f1ed54baa5cfe275432041189c70e8fca7d557ae1f95f4be726ec8ae0e5",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-right-large-667x375.png",
+      "sha256": "f9a96f30e9954e8a1c80fd5bdd1a173e65acf12fb0adb62acce1225049f7b965",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-right-long-667x375.png",
+      "sha256": "4730b853938b36ef06390c061d967ba927d010cbc9262a27d0d276f8a13dafd0",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-self-large-667x375.png",
+      "sha256": "a670fd60b88f022869e3c5526e26e64e1d8822e474f4c001f451dce16256e177",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-self-long-667x375.png",
+      "sha256": "37bf7e3c8fffb46dace293d0eaf050fe066ae2048d515624beb048f7568bdd9b",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mahjong-layout/twelve-eats-top-large-667x375.png",
+      "sha256": "bb7418be85a6b5df2f0f94555d2d0a970a2d60fbc3bd2678ff8d6b00b9db5abe",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/declaration-fish.png",
+      "sha256": "ca5d47e8cb454149d2814515ef4b5f2ff2e24f69ee4ce93e7a0fa7529d11e0da",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/declaration-kan.png",
+      "sha256": "4258c8162f22611b86ed82649b5b7ef6850cff855de9f3f4fec8b52663692482",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/desktop-1440-long.png",
+      "sha256": "e9465752de2dae930be3e9517ef30c347e51eaecebf63e90c46a67833a28fe5d",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/desktop-1920-large.png",
+      "sha256": "e4d9756215b1141fb6e46c3046cc4373b78ef8559a940223e96423e77f0824ce",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-360-portrait.png",
+      "sha256": "eb403108a58aa3715da02e2a0f8562251c05b47429db0aeb9fc75adf0001445c",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-390-portrait.png",
+      "sha256": "d374ccdd553826285506da3e7ac03d9e6f8cb6cdf6deb43ee9a384102ddbe9ae",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-568-long.png",
+      "sha256": "84e8c62c18957b0193d818e63c067fb3e66b65bc8835b5b256d90e22d7f2ff57",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-667-long.png",
+      "sha256": "0eb59a1fdb51a8627a483b278510f62e32f9647433df56993e40de63ec253a48",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-740-long.png",
+      "sha256": "9f5e04a306c84e07c6ec52c34e3c9ca9bfed5ac0e797c67e813270c7cee3b454",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-density-2026-09-08/phone-844-large.png",
+      "sha256": "a1cfa488b01d8efdb89fbb88342ca5f2c698c55e97b726e2d06de8937c8486da",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/dealer-count-white-4.png",
+      "sha256": "39cdb47c2f36c63acb4d434ee05e4db5d097833e83aa62b262ac4046e8c80542",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/declaration-fish.png",
+      "sha256": "34abe0b5b93155aef6f54a0a080d6b00a89724efd84cde3a64a636c04d14cf5e",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/iphone-se-normal-game.png",
+      "sha256": "a7a3f9851c36b47cbb9782188c4fdcf69dad080b09dea1de9d9ee437292cd968",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/licheng-water-classic-groups-844.png",
+      "sha256": "4d27dca0a3ff49e14712bbf10406adf1076c342467e5b0434697660fb293a4c9",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/meizhou-sea-classic-groups-1440.png",
+      "sha256": "44d2287181de304c2392592dc7513aaa2943148fce6010c4a01c02975053372f",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    },
+    {
+      "path": "docs/validation/mobile-table/puxian-house-classic-groups-390.png",
+      "sha256": "7ebb6b4ab4ffc3d442a9481ebb18262a7c577aee5fe536dacf8420ed4585ff70",
+      "source": "仓库验证资料",
+      "author": "未确认",
+      "originality": "测试截图，作者/发布权待确认",
+      "allowedUse": "未确认；不推定商用或再分发许可",
+      "status": "待维护者确认",
+      "evidence": "所在验证目录及 Git 历史；不视为对截图内第三方内容的授权。"
+    }
+  ]
+}
