@@ -13,6 +13,7 @@ WebSocketTransport.prototype.connect = function (url: string): void {
   const stopReading = () => {
     stopped = true;
     activeReader?.abort();
+    window.removeEventListener('beforeunload', handlePageHide);
     window.removeEventListener('pagehide', handlePageHide);
   };
   const handlePageHide = () => {
@@ -20,7 +21,9 @@ WebSocketTransport.prototype.connect = function (url: string): void {
     socket.close();
   };
   // WebKit invalidates a document's Blob URLs during navigation. Cancel the
-  // queue before it tries to decode frames belonging to the departing page.
+  // queue when navigation starts: pagehide can arrive after Blob invalidation.
+  // Keep pagehide as a fallback for mobile lifecycle transitions.
+  window.addEventListener('beforeunload', handlePageHide, { once: true });
   window.addEventListener('pagehide', handlePageHide, { once: true });
   socket.addEventListener('close', stopReading, { once: true });
   const canRead = () => !stopped && this.ws === socket && socket.readyState === WebSocket.OPEN;

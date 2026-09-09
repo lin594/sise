@@ -63,7 +63,7 @@ for (const format of ['blob', 'view', 'mixed'] as const) {
   });
 }
 
-for (const stop of ['socket-close', 'pagehide'] as const) {
+for (const stop of ['socket-close', 'pagehide', 'beforeunload'] as const) {
   test(`queued Blob frames stop decoding after ${stop}`, async ({ page }) => {
     await page.addInitScript(() => {
       const state = { socket: null as WebSocket | null, reads: 0, aborts: 0, release: null as (() => void) | null };
@@ -130,6 +130,7 @@ for (const stop of ['socket-close', 'pagehide'] as const) {
       const socket = state.socket as WebSocket;
       for (let i = 0; i < 3; i++) socket.dispatchEvent(new MessageEvent('message', { data: new Blob([new Uint8Array([0])]) }));
       if (stop === 'pagehide') window.dispatchEvent(new PageTransitionEvent('pagehide'));
+      else if (stop === 'beforeunload') window.dispatchEvent(new Event('beforeunload'));
       else await new Promise<void>(resolve => {
         socket.addEventListener('close', () => resolve(), { once: true });
         socket.close();
