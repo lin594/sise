@@ -102,3 +102,33 @@ test("only a waiting friend-room host can select scoring before the first round"
   room.handleSetScoringMode(host, { mode: "single" });
   assert.equal(room.state.scoringMode, "cumulative");
 });
+
+
+test("duplicate settlement callbacks and an ended recovery cannot add scores or metrics twice", () => {
+  const room = new FourColorGameRoom() as any;
+  room.roomId = "settlement-once";
+  room.state = new GameState(); room.state.phase = "playing"; room.state.scoringMode = "cumulative";
+  room.playerOrder = ["A", "B", "C", "D"]; addPlayers(room.state);
+  const results = [resultPlayer("A", 6), resultPlayer("B", -2), resultPlayer("C", -2), resultPlayer("D", -2)];
+  room.buildRoundResultPlayers = () => results;
+  room.buildRemainingDeckPreview = () => [];
+  room.broadcastAvailableActions = () => {};
+  const metrics: string[] = []; const messages: string[] = [];
+  room.recordProductRound = (name: string) => metrics.push(name);
+  room.broadcast = (event: string) => messages.push(event);
+  room.endRound("A HU", "A", []);
+  room.endRound("A HU", "A", []);
+  assert.equal(room.state.completedRounds, 1);
+  assert.equal(room.state.players.get("A").cumulativeScore, 6);
+  assert.deepEqual(metrics, ["round_complete"]);
+  assert.equal(messages.filter(event => event === "round_result").length, 1);
+  const snapshot = room.exportRecoverySnapshot();
+  const restored = new FourColorGameRoom() as any;
+  restored.state = new GameState(); restored.state.restore(snapshot.state);
+  restored.restoreRecoveryPrivateState(snapshot);
+  restored.recordProductRound = () => assert.fail("restored settlement must not re-emit completion");
+  restored.endRound("A HU", "A", []);
+  assert.equal(restored.state.completedRounds, 1);
+  assert.equal(restored.state.players.get("A").cumulativeScore, 6);
+  room.onDispose(); restored.onDispose();
+});

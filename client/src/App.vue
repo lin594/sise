@@ -491,7 +491,7 @@
               :disabled="!settlementReady || quickRematchPending"
               @click="rematchQuickTable"
             >
-              {{ quickRematchPending ? "正在重新配桌…" : "再来一局（重新配桌）" }}
+              {{ quickRematchPending ? "正在重新配桌…" : "重新配桌" }}
             </button>
             <p class="host-actions-hint">只为你寻找下一桌，不会让其他牌友离开当前结算。</p>
           </template>
@@ -538,7 +538,7 @@
                 ? "正在结算…"
                 : settlementTransitionPending === "next_round"
                 ? "正在开始下一局…"
-                : "下一局（房主）" }}
+                : "同桌下一局" }}
             </button>
             <button
               ref="returnLobbyTriggerRef"
@@ -558,7 +558,12 @@
               aria-live="polite"
             >整桌请求已发送，请稍候</p>
           </template>
-          <p v-else class="host-actions-hint">下一局与全桌返回由房主操作；你可以使用设置中的退出牌局个人离开。</p>
+          <p v-else class="host-actions-hint" data-testid="settlement-waiting-host" role="status">等待房主开始同桌下一局</p>
+          <div v-if="state?.roomMode === 'friends'" class="settlement-friend-tools">
+            <button class="ghost" type="button" data-testid="settlement-invite" :disabled="inviteActionPending !== null" @click="shareInviteLink()">邀请牌友</button>
+            <button class="ghost" type="button" data-testid="settlement-exit" @click="gameToolsRef?.requestExit()">离开房间</button>
+            <small>新牌友需等房主返回大厅后选座。</small>
+          </div>
         </div>
       </div>
     </div>
@@ -5283,4 +5288,10 @@ watch(
 .small-screen-recommendation { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; padding: .4rem .65rem; background: var(--ui-panel, #0f172a); border: 1px solid var(--ui-border, #475569); border-radius: .6rem; font-size: 13px; }
 .small-screen-recommendation span { flex: 1 1 15rem; }
 .small-screen-recommendation button { min-height: 36px; background: var(--ui-raised, #1e293b); color: inherit; border: 1px solid var(--ui-border, #475569); border-radius: .4rem; padding: .3rem .5rem; cursor: pointer; }
+
+.end-actions { flex-wrap: wrap; }
+.end-actions > .primary { white-space: nowrap; }
+.settlement-friend-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.settlement-friend-tools small { color: var(--ui-muted); font-size: 12px; }
+@media (max-height: 400px) { .settlement-friend-tools small { flex-basis: 100%; font-size: 11px; } }
 </style>
