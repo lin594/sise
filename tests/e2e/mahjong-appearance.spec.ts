@@ -411,3 +411,50 @@ test('paged hands retain full touch targets beside many eats', async ({ page }) 
     expect(hand).toEqual({ reachable: true, targets: true });
   }
 });
+
+for (const mode of ['long', 'large']) test(`color assistance keeps ${mode} meld labels unobscured at every scale`, async ({ page }, info) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await start(page, 'mahjong', mode);
+  const toggleAssist = async () => {
+    await page.getByTestId('game-settings').click();
+    await revealSetting(page, 'card-color-assist');
+    await page.getByTestId('card-color-assist').click();
+    await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+  };
+  await toggleAssist();
+  const assertFaces = async () => {
+    await expect.poll(() => page.locator('.group-block-list .mini-card.card').evaluateAll(cards => cards.every(card => {
+      const bounds = card.getBoundingClientRect();
+      const seal = card.querySelector('.color-seal')!.getBoundingClientRect();
+      const inside = (r: DOMRect) => r.left >= bounds.left - .5 && r.right <= bounds.right + .5
+        && r.top >= bounds.top - .5 && r.bottom <= bounds.bottom + .5;
+      const overlap = (r: DOMRect) => Math.min(r.right, seal.right) - Math.max(r.left, seal.left) > .5
+        && Math.min(r.bottom, seal.bottom) - Math.max(r.top, seal.top) > .5;
+      return inside(seal) && [...card.querySelectorAll('.text')].every(text => {
+        const rect = text.getBoundingClientRect();
+        return inside(rect) && !overlap(rect);
+      }) && parseFloat(getComputedStyle(card).fontSize) >= 9.99;
+    }))).toBe(true);
+  };
+  await assertFaces();
+  await page.screenshot({ path: info.outputPath(`color-assist-${mode}.png`) });
+  for (const [width, height] of [[667, 375], [375, 667], [1440, 900]]) {
+    await page.setViewportSize({ width, height });
+    for (const side of ['self', 'left', 'top', 'right']) {
+      const area = await manyMelds(page, side, 28);
+      await assertFaces();
+      expect(await area.evaluate(area => [...area.querySelectorAll('.group-block')].every(group => {
+        group.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const b = area.getBoundingClientRect();
+        return [...group.querySelectorAll('.mini-card')].every(card => {
+          const r = card.getBoundingClientRect();
+          return r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1;
+        });
+      })), `${side} ${mode} ${width}x${height} all groups reachable`).toBe(true);
+    }
+  }
+  await toggleAssist();
+  await expect.poll(() => page.locator('.group-block-list .mini-card.card').first().evaluate(card => parseFloat(card.style.height))).toBeLessThanOrEqual(24);
+  await toggleAssist();
+  await assertFaces();
+});

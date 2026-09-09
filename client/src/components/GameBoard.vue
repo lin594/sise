@@ -10,6 +10,7 @@
       'board-declaring': state?.phase === 'declaring',
       'many-top-groups': topGroupBlocks.length > 7,
       'wide-self-groups': selfGroupBlocks.length > 5,
+      'meld-color-assist': props.showCardColorAssist,
     }"
     data-testid="game-board"
     :data-geometry-busy="Boolean(flights.length || (!coordinateMotionSuppressed && activeTableEvents.length) || dealerReveal)"
@@ -895,6 +896,7 @@ const props = defineProps<{
   tableCardMode?: RenderedCardMode;
   seatDirection?: SeatDirection;
   reduceMotion?: boolean;
+  showCardColorAssist?: boolean;
   viewportTransformed?: boolean;
   viewportTransformKey?: string;
   quickPhrase?: { seatId: string; phraseId: string; text: string; sequence: number } | null;
@@ -2304,15 +2306,19 @@ function updateMahjongMeldLayout(): void {
   boardRef.value?.querySelectorAll<HTMLElement>('.group-block-list').forEach(list => {
     if (!list.clientWidth || !list.clientHeight) return;
     const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
-    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
+    const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}:${props.showCardColorAssist}`;
     const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
     const sideways = Boolean(list.closest('.player-left, .player-right'));
+    // Preserve two 12px names and the fixed 9px seal, even at the 10px
+    // readability floor. Large faces need room for one 1.32em name plus seal.
+    const height = props.showCardColorAssist ? (appliedTableCardMode.value === 'long' ? 40 : 32) : 24;
+    const sidewaysMargin = (height - 20) / 2;
     const applyScale = (scale: number) => {
       list.style.setProperty('--meld-scale', String(scale));
       // Size the same card boxes measured below; CSS clears their automatic
       // minimum sizes so intrinsic content cannot clamp the fitted dimensions.
-      const sizes = { width: `${20 * scale}px`, height: `${24 * scale}px`,
-        'font-size': `${12 * scale}px`, margin: sideways ? `${-2 * scale}px ${2 * scale}px` : '0px' };
+      const sizes = { width: `${20 * scale}px`, height: `${height * scale}px`,
+        'font-size': `${12 * scale}px`, margin: sideways ? `${-sidewaysMargin * scale}px ${sidewaysMargin * scale}px` : '0px' };
       cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {
         if (card.style.getPropertyValue(property) !== value) card.style.setProperty(property, value);
       }));

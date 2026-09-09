@@ -92,6 +92,11 @@
 .board[data-table-layout="mahjong"] .group-badge { min-width: 12px; width: 12px; height: 14px; font-size: 10px; }
 .board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip { flex-direction: column; }
 .board[data-table-layout="mahjong"] :is(.player-left, .player-right) .mini-card-strip .mini-card { margin: -2px 2px; }
+.board[data-table-layout="mahjong"].meld-color-assist { --mahjong-top-height: 44px; --mahjong-self-height: 44px; }
+.board[data-table-layout="mahjong"].meld-color-assist .mini-card.mode-long { height: 40px; }
+.board[data-table-layout="mahjong"].meld-color-assist .mini-card.mode-large { height: 32px; }
+.board[data-table-layout="mahjong"].meld-color-assist :is(.player-left, .player-right) .mini-card.mode-long { margin: -10px 10px; }
+.board[data-table-layout="mahjong"].meld-color-assist :is(.player-left, .player-right) .mini-card.mode-large { margin: -6px 6px; }
 .board[data-table-layout="mahjong"] .self-groups-card { padding: 0; overflow: hidden; }
 .board[data-table-layout="mahjong"].rotated-scroll .group-block-list { touch-action: none; }
 

@@ -242,6 +242,7 @@
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
+        :show-card-color-assist="displayPreferences.showCardColorAssist"
         :viewport-transformed="isRotatedPhonePortrait"
         :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${viewportLeft},${viewportTop}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         :quick-phrase="quickPhrase"
