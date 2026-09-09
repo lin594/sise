@@ -265,3 +265,5 @@ server/src/schema/                    公开同步 Schema
 `useEntryProfile` 复用 `useGuestProfile`，集中入口昵称、保留窗口内昵称历史、档案摘要和修改昵称弹层的焦点恢复。App 通过回调提供当前是否允许修改昵称；结算刷新时机继续由 App 的权威结果订阅触发。
 
 `useInstallGuide` 复用 `usePwaInstall` 检测浏览器能力，拥有安装说明状态、提示结果与焦点归还。通过回调写入全局提示并清除待处理操作焦点，避免安装页与服务器决策更新互抢焦点。
+
+`useDisplayPreferences` 集中设置默认值、旧牌面模式迁移、安全存储持久化与全局色彩辅助 class 的挂载/清理。App 继续将同一响应式设置对象传给现有 GameTools；布局解析与对局提醒仍使用原 composable。
