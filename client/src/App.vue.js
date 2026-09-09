@@ -1,3 +1,4 @@
+import TutorialGuide from "./components/TutorialGuide.vue";
 import { openProductSession, beginProductMode, readyProductMode, failProductMode, trackProductEvent, productVisitId } from "@/utils/productAnalytics";
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
@@ -144,7 +145,7 @@ function writeNicknameHistory(names) {
 }
 const { profile: guestProfile, refresh: refreshGuestProfile, refreshAfterSettlement: refreshGuestProfileAfterSettlement, updateNickname: updateGuestProfileNickname, } = useGuestProfile();
 void refreshGuestProfile();
-const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, acceptedStateRevision, listeningHints, quickPhrase, quickPhraseMuted, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, actionFeedback, matchClockSync, decisionTimer, clearActionLogs, debugSetup, sendAction, sendDiscardCard, declareFish, declareKongs, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setLobbyReady, setAutoPlay, debugApplyRoomSnapshot, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, sendQuickPhrase, setQuickPhraseMuted, } = useRoom("玩家");
+const { connect, connected, connectionState, reconnectAttempt, retryConnection, mySeatId, activeRoomId, state, players, privateHand, acceptedStateRevision, listeningHints, quickPhrase, quickPhraseMuted, availableActions, huResult, roundResult, debugApplied, joinError, declareError, actionLogs, actionFeedback, matchClockSync, decisionTimer, clearActionLogs, debugSetup, tutorial, sendTutorialCommand, sendAction, sendDiscardCard, declareFish, declareKongs, startGame, nextRound, returnLobby, dissolveRoom, setScoringMode, setLobbyReady, setAutoPlay, debugApplyRoomSnapshot, leaveRoom, claimSeat, addBot, fillBots, updateBot, removeSeat, sendQuickPhrase, setQuickPhraseMuted, } = useRoom("玩家");
 const guestProfileSummary = computed(() => {
     if (!browserStoragePersistent)
         return "";
@@ -1458,7 +1459,7 @@ function requestLobbyReady(ready) {
     return true;
 }
 async function handleLeaveRoom() {
-    trackProductEvent("room_exit", { mode: state.value?.roomMode });
+    trackProductEvent("room_exit", { mode: tutorial.value ? "tutorial" : state.value?.roomMode });
     globalError.value = "";
     pendingPracticeAutoStart.value = false;
     clearRoundStartPending();
@@ -2342,7 +2343,16 @@ function requestPracticeAutoStart() {
     pendingPracticeAutoStart.value = true;
     maybeAutoStartPractice();
 }
-async function startPracticeLobby() {
+async function finishTutorial(invite) {
+    if (enteringLobby.value)
+        return;
+    await leaveRoom();
+    if (invite)
+        await startFriendLobby();
+    else
+        await startPracticeLobby();
+}
+async function startPracticeLobby(tutorial = false) {
     if (enteringLobby.value) {
         return;
     }
@@ -2350,12 +2360,12 @@ async function startPracticeLobby() {
     entryName.value = nickname;
     startingRoomMode.value = "practice";
     enteringLobby.value = true;
-    beginProductMode("practice");
+    beginProductMode(tutorial ? "tutorial" : "practice");
     try {
         const response = await fetch(`${HTTP_URL}/rooms`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "practice" }),
+            body: JSON.stringify({ mode: "practice", tutorial }),
         });
         if (!response.ok) {
             throw new Error(await apiErrorMessage(response, "创建单人练习房间失败，请稍后重试。"));
@@ -3069,6 +3079,7 @@ const __VLS_8 = __VLS_asFunctionalComponent(GameTools, new GameTools({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    tutorial: (Boolean(__VLS_ctx.tutorial)),
     resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
@@ -3099,6 +3110,7 @@ const __VLS_9 = __VLS_8({
     ...{ 'onExit': {} },
     ref: "gameToolsRef",
     inRoom: (__VLS_ctx.showGameTools),
+    tutorial: (Boolean(__VLS_ctx.tutorial)),
     resolvedTableLayout: (__VLS_ctx.resolvedTableLayout),
     playingContext: (__VLS_ctx.state?.phase === 'playing' || __VLS_ctx.state?.phase === 'declaring'),
     modelValue: (__VLS_ctx.displayPreferences),
@@ -3355,6 +3367,22 @@ else if (__VLS_ctx.showModeLobby) {
     __VLS_26.slots.default;
     {
         const { recommendation: __VLS_thisSlot } = __VLS_26.slots;
+        if (__VLS_ctx.showModeLobby && !__VLS_ctx.state) {
+            __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+                ...{ onClick: (...[$event]) => {
+                        if (!!(__VLS_ctx.showEntry))
+                            return;
+                        if (!(__VLS_ctx.showModeLobby))
+                            return;
+                        if (!(__VLS_ctx.showModeLobby && !__VLS_ctx.state))
+                            return;
+                        __VLS_ctx.startPracticeLobby(true);
+                    } },
+                ...{ class: "ghost tutorial-entry" },
+                'data-testid': "tutorial-entry",
+                disabled: (__VLS_ctx.enteringLobby),
+            });
+        }
         if (__VLS_ctx.showSmallScreenRecommendation) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
                 ...{ class: "small-screen-recommendation" },
@@ -3426,6 +3454,7 @@ else {
         ...{ 'onGeometryBusy': {} },
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        guidanceActive: (Boolean(__VLS_ctx.tutorial)),
         ...{ class: ({ 'small-table-viewport': __VLS_ctx.effectiveWidth <= 740 && __VLS_ctx.effectiveHeight <= 400 }) },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
@@ -3463,6 +3492,7 @@ else {
         ...{ 'onGeometryBusy': {} },
         ...{ 'onDiscardCard': {} },
         ...{ 'onSubmitAction': {} },
+        guidanceActive: (Boolean(__VLS_ctx.tutorial)),
         ...{ class: ({ 'small-table-viewport': __VLS_ctx.effectiveWidth <= 740 && __VLS_ctx.effectiveHeight <= 400 }) },
         state: (__VLS_ctx.state),
         players: (__VLS_ctx.players),
@@ -3518,11 +3548,60 @@ else {
     };
     __VLS_50.slots.default;
     {
+        const { guidance: __VLS_thisSlot } = __VLS_50.slots;
+        if (__VLS_ctx.tutorial) {
+            /** @type {[typeof TutorialGuide, ]} */ ;
+            // @ts-ignore
+            const __VLS_57 = __VLS_asFunctionalComponent(TutorialGuide, new TutorialGuide({
+                ...{ 'onNext': {} },
+                ...{ 'onRestart': {} },
+                step: (__VLS_ctx.tutorial.step),
+                actions: (__VLS_ctx.availableActions),
+            }));
+            const __VLS_58 = __VLS_57({
+                ...{ 'onNext': {} },
+                ...{ 'onRestart': {} },
+                step: (__VLS_ctx.tutorial.step),
+                actions: (__VLS_ctx.availableActions),
+            }, ...__VLS_functionalComponentArgsRest(__VLS_57));
+            let __VLS_60;
+            let __VLS_61;
+            let __VLS_62;
+            const __VLS_63 = {
+                onNext: (...[$event]) => {
+                    if (!!(__VLS_ctx.showEntry))
+                        return;
+                    if (!!(__VLS_ctx.showModeLobby))
+                        return;
+                    if (!!(__VLS_ctx.showSyncingScreen))
+                        return;
+                    if (!(__VLS_ctx.tutorial))
+                        return;
+                    __VLS_ctx.sendTutorialCommand('next');
+                }
+            };
+            const __VLS_64 = {
+                onRestart: (...[$event]) => {
+                    if (!!(__VLS_ctx.showEntry))
+                        return;
+                    if (!!(__VLS_ctx.showModeLobby))
+                        return;
+                    if (!!(__VLS_ctx.showSyncingScreen))
+                        return;
+                    if (!(__VLS_ctx.tutorial))
+                        return;
+                    __VLS_ctx.sendTutorialCommand('restart');
+                }
+            };
+            var __VLS_59;
+        }
+    }
+    {
         const { declaration: __VLS_thisSlot } = __VLS_50.slots;
         if (__VLS_ctx.shouldShowDeclarePanel) {
             /** @type {[typeof DeclarationPanel, ]} */ ;
             // @ts-ignore
-            const __VLS_57 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
+            const __VLS_65 = __VLS_asFunctionalComponent(DeclarationPanel, new DeclarationPanel({
                 ...{ 'onMarks': {} },
                 ...{ 'onSubmitFish': {} },
                 ...{ 'onSubmitKongs': {} },
@@ -3541,7 +3620,7 @@ else {
                 untimed: (__VLS_ctx.decisionTimer.untimed),
                 decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
             }));
-            const __VLS_58 = __VLS_57({
+            const __VLS_66 = __VLS_65({
                 ...{ 'onMarks': {} },
                 ...{ 'onSubmitFish': {} },
                 ...{ 'onSubmitKongs': {} },
@@ -3559,11 +3638,11 @@ else {
                 cardMode: (__VLS_ctx.resolvedOwnCardMode),
                 untimed: (__VLS_ctx.decisionTimer.untimed),
                 decisionKey: (__VLS_ctx.decisionTimer.decisionKey),
-            }, ...__VLS_functionalComponentArgsRest(__VLS_57));
-            let __VLS_60;
-            let __VLS_61;
-            let __VLS_62;
-            const __VLS_63 = {
+            }, ...__VLS_functionalComponentArgsRest(__VLS_65));
+            let __VLS_68;
+            let __VLS_69;
+            let __VLS_70;
+            const __VLS_71 = {
                 onMarks: (...[$event]) => {
                     if (!!(__VLS_ctx.showEntry))
                         return;
@@ -3576,13 +3655,13 @@ else {
                     __VLS_ctx.declarationMarks = $event;
                 }
             };
-            const __VLS_64 = {
+            const __VLS_72 = {
                 onSubmitFish: (__VLS_ctx.submitFishDeclaration)
             };
-            const __VLS_65 = {
+            const __VLS_73 = {
                 onSubmitKongs: (__VLS_ctx.submitKongDeclaration)
             };
-            var __VLS_59;
+            var __VLS_67;
         }
     }
     var __VLS_50;
@@ -3590,62 +3669,62 @@ else {
 if (__VLS_ctx.inviteCopyFallbackUrl) {
     /** @type {[typeof InviteLinkFallbackDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_66 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
+    const __VLS_74 = __VLS_asFunctionalComponent(InviteLinkFallbackDialog, new InviteLinkFallbackDialog({
         ...{ 'onClose': {} },
         url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }));
-    const __VLS_67 = __VLS_66({
-        ...{ 'onClose': {} },
-        url: (__VLS_ctx.inviteCopyFallbackUrl),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_66));
-    let __VLS_69;
-    let __VLS_70;
-    let __VLS_71;
-    const __VLS_72 = {
-        onClose: (__VLS_ctx.closeInviteCopyFallback)
-    };
-    var __VLS_68;
-}
-if (__VLS_ctx.inviteQrUrl) {
-    const __VLS_73 = {}.FriendInviteQrDialog;
-    /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
-    // @ts-ignore
-    const __VLS_74 = __VLS_asFunctionalComponent(__VLS_73, new __VLS_73({
-        ...{ 'onClose': {} },
-        url: (__VLS_ctx.inviteQrUrl),
-        roomId: (__VLS_ctx.inviteQrRoomId),
     }));
     const __VLS_75 = __VLS_74({
         ...{ 'onClose': {} },
-        url: (__VLS_ctx.inviteQrUrl),
-        roomId: (__VLS_ctx.inviteQrRoomId),
+        url: (__VLS_ctx.inviteCopyFallbackUrl),
     }, ...__VLS_functionalComponentArgsRest(__VLS_74));
     let __VLS_77;
     let __VLS_78;
     let __VLS_79;
     const __VLS_80 = {
-        onClose: (__VLS_ctx.closeInviteQr)
+        onClose: (__VLS_ctx.closeInviteCopyFallback)
     };
     var __VLS_76;
+}
+if (__VLS_ctx.inviteQrUrl) {
+    const __VLS_81 = {}.FriendInviteQrDialog;
+    /** @type {[typeof __VLS_components.FriendInviteQrDialog, ]} */ ;
+    // @ts-ignore
+    const __VLS_82 = __VLS_asFunctionalComponent(__VLS_81, new __VLS_81({
+        ...{ 'onClose': {} },
+        url: (__VLS_ctx.inviteQrUrl),
+        roomId: (__VLS_ctx.inviteQrRoomId),
+    }));
+    const __VLS_83 = __VLS_82({
+        ...{ 'onClose': {} },
+        url: (__VLS_ctx.inviteQrUrl),
+        roomId: (__VLS_ctx.inviteQrRoomId),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_82));
+    let __VLS_85;
+    let __VLS_86;
+    let __VLS_87;
+    const __VLS_88 = {
+        onClose: (__VLS_ctx.closeInviteQr)
+    };
+    var __VLS_84;
 }
 if (__VLS_ctx.pwaInstallGuide) {
     /** @type {[typeof PwaInstallDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_81 = __VLS_asFunctionalComponent(PwaInstallDialog, new PwaInstallDialog({
+    const __VLS_89 = __VLS_asFunctionalComponent(PwaInstallDialog, new PwaInstallDialog({
         ...{ 'onClose': {} },
         guide: (__VLS_ctx.pwaInstallGuide),
     }));
-    const __VLS_82 = __VLS_81({
+    const __VLS_90 = __VLS_89({
         ...{ 'onClose': {} },
         guide: (__VLS_ctx.pwaInstallGuide),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_81));
-    let __VLS_84;
-    let __VLS_85;
-    let __VLS_86;
-    const __VLS_87 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_89));
+    let __VLS_92;
+    let __VLS_93;
+    let __VLS_94;
+    const __VLS_95 = {
         onClose: (__VLS_ctx.closePwaInstallGuide)
     };
-    var __VLS_83;
+    var __VLS_91;
 }
 if (__VLS_ctx.showEndPanel) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3760,12 +3839,12 @@ if (__VLS_ctx.showEndPanel) {
                 if (p.isConfiguredBot) {
                     /** @type {[typeof PlayerStatusIcon, ]} */ ;
                     // @ts-ignore
-                    const __VLS_88 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+                    const __VLS_96 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
                         isConfiguredBot: (true),
                     }));
-                    const __VLS_89 = __VLS_88({
+                    const __VLS_97 = __VLS_96({
                         isConfiguredBot: (true),
-                    }, ...__VLS_functionalComponentArgsRest(__VLS_88));
+                    }, ...__VLS_functionalComponentArgsRest(__VLS_96));
                 }
                 if (p.clientId === __VLS_ctx.mySeatId) {
                     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
@@ -3839,18 +3918,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_91 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_99 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
                             }));
-                            const __VLS_92 = __VLS_91({
+                            const __VLS_100 = __VLS_99({
                                 key: (`settle-e-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.resolvedTableCardMode),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_91));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_99));
                         }
                     }
                 }
@@ -3887,18 +3966,18 @@ if (__VLS_ctx.showEndPanel) {
                         for (const [card] of __VLS_getVForSourceType((group.cards))) {
                             /** @type {[typeof CardComp, ]} */ ;
                             // @ts-ignore
-                            const __VLS_94 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                            const __VLS_102 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                             }));
-                            const __VLS_95 = __VLS_94({
+                            const __VLS_103 = __VLS_102({
                                 key: (`settle-hg-${p.clientId}-${group.id}-${card.id}`),
                                 card: (card),
                                 size: "sm",
                                 mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                            }, ...__VLS_functionalComponentArgsRest(__VLS_94));
+                            }, ...__VLS_functionalComponentArgsRest(__VLS_102));
                         }
                     }
                 }
@@ -3909,18 +3988,18 @@ if (__VLS_ctx.showEndPanel) {
                     for (const [card] of __VLS_getVForSourceType((p.hand))) {
                         /** @type {[typeof CardComp, ]} */ ;
                         // @ts-ignore
-                        const __VLS_97 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                        const __VLS_105 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
                         }));
-                        const __VLS_98 = __VLS_97({
+                        const __VLS_106 = __VLS_105({
                             key: (`settle-${p.clientId}-${card.id}`),
                             card: (card),
                             size: "sm",
                             mode: (__VLS_ctx.settlementHandCardMode(p.clientId)),
-                        }, ...__VLS_functionalComponentArgsRest(__VLS_97));
+                        }, ...__VLS_functionalComponentArgsRest(__VLS_105));
                     }
                 }
                 else {
@@ -3984,25 +4063,52 @@ if (__VLS_ctx.showEndPanel) {
             for (const [card] of __VLS_getVForSourceType((__VLS_ctx.remainingDeckPreview))) {
                 /** @type {[typeof CardComp, ]} */ ;
                 // @ts-ignore
-                const __VLS_100 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+                const __VLS_108 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
                 }));
-                const __VLS_101 = __VLS_100({
+                const __VLS_109 = __VLS_108({
                     key: (`remain-${card.id}`),
                     card: (card),
                     size: "sm",
                     mode: (__VLS_ctx.resolvedTableCardMode),
-                }, ...__VLS_functionalComponentArgsRest(__VLS_100));
+                }, ...__VLS_functionalComponentArgsRest(__VLS_108));
             }
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "end-actions" },
     });
-    if (__VLS_ctx.state?.roomMode === 'match') {
+    if (__VLS_ctx.tutorial) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.showEndPanel))
+                        return;
+                    if (!(__VLS_ctx.tutorial))
+                        return;
+                    __VLS_ctx.finishTutorial(false);
+                } },
+            ...{ class: "primary" },
+            'data-testid': "tutorial-practice",
+            disabled: (__VLS_ctx.enteringLobby),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.showEndPanel))
+                        return;
+                    if (!(__VLS_ctx.tutorial))
+                        return;
+                    __VLS_ctx.finishTutorial(true);
+                } },
+            ...{ class: "ghost" },
+            'data-testid': "tutorial-invite",
+            disabled: (__VLS_ctx.enteringLobby),
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    }
+    else if (__VLS_ctx.state?.roomMode === 'match') {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
             ...{ onClick: (__VLS_ctx.rematchQuickTable) },
             ...{ class: "primary" },
@@ -4228,7 +4334,7 @@ if (__VLS_ctx.confirmingResumeAbandon) {
 if (__VLS_ctx.nicknameDialogOpen) {
     /** @type {[typeof NicknameDialog, ]} */ ;
     // @ts-ignore
-    const __VLS_103 = __VLS_asFunctionalComponent(NicknameDialog, new NicknameDialog({
+    const __VLS_111 = __VLS_asFunctionalComponent(NicknameDialog, new NicknameDialog({
         ...{ 'onSave': {} },
         ...{ 'onClose': {} },
         ...{ 'onRandomize': {} },
@@ -4236,31 +4342,31 @@ if (__VLS_ctx.nicknameDialogOpen) {
         history: (__VLS_ctx.nicknameHistory),
         randomName: (__VLS_ctx.nicknameDraftRandom),
     }));
-    const __VLS_104 = __VLS_103({
+    const __VLS_112 = __VLS_111({
         ...{ 'onSave': {} },
         ...{ 'onClose': {} },
         ...{ 'onRandomize': {} },
         nickname: (__VLS_ctx.entryName),
         history: (__VLS_ctx.nicknameHistory),
         randomName: (__VLS_ctx.nicknameDraftRandom),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_103));
-    let __VLS_106;
-    let __VLS_107;
-    let __VLS_108;
-    const __VLS_109 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_111));
+    let __VLS_114;
+    let __VLS_115;
+    let __VLS_116;
+    const __VLS_117 = {
         onSave: (__VLS_ctx.saveNickname)
     };
-    const __VLS_110 = {
+    const __VLS_118 = {
         onClose: (__VLS_ctx.closeNicknameDialog)
     };
-    const __VLS_111 = {
+    const __VLS_119 = {
         onRandomize: (...[$event]) => {
             if (!(__VLS_ctx.nicknameDialogOpen))
                 return;
             __VLS_ctx.nicknameDraftRandom = __VLS_ctx.generateRandomNickname();
         }
     };
-    var __VLS_105;
+    var __VLS_113;
 }
 if (__VLS_ctx.showRules) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -4330,14 +4436,14 @@ if (__VLS_ctx.showRules) {
     }
     /** @type {[typeof RulesGuide, ]} */ ;
     // @ts-ignore
-    const __VLS_112 = __VLS_asFunctionalComponent(RulesGuide, new RulesGuide({
+    const __VLS_120 = __VLS_asFunctionalComponent(RulesGuide, new RulesGuide({
         ...{ class: "rules-content" },
         phase: (__VLS_ctx.state?.phase),
     }));
-    const __VLS_113 = __VLS_112({
+    const __VLS_121 = __VLS_120({
         ...{ class: "rules-content" },
         phase: (__VLS_ctx.state?.phase),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_112));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_120));
 }
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['top']} */ ;
@@ -4361,6 +4467,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['global-error']} */ ;
 /** @type {__VLS_StyleScopedClasses['global-notice']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-shell']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['tutorial-entry']} */ ;
 /** @type {__VLS_StyleScopedClasses['small-screen-recommendation']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-shell']} */ ;
 /** @type {__VLS_StyleScopedClasses['sync-card']} */ ;
@@ -4424,6 +4532,8 @@ if (__VLS_ctx.showRules) {
 /** @type {__VLS_StyleScopedClasses['settlement-cards']} */ ;
 /** @type {__VLS_StyleScopedClasses['end-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['host-actions-hint']} */ ;
 /** @type {__VLS_StyleScopedClasses['primary']} */ ;
 /** @type {__VLS_StyleScopedClasses['ghost']} */ ;
@@ -4462,6 +4572,7 @@ var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            TutorialGuide: TutorialGuide,
             CardComp: CardComp,
             PlayerStatusIcon: PlayerStatusIcon,
             ConnectionStatus: ConnectionStatus,
@@ -4499,6 +4610,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             actionLogs: actionLogs,
             actionFeedback: actionFeedback,
             decisionTimer: decisionTimer,
+            tutorial: tutorial,
+            sendTutorialCommand: sendTutorialCommand,
             sendDiscardCard: sendDiscardCard,
             dissolveRoom: dissolveRoom,
             setScoringMode: setScoringMode,
@@ -4659,6 +4772,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             saveNickname: saveNickname,
             startLobbyMode: startLobbyMode,
             startSelectedMode: startSelectedMode,
+            finishTutorial: finishTutorial,
+            startPracticeLobby: startPracticeLobby,
             copyInviteLink: copyInviteLink,
             shareInviteLink: shareInviteLink,
             shareGame: shareGame,

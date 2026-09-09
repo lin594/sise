@@ -3224,6 +3224,19 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['hand-visible-range']} */ ;
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
 /** @type {__VLS_StyleScopedClasses['table']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
+/** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
+/** @type {__VLS_StyleScopedClasses['dynamic-action-track']} */ ;
+/** @type {__VLS_StyleScopedClasses['board']} */ ;
+/** @type {__VLS_StyleScopedClasses['has-guidance']} */ ;
+/** @type {__VLS_StyleScopedClasses['dealer-ceremony-active']} */ ;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -3237,6 +3250,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ref: "boardRef",
     ...{ class: "board" },
     ...{ class: ({
+            'has-guidance': Boolean(props.guidanceActive),
             'crowded-action-dock': __VLS_ctx.crowdedActionDock,
             'hand-overflow': __VLS_ctx.handHasOverflow,
             'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
@@ -4269,6 +4283,12 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
         ref: "selfZoneRef",
     });
     /** @type {typeof __VLS_ctx.selfZoneRef} */ ;
+    if (props.guidanceActive) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "board-guidance" },
+        });
+        var __VLS_60 = {};
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "clock-slot" },
     });
@@ -4312,12 +4332,12 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
     /** @type {typeof __VLS_ctx.selfIdentityMetaRef} */ ;
     /** @type {[typeof PlayerStatusIcon, ]} */ ;
     // @ts-ignore
-    const __VLS_60 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
+    const __VLS_62 = __VLS_asFunctionalComponent(PlayerStatusIcon, new PlayerStatusIcon({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
     }));
-    const __VLS_61 = __VLS_60({
+    const __VLS_63 = __VLS_62({
         ...(__VLS_ctx.statusIconProps(__VLS_ctx.selfPlayer)),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_62));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
         ...{ class: "hand-count-badge" },
         'aria-label': (`剩余手牌 ${__VLS_ctx.playerHandCount(__VLS_ctx.selfPlayer)} 张`),
@@ -4358,27 +4378,27 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
         if (__VLS_ctx.dealerInfoCard) {
             /** @type {[typeof CardComp, ]} */ ;
             // @ts-ignore
-            const __VLS_63 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+            const __VLS_65 = __VLS_asFunctionalComponent(CardComp, new CardComp({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
             }));
-            const __VLS_64 = __VLS_63({
+            const __VLS_66 = __VLS_65({
                 card: (__VLS_ctx.dealerInfoCard),
                 mode: (__VLS_ctx.appliedTableCardMode),
                 size: "xs",
-            }, ...__VLS_functionalComponentArgsRest(__VLS_63));
+            }, ...__VLS_functionalComponentArgsRest(__VLS_65));
         }
     }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "dynamic-action-track" },
         'data-testid': "dynamic-action-track",
     });
-    var __VLS_66 = {};
+    var __VLS_68 = {};
     if (props.state?.phase === 'playing' && (__VLS_ctx.canAct || __VLS_ctx.canDiscard)) {
         /** @type {[typeof ActionPanel, ]} */ ;
         // @ts-ignore
-        const __VLS_68 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
+        const __VLS_70 = __VLS_asFunctionalComponent(ActionPanel, new ActionPanel({
             ...{ 'onConfirmDiscard': {} },
             ...{ 'onSubmit': {} },
             ...{ class: "embedded-actions action-dock" },
@@ -4397,7 +4417,7 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
             actionFeedback: (__VLS_ctx.effectiveActionFeedback),
             selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
         }));
-        const __VLS_69 = __VLS_68({
+        const __VLS_71 = __VLS_70({
             ...{ 'onConfirmDiscard': {} },
             ...{ 'onSubmit': {} },
             ...{ class: "embedded-actions action-dock" },
@@ -4415,29 +4435,29 @@ if (__VLS_ctx.selfPlayer && !__VLS_ctx.dealerReveal) {
             decisionKey: (props.decisionKey ?? ''),
             actionFeedback: (__VLS_ctx.effectiveActionFeedback),
             selectedChiCandidateId: (__VLS_ctx.selectedChiCandidate?.id ?? null),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
-        let __VLS_71;
-        let __VLS_72;
+        }, ...__VLS_functionalComponentArgsRest(__VLS_70));
         let __VLS_73;
-        const __VLS_74 = {
+        let __VLS_74;
+        let __VLS_75;
+        const __VLS_76 = {
             onConfirmDiscard: (__VLS_ctx.confirmDiscard)
         };
-        const __VLS_75 = {
+        const __VLS_77 = {
             onSubmit: (__VLS_ctx.onSubmitAction)
         };
-        var __VLS_70;
+        var __VLS_72;
     }
 }
-const __VLS_76 = {}.Transition;
+const __VLS_78 = {}.Transition;
 /** @type {[typeof __VLS_components.Transition, typeof __VLS_components.Transition, ]} */ ;
 // @ts-ignore
-const __VLS_77 = __VLS_asFunctionalComponent(__VLS_76, new __VLS_76({
+const __VLS_79 = __VLS_asFunctionalComponent(__VLS_78, new __VLS_78({
     name: "quick-phrase",
 }));
-const __VLS_78 = __VLS_77({
+const __VLS_80 = __VLS_79({
     name: "quick-phrase",
-}, ...__VLS_functionalComponentArgsRest(__VLS_77));
-__VLS_79.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_79));
+__VLS_81.slots.default;
 if (__VLS_ctx.flowStatusText) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "self-flow-toast" },
@@ -4447,7 +4467,7 @@ if (__VLS_ctx.flowStatusText) {
     });
     (__VLS_ctx.flowStatusText);
 }
-var __VLS_79;
+var __VLS_81;
 if (__VLS_ctx.listeningDetailsOpen && __VLS_ctx.listeningDetailWaits.length) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
         ...{ onPointerdown: (__VLS_ctx.restartListeningTimer) },
@@ -4490,16 +4510,16 @@ if (__VLS_ctx.listeningDetailsOpen && __VLS_ctx.listeningDetailWaits.length) {
         });
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_80 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_82 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (wait.card),
             size: "xs",
             mode: "large",
         }));
-        const __VLS_81 = __VLS_80({
+        const __VLS_83 = __VLS_82({
             card: (wait.card),
             size: "xs",
             mode: "large",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_80));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_82));
         __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
             ...{ class: "wait-count-badge" },
             'data-testid': "listening-wait-count",
@@ -4661,18 +4681,18 @@ if (__VLS_ctx.selfPlayer) {
         }
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_83 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_85 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (__VLS_ctx.appliedOwnCardMode),
             size: "xl",
         }));
-        const __VLS_84 = __VLS_83({
+        const __VLS_86 = __VLS_85({
             card: (card),
             ...{ style: (__VLS_ctx.movingCardStyle(card.id)) },
             mode: (__VLS_ctx.appliedOwnCardMode),
             size: "xl",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_83));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_85));
     }
 }
 if (__VLS_ctx.isMyTurn && !__VLS_ctx.dealerReveal) {
@@ -4682,16 +4702,16 @@ if (__VLS_ctx.isMyTurn && !__VLS_ctx.dealerReveal) {
         'aria-hidden': "true",
     });
 }
-const __VLS_86 = {}.Teleport;
+const __VLS_88 = {}.Teleport;
 /** @type {[typeof __VLS_components.Teleport, typeof __VLS_components.Teleport, ]} */ ;
 // @ts-ignore
-const __VLS_87 = __VLS_asFunctionalComponent(__VLS_86, new __VLS_86({
+const __VLS_89 = __VLS_asFunctionalComponent(__VLS_88, new __VLS_88({
     to: "body",
 }));
-const __VLS_88 = __VLS_87({
+const __VLS_90 = __VLS_89({
     to: "body",
-}, ...__VLS_functionalComponentArgsRest(__VLS_87));
-__VLS_89.slots.default;
+}, ...__VLS_functionalComponentArgsRest(__VLS_89));
+__VLS_91.slots.default;
 for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         key: (flight.key),
@@ -4710,33 +4730,33 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.tableFlights))) {
     if (flight.back) {
         /** @type {[typeof CardBack, ]} */ ;
         // @ts-ignore
-        const __VLS_90 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+        const __VLS_92 = __VLS_asFunctionalComponent(CardBack, new CardBack({
             mode: (__VLS_ctx.appliedTableCardMode),
         }));
-        const __VLS_91 = __VLS_90({
+        const __VLS_93 = __VLS_92({
             mode: (__VLS_ctx.appliedTableCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_90));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_92));
     }
     else {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_93 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_95 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
             ...{ style: (flight.cardStyle) },
         }));
-        const __VLS_94 = __VLS_93({
+        const __VLS_96 = __VLS_95({
             card: (flight.card),
             mode: (__VLS_ctx.appliedTableCardMode),
             size: (flight.cardSize),
             ...{ class: (flight.cardClass) },
             ...{ style: (flight.cardStyle) },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_93));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_95));
     }
 }
-var __VLS_89;
+var __VLS_91;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "fx-layer" },
 });
@@ -4750,26 +4770,26 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
     if (flight.mode === 'deal') {
         /** @type {[typeof CardBack, ]} */ ;
         // @ts-ignore
-        const __VLS_96 = __VLS_asFunctionalComponent(CardBack, new CardBack({
+        const __VLS_98 = __VLS_asFunctionalComponent(CardBack, new CardBack({
             mode: (__VLS_ctx.appliedOwnCardMode),
         }));
-        const __VLS_97 = __VLS_96({
+        const __VLS_99 = __VLS_98({
             mode: (__VLS_ctx.appliedOwnCardMode),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_96));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_98));
     }
     else if (flight.card) {
         /** @type {[typeof CardComp, ]} */ ;
         // @ts-ignore
-        const __VLS_99 = __VLS_asFunctionalComponent(CardComp, new CardComp({
+        const __VLS_101 = __VLS_asFunctionalComponent(CardComp, new CardComp({
             card: (flight.card),
             mode: (__VLS_ctx.appliedTableCardMode),
             size: "md",
         }));
-        const __VLS_100 = __VLS_99({
+        const __VLS_102 = __VLS_101({
             card: (flight.card),
             mode: (__VLS_ctx.appliedTableCardMode),
             size: "md",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_99));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_101));
     }
 }
 /** @type {__VLS_StyleScopedClasses['board']} */ ;
@@ -4908,6 +4928,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-card-name']} */ ;
 /** @type {__VLS_StyleScopedClasses['dealer-reveal-result']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-command-row']} */ ;
+/** @type {__VLS_StyleScopedClasses['board-guidance']} */ ;
 /** @type {__VLS_StyleScopedClasses['clock-slot']} */ ;
 /** @type {__VLS_StyleScopedClasses['fixed-clock']} */ ;
 /** @type {__VLS_StyleScopedClasses['self-info-card']} */ ;
@@ -4955,7 +4976,7 @@ for (const [flight] of __VLS_getVForSourceType((__VLS_ctx.flights))) {
 /** @type {__VLS_StyleScopedClasses['fx-layer']} */ ;
 /** @type {__VLS_StyleScopedClasses['fx-card']} */ ;
 // @ts-ignore
-var __VLS_67 = __VLS_66;
+var __VLS_61 = __VLS_60, __VLS_69 = __VLS_68;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {

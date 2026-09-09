@@ -1,5 +1,7 @@
 import { emitProductEvent } from "../analytics/runtime.js";
 
+
+import { createTutorialDeal, advanceTutorial, type TutorialProgress } from "./tutorial.js";
 import { explainHand } from "../rules/hu.js";
 import { countHiddenKans } from "../rules/declared-kans.js";
 import {
@@ -128,6 +130,7 @@ interface DeclareFishPayload {
 }
 
 interface RoomCreateOptions {
+  tutorial?: boolean;
   roomMode?: "practice" | "friends" | "match";
   hostKey?: string;
   recoverySnapshot?: RoomRecoverySnapshot;
@@ -190,6 +193,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private presentationTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPresentationEnd: { lastAction: string; winnerId: string | null; groups: string[] } | null = null;
+  private tutorial: TutorialProgress | null = null;
+  private tutorialActionAccepted = false;
   private deck: Card[] = [];
   private playerHands = new Map<string, Card[]>(); // seatId -> cards
   private playerOrder: string[] = []; // seatIds in round order
@@ -324,6 +329,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ? options.roomMode
         : "practice";
       this.hostKey = String(options.hostKey ?? "").trim();
+      if (options.tutorial === true && this.state.roomMode === "practice") this.tutorial = { seatId: "", step: "intro" };
     }
     if (this.state.roomMode === "match") {
       this.maxClients = this.targetSeats;
@@ -413,11 +419,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     });
 
     this.onMessage("action", (client, payload: ActionRequest) => {
+      this.tutorialActionAccepted = false;
       this.handleAction(client, payload);
+      this.advanceTutorialAfterAction(client, typeof payload === "string" ? payload : payload?.action ?? "");
     });
 
     this.onMessage("discard_card", (client, payload: DiscardCardRequest) => {
+      this.tutorialActionAccepted = false;
       this.handleDiscardCard(client, payload);
+      this.advanceTutorialAfterAction(client, "discard", typeof payload === "string" ? payload : payload?.cardId);
+    });
+
+    this.onMessage("tutorial_next", (client) => {
+      if (this.tutorial?.seatId !== this.seatBySession.get(client.sessionId) || this.tutorial?.step !== "intro") return;
+      this.tutorial.step = "grab";
+      this.broadcastAvailableActions();
+    });
+    this.onMessage("tutorial_restart", (client) => {
+      if (!this.tutorial || this.tutorial.seatId !== this.seatBySession.get(client.sessionId)) return;
+      this.bootstrapRound();
     });
 
     this.onMessage("sync_state", (client) => {
@@ -577,6 +597,20 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     player.connected = false;
     const baseName = this.baseNameBySeat.get(seatId) ?? player.name;
     const consentedLeave = code === CloseCode.CONSENTED;
+    if (consentedLeave && this.tutorial?.seatId === seatId) {
+      this.tutorial = null;
+      this.clearBotTimer();
+      this.resetCollectivePolling();
+      void this.disconnect();
+      return;
+    }
+    if (!consentedLeave && this.tutorial?.seatId === seatId) {
+      player.isBot = false; player.isAutoPlay = false;
+      this.botIds.delete(seatId);
+      this.scheduleRoomIdleIfEmpty();
+      this.broadcastAvailableActions();
+      return;
+    }
     if (this.state.phase === "waiting") {
       if (consentedLeave) {
         const wasHost = this.state.hostPlayerId === seatId;
@@ -667,6 +701,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       state: JSON.parse(JSON.stringify(this.state)) as Record<string, unknown>,
       privateState: {
         ruleVersion: this.ruleVersion,
+        tutorial: this.tutorial ? { ...this.tutorial } : null,
         roomIdleExpiresAt: idleExpiry,
         deck: cloneCards(this.deck),
         playerHands: [...this.playerHands].map(([seatId, cards]) => [seatId, cloneCards(cards)]),
@@ -714,6 +749,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
     const privateState = snapshot.privateState;
     this.ruleVersion = privateState.ruleVersion ?? "legacy";
+    this.tutorial = privateState.tutorial ? { ...privateState.tutorial } : null;
+    if (this.tutorial) this.collectiveResponseWindowMs = 120_000;
     this.pendingPresentationEnd = privateState.pendingPresentationEnd ?? null;
     const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
     this.roomIdleExpiresAt = privateState.roomIdleExpiresAt;
@@ -1176,7 +1213,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.pendingTokenBySession.delete(client.sessionId);
     this.pendingProfileTokenBySession.delete(client.sessionId);
     this.bindGuestProfile(targetSeatId, profileToken, requestedName);
-    if (!currentSeatId) emitProductEvent({ name: "join_success", id: `${this.roomId}_${client.sessionId}`, mode: this.state.roomMode, humans: this.analyticsHumanCount() }, profileToken);
+    if (!currentSeatId) emitProductEvent({ name: "join_success", id: `${this.roomId}_${client.sessionId}`, mode: this.tutorial ? "tutorial" : this.state.roomMode, humans: this.analyticsHumanCount() }, profileToken);
     if (!currentSeatId && this.state.roomMode === "friends" && this.analyticsVisits.has(client.sessionId)) {
       emitProductEvent({ name: "invite_join_success", id: this.analyticsVisits.get(client.sessionId)!, visitId: this.analyticsVisits.get(client.sessionId), mode: "friends", humans: this.analyticsHumanCount() }, profileToken);
     }
@@ -1395,6 +1432,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private scheduleTemporaryTakeover(seatId: string): void {
     this.clearTakeoverTimer(seatId);
+    if (this.tutorial?.seatId === seatId) return;
     if (this.reconnectGraceMs === 0) {
       this.activateTemporaryTakeover(seatId);
       return;
@@ -1407,6 +1445,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private activateTemporaryTakeover(seatId: string): void {
     this.clearTakeoverTimer(seatId);
+    if (this.tutorial?.seatId === seatId) return;
     const player = this.state.players.get(seatId);
     if (!player || player.connected || player.isConfiguredBot) {
       return;
@@ -1852,6 +1891,51 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：重置局内状态，写入手牌/庄家/声明倒计时并进入声明阶段。
    */
+  private advanceTutorialAfterAction(client: Client, action: string, cardId?: string): void {
+    if (!this.tutorialActionAccepted || !this.tutorial || this.tutorial.seatId !== this.seatBySession.get(client.sessionId)) return;
+    this.tutorial.step = advanceTutorial(this.tutorial.step, action, cardId);
+    this.broadcastAvailableActions();
+  }
+
+  private bootstrapTutorial(): void {
+    const learner = this.playerOrder.find(id => !this.configuredBotIds.has(id));
+    if (!learner) return;
+    this.clearBotTimer();
+    this.resetCollectivePolling();
+    this.responseDecisionWindowId += 1;
+    this.collectiveResponseWindowMs = 120_000;
+    this.tutorial = { seatId: learner, step: "intro" };
+    const deal = createTutorialDeal();
+    this.deck = deal.deck;
+    this.playerHands.set(learner, deal.hand);
+    this.playerOrder.filter(id => id !== learner).forEach((id, index) => this.playerHands.set(id, [deal.opponents[index]!]));
+    for (const player of this.state.players.values()) {
+      player.declaredReady = true; player.declarationStep = "done"; player.declaredKongs = 0;
+    }
+    const previous = this.playerOrder[(this.playerOrder.indexOf(learner) + 3) % 4]!;
+    this.roundDealerId = learner;
+    this.state.dealerId = learner;
+    this.state.dealerPickerId = "";
+    this.state.dealerCard = new CardSchema();
+    this.state.phase = "playing";
+    this.state.responsePhase = "local_upper";
+    this.state.currentPlayerId = learner;
+    this.state.currentTurnPlayerId = learner;
+    this.state.pendingReceiverId = learner;
+    this.state.pollOriginPlayerId = previous;
+    this.state.declareEndsAt = 0;
+    this.state.deckCount = this.deck.length;
+    this.state.lastAction = "教学演练";
+    this.pendingResponse = createPendingResponse(learner, deal.upper, "upper");
+    this.ops.pushDiscard(previous, deal.upper);
+    this.ops.setResponseCard(deal.upper, "upper");
+    this.nextRoundSetup = null;
+    this.updatePublicHandCounts();
+    this.syncAllPrivateHands();
+    this.tickBots();
+    this.broadcastAvailableActions();
+  }
+
   private analyticsHumanCount(): number {
     return [...this.state.players.values()].filter(player => !player.isConfiguredBot).length;
   }
@@ -1860,7 +1944,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const round = `${this.roomId}_${roundNumber}`;
     for (const [seat, token] of this.profileTokenBySeat) {
       if (this.state.players.get(seat)?.isConfiguredBot) continue;
-      emitProductEvent({ name, id: round, visitId: round, mode: this.state.roomMode, humans: this.analyticsHumanCount() }, token);
+      emitProductEvent({ name, id: round, visitId: round, mode: this.tutorial ? "tutorial" : this.state.roomMode, humans: this.analyticsHumanCount() }, token);
     }
   }
 
@@ -1891,6 +1975,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
     this.recordProductRound("round_start", this.state.completedRounds + 1);
+    if (this.tutorial) { this.bootstrapTutorial(); return; }
     const setup = this.resolveBootstrapSetup();
     const pickerId = setup.mode === "picker" ? setup.pickerId : null;
 
@@ -2096,6 +2181,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private handleSetAutoPlay(client: Client, payload?: { enabled?: unknown }): void {
     const seatId = this.seatBySession.get(client.sessionId);
+    if (seatId && this.tutorial?.seatId === seatId && payload?.enabled === true) {
+      this.rejectAction(client, "action_unavailable", seatId); return;
+    }
     const player = seatId ? this.state.players.get(seatId) : undefined;
     if (
       !seatId ||
@@ -2431,7 +2519,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private rejectAction(client: Client, reason: string, seatId?: string): void {
-    if (seatId) emitProductEvent({ name: "action_rejected", id: `${this.roomId}_${this.state.completedRounds}_${this.responseDecisionWindowId}_${reason}`, mode: this.state.roomMode, humans: this.analyticsHumanCount(), outcome: "failed" }, this.profileTokenBySeat.get(seatId) ?? "");
+    if (seatId) emitProductEvent({ name: "action_rejected", id: `${this.roomId}_${this.state.completedRounds}_${this.responseDecisionWindowId}_${reason}`, mode: this.tutorial ? "tutorial" : this.state.roomMode, humans: this.analyticsHumanCount(), outcome: "failed" }, this.profileTokenBySeat.get(seatId) ?? "");
     client.send("action_rejected", {
       reason,
       decisionKey: seatId ? this.buildDecisionTimerSnapshot(seatId).decisionKey : "",
@@ -2446,6 +2534,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     action: ActionType | "discard",
     submittedDecisionKey?: string,
   ): void {
+    if (this.tutorial?.seatId === seatId) this.tutorialActionAccepted = true;
     client.send("action_received", {
       action,
       decisionKey: submittedDecisionKey || this.buildDecisionTimerSnapshot(seatId).decisionKey,
@@ -3308,7 +3397,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
               roundNumber: this.state.completedRounds,
             };
             this.recordProductRound("round_complete", this.state.completedRounds);
-            recordActiveGuestRoundResults(
+            if (this.tutorial) this.tutorial.step = winnerId === this.tutorial.seatId ? "complete" : "retry";
+            if (!this.tutorial) recordActiveGuestRoundResults(
               `${this.roomId}:${this.state.completedRounds}`,
               winnerId,
               completedPlayers,
@@ -3659,6 +3749,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ...card,
         isHidden: false,
       })),
+      tutorial: this.tutorial?.seatId === seatId ? { step: this.tutorial.step } : null,
       listeningHints: this.buildListeningHints(seatId),
       availableActions: decisionView.availableActions,
       decisionTimer: decisionView.decisionTimer,
@@ -3679,6 +3770,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         ...card,
         isHidden: false,
       })),
+      tutorial: this.tutorial?.seatId === seatId ? { step: this.tutorial.step } : null,
       listeningHints: this.buildListeningHints(seatId),
       availableActions: decisionView.availableActions,
       decisionTimer: decisionView.decisionTimer,

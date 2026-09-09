@@ -2,13 +2,13 @@ import { BACKEND_HTTP_URL } from "@/config/backend";
 import { ensureGuestProfileToken } from "@/composables/useGuestProfile";
 import { hasPersistentBrowserStorage } from "@/utils/safeStorage";
 
-type Mode = "practice" | "match" | "friends";
+type Mode = "practice" | "match" | "friends" | "tutorial";
 type ClientEvent = "app_open" | "lobby_view" | "practice_start" | "quick_match_start" | "friend_room_create" | "invite_open" | "play_again" | "room_exit" | "join_failed" | "reconnect_started" | "reconnect_success" | "reconnect_failed";
 let visitId = "";
 let activeRequests = 0;
 let modeAttempt: { id: string; mode: Mode; at: number } | null = null;
 const once = new Set<string>();
-const modeEvent = (mode: Mode): ClientEvent => mode === "practice" ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
+const modeEvent = (mode: Mode): ClientEvent => (mode === "practice" || mode === "tutorial") ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
 export function productVisitId(): string {
   try { return visitId ||= crypto.randomUUID(); } catch { return ""; }
 }

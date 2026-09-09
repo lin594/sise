@@ -1,3 +1,4 @@
+import { isTutorialProgress, type TutorialProgress } from "./tutorial.js";
 import type { ActionType, Card } from "../rules/types.js";
 
 export const ROOM_RECOVERY_VERSION = 2;
@@ -12,6 +13,7 @@ export interface RecoveryPendingResponse {
 }
 
 export interface RoomRecoveryPrivateState {
+  tutorial?: TutorialProgress | null;
   ruleVersion?: "legacy" | "1.0";
   roomIdleExpiresAt: number;
   deck: Card[];
@@ -93,6 +95,7 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
     return false;
   }
   return (
+    (privateState.tutorial == null || (state.roomMode === "practice" && isTutorialProgress(privateState.tutorial))) &&
     (privateState.ruleVersion === undefined || privateState.ruleVersion === "legacy" || privateState.ruleVersion === "1.0") &&
     isFiniteInteger(privateState.roomIdleExpiresAt) &&
     privateState.roomIdleExpiresAt >= 0 &&

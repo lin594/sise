@@ -249,3 +249,9 @@ server/src/schema/                    公开同步 Schema
 ## 规则 v1.0 私有决策
 
 `decisionTimer.legalDiscardCardIds` 由服务端统一保坎校验生成，仅通过本人的私有决策、快照和受保护恢复接口传送，不进入公开 Schema。新客户端用该列表禁用不合法弃牌，缺少字段时兼容旧服务端。`declaredKongs` 继续表示尚未转为开的暗坎义务，成功开牌减一，不能重复扣减或重复结算。恢复快照的可选 `privateState.ruleVersion` 区分旧局与 v1.0，新局始终升级。
+
+## 私有教学状态
+
+`POST /rooms` 只新增 practice 模式的布尔 `tutorial` 选项，拒绝额外 seed、hand 或调试字段。固定牌序定义于 `rooms/tutorial.ts`，由正常规则动作推进。`room_snapshot` 与认证 `/private-state` 仅向学习者返回 `tutorial.step`；恢复快照保存 seatId 与 step。消息 `tutorial_next` / `tutorial_restart` 仅允许该学习者操作。普通房间无教学上下文。
+
+公共 Colyseus matchmaking 仅允许正常 match 的 joinOrCreate，以及既有按 ID 加入/重连；禁止客户端 create/join 建房替代路径，拒绝快速配桌选项中的教学、恢复快照或任意调试字段。服务端直接 createRoom 与受验证的 HTTP 建房不受此限制。
