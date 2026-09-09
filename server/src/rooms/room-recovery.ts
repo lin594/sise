@@ -12,6 +12,7 @@ export interface RecoveryPendingResponse {
 }
 
 export interface RoomRecoveryPrivateState {
+  ruleVersion?: "legacy" | "1.0";
   roomIdleExpiresAt: number;
   deck: Card[];
   playerHands: Array<[string, Card[]]>;
@@ -92,6 +93,7 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
     return false;
   }
   return (
+    (privateState.ruleVersion === undefined || privateState.ruleVersion === "legacy" || privateState.ruleVersion === "1.0") &&
     isFiniteInteger(privateState.roomIdleExpiresAt) &&
     privateState.roomIdleExpiresAt >= 0 &&
     (privateState.roomIdleExpiresAt === 0 || privateState.roomIdleExpiresAt <= value.expiresAt) &&

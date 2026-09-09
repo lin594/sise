@@ -1,3 +1,4 @@
+import { canDiscardPreservingKans } from "../../rules/declared-kans.js";
 import { isDiscardRestricted, isSameFace } from "../../rules/deck.js";
 import { analyzeCardGrouping, explainHu } from "../../rules/hu.js";
 import type { Card } from "../../rules/types.js";
@@ -22,6 +23,7 @@ export class RoomStateOps {
     private readonly state: GameState,
     private readonly playerHands: Map<SeatId, Card[]>,
     private readonly getPendingOwnerId: () => SeatId | null,
+    private readonly enforceDeclaredKans: () => boolean = () => true,
   ) {}
 
   /**
@@ -46,11 +48,16 @@ export class RoomStateOps {
    * 关键输入/输出：输入座位，输出被移除的牌或 null。
    * 副作用：修改 `playerHands`。
    */
+  canDiscardCard(playerId: SeatId, cardId: string): boolean {
+    return canDiscardPreservingKans(this.playerHands.get(playerId) ?? [], cardId,
+      this.enforceDeclaredKans() ? this.state.players.get(playerId)?.declaredKongs ?? 0 : 0);
+  }
+
   pickDiscardCard(playerId: SeatId): Card | null {
     const hand = this.playerHands.get(playerId) ?? [];
     const candidates = hand
       .map((card, index) => ({ card, index }))
-      .filter((item) => !isDiscardRestricted(item.card));
+      .filter((item) => this.canDiscardCard(playerId, item.card.id));
     if (!candidates.length) {
       return null;
     }
@@ -91,7 +98,7 @@ export class RoomStateOps {
       return null;
     }
     const discard = hand[idx];
-    if (isDiscardRestricted(discard)) {
+    if (!this.canDiscardCard(playerId, cardId)) {
       return null;
     }
     hand.splice(idx, 1);
@@ -444,6 +451,7 @@ export function createRoomStateOps(
   state: GameState,
   playerHands: Map<string, Card[]>,
   getPendingOwnerId: () => string | null,
+  enforceDeclaredKans: () => boolean = () => true,
 ): RoomStateOps {
-  return new RoomStateOps(state, playerHands, getPendingOwnerId);
+  return new RoomStateOps(state, playerHands, getPendingOwnerId, enforceDeclaredKans);
 }

@@ -131,6 +131,7 @@ export interface AvailableAction {
     deferred?: boolean;
 }
 export interface DecisionTimerState {
+    legalDiscardCardIds?: string[];
     untimed: boolean;
     totalMs: number;
     endsAt: number;
