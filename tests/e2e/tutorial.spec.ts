@@ -31,8 +31,14 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     await expect(page.getByTestId('tutorial-practice')).toBeVisible({ timeout: 20000 });
     const primary = await page.getByTestId('tutorial-practice').boundingBox();
     expect(primary && primary.y >= 0 && primary.y + primary.height <= viewport.height).toBeTruthy();
-    await page.getByTestId('tutorial-practice').click();
-    await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20000 });
+    if (viewport.width === 1280) {
+      await page.getByTestId('tutorial-invite').click();
+      await expect(page.getByTestId('seat-grid')).toBeVisible({ timeout: 20000 });
+      await expect(page.getByTestId('tutorial-entry')).toHaveCount(0);
+    } else {
+      await page.getByTestId('tutorial-practice').click();
+      await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20000 });
+    }
     await expect(guide).toHaveCount(0);
   });
 }

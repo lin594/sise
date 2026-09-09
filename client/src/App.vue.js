@@ -3367,14 +3367,14 @@ else if (__VLS_ctx.showModeLobby) {
     __VLS_26.slots.default;
     {
         const { recommendation: __VLS_thisSlot } = __VLS_26.slots;
-        if (__VLS_ctx.showModeLobby) {
+        if (__VLS_ctx.showModeLobby && !__VLS_ctx.state) {
             __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
                 ...{ onClick: (...[$event]) => {
                         if (!!(__VLS_ctx.showEntry))
                             return;
                         if (!(__VLS_ctx.showModeLobby))
                             return;
-                        if (!(__VLS_ctx.showModeLobby))
+                        if (!(__VLS_ctx.showModeLobby && !__VLS_ctx.state))
                             return;
                         __VLS_ctx.startPracticeLobby(true);
                     } },
