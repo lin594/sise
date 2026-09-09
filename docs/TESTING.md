@@ -355,3 +355,5 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 ## 教学回归
 
 `tests/e2e/tutorial.spec.ts` 纳入 Chromium / WebKit，覆盖正常抓吃碰胡、吃后刷新恢复、568×320 / 375×667 / 桌面首屏操作与结算按钮、禁用存储、键盘、退出和拒绝客户端夹具。`tests/rooms/tutorial.test.ts` 验证 117 张牌守恒、私有进度恢复、重试决策键与未接受动作不推进。真实读屏与真机验收另记发布清单，自动化 aria 状态检查不替代真机读屏。
+
+WebKit 回归与 Chromium 一样使用独立 runner 分片：三片分别运行 `--project=webkit-responsive --shard=1/3`、`2/3`、`3/3`，每片仍为单 worker 和独立服务端进程。测试匹配范围、超时、错误断言、失败 trace、容器检查及 CI gate 均保留。

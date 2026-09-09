@@ -128,10 +128,18 @@ jobs:
             project: chromium
             browser: chromium
             shard: 4/4
-          - label: webkit-responsive
+          - label: webkit-1-of-3
             project: webkit-responsive
             browser: webkit
-            shard: 1/1
+            shard: 1/3
+          - label: webkit-2-of-3
+            project: webkit-responsive
+            browser: webkit
+            shard: 2/3
+          - label: webkit-3-of-3
+            project: webkit-responsive
+            browser: webkit
+            shard: 3/3
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
