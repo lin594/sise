@@ -1,3 +1,4 @@
+import { productVisitId } from "@/utils/productAnalytics";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import "@/config/browser-transport";
 import { computed, onUnmounted, ref, shallowRef, watch } from "vue";
@@ -1464,6 +1465,7 @@ export function useRoom(playerName = "Player") {
                         name: desiredName,
                         playerToken: desiredToken,
                         profileToken,
+                        analyticsVisitId: productVisitId(),
                         roomMode: "match",
                         matchOpen: true,
                     })
@@ -1471,6 +1473,7 @@ export function useRoom(playerName = "Player") {
                         name: desiredName,
                         playerToken: desiredToken,
                         profileToken,
+                        analyticsVisitId: productVisitId(),
                         hostKey: resolvedOptions.hostKey,
                     });
             }
@@ -1495,6 +1498,7 @@ export function useRoom(playerName = "Player") {
                     name: desiredName,
                     playerToken: desiredToken,
                     profileToken,
+                    analyticsVisitId: productVisitId(),
                     hostKey: resolvedOptions.hostKey,
                 });
             }

@@ -341,3 +341,7 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 ## 5. 当前文档链接
 
 `npm run check:docs` 检查根目录与 `docs/` 中当前 Markdown 的相对链接目标（含截图文件）。历史 `docs/archive/` 不作为维护对象；外部网址与页内锚点不在这条离线检查的范围。
+
+## 产品指标
+
+`product-analytics.test.ts` 检查敏感字段拒绝、匿名化、有界队列故障隔离、成熟 cohort 分母及真实 Redis 原子去重和 TTL。CI server-tests 使用独立 Redis 服务；本地可通过 `ANALYTICS_TEST_REDIS_URL` 指向专用空测试 Redis，测试仅清理指标前缀，禁止指向正式服务。浏览器采集故障还须验证游戏可继续。

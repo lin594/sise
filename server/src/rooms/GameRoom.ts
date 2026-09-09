@@ -1,3 +1,4 @@
+import { emitProductEvent } from "../analytics/runtime.js";
 import {
   buildVisibleRemainingByFace,
   findCurrentListeningWaits,
@@ -130,6 +131,7 @@ interface RoomCreateOptions {
 }
 
 interface RoomJoinOptions {
+  analyticsVisitId?: string;
   name?: string;
   playerToken?: string;
   profileToken?: string;
@@ -464,7 +466,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：输入客户端和 join 参数；输出为座位分配或拒绝结果。
    * 副作用：更新 seat 映射、玩家信息、大厅动作面板。
    */
+  private analyticsVisits = new Map<string, string>();
   onJoin(client: Client, options: RoomJoinOptions): void {
+    if (typeof options?.analyticsVisitId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(options.analyticsVisitId)) {
+      this.analyticsVisits.set(client.sessionId, options.analyticsVisitId);
+    }
     this.clearRoomIdleTimer();
     const inputName = normalizeNameUtil(options?.name);
     const inputToken = normalizeTokenUtil(options?.playerToken);
@@ -548,6 +554,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：更新在线态与 botIds，必要时重置到 fresh lobby。
    */
   onLeave(client: Client, code?: number): void {
+    this.analyticsVisits.delete(client.sessionId);
     const seatId = this.seatBySession.get(client.sessionId);
     this.pendingNameBySession.delete(client.sessionId);
     this.pendingTokenBySession.delete(client.sessionId);
@@ -1163,6 +1170,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.pendingTokenBySession.delete(client.sessionId);
     this.pendingProfileTokenBySession.delete(client.sessionId);
     this.bindGuestProfile(targetSeatId, profileToken, requestedName);
+    if (!currentSeatId) emitProductEvent({ name: "join_success", id: `${this.roomId}_${client.sessionId}`, mode: this.state.roomMode, humans: this.analyticsHumanCount() }, profileToken);
+    if (!currentSeatId && this.state.roomMode === "friends" && this.analyticsVisits.has(client.sessionId)) {
+      emitProductEvent({ name: "invite_join_success", id: this.analyticsVisits.get(client.sessionId)!, visitId: this.analyticsVisits.get(client.sessionId), mode: "friends", humans: this.analyticsHumanCount() }, profileToken);
+    }
     this.clearSeatReleaseTimer(targetSeatId);
     if (movingHost || !this.state.hostPlayerId) {
       this.state.hostPlayerId = targetSeatId;
@@ -1650,6 +1661,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.pendingNameBySession.delete(client.sessionId);
     this.pendingProfileTokenBySession.delete(client.sessionId);
     this.bindGuestProfile(seatId, profileToken || this.profileTokenBySeat.get(seatId) || "", rawName);
+    const analyticsVisit = this.analyticsVisits.get(client.sessionId);
+    if (analyticsVisit && this.state.roomMode === "friends") emitProductEvent({ name: "invite_join_success", id: analyticsVisit, visitId: analyticsVisit, mode: "friends", humans: this.analyticsHumanCount() }, this.profileTokenBySeat.get(seatId) ?? "");
     if (!this.state.hostPlayerId) {
       this.state.hostPlayerId = seatId;
     }
@@ -1833,6 +1846,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 关键输入/输出：无入参；输出无返回值。
    * 副作用：重置局内状态，写入手牌/庄家/声明倒计时并进入声明阶段。
    */
+  private analyticsHumanCount(): number {
+    return [...this.state.players.values()].filter(player => !player.isConfiguredBot).length;
+  }
+
+  private recordProductRound(name: "round_start" | "round_complete", roundNumber: number): void {
+    const round = `${this.roomId}_${roundNumber}`;
+    for (const [seat, token] of this.profileTokenBySeat) {
+      if (this.state.players.get(seat)?.isConfiguredBot) continue;
+      emitProductEvent({ name, id: round, visitId: round, mode: this.state.roomMode, humans: this.analyticsHumanCount() }, token);
+    }
+  }
+
   private bootstrapRound(): void {
     this.clearPresentation();
     this.clearDeclareTimer();
@@ -1858,6 +1883,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.huChecksBySeat.clear();
 
     resetRoundPlayersFlow(this.state, this.playerOrder);
+    this.recordProductRound("round_start", this.state.completedRounds + 1);
     const setup = this.resolveBootstrapSetup();
     const pickerId = setup.mode === "picker" ? setup.pickerId : null;
 
@@ -2394,6 +2420,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private rejectAction(client: Client, reason: string, seatId?: string): void {
+    if (seatId) emitProductEvent({ name: "action_rejected", id: `${this.roomId}_${this.state.completedRounds}_${this.responseDecisionWindowId}_${reason}`, mode: this.state.roomMode, humans: this.analyticsHumanCount(), outcome: "failed" }, this.profileTokenBySeat.get(seatId) ?? "");
     client.send("action_rejected", {
       reason,
       decisionKey: seatId ? this.buildDecisionTimerSnapshot(seatId).decisionKey : "",
@@ -3275,6 +3302,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
               scoringMode: this.state.scoringMode,
               roundNumber: this.state.completedRounds,
             };
+            this.recordProductRound("round_complete", this.state.completedRounds);
             recordActiveGuestRoundResults(
               `${this.roomId}:${this.state.completedRounds}`,
               winnerId,

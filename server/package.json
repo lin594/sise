@@ -11,7 +11,8 @@
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "npm run build && npm run test:built",
-    "test:built": "node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/persistence/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js"
+    "test:built": "node dist/tests/run.js && node --test dist/tests/http/*.test.js dist/tests/persistence/*.test.js dist/tests/rules/*.test.js dist/tests/rooms/*.test.js",
+    "metrics": "node dist/analytics/cli.js"
   },
   "dependencies": {
     "@colyseus/core": "^0.18.10",

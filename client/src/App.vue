@@ -671,6 +671,7 @@
 </template>
 
 <script setup lang="ts">
+import { openProductSession, beginProductMode, readyProductMode, failProductMode, trackProductEvent, productVisitId } from "@/utils/productAnalytics";
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
 import PlayerStatusIcon from "@/components/PlayerStatusIcon.vue";
@@ -1802,6 +1803,7 @@ function submitSettlementTransition(transition: SettlementTransition): boolean {
       : "网络未连接，整桌操作没有发送，请稍候重试。";
     return false;
   }
+  if (transition === "next_round") trackProductEvent("play_again", { id: `${activeRoomId.value}_${state.value?.completedRounds}`, mode: state.value?.roomMode });
   settlementTransitionPending.value = transition;
   const requestedRoomId = activeRoomId.value;
   settlementTransitionReceiptTimer = window.setTimeout(() => {
@@ -1838,6 +1840,8 @@ async function rematchQuickTable(): Promise<void> {
   if (!settlementReady.value || state.value?.roomMode !== "match" || quickRematchPending.value) {
     return;
   }
+  trackProductEvent("play_again", { id: `${activeRoomId.value}_${state.value?.completedRounds}`, mode: "match" });
+  beginProductMode("match");
   quickRematchPending.value = true;
   globalError.value = "";
   const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
@@ -2394,6 +2398,7 @@ function requestLobbyReady(ready: boolean): boolean {
 }
 
 async function handleLeaveRoom(): Promise<void> {
+  trackProductEvent("room_exit", { mode: state.value?.roomMode });
   globalError.value = "";
   pendingPracticeAutoStart.value = false;
   clearRoundStartPending();
@@ -2571,6 +2576,7 @@ watch(
 );
 
 onMounted(() => {
+  openProductSession(Boolean(new URLSearchParams(window.location.search).get("roomId")));
   roomNavigationGuardMounted = true;
   window.addEventListener("popstate", handleRoomNavigationPopState);
   armRoomNavigationGuard();
@@ -2629,7 +2635,20 @@ watch(joinError, (message) => {
   }
 });
 
+let productRecoveryId = "";
+let productRecoveryRevision = -1;
+watch(showModeLobby, visible => { if (visible) trackProductEvent("lobby_view", { id: productVisitId() }); }, { immediate: true });
+watch(() => connected.value && privateHandSynchronized.value && (canAct.value || canDiscard.value || (state.value?.phase === "declaring" && !openingDealActive.value && !tablePresentationActive.value && !mePlayer.value?.declaredReady)), ready => { if (ready) readyProductMode(); });
 watch(connectionState, (nextState) => {
+  if (["offline", "reconnecting", "retry_wait"].includes(nextState) && !productRecoveryId) {
+    productRecoveryRevision = acceptedStateRevision.value;
+    productRecoveryId = `${productVisitId()}_${Date.now()}`;
+    trackProductEvent("reconnect_started", { id: productRecoveryId, mode: state.value?.roomMode });
+  }
+  if (productRecoveryId && (nextState === "closed" || nextState === "failed")) {
+    trackProductEvent("reconnect_failed", { id: productRecoveryId, mode: state.value?.roomMode });
+    productRecoveryId = "";
+  }
   if (nextState !== "closed") {
     return;
   }
@@ -2638,6 +2657,13 @@ watch(connectionState, (nextState) => {
       ?? document.querySelector<HTMLButtonElement>("[data-testid='terminal-return-to-modes']");
     terminalAction?.focus({ preventScroll: true });
   });
+});
+
+watch(() => [connectionState.value, acceptedStateRevision.value, privateHandSynchronized.value, mySeatId.value], () => {
+  if (productRecoveryId && connected.value && mySeatId.value && privateHandSynchronized.value && acceptedStateRevision.value > productRecoveryRevision) {
+    trackProductEvent("reconnect_success", { id: productRecoveryId, mode: state.value?.roomMode });
+    productRecoveryId = "";
+  }
 });
 
 watch(connected, (isConnected) => {
@@ -3251,6 +3277,7 @@ async function enterLobby() {
       throw new Error(joinError.value || "加入好友房失败");
     }
   } catch (error) {
+    trackProductEvent("join_failed", { mode: "friends", outcome: "failed" });
     if (!joiningFriendInvite.value || entryInviteRoomId.value !== invitedRoomId) {
       return;
     }
@@ -3318,6 +3345,7 @@ async function startQuickMatchLobby() {
   entryName.value = nickname;
   startingRoomMode.value = "quick_match";
   enteringLobby.value = true;
+  beginProductMode("match");
   try {
     const ok = await connect({
       nameOverride: nickname,
@@ -3328,6 +3356,7 @@ async function startQuickMatchLobby() {
       throw new Error(joinError.value || "暂时无法快速配桌，请稍后重试。");
     }
   } catch (error) {
+    failProductMode();
     globalError.value = error instanceof Error ? error.message : "暂时无法快速配桌，请稍后重试。";
   } finally {
     enteringLobby.value = false;
@@ -3350,6 +3379,7 @@ async function startPracticeLobby() {
   entryName.value = nickname;
   startingRoomMode.value = "practice";
   enteringLobby.value = true;
+  beginProductMode("practice");
   try {
     const response = await fetch(`${HTTP_URL}/rooms`, {
       method: "POST",
@@ -3374,6 +3404,7 @@ async function startPracticeLobby() {
     }
     requestPracticeAutoStart();
   } catch (error) {
+    failProductMode();
     globalError.value = error instanceof Error ? error.message : "进入大厅失败";
   } finally {
     enteringLobby.value = false;
@@ -3390,6 +3421,7 @@ async function startFriendLobby() {
   const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
   startingRoomMode.value = "friends";
   enteringLobby.value = true;
+  beginProductMode("friends");
   try {
     const response = await fetch(`${HTTP_URL}/rooms`, {
       method: "POST",
@@ -3414,6 +3446,7 @@ async function startFriendLobby() {
       throw new Error(joinError.value || "进入好友房失败");
     }
   } catch (error) {
+    failProductMode();
     globalError.value = error instanceof Error ? error.message : "创建好友房失败";
   } finally {
     enteringLobby.value = false;
