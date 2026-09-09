@@ -1,0 +1,18 @@
+name: 功能与体验建议
+description: 描述玩家或贡献者的问题及验收条件
+title: "feat: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决什么问题
+      description: 说明谁在什么场景下受到影响。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 建议与验收条件
+      description: 说明期望的结果、适用范围，以及如何判断已完成。
+    validations:
+      required: true

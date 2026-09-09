@@ -38,14 +38,18 @@ git diff --check
 
 ## 2. GitHub CI 与合并门禁
 
-`.github/workflows/ci.yml` 在每个 Pull Request、`main` 更新和手动触发时都从干净 checkout 运行，不复用开发机上的 `dist`、`node_modules` 或浏览器服务。工作流固定使用 Node.js 22 和 npm 官方 registry，并包含：
+`.github/workflows/ci.yml` 的工作流名为 **Validate contributions**，在每个 Pull Request、`main` 更新和手动触发时运行。使用 Node.js 22、npm 官方 registry 和干净 checkout；外部 Fork 无需部署凭证。
 
-- 服务端完整规则、HTTP、持久化和房间回归；
-- 服务端与客户端 TypeScript/生产构建，以及生成文件是否已经提交；
-- Chromium 全量浏览器回归与 WebKit 移动关键流；
-- 根目录 CI/开发工具以及服务端、客户端生产依赖的已知漏洞审计；
-- 普通、开发、Traefik、iMac Compose 配置验证和生产容器镜像构建；
-- 汇总以上结果的稳定必需检查 `CI gate`。
+| 阶段 | 检查 | 依赖与产物 |
+| --- | --- | --- |
+| 1 · 源码与配置 | Build and source checks、Deployment configuration、Dependency audit | 并行构建前后端、检查生成文件与文档链接、校验四种 Compose、审计依赖 |
+| 2 · 回归 | Server regression、Browser regression | 构建与配置通过后，运行服务端、4 个 Chromium 分片及 WebKit 移动关键流；下载同一次工作流的 `build-output`，不重复构建 |
+| 3 · 容器 | Production containers | 前面所有检查通过后，构建服务端与网页生产镜像；只构建，不推送或部署 |
+| 汇总 | `CI gate` | 始终运行；任何依赖失败、取消或跳过均不能通过 |
+
+缓存与构建产物职责分开：`setup-node` 按锁文件缓存 npm 下载，安装仍使用 `npm ci`；构建产物仅在本次工作流中通过 artifact 共享、保留 1 天，避免其他提交的旧 `dist` 混入；Buildx 通过 GitHub Actions 缓存复用镜像层，服务端与网页使用不同 scope。浏览器仍安装与根锁文件匹配的 Playwright 版本及系统依赖。缓存失效或首次贡献没有缓存时，完整检查照常运行。
+
+本地 `npm run test:server` / `npm --prefix server test` 仍先构建服务端；`npm --prefix server run test:built` 仅供已有当前构建产物的环境使用。
 
 浏览器用例失败时，Actions 会保留 7 天的 Playwright trace、截图和测试结果。不能用本地结果、某一个子任务或旧提交的绿色状态替代当前 Pull Request 的 `CI gate`。
 
@@ -332,3 +336,8 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 声明恢复用例在断网期间截图，需要留足重连宽限，避免默认 300ms 的快速托管抢先提交。测试配置允许通过环境变量覆盖该值，不改变生产默认值；默认宽限下的托管与恢复仍由 `reconnection.spec.ts` 验证。
 
 公共倒计时固定显示 3、2、1、0；`decisionTimer` 仍携带真实共享截止点与总时长。前端由真实起点推导三秒显示截止点，不能用显示归零触发提交。十秒窗口的剩余时间内，无合法操作的玩家保持 0 并显示“等待其他玩家操作”，有胡／开／碰者仍可操作，至真实截止点才自动放弃。设置及规则中的倒计时与牌桌使用同一显示规则。
+
+
+## 5. 当前文档链接
+
+`npm run check:docs` 检查根目录与 `docs/` 中当前 Markdown 的相对链接目标（含截图文件）。历史 `docs/archive/` 不作为维护对象；外部网址与页内锚点不在这条离线检查的范围。
