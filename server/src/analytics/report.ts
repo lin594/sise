@@ -4,6 +4,23 @@ export function summarizeMetrics(rows: Array<{ day: number; counts: Record<strin
   const sum = (field: string, filter = (_: number) => true) => rows.filter(row => filter(row.day)).reduce((n, row) => n + Number(row.counts[field] ?? 0), 0);
   const ratio = (numerator: number, denominator: number) => ({ numerator, denominator, rate: denominator ? numerator / denominator : null });
   const events = (name: string, source: string, outcome = "started") => ["practice", "match", "friends", "unknown"].reduce((n, mode) => n + sum(`events:${source}:${name}:${mode}:${outcome}`), 0);
+  // Backfilled cohort counters alone do not prove collection on that target day.
+  const observedDays = new Set(rows.filter(row => Object.keys(row.counts).some(key => key.startsWith("events:"))).map(row => row.day));
+  const retention = (offset: number) => {
+    const mature = rows.filter(row => row.day + offset < today && Number(row.counts.retention_eligible ?? 0) > 0);
+    const measured = mature.filter(row => observedDays.has(row.day + offset));
+    const missing = mature.filter(row => !observedDays.has(row.day + offset));
+    return {
+      metric: ratio(measured.reduce((n, row) => n + Number(row.counts[`return${offset}`] ?? 0), 0), measured.reduce((n, row) => n + Number(row.counts.retention_eligible), 0)),
+      coverage: {
+        matureCohorts: mature.length,
+        measuredCohorts: measured.length,
+        excludedParticipants: missing.reduce((n, row) => n + Number(row.counts.retention_eligible), 0),
+        missingTargetDays: [...new Set(missing.map(row => dayLabel(row.day + offset)))].sort(),
+      },
+    };
+  };
+  const d1 = retention(1), d7 = retention(7);
   const latency = Object.fromEntries(["practice", "match", "friends", "tutorial"].map(mode => {
     const buckets = HISTOGRAM_BOUNDS.map(bound => ({ upperBoundMs: bound, count: sum(`latency:${mode}:${bound}`) }));
     const samples = buckets.reduce((n, b) => n + b.count, 0);
@@ -18,8 +35,8 @@ export function summarizeMetrics(rows: Array<{ day: number; counts: Record<strin
     invitationJoin: ratio(sum("invite_joined"), sum("invite_opened")),
     playAgain: ratio(sum("replay_started"), events("round_complete", "server")),
     playAgainClicks: events("play_again", "client"),
-    d1: ratio(sum("return1", day => day + 1 < today), sum("retention_eligible", day => day + 1 < today)),
-    d7: ratio(sum("return7", day => day + 7 < today), sum("retention_eligible", day => day + 7 < today)),
+    d1: d1.metric, d7: d7.metric,
+    retentionCoverage: { d1: d1.coverage, d7: d7.coverage },
     joinFailure: ratio(events("join_failed", "client", "failed"), events("join_failed", "client", "failed") + events("join_success", "server")),
     recoverySuccess: ratio(events("reconnect_success", "client"), events("reconnect_started", "client")),
     latency, note: "仅代表已采集样本；统计故障可能丢数，空分母为 null。耗时为成功样本直方图分位数上界。",

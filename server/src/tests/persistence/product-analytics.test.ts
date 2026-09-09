@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anonymizeEvent, dayNumber, DAY_MS, validateProductEvent } from "../../analytics/events.js";
+import { anonymizeEvent, dayLabel, dayNumber, DAY_MS, validateProductEvent } from "../../analytics/events.js";
 import { ProductAnalytics } from "../../analytics/runtime.js";
 import { summarizeMetrics } from "../../analytics/report.js";
 import { RedisProductEventStore, ANALYTICS_PREFIX } from "../../analytics/redis-store.js";
@@ -37,12 +37,35 @@ test("retention excludes immature calendar cohorts and empty metrics stay unknow
   const today = dayNumber(now);
   const report = summarizeMetrics([
     { day: today - 8, counts: { retention_eligible: "10", return1: "5", return7: "3" } },
-    { day: today - 1, counts: { retention_eligible: "20", return1: "9" } },
+    { day: today - 7, counts: { "events:client:app_open:unknown:started": "5" } },
+    { day: today - 1, counts: { retention_eligible: "20", return1: "9", "events:client:app_open:unknown:started": "20" } },
   ], now);
   assert.deepEqual(report.d7, { numerator: 3, denominator: 10, rate: .3 });
   assert.deepEqual(report.d1, { numerator: 5, denominator: 10, rate: .5 });
   assert.equal(report.firstRoundActivation.rate, null);
   assert.equal(dayNumber(Date.UTC(2026, 8, 9, 16)), today);
+});
+
+test("missing target days exclude matured retention cohorts instead of inventing zero", () => {
+  const now = Date.UTC(2026, 8, 10, 4), today = dayNumber(now);
+  const report = summarizeMetrics([
+    { day: today - 8, counts: { retention_eligible: "10" } },
+    { day: today - 4, counts: { retention_eligible: "4" } },
+    { day: today - 3, counts: { "events:client:app_open:unknown:started": "1" } },
+  ], now);
+  assert.deepEqual(report.d1, { numerator: 0, denominator: 4, rate: 0 });
+  assert.deepEqual(report.d7, { numerator: 0, denominator: 0, rate: null });
+  assert.deepEqual(report.retentionCoverage.d1, { matureCohorts: 2, measuredCohorts: 1, excludedParticipants: 10, missingTargetDays: [dayLabel(today - 7)] });
+  assert.deepEqual(report.retentionCoverage.d7.missingTargetDays, [dayLabel(today - 1)]);
+});
+
+test("backfilled counters are not target-day collection evidence", () => {
+  const now = Date.UTC(2026, 8, 10, 4), today = dayNumber(now);
+  const cohort = { day: today - 8, counts: { retention_eligible: "10", return7: "3" } };
+  const backfill = { day: today - 1, counts: { activated: "1" } };
+  assert.equal(summarizeMetrics([cohort, backfill], now).d7.rate, null);
+  const observed = { ...backfill, counts: { ...backfill.counts, "events:server:round_start:practice:started": "1" } };
+  assert.equal(summarizeMetrics([cohort, observed], now).d7.rate, .3);
 });
 
 const redisUrl = process.env.ANALYTICS_TEST_REDIS_URL;
