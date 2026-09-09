@@ -27,7 +27,7 @@ export function buildInvitePage(roomId: string, publicWebOrigin: string): string
   const entryUrl = `${publicWebOrigin}/?roomId=${encodeURIComponent(roomId)}`;
   const imageUrl = `${publicWebOrigin}/share-thumbnail-v3.png`;
   const title = "邀请你一起传承四色牌文化";
-  const description = `好友房 ${roomId} · 点击进入四色牌同桌相聚`;
+  const description = `好友房 ${roomId} · 不用注册，打开选座；不满四人可电脑补位`;
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -61,7 +61,7 @@ export function buildInvitePage(roomId: string, publicWebOrigin: string): string
   <body>
     <main>
       <h1>${title}</h1>
-      <p>好友房 ${safeRoomId}</p>
+      <p>好友房 ${safeRoomId} · 不用注册，首次取个昵称即可选座；不满四人可电脑补位。</p>
       <p><a href="${escapeHtml(entryUrl)}">点击进入四色牌同桌相聚</a></p>
     </main>
   </body>

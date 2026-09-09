@@ -34,6 +34,7 @@ test("friend-room cumulative scoring survives a lobby return and adds the next r
   await openGameAs(page, "/?e2eDebug=1", "累计牌友");
   await page.getByTestId("mode-friends").click();
 
+  await page.getByTestId("friend-table-settings-toggle").click();
   await expect(page.getByTestId("scoring-mode-card")).toBeVisible();
   await page.getByTestId("scoring-mode-cumulative").click();
   await expect(page.getByTestId("scoring-mode-cumulative")).toHaveAttribute("aria-checked", "true");

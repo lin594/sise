@@ -129,7 +129,8 @@
       data-testid="global-notice"
     >{{ globalNotice }}</p>
 
-    <section v-if="showEntry" class="sync-shell" role="status">正在进入大厅…</section>
+    <LoginPage v-if="showEntry && entryInviteRoomId" :nickname="entryName" :entering="enteringLobby" primary-label="加入好友房" :friend-invite="true" :history-names="nicknameHistory" :storage-persistent="browserStoragePersistent" @update:nickname="entryName = $event" @submit="enterLobby" @select-history="entryName = $event" @randomize="entryName = generateRandomNickname()" />
+    <section v-else-if="showEntry" class="sync-shell" role="status">正在进入大厅…</section>
 
     <LobbyPage
       ref="lobbyPageRef"
@@ -687,6 +688,7 @@
 </template>
 
 <script setup lang="ts">
+import LoginPage from "./components/LoginPage.vue";
 import ContextHint from "./components/ContextHint.vue";
 import { useContextHints, type HintConcept } from "./composables/useContextHints";
 import TutorialGuide from "./components/TutorialGuide.vue";
@@ -1120,6 +1122,7 @@ async function bootstrapRoomEntry(): Promise<void> {
     return;
   }
   entryName.value = entryName.value.trim() || nicknameHistory.value[0] || generateRandomNickname();
+  if (entryInviteRoomId.value && !storedEntryNameAtBoot && nicknameHistoryAtBoot.length === 0) return;
   await enterLobby();
 }
 
@@ -3538,7 +3541,7 @@ async function performInviteAction(action: "copy" | "share", target: "invite" | 
   const inviteUrl = target === "invite" ? buildInviteUrl() : buildPublicShareUrl();
   const title = "邀请你一起传承四色牌文化";
   const shareText = target === "invite"
-    ? `好友房 ${activeRoomId.value} · 点击进入四色牌同桌相聚`
+    ? `好友房 ${activeRoomId.value} · 不用注册，打开选座；不满四人可电脑补位`
     : "象棋魂 · 麻将韵 · 纸牌趣——四色牌，一局见真章！";
   let restoreFocus = true;
   try {

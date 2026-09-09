@@ -28,7 +28,7 @@
         <p class="qr-kicker">好友房 {{ roomId }}</p>
         <h2 id="invite-qr-title">扫码加入好友房</h2>
         <p id="invite-qr-description">
-          {{ generationFailed ? "二维码生成失败，请长按并复制下面的链接。" : "请让牌友用另一台手机扫码，再输入昵称入座。" }}
+          {{ generationFailed ? "二维码生成失败，请长按并复制下面的链接。" : "请用另一台手机扫码。首次取个昵称，已有昵称直接选座，不用注册。" }}
         </p>
         <textarea
           v-if="generationFailed"
