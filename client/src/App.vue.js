@@ -57,6 +57,7 @@ function closePwaInstallGuide(restoreFocus = true) {
     if (!pwaInstallGuide.value)
         return;
     pwaInstallGuide.value = null;
+    decisionControlFocusPending = false;
     if (!restoreFocus) {
         pwaInstallReturnFocus = null;
         return;
@@ -825,7 +826,7 @@ function returnToDecision() {
     decisionControlFocusPending = true;
     void nextTick(() => {
         const focusAfterPopoverLeaves = (attempt = 0) => {
-            if (!decisionControlFocusPending || focusReadyGameControl()) {
+            if (!decisionControlFocusPending || focusReadyGameControl(true)) {
                 return;
             }
             // 设置和规则使用离场过渡，节点短时间内仍具有 aria-modal。持续到节点真正卸载，
@@ -1236,7 +1237,14 @@ function handleRoomNavigationPopState() {
     void requestRoomExitFromBrowserBack();
 }
 let decisionControlFocusPending = false;
-function focusReadyGameControl() {
+function focusReadyGameControl(force = false) {
+    if (!decisionControlFocusPending)
+        return true;
+    // A new server decision must not steal focus from an intentional tools entry.
+    if (!force && document.activeElement?.closest("[data-testid='game-settings'], [data-testid='pwa-install-entry']")) {
+        decisionControlFocusPending = false;
+        return true;
+    }
     if (document.querySelector("[aria-modal='true']")) {
         return false;
     }

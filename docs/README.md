@@ -17,6 +17,10 @@
 | [DEPLOYMENT.md](DEPLOYMENT.md) | 本地、Docker、Traefik 与 iMac 部署方式 |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | 尚未最终决定、不能由旧文档自行推断的问题 |
 
+## 产品化路线
+
+[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) 记录任务、维护者决定、PR 和未完成验收。
+
 ## 权威关系
 
 - 游戏规则以 `GAME_RULES.md` 为准，界面体验以 `PRODUCT_UX.md` 为准，代码事实以 `ARCHITECTURE.md` 为准。
@@ -33,3 +37,7 @@
 ## 产品指标
 
 [PRODUCT_METRICS.md](PRODUCT_METRICS.md) 定义匿名事件、指标口径、保留与删除策略和维护命令。
+
+## 素材与许可证
+
+[ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) 和逐项清单记录素材来源线索及尚待维护者确认的授权边界。
