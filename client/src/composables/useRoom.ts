@@ -492,6 +492,11 @@ export function useRoom(playerName = "Player") {
   const localPlayerName = ref(playerName);
   const privateHand = ref<Card[]>([]);
   const acceptedStateRevision = ref(-1);
+  const tutorial = ref<{ step: string } | null>(null);
+  const applyTutorial = (value: unknown) => {
+    const step = value && typeof value === "object" ? (value as { step?: unknown }).step : null;
+    tutorial.value = typeof step === "string" && ["intro", "grab", "eat", "discard_chi", "peng", "discard_peng", "hu", "complete", "retry"].includes(step) ? { step } : null;
+  };
   const listeningHints = ref<ListeningHints | null>(null);
   const quickPhrase = ref<{ seatId: string; phraseId: string; text: string; sequence: number } | null>(null);
   const quickPhraseMuted = ref(readStoredValue(QUICK_PHRASE_MUTE_KEY) === "1");
@@ -1065,6 +1070,7 @@ export function useRoom(playerName = "Player") {
         ok?: boolean;
         seatId?: string;
         privateHand?: unknown;
+        tutorial?: unknown;
         listeningHints?: ListeningHints;
         availableActions?: unknown;
         decisionTimer?: unknown;
@@ -1080,6 +1086,7 @@ export function useRoom(playerName = "Player") {
       const nextHand = sortHandCards(asCardArray(payload.privateHand));
       const nextActions = normalizeAvailableActions(payload.availableActions);
       privateHand.value = nextHand;
+      applyTutorial(payload.tutorial);
       listeningHints.value = payload.listeningHints ?? null;
       availableActions.value = nextActions;
       applyDecisionTimer(payload.decisionTimer);
@@ -1111,6 +1118,7 @@ export function useRoom(playerName = "Player") {
     state.value = null;
     acceptedStateRevision.value = -1;
     privateHand.value = [];
+    tutorial.value = null;
     listeningHints.value = null;
     clearQuickPhrase();
     availableActions.value = [];
@@ -1359,7 +1367,10 @@ export function useRoom(playerName = "Player") {
     if (previousSnapshot) previousSnapshot.presentationClockOffsetMs = normalized.presentationClockOffsetMs;
     applyDecisionTimer(rawSnapshot?.decisionTimer);
 
-    if (source !== "schema") listeningHints.value = rawSnapshot?.listeningHints ?? null;
+    if (source !== "schema") {
+      listeningHints.value = rawSnapshot?.listeningHints ?? null;
+      applyTutorial(rawSnapshot?.tutorial);
+    }
     const snapshotPrivateHand = sortHandCards(asCardArray(rawSnapshot?.privateHand));
     const snapshotAvailableActions = normalizeAvailableActions(rawSnapshot?.availableActions);
     const nextPrivateHandFingerprint = buildCardIdFingerprint(snapshotPrivateHand);
@@ -2301,6 +2312,8 @@ export function useRoom(playerName = "Player") {
     fillBots,
     updateBot,
     removeSeat,
+    sendTutorialCommand: (command: "next" | "restart") => safeRoomSend(`tutorial_${command}`),
+    tutorial,
     sendQuickPhrase,
     setQuickPhraseMuted,
   };

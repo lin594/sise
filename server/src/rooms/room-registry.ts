@@ -1,4 +1,5 @@
 export type PrivateStateSnapshot = {
+  tutorial?: { step: import("./tutorial.js").TutorialStep } | null;
   listeningHints?: import("./flow/listening-hints.js").ListeningHints;
   seatId: string;
   roomId: string;

@@ -415,7 +415,7 @@
         >
           <div class="exit-symbol" aria-hidden="true">↗</div>
           <h2 id="exit-confirm-title">退出当前牌局？</h2>
-          <p id="exit-confirm-description">退出后你的座位会由机器人接管，你将返回游戏模式大厅。</p>
+          <p id="exit-confirm-description">{{ props.tutorial ? "退出后结束这次教学演练，返回游戏模式大厅。" : "退出后你的座位会由机器人接管，你将返回游戏模式大厅。" }}</p>
           <div class="exit-actions">
             <button ref="cancelExitButtonRef" type="button" data-testid="cancel-exit" @click="cancelExit">继续游戏</button>
             <button class="danger" type="button" data-testid="confirm-exit" @click="confirmExit">确认退出</button>
@@ -445,6 +445,7 @@ const props = withDefaults(
   defineProps<{
     modelValue: GameDisplayPreferences;
     inRoom?: boolean;
+    tutorial?: boolean;
     playingContext?: boolean;
     resolvedTableLayout?: RenderedTableLayoutId;
     declaring?: boolean;

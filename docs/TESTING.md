@@ -349,3 +349,7 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 ## 规则 v1.0 产品化回归
 
 `server/src/tests/rooms/declared-kans.test.ts` 覆盖声明上限、手动/自动/机器人保坎、坎转开、失败原子性与流局五色定庄；恢复测试覆盖未版本化旧快照。`tests/e2e/declared-kans.spec.ts` 在 Chromium 与 WebKit 项目验证 568×320、375×667、桌面的禁用牌、键盘操作与刷新恢复。真机尚未验证。
+
+## 教学回归
+
+`tests/e2e/tutorial.spec.ts` 纳入 Chromium / WebKit，覆盖正常抓吃碰胡、吃后刷新恢复、568×320 / 375×667 / 桌面首屏操作与结算按钮、禁用存储、键盘、退出和拒绝客户端夹具。`tests/rooms/tutorial.test.ts` 验证 117 张牌守恒、私有进度恢复、重试决策键与未接受动作不推进。真实读屏与真机验收另记发布清单，自动化 aria 状态检查不替代真机读屏。

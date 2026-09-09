@@ -67,6 +67,10 @@ test("real Redis atomically dedupes events, attributes invite reorder, preserves
     assert.equal(await client.hGet(daily, "invite_opened"), "1");
     assert.equal(await client.hGet(daily, "invite_joined"), "1");
     const round = (name: string, visitId: string) => anonymizeEvent({ name, id: visitId, visitId, mode: "practice" }, token, secret, "server")!;
+    await stores[0].record({ ...round("round_start", "teaching"), mode: "tutorial" });
+    await stores[0].record({ ...round("round_complete", "teaching"), mode: "tutorial" });
+    assert.equal(await client.hGet(daily, "activated"), null);
+    assert.equal(await client.hGet(daily, "first_completed"), null);
     await stores[0].record(round("round_start", "r1"));
     await stores[0].record(round("round_complete", "r1"));
     await stores[0].record(round("round_complete", "r1"));

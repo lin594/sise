@@ -33,7 +33,7 @@ if e.name == 'app_open' then
   local delta = day - cohort
   if (delta == 1 or delta == 7) and redis.call('HEXISTS', actorKey, 'persistent') == 1 and redis.call('HSETNX', actorKey, 'return' .. delta, 1) == 1 then cohortInc('return' .. delta) end
 end
-if e.name == 'round_start' then
+if e.mode ~= 'tutorial' and e.name == 'round_start' then
   local lastCompleted = redis.call('HGET', actorKey, 'lastCompleted')
   if lastCompleted and lastCompleted ~= e.visit and redis.call('HGET', actorKey, 'lastReplayed') ~= lastCompleted then
     local completedDay = tonumber(redis.call('HGET', actorKey, 'completedDay'))
@@ -45,10 +45,10 @@ if e.name == 'round_start' then
   redis.call('HSETNX', actorKey, 'firstRound', e.visit)
   redis.call('HSETNX', actorKey, 'started', 1)
 end
-if e.name == 'round_complete' then
+if e.mode ~= 'tutorial' and e.name == 'round_complete' then
   redis.call('HSET', actorKey, 'lastCompleted', e.visit, 'completedDay', day)
 end
-if e.name == 'round_complete' and redis.call('HGET', actorKey, 'firstRound') == e.visit then
+if e.mode ~= 'tutorial' and e.name == 'round_complete' and redis.call('HGET', actorKey, 'firstRound') == e.visit then
   redis.call('HSETNX', actorKey, 'completed', 1)
 end
 if redis.call('HEXISTS', actorKey, 'opened') == 1 and redis.call('HEXISTS', actorKey, 'started') == 1 and redis.call('HSETNX', actorKey, 'activationCounted', 1) == 1 then cohortInc('activated') end

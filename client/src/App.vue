@@ -73,6 +73,7 @@
       <GameTools
         ref="gameToolsRef"
         :in-room="showGameTools"
+        :tutorial="Boolean(tutorial)"
         :resolved-table-layout="resolvedTableLayout"
         :playing-context="state?.phase === 'playing' || state?.phase === 'declaring'"
         v-model="displayPreferences"
@@ -176,6 +177,7 @@
       @set-lobby-ready="requestLobbyReady"
     >
       <template #recommendation>
+        <button v-if="showModeLobby" class="ghost tutorial-entry" data-testid="tutorial-entry" :disabled="enteringLobby" @click="startPracticeLobby(true)">第一次玩？3 分钟学会</button>
         <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
           <span>屏幕较小，紧凑布局能留出更多操作空间</span>
           <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
@@ -250,6 +252,9 @@
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
       >
+        <template #guidance>
+          <TutorialGuide v-if="tutorial" :step="tutorial.step" :actions="availableActions" @next="sendTutorialCommand('next')" @restart="sendTutorialCommand('restart')" />
+        </template>
         <template #declaration>
           <DeclarationPanel
             v-if="shouldShowDeclarePanel"
@@ -467,7 +472,12 @@
         </div>
 
         <div class="end-actions">
-          <template v-if="state?.roomMode === 'match'">
+          <template v-if="tutorial">
+            <button class="primary" data-testid="tutorial-practice" :disabled="enteringLobby" @click="finishTutorial(false)">自己练一局</button>
+            <button class="ghost" data-testid="tutorial-invite" :disabled="enteringLobby" @click="finishTutorial(true)">邀请朋友</button>
+            <p>演练已完成。普通牌局使用完整手牌与正式结算。</p>
+          </template>
+          <template v-else-if="state?.roomMode === 'match'">
             <button
               class="primary"
               type="button"
@@ -672,6 +682,7 @@
 </template>
 
 <script setup lang="ts">
+import TutorialGuide from "./components/TutorialGuide.vue";
 import { openProductSession, beginProductMode, readyProductMode, failProductMode, trackProductEvent, productVisitId } from "@/utils/productAnalytics";
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import CardComp from "@/components/Card.vue";
@@ -888,6 +899,8 @@ const {
   decisionTimer,
   clearActionLogs,
   debugSetup,
+  tutorial,
+  sendTutorialCommand,
   sendAction,
   sendDiscardCard,
   declareFish,
@@ -2406,7 +2419,7 @@ function requestLobbyReady(ready: boolean): boolean {
 }
 
 async function handleLeaveRoom(): Promise<void> {
-  trackProductEvent("room_exit", { mode: state.value?.roomMode });
+  trackProductEvent("room_exit", { mode: tutorial.value ? "tutorial" : state.value?.roomMode });
   globalError.value = "";
   pendingPracticeAutoStart.value = false;
   clearRoundStartPending();
@@ -3379,7 +3392,14 @@ function requestPracticeAutoStart() {
   maybeAutoStartPractice();
 }
 
-async function startPracticeLobby() {
+async function finishTutorial(invite: boolean) {
+  if (enteringLobby.value) return;
+  await leaveRoom();
+  if (invite) await startFriendLobby();
+  else await startPracticeLobby();
+}
+
+async function startPracticeLobby(tutorial = false) {
   if (enteringLobby.value) {
     return;
   }
@@ -3387,12 +3407,12 @@ async function startPracticeLobby() {
   entryName.value = nickname;
   startingRoomMode.value = "practice";
   enteringLobby.value = true;
-  beginProductMode("practice");
+  beginProductMode(tutorial ? "tutorial" : "practice");
   try {
     const response = await fetch(`${HTTP_URL}/rooms`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "practice" }),
+      body: JSON.stringify({ mode: "practice", tutorial }),
     });
     if (!response.ok) {
       throw new Error(await apiErrorMessage(response, "创建单人练习房间失败，请稍后重试。"));

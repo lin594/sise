@@ -598,6 +598,7 @@
       </div>
 
       <div class="dynamic-action-track" data-testid="dynamic-action-track">
+        <slot name="guidance" />
         <slot name="declaration" />
         <ActionPanel
           v-if="props.state?.phase === 'playing' && (canAct || canDiscard)"

@@ -73,3 +73,7 @@ npm --prefix server run metrics -- purge --all
 ```
 
 容器内工作目录为 server 时使用 `npm run metrics -- report 7`。报告只输出聚合值；没有公开 dashboard 或指标查询 HTTP 接口。正式上线后需确认报告开始出现真实节点，且断开指标存储不影响完成一局，才能把任务标为已上线。
+
+## 教学隔离
+
+统计固定 mode 枚举新增 `tutorial`（不改变普通房间 roomMode）。教学沿用 practice_start、round_start、round_complete 等事件；CLI 单独返回 tutorialCompletion 与 tutorial 耗时。教学 round_start/complete 不贡献普通 activated、first_completed、replay_started 或档案战绩，普通事件汇总不纳入 tutorial 模式。教学完成率以去重服务端完成 / 开局计算，30 天去重窗口与 90 天汇总到期不变。教学重试属于同一演练，开局事件去重；完成后新建普通房或好友房。

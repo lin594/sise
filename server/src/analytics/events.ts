@@ -3,7 +3,7 @@ import { normalizeGuestProfileToken } from "../profiles/guest-profile-store.js";
 
 export const EVENT_NAMES = ["app_open", "lobby_view", "practice_start", "quick_match_start", "friend_room_create", "invite_open", "invite_join_success", "round_start", "round_complete", "play_again", "room_exit", "join_failed", "reconnect_started", "reconnect_success", "reconnect_failed", "action_rejected", "join_success"] as const;
 export type EventName = typeof EVENT_NAMES[number];
-export type RoomMode = "practice" | "match" | "friends";
+export type RoomMode = "practice" | "match" | "friends" | "tutorial";
 export const AUTHORITY_EVENTS = new Set<EventName>(["round_start", "round_complete", "invite_join_success", "action_rejected", "join_success"]);
 export interface ProductEventInput {
   name: EventName;
@@ -36,7 +36,7 @@ export function validateProductEvent(value: unknown, source: "client" | "server"
   if (!EVENT_NAMES.includes(v.name as EventName) || typeof v.id !== "string" || !/^[a-zA-Z0-9:_-]{1,160}$/.test(v.id)) return false;
   if (source === "client" && AUTHORITY_EVENTS.has(v.name as EventName)) return false;
   if (v.visitId !== undefined && (typeof v.visitId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(v.visitId))) return false;
-  if (v.mode !== undefined && !["practice", "match", "friends"].includes(String(v.mode))) return false;
+  if (v.mode !== undefined && !["practice", "match", "friends", "tutorial"].includes(String(v.mode))) return false;
   if (v.humans !== undefined && (!Number.isInteger(v.humans) || Number(v.humans) < 0 || Number(v.humans) > 4 || source === "client")) return false;
   if (v.outcome !== undefined && !["started", "ready", "failed"].includes(String(v.outcome))) return false;
   if (v.durationMs !== undefined && (!Number.isInteger(v.durationMs) || Number(v.durationMs) < 0 || Number(v.durationMs) > 600_000)) return false;

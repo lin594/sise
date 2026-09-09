@@ -937,6 +937,14 @@ export declare function useRoom(playerName?: string): {
     fillBots: () => void;
     updateBot: (seatIndex: number, strength: number) => void;
     removeSeat: (seatIndex: number) => void;
+    sendTutorialCommand: (command: "next" | "restart") => boolean;
+    tutorial: import("vue").Ref<{
+        step: string;
+    } | null, {
+        step: string;
+    } | {
+        step: string;
+    } | null>;
     sendQuickPhrase: (phraseId: string) => boolean;
     setQuickPhraseMuted: (muted: boolean) => void;
 };

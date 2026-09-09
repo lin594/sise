@@ -11,6 +11,7 @@
 | 文档 | 用途 |
 |---|---|
 | [GAME_RULES.md](GAME_RULES.md) | 牌组、牌局流程、特殊牌、胡牌与计分规则，是游戏行为的规则依据 |
+| [TUTORIAL.md](TUTORIAL.md) | 服务端固定教学局、私有进度与验证边界 |
 | [PRODUCT_UX.md](PRODUCT_UX.md) | 产品范围、老年玩家体验目标、移动端布局与显示设置 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 当前前后端边界、状态模型、消息接口与代码结构 |
 | [TESTING.md](TESTING.md) | 自动化命令、回归矩阵与人工试玩清单 |

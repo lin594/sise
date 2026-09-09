@@ -1,3 +1,4 @@
+import { isPublicMatchmakingAllowed } from "./http/public-matchmaking.js";
 import { ProductAnalytics, configureProductAnalytics } from "./analytics/runtime.js";
 import { RedisProductEventStore } from "./analytics/redis-store.js";
 import { receiveProductEvent } from "./http/product-events.js";
@@ -58,6 +59,12 @@ const gameServer = new Server({
   }),
 });
 
+const invokePublicMatchmaking = matchMaker.controller.invokeMethod.bind(matchMaker.controller);
+matchMaker.controller.invokeMethod = async (method, roomName, options, auth) => {
+  if (!isPublicMatchmakingAllowed(method, options)) throw new Error("invalid public room options");
+  return invokePublicMatchmaking(method, roomName, options, auth);
+};
+
 matchMaker.controller.DEFAULT_CORS_HEADERS["Access-Control-Allow-Origin"] = "null";
 matchMaker.controller.getCorsHeaders = (headers) => {
   const origin = headers.get("origin") ?? undefined;
@@ -101,9 +108,9 @@ function createHostKey(): string {
   return randomBytes(24).toString("base64url");
 }
 
-async function createGameRoom(mode: "friends" | "practice") {
+async function createGameRoom(mode: "friends" | "practice", tutorial = false) {
   const hostKey = createHostKey();
-  const created = await matchMaker.createRoom("four-color", { roomMode: mode, hostKey });
+  const created = await matchMaker.createRoom("four-color", { roomMode: mode, hostKey, tutorial });
   return { roomId: created.roomId, hostKey };
 }
 
@@ -139,7 +146,10 @@ app.post("/rooms", roomCreationLimit, async (req, res) => {
       res.status(400).json({ ok: false, message: "mode must be friends or practice" });
       return;
     }
-    const created = await createGameRoom(mode);
+    if ((req.body?.tutorial !== undefined && typeof req.body.tutorial !== "boolean") || (req.body?.tutorial === true && mode !== "practice") || Object.keys(req.body ?? {}).some(key => !["mode", "tutorial"].includes(key))) {
+      res.status(400).json({ ok: false, message: "invalid room options" }); return;
+    }
+    const created = await createGameRoom(mode, req.body?.tutorial === true);
     res.json({ ok: true, ...created });
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to create room";

@@ -5,7 +5,7 @@ let visitId = "";
 let activeRequests = 0;
 let modeAttempt = null;
 const once = new Set();
-const modeEvent = (mode) => mode === "practice" ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
+const modeEvent = (mode) => (mode === "practice" || mode === "tutorial") ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
 export function productVisitId() {
     try {
         return visitId ||= crypto.randomUUID();

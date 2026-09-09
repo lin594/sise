@@ -4,7 +4,7 @@ export function summarizeMetrics(rows: Array<{ day: number; counts: Record<strin
   const sum = (field: string, filter = (_: number) => true) => rows.filter(row => filter(row.day)).reduce((n, row) => n + Number(row.counts[field] ?? 0), 0);
   const ratio = (numerator: number, denominator: number) => ({ numerator, denominator, rate: denominator ? numerator / denominator : null });
   const events = (name: string, source: string, outcome = "started") => ["practice", "match", "friends", "unknown"].reduce((n, mode) => n + sum(`events:${source}:${name}:${mode}:${outcome}`), 0);
-  const latency = Object.fromEntries(["practice", "match", "friends"].map(mode => {
+  const latency = Object.fromEntries(["practice", "match", "friends", "tutorial"].map(mode => {
     const buckets = HISTOGRAM_BOUNDS.map(bound => ({ upperBoundMs: bound, count: sum(`latency:${mode}:${bound}`) }));
     const samples = buckets.reduce((n, b) => n + b.count, 0);
     const quantile = (q: number) => { let count = 0; return samples ? buckets.find(b => { count += b.count; return count >= Math.ceil(samples * q); })?.upperBoundMs ?? null : null; };
@@ -12,6 +12,7 @@ export function summarizeMetrics(rows: Array<{ day: number; counts: Record<strin
   }));
   return {
     daysWithData: rows.length, through: dayLabel(today), timezone: "Asia/Shanghai",
+    tutorialCompletion: ratio(sum("events:server:round_complete:tutorial:started"), sum("events:server:round_start:tutorial:started")),
     firstRoundActivation: ratio(sum("activated"), sum("visitors")),
     firstRoundCompletion: ratio(sum("first_completed"), sum("activated")),
     invitationJoin: ratio(sum("invite_joined"), sum("invite_opened")),
