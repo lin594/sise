@@ -326,7 +326,7 @@ function flowSide(receiverId) {
     return playerSide(flowOwner(receiverId)?.clientId ?? "");
 }
 function tableLocationRotation(location) {
-    if (appliedTableLayout.value !== "mahjong" || !["flow", "meld"].includes(location.zone))
+    if (appliedTableLayout.value !== "mahjong" || location.zone !== "flow")
         return 0;
     return { bottom: 0, left: 90, top: 180, right: -90 }[playerSide(location.playerId ?? "")];
 }
@@ -1308,17 +1308,15 @@ function updateMahjongMeldLayout() {
         const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
         const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}:${props.showCardColorAssist}`;
         const cards = [...list.querySelectorAll('.mini-card')];
-        const sideways = Boolean(list.closest('.player-left, .player-right'));
         // Preserve two 12px names and the fixed 9px seal, even at the 10px
         // readability floor. Large faces need room for one 1.32em name plus seal.
         const height = props.showCardColorAssist ? (appliedTableCardMode.value === 'long' ? 40 : 32) : 24;
-        const sidewaysMargin = (height - 20) / 2;
         const applyScale = (scale) => {
             list.style.setProperty('--meld-scale', String(scale));
             // Size the same card boxes measured below; CSS clears their automatic
             // minimum sizes so intrinsic content cannot clamp the fitted dimensions.
             const sizes = { width: `${20 * scale}px`, height: `${height * scale}px`,
-                'font-size': `${12 * scale}px`, margin: sideways ? `${-sidewaysMargin * scale}px ${sidewaysMargin * scale}px` : '0px' };
+                'font-size': `${12 * scale}px`, margin: '0px' };
             cards.forEach(card => Object.entries(sizes).forEach(([property, value]) => {
                 if (card.style.getPropertyValue(property) !== value)
                     card.style.setProperty(property, value);

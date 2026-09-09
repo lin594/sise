@@ -146,9 +146,10 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} color labels stay up
   }
 });
 
-test('rotated river flights land on the exact face and defer layout changes until finished', async ({ page }) => {
+for (const zone of ['flow', 'meld'] as const) test(`${zone === 'flow' ? 'rotated river' : 'horizontal meld'} flights land on the exact face and defer layout changes until finished`, async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
-  await start(page, 'mahjong', 'long', false);
+  await start(page, 'mahjong', zone === 'meld' ? 'large' : 'long', false);
+  const destination = zone === 'meld' ? '.group-block-list' : '.flow-card';
   for (const side of ['left', 'top', 'right']) {
     const playerId = await page.getByTestId(`player-${side}`).getAttribute('data-player-id');
     const card = { id: `flight-to-${side}`, color: 'white', type: 'ma', source: 'deck' };
@@ -160,21 +161,23 @@ test('rotated river flights land on the exact face and defer layout changes unti
         tablePresentationVersion: 1, previousPlayerId: '', pollOriginPlayerId: '', lastAction: 'MAHJONG_FLIGHT_FIXTURE' }, 'explicit');
     }, card);
     await expect(page.locator(`.response-card-face[data-face-id="${card.id}"]`)).toBeVisible();
-    await page.evaluate(({ card, playerId }) => {
+    await page.evaluate(({ card, playerId, zone }) => {
       const bridge = (window as any).__siseLocalTest;
       const state = bridge.getRoomState();
       const now = Date.now();
       bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 1, responseCard: null, targetCard: null,
-        players: state.players.map((p: any) => p.clientId === playerId ? { ...p, discardPile: [...p.discardPile, card] } : p),
+        players: state.players.map((p: any) => p.clientId === playerId ? (zone === 'flow' ? { ...p, discardPile: [...p.discardPile, card] } : { ...p,
+          exposedArea: [...p.exposedArea, card, { ...card, id: `${card.id}-2` }, { ...card, id: `${card.id}-3` }],
+          exposedGroupSizes: [...p.exposedGroupSizes, 3], exposedGroupKinds: [...p.exposedGroupKinds, 'chi'] }) : p),
         serverNow: now, tableTransitions: [{ id: state.stateRevision + 1, round: state.completedRounds + 1,
-          kind: 'discard', startsAt: now, endsAt: now + 3000,
-          moves: [{ card, from: { zone: 'center' }, to: { zone: 'flow', playerId } }] }] }, 'explicit');
-    }, { card, playerId });
+          kind: zone === 'meld' ? 'chi' : 'discard', startsAt: now, endsAt: now + 3000,
+          moves: [{ card, from: { zone: 'center' }, to: { zone, playerId } }] }] }, 'explicit');
+    }, { card, playerId, zone });
     const flight = page.locator(`[data-transition-card-id="${card.id}"]`);
     await expect(flight).toHaveAttribute('data-transition-stage', 'landed');
-    const match = await page.evaluate(id => {
+    const match = await page.evaluate(({ id, destination }) => {
       const face = document.querySelector<HTMLElement>(`[data-transition-card-id="${id}"] .card`)!;
-      const landing = document.querySelector<HTMLElement>(`.flow-card [data-face-id="${id}"]`)!;
+      const landing = document.querySelector<HTMLElement>(`${destination} [data-face-id="${id}"]`)!;
       const a = face.getBoundingClientRect(), b = landing.getBoundingClientRect();
       return { delta: Math.max(Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)),
         transform: getComputedStyle(face).transform,
@@ -186,7 +189,7 @@ test('rotated river flights land on the exact face and defer layout changes unti
             + Math.atan2(textMatrix.b, textMatrix.a) * 180 / Math.PI;
           return Math.abs(total % 360) < 0.01;
         }) };
-    }, card.id);
+    }, { id: card.id, destination });
     expect(match.textUpright).toBe(true);
     expect(match.delta).toBeLessThanOrEqual(1);
     expect(match.transform).not.toBe('none');
@@ -199,7 +202,7 @@ test('rotated river flights land on the exact face and defer layout changes unti
       await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     }
     await expect(flight).toHaveCount(0);
-    await expect(page.locator(`.flow-card [data-face-id="${card.id}"]`)).toBeVisible();
+    await expect(page.locator(`${destination} [data-face-id="${card.id}"]`)).toBeVisible();
   }
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-table-layout', 'classic');
 });
@@ -293,7 +296,16 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
       const overview = await area.evaluate(el => {
         const b = el.getBoundingClientRect();
-        return { overflow: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
+        const groups = [...el.querySelectorAll<HTMLElement>('.group-block')];
+        const horizontal = groups.every(group => {
+          const cards = [...group.querySelectorAll<HTMLElement>('.mini-card')];
+          return cards.every((card, i) => getComputedStyle(card).rotate === '0deg'
+            && Math.abs(card.offsetTop - cards[0]!.offsetTop) <= 1
+            && (!i || card.offsetLeft > cards[i - 1]!.offsetLeft));
+        });
+        const readingOrder = groups.every((group, i) => !i || group.offsetTop > groups[i - 1]!.offsetTop
+          || (group.offsetTop === groups[i - 1]!.offsetTop && group.offsetLeft > groups[i - 1]!.offsetLeft));
+        return { horizontal, readingOrder, overflow: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
           cards: [...el.querySelectorAll('.mini-card')].map(card => {
             const r = card.getBoundingClientRect();
             return { visible: r.left >= b.left - 1 && r.right <= b.right + 1 && r.top >= b.top - 1 && r.bottom <= b.bottom + 1,
@@ -308,6 +320,8 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
         }))));
         await page.screenshot({ path: info.outputPath('overview-failure.png') });
       }
+      expect(overview.horizontal, `${side} ${mode} each meld reads horizontally`).toBe(true);
+      expect(overview.readingOrder, `${side} ${mode} melds read left to right then down`).toBe(true);
       expect(overview.overflow, `${side} ${mode} ${width}x${height} overflow`).toBe(false);
       expect(overview.cards.every(card => card.visible && card.font >= 9.99), `${side} ${mode} ${width}x${height} complete readable overview`).toBe(true);
       if (side === 'left' || side === 'right') {
@@ -342,9 +356,9 @@ for (const mode of ['long', 'large']) test(`twelve eats at every seat are comple
   }
 });
 
-test('mahjong overflow keeps every card reachable at a readable minimum size', async ({ page }) => {
+for (const mode of ['long', 'large']) test(`mahjong ${mode} overflow keeps every card reachable at a readable minimum size`, async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
-  await start(page);
+  await start(page, 'mahjong', mode);
   for (const side of ['self', 'left', 'top', 'right']) {
     const area = await manyMelds(page, side, 28);
     await expect.poll(() => area.evaluate(el => el.scrollHeight > el.clientHeight + 1)).toBe(true);
@@ -363,10 +377,10 @@ test('mahjong overflow keeps every card reachable at a readable minimum size', a
   }
 });
 
-test('touch swipes reach overflowing eats after portrait rotation', async ({ page, browserName }) => {
+for (const mode of ['long', 'large']) test(`touch swipes reach overflowing ${mode} eats after portrait rotation`, async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Native CDP touch injection; every group is also checked in WebKit.');
   await page.setViewportSize({ width: 375, height: 667 });
-  await start(page);
+  await start(page, 'mahjong', mode);
   const session = await page.context().newCDPSession(page);
   await session.send('Emulation.setTouchEmulationEnabled', { enabled: true });
   for (const side of ['self', 'left', 'top', 'right']) {
