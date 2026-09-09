@@ -23,7 +23,10 @@
     "compose:imac": "npm run compose:imac:check && docker compose -f docker-compose.yml -f docker-compose.imac.yml up --build -d",
     "compose:down": "docker compose down",
     "compose:down:imac": "docker compose -f docker-compose.yml -f docker-compose.imac.yml down",
-    "compose:down:dev": "docker compose -f docker-compose.dev.yml down"
+    "compose:down:dev": "docker compose -f docker-compose.dev.yml down",
+    "install:ci": "npm ci && npm ci --prefix server && npm ci --prefix client",
+    "test:server": "npm --prefix server test",
+    "check:docs": "node scripts/check-doc-links.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

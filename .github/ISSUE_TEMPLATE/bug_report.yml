@@ -1,0 +1,25 @@
+name: 缺陷报告
+description: 提供可以复现的游戏、界面或部署问题
+title: "fix: "
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 如何复现
+      description: 游戏模式、操作步骤和复现频率；请移除房间凭证与个人信息。
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期与实际结果
+      description: 可以附截图或录屏；规则问题请引用对应规则。
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: 浏览器及版本、设备、视口尺寸、横竖屏、布局与牌型；自部署请附提交号。
+    validations:
+      required: true

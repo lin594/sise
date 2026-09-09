@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 贡献与本地开发指南
+    url: https://github.com/lin594/sise/blob/main/CONTRIBUTING.md
+    about: 启动项目、寻找代码入口与提交 PR

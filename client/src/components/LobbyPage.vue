@@ -97,6 +97,10 @@
         >{{ invitePending === "share" ? "正在打开…" : "分享四色牌" }}</button>
       </div>
 
+      <a v-if="modes.length" class="repository-link" data-testid="repository-link"
+        href="https://github.com/lin594/sise" target="_blank" rel="noopener noreferrer"
+        aria-label="联系我们，打开 GitHub 仓库（新窗口）">联系我们 · GitHub ↗</a>
+
       <div v-if="roomMode === 'friends' && roomId" class="invite-card">
         <div>
           <strong>好友房 {{ roomId }}</strong>
@@ -793,6 +797,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 </script>
 
 <style scoped>
+.repository-link { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; color: var(--ui-accent-text); text-underline-offset: 3px; }
+.repository-link:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 8px; }
 .lobby {
   background: var(--ui-panel, #0b1220);
   border: 1px solid var(--ui-raised, #1e293b);
