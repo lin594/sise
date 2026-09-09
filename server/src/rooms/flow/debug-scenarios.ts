@@ -15,6 +15,7 @@ export interface DebugScenarioContext {
   setDealerCard: (card: Card) => void;
   setResponseCard: (card: Card, source: "upper" | "draw") => void;
   clearAwaitingDiscardOwner: () => void;
+  enterDiscardStage: (seatId: string, tag: string) => void;
   updatePublicHandCounts: () => void;
   syncAllPrivateHands: () => void;
   resetCollectivePolling: () => void;
@@ -57,6 +58,20 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.activeResponderId = "";
   };
 
+  if (scenario === "protected_kan_discard") {
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id)!;
+      seat.exposedArea.clear(); seat.exposedGroupSizes.clear(); seat.exposedGroupKinds.clear();
+      seat.fishArea.clear(); seat.declaredKongs = id === seatId ? 1 : 0;
+    }
+    for (let i = 0; i < 3; i++) add(`protected-kan-${i}`, "red", "ma");
+    add("legal-discard", "white", "shi");
+    context.state.phase = "playing";
+    context.updatePublicHandCounts();
+    context.enterDiscardStage(seatId, "DEBUG_KAN");
+    context.broadcastAvailableActions();
+    return true;
+  }
   if (scenario === "staged_declaration") {
     for (const id of context.playerOrder) {
       const seat = context.state.players.get(id)!;

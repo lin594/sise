@@ -245,3 +245,7 @@ server/src/schema/                    公开同步 Schema
 ## 匿名产品统计
 
 可选指标运行时使用独立 Redis 连接和有界异步队列，牌局不等待写入。客户端 `/product-events` 仅接受固定字段，权威事件由服务端发出；凭证在进入队列前转换为独立 HMAC 标识。`analyticsVisitId` 仅关联访问和真实入座，不参与权限判断或恢复。详见 [PRODUCT_METRICS.md](PRODUCT_METRICS.md)。
+
+## 规则 v1.0 私有决策
+
+`decisionTimer.legalDiscardCardIds` 由服务端统一保坎校验生成，仅通过本人的私有决策、快照和受保护恢复接口传送，不进入公开 Schema。新客户端用该列表禁用不合法弃牌，缺少字段时兼容旧服务端。`declaredKongs` 继续表示尚未转为开的暗坎义务，成功开牌减一，不能重复扣减或重复结算。恢复快照的可选 `privateState.ruleVersion` 区分旧局与 v1.0，新局始终升级。
