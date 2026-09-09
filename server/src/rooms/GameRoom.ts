@@ -1,3 +1,5 @@
+import { explainHand } from "../rules/hu.js";
+import { countHiddenKans } from "../rules/declared-kans.js";
 import {
   buildVisibleRemainingByFace,
   findCurrentListeningWaits,
@@ -285,11 +287,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     scoringMode: "single" | "cumulative";
     roundNumber: number;
   } | null = null;
+  private ruleVersion: "legacy" | "1.0" = "1.0";
   private stateOps: RoomStateOps | null = null;
 
   private get ops(): RoomStateOps {
     if (!this.stateOps) {
-      this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
+      this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null, () => this.ruleVersion === "1.0");
     }
     return this.stateOps;
   }
@@ -322,7 +325,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.roomMode === "match") {
       this.maxClients = this.targetSeats;
     }
-    this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null);
+    this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null, () => this.ruleVersion === "1.0");
     this.syncRoomMetadata();
     registerRoom(this.roomId, this);
 
@@ -655,6 +658,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       expiresAt,
       state: JSON.parse(JSON.stringify(this.state)) as Record<string, unknown>,
       privateState: {
+        ruleVersion: this.ruleVersion,
         roomIdleExpiresAt: idleExpiry,
         deck: cloneCards(this.deck),
         playerHands: [...this.playerHands].map(([seatId, cards]) => [seatId, cloneCards(cards)]),
@@ -701,6 +705,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
     const privateState = snapshot.privateState;
+    this.ruleVersion = privateState.ruleVersion ?? "legacy";
     this.pendingPresentationEnd = privateState.pendingPresentationEnd ?? null;
     const cloneCards = (cards: Card[]) => cards.map((card) => ({ ...card }));
     this.roomIdleExpiresAt = privateState.roomIdleExpiresAt;
@@ -1834,6 +1839,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：重置局内状态，写入手牌/庄家/声明倒计时并进入声明阶段。
    */
   private bootstrapRound(): void {
+    this.ruleVersion = "1.0";
     this.clearPresentation();
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
@@ -1997,6 +2003,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     totalMs: number;
     endsAt: number;
     decisionKey: string;
+    legalDiscardCardIds: string[];
   } {
     const untimed = this.isPracticeDecisionUntimed(seatId);
     const totalMs = untimed
@@ -2007,6 +2014,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           ? this.responseTimerTotalMs || this.operationTimeoutMs
           : 0;
     return {
+      legalDiscardCardIds: this.state.phase === "playing" && this.awaitingDiscardOwnerId === seatId
+        ? (this.playerHands.get(seatId) ?? []).filter(card => this.ops.canDiscardCard(seatId, card.id)).map(card => card.id)
+        : [],
       untimed,
       totalMs,
       endsAt: untimed
@@ -2291,7 +2301,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     discardFromAndCollectiveFlow(
       {
         pickDiscardCard: (ownerIdArg) =>
-          cardId ? this.ops.discardCardById(ownerIdArg, cardId) : this.ops.pickDiscardCard(ownerIdArg),
+          (cardId ? this.ops.discardCardById(ownerIdArg, cardId) : null) ?? this.ops.pickDiscardCard(ownerIdArg),
         pushDiscard: (ownerIdArg, card) => this.ops.pushDiscard(ownerIdArg, card),
         beginCollectiveFromDiscard: (ownerIdArg, discard) => this.beginCollectiveFromDiscard(ownerIdArg, discard),
         clearAwaitingDiscardOwner: () => {
@@ -2620,6 +2630,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    * 副作用：写入 awaitingDiscardOwner 与 local_draw 状态。
    */
   private enterDiscardStage(ownerId: string, tag: string): void {
+    const hand = this.playerHands.get(ownerId) ?? [];
+    if (this.ruleVersion === "1.0" && !hand.some(card => this.ops.canDiscardCard(ownerId, card.id))
+      && countHiddenKans(hand) >= (this.state.players.get(ownerId)?.declaredKongs ?? 0) && explainHand(hand).valid) {
+      this.declareNoDiscardWin(ownerId, tag);
+      return;
+    }
     this.traceStep("enter_discard_stage", `owner=${ownerId} tag=${tag}`);
     enterDiscardStageFlow(
       {
@@ -2802,6 +2818,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (!pending) {
       return;
     }
+    if ((choice.action === "kai" || choice.action === "peng" || choice.action === "chi") &&
+      (!choice.candidateId || !this.preservesDeclaredKongsAfterAction(winnerId, choice.action, pending.card, choice.candidateId))) return;
+    if (choice.action === "hu" && !this.ops.explainHuForSeat(winnerId,
+      this.playerHands.get(winnerId) ?? [], pending.card, this.getHuWildcardCount()).valid) return;
     this.collectiveResponseEndsAt = 0;
     const sourceOwnerId = String(this.state.pollOriginPlayerId || pending.ownerId || "");
     if (
@@ -3102,19 +3122,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     return this.deck.slice(0, 8).map((card) => ({ ...card }));
   }
 
-  private countHiddenTriplets(cards: Card[]): number {
-    const counter = new Map<string, number>();
-    for (const card of cards) {
-      const key = card.color === "gold" ? "gold" : `${card.color}:${card.type}`;
-      counter.set(key, (counter.get(key) ?? 0) + 1);
-    }
-    let total = 0;
-    for (const count of counter.values()) {
-      total += Math.floor(count / 3);
-    }
-    return total;
-  }
-
   private removeCardsByIdFromHand(hand: Card[], cardIds: string[]): Card[] {
     if (!cardIds.length) {
       return [...hand];
@@ -3131,9 +3138,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   ): boolean {
     const player = this.state.players.get(seatId);
     const declaredKongs = Number(player?.declaredKongs ?? 0);
-    if (declaredKongs <= 0) {
-      return true;
-    }
     const handNoPending = this.ops.getHandWithoutPending(seatId, pendingCard);
     if (action === "kai") {
       const picked = buildKaiCandidates(handNoPending, pendingCard, this.ops.getWildcardPoolCards(seatId)).find(
@@ -3143,7 +3147,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return false;
       }
       const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
-      return this.countHiddenTriplets(nextHand) >= Math.max(0, declaredKongs - 1);
+      return countHiddenKans(nextHand) >= Math.max(0, declaredKongs - 1);
     }
     if (action === "peng") {
       const picked = buildPengCandidates(handNoPending, pendingCard).find((item) => item.candidate.id === candidateId);
@@ -3151,7 +3155,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return false;
       }
       const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
-      return this.countHiddenTriplets(nextHand) >= declaredKongs;
+      return countHiddenKans(nextHand) >= declaredKongs;
     }
     const picked = buildChiCandidates(handNoPending, pendingCard, this.ops.getWildcardPoolCards(seatId)).find(
       (item) => item.candidate.id === candidateId,
@@ -3160,7 +3164,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return false;
     }
     const nextHand = this.removeCardsByIdFromHand(handNoPending, picked.plan.handCards.map((card) => card.id));
-    return this.countHiddenTriplets(nextHand) >= declaredKongs;
+    return countHiddenKans(nextHand) >= declaredKongs;
   }
 
   private consumeDeclaredKongForKai(seatId: string): void {
@@ -3680,6 +3684,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private declareNoDiscardWin(ownerId: string, tag: string): void {
+    const hand = this.playerHands.get(ownerId) ?? [];
+    if (this.ruleVersion === "1.0" && (!explainHand(hand).valid ||
+      countHiddenKans(hand) < (this.state.players.get(ownerId)?.declaredKongs ?? 0))) return;
     this.traceStep("no_discard_win", `owner=${ownerId} tag=${tag}`);
     this.endRound(`${ownerId} HU`, ownerId, []);
   }
@@ -3883,7 +3890,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       ? this.roundDealerId
       : this.playerOrder[0];
     if (fallbackDealerId) {
-      this.nextRoundSetup = { mode: "fixed", dealerId: fallbackDealerId };
+      this.nextRoundSetup = this.ruleVersion === "1.0"
+        ? { mode: "picker", pickerId: this.getOppositePlayerId(fallbackDealerId) }
+        : { mode: "fixed", dealerId: fallbackDealerId };
     }
   }
 
@@ -4290,6 +4299,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           hand: this.playerHands.get(seatId) ?? [],
           visibleCards: this.buildBotVisibleCards(),
           declaredKongs: this.state.players.get(seatId)?.declaredKongs ?? 0,
+          enforceDeclaredKans: this.ruleVersion === "1.0",
           strength: this.state.players.get(seatId)?.botStrength ?? 50,
         })?.id ?? null,
       setCollectiveChoice: (seatId, choice) => this.acceptBotCollectiveChoice(seatId, choice),
@@ -4362,6 +4372,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         playerOrder: this.playerOrder,
         publicGeneralPool: this.publicGeneralPool,
         nextDebugSeq: () => ++this.debugSeq,
+        enterDiscardStage: (seatId, tag) => this.enterDiscardStage(seatId, tag),
         getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
         setPendingResponse: (value) => {
           this.pendingResponse = value;

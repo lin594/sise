@@ -1269,6 +1269,8 @@ export function useRoom(playerName = "Player") {
     }
     const raw = input as Partial<DecisionTimerState>;
     const nextTimer: DecisionTimerState = {
+      legalDiscardCardIds: Array.isArray(raw.legalDiscardCardIds)
+        ? raw.legalDiscardCardIds.filter((id): id is string => typeof id === "string") : undefined,
       untimed: Boolean(raw.untimed),
       totalMs: Math.max(0, Number(raw.totalMs) || 0),
       endsAt: Math.max(0, Number(raw.endsAt) || 0),

@@ -343,3 +343,7 @@ RECONNECT_GRACE_MS=10000 PLAYWRIGHT_CHANNEL=chrome npx playwright test tests/e2e
 ## 5. 当前文档链接
 
 `npm run check:docs` 检查根目录与 `docs/` 中当前 Markdown 的相对链接目标（含截图文件）。历史 `docs/archive/` 不作为维护对象；外部网址与页内锚点不在这条离线检查的范围。
+
+## 规则 v1.0 产品化回归
+
+`server/src/tests/rooms/declared-kans.test.ts` 覆盖声明上限、手动/自动/机器人保坎、坎转开、失败原子性与流局五色定庄；恢复测试覆盖未版本化旧快照。`tests/e2e/declared-kans.spec.ts` 在 Chromium 与 WebKit 项目验证 568×320、375×667、桌面的禁用牌、键盘操作与刷新恢复。真机尚未验证。

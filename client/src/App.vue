@@ -236,6 +236,7 @@
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
         :decision-key="decisionTimer.decisionKey"
+        :legal-discard-card-ids="decisionTimer.legalDiscardCardIds"
         :action-feedback="actionFeedback"
         :ultra-compact="isUltraCompactViewport"
         :own-card-mode="resolvedOwnCardMode"
