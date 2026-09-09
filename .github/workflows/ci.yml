@@ -152,6 +152,12 @@ jobs:
           npm ci --prefix server
           npm ci --prefix client
 
+      # Playwright downloads its own pinned browsers. The runner's unrelated
+      # Chrome apt index can be temporarily inconsistent during publication.
+      - name: Disable unrelated Chrome apt source
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps "${{ matrix.browser }}"
 
