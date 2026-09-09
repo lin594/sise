@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resolveTableLayout, normalizeTableLayout } from '../../client/src/utils/appearance';
-import { startLobbyAction } from './helpers/game';
+import { finishDeclarationIfNeeded, startLobbyAction } from './helpers/game';
 import { revealSetting } from './helpers/settings';
 
 test.use({ hasTouch: true });
@@ -28,6 +28,12 @@ async function start(page: Page, tableLayout = 'mahjong', mode = 'long', reduceM
   await page.goto('/?new=1&e2eDebug=1');
   await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible();
+  // Static crowd geometry must not race the real opening's delayed animation.
+  // Opening animation geometry has separate frame-level regression coverage.
+  await finishDeclarationIfNeeded(page);
+  await expect(page.locator('.deal-overlay')).toBeHidden();
+  await expect(page.getByTestId('dealer-ceremony')).toBeHidden();
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ ok: true });
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getRoomState()?.lastAction))
@@ -80,15 +86,20 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
   await crowd(page);
   for (const [width, height] of [[568, 320], [667, 375], [844, 390], [932, 430], [390, 844], [1024, 768], [1440, 900]]) {
     await page.setViewportSize({ width, height });
-    await page.waitForTimeout(250);
-    const geometry = await page.getByTestId('game-board').evaluate(board => {
+    // ResizeObserver and WebKit scroll/layout updates need not settle in 250 ms.
+    // Poll the same geometry contract instead of sampling a transient frame.
+    await expect.poll(() => page.getByTestId('game-board').evaluate(board => {
       const bounds = board.getBoundingClientRect();
+      const layoutStyle = getComputedStyle(board.closest('main.layout')!);
       const table = board.querySelector<HTMLElement>('.table')!;
       const flows = [...board.querySelectorAll<HTMLElement>('.flow-card')];
       const within = (a: DOMRect, b: DOMRect) => a.left >= b.left - 1 && a.right <= b.right + 1 && a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
       const overlaps = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
       const regions = [...flows, ...board.querySelectorAll<HTMLElement>('.player-card, .self-groups-card, .center')];
       return {
+        viewport: [window.innerWidth, window.innerHeight],
+        appliedViewport: ['--physical-viewport-width', '--physical-viewport-height'].map(key => parseFloat(layoutStyle.getPropertyValue(key))),
+        withinViewport: bounds.left >= -1 && bounds.top >= -1 && bounds.right <= window.innerWidth + 1 && bounds.bottom <= window.innerHeight + 1,
         contained: regions.every(el => within(el.getBoundingClientRect(), bounds)),
         noOverlap: regions.every((el, i) => regions.slice(i + 1).every(other => !overlaps(el.getBoundingClientRect(), other.getBoundingClientRect()))),
         tableFits: table.scrollHeight <= table.clientHeight + 1,
@@ -105,18 +116,16 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
         }),
         flowCount: flows.map(el => el.querySelectorAll('.discard-token').length),
       };
-    });
-    expect(geometry, `${width}x${height}`).toMatchObject({ contained: true, noOverlap: true, tableFits: true, handsVisible: true,
+    }), { message: `${width}x${height}` }).toMatchObject({ viewport: [width, height], appliedViewport: [width, height], withinViewport: true, contained: true, noOverlap: true, tableFits: true, handsVisible: true,
       textUpright: true, sides: ['bottom', 'left', 'right', 'top'], angles: { bottom: '0deg', left: '90deg', right: '-90deg', top: '180deg' }, flowCount: [15, 15, 15, 15] });
     // Every river can expose its final card without scrolling the whole table.
     for (const flow of await page.locator('.flow-card').all()) {
       await flow.locator('.discard-strip').evaluate(el => { el.scrollTop = el.scrollHeight; });
-      const visible = await flow.evaluate(el => {
+      await expect.poll(() => flow.evaluate(el => {
         const strip = el.querySelector('.discard-strip')!.getBoundingClientRect();
         const last = el.querySelector('.discard-token:last-child')!.getBoundingClientRect();
         return last.left >= strip.left - 1 && last.right <= strip.right + 1 && last.top >= strip.top - 1 && last.bottom <= strip.bottom + 1;
-      });
-      expect(visible).toBe(true);
+      }), { message: `last river card visible after scroll at ${width}x${height}` }).toBe(true);
     }
     await page.screenshot({ path: info.outputPath(`mahjong-${mode}-${width}x${height}.png`) });
   }
