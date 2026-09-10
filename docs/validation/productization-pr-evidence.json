@@ -1,0 +1,522 @@
+[
+  {
+    "pr": 41,
+    "url": "https://github.com/lin594/sise/pull/41",
+    "state": "MERGED",
+    "head": "9ab09de58dd33eed295a80229bc592866968682e",
+    "mergedAt": "2026-09-09T18:18:02Z",
+    "mergeCommit": {
+      "oid": "d9a93d8bfc4578915209450b3f58df656b5c2cdb"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T18:15:55Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34386806251/job/102588808894",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T18:15:53Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 43,
+    "url": "https://github.com/lin594/sise/pull/43",
+    "state": "MERGED",
+    "head": "4e641d08b9d85725c3ee4d8e05f78502c7db0da5",
+    "mergedAt": "2026-09-09T18:04:10Z",
+    "mergeCommit": {
+      "oid": "b7999701b7b46919642ddf9af5e05025f5d3b6f1"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T18:03:05Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34385394816/job/102584439568",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T18:03:02Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 44,
+    "url": "https://github.com/lin594/sise/pull/44",
+    "state": "MERGED",
+    "head": "c9fe90b919a1b1db9921f91093f92f7347b4e65f",
+    "mergedAt": "2026-09-09T19:28:56Z",
+    "mergeCommit": {
+      "oid": "8f84cc24aff7071fb789546aeb390bfed4036a4c"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T19:25:06Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34393583500/job/102612129292",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T19:25:03Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 45,
+    "url": "https://github.com/lin594/sise/pull/45",
+    "state": "MERGED",
+    "head": "54eabb193add3e5fb05877f4c168417dbfd8f986",
+    "mergedAt": "2026-09-09T19:11:10Z",
+    "mergeCommit": {
+      "oid": "356ca80f82bacddc6af722e455b45fb42deee673"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T19:09:57Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34391416955/job/102607090749",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T19:09:55Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 46,
+    "url": "https://github.com/lin594/sise/pull/46",
+    "state": "MERGED",
+    "head": "136ecb95eae6f1e0e0e597c042eb4fdc376228c1",
+    "mergedAt": "2026-09-09T18:33:50Z",
+    "mergeCommit": {
+      "oid": "2fec0378f2b76c2d447d9b12662bc726046f9c82"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T18:33:29Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34388243327/job/102594747292",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T18:33:26Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 48,
+    "url": "https://github.com/lin594/sise/pull/48",
+    "state": "MERGED",
+    "head": "a6a9a8babfae5f621669e1c9caf109284b26b9ad",
+    "mergedAt": "2026-09-09T19:46:00Z",
+    "mergeCommit": {
+      "oid": "19fc98ee1e72b395ee30357dc3a3b87acfcc7a77"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T19:45:18Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34395351610/job/102618616305",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T19:45:16Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 49,
+    "url": "https://github.com/lin594/sise/pull/49",
+    "state": "MERGED",
+    "head": "3cd2993ba84f801cbff1b4dfb910e311961a5c83",
+    "mergedAt": "2026-09-09T18:49:37Z",
+    "mergeCommit": {
+      "oid": "e9cd84dd115356c08e4ebd8fc8d220db12e60b7b"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T18:48:01Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34389796676/job/102599685149",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T18:47:59Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 50,
+    "url": "https://github.com/lin594/sise/pull/50",
+    "state": "MERGED",
+    "head": "70b822fb3fb94df3a4ad34d4e71c4fb8565d68cc",
+    "mergedAt": "2026-09-09T20:04:42Z",
+    "mergeCommit": {
+      "oid": "770606e319f9c4141969372361be635b966d3ebe"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T20:03:17Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34397333230/job/102624918795",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T20:03:14Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 51,
+    "url": "https://github.com/lin594/sise/pull/51",
+    "state": "MERGED",
+    "head": "44a5e1e3e30115c0441316fcceb5022d1e2d934b",
+    "mergedAt": "2026-09-09T21:32:49Z",
+    "mergeCommit": {
+      "oid": "04acd952909d4d86e2044f886e88ff8a041786d7"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T21:32:40Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34406788315/job/102653882057",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T21:32:38Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 52,
+    "url": "https://github.com/lin594/sise/pull/52",
+    "state": "MERGED",
+    "head": "8dff4a3cb94f273433480355f773c14a247a6df5",
+    "mergedAt": "2026-09-09T21:43:18Z",
+    "mergeCommit": {
+      "oid": "3ef02fe8a5b0224d11c5cf420e9a2376734c0f44"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T21:42:45Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34407689752/job/102656824015",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T21:42:42Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 53,
+    "url": "https://github.com/lin594/sise/pull/53",
+    "state": "MERGED",
+    "head": "3ee8af6e57e835bec33c91787e09e14535856519",
+    "mergedAt": "2026-09-09T21:54:40Z",
+    "mergeCommit": {
+      "oid": "24c2876e26c5178d6543ce1a14dfb3a29676857d"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T21:54:30Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34408499486/job/102660153852",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T21:54:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 54,
+    "url": "https://github.com/lin594/sise/pull/54",
+    "state": "MERGED",
+    "head": "148846d2a16850070975fe2fadbc342291defa55",
+    "mergedAt": "2026-09-09T22:06:02Z",
+    "mergeCommit": {
+      "oid": "452f1137471e690842238938c12c67050190f3e5"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T22:05:54Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34409495356/job/102663336601",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T22:05:51Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 55,
+    "url": "https://github.com/lin594/sise/pull/55",
+    "state": "MERGED",
+    "head": "15a51c49e3c559854e4d80beb4df122aef7a57df",
+    "mergedAt": "2026-09-09T22:16:37Z",
+    "mergeCommit": {
+      "oid": "a4e55403e4c1a3d9e1e967baa573f190e241033a"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T22:16:21Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34410490074/job/102666105347",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T22:15:43Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 56,
+    "url": "https://github.com/lin594/sise/pull/56",
+    "state": "MERGED",
+    "head": "62802b6cc6410ba7003f66f2d8ef0a11cc35eb2e",
+    "mergedAt": "2026-09-09T22:30:17Z",
+    "mergeCommit": {
+      "oid": "04835cf0c67284d65d75fac6f79ac7e4783c9b55"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T22:29:55Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34411427686/job/102669895204",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T22:29:51Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 57,
+    "url": "https://github.com/lin594/sise/pull/57",
+    "state": "MERGED",
+    "head": "36d3f2b6b7638fc9a8b086c8c861e68267105e0c",
+    "mergedAt": "2026-09-09T22:41:54Z",
+    "mergeCommit": {
+      "oid": "56d2b436d30226aa87a37e741be34679b99b82d2"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T22:41:45Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34412582105/job/102672966651",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T22:41:43Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 58,
+    "url": "https://github.com/lin594/sise/pull/58",
+    "state": "MERGED",
+    "head": "c7770ea57ba7f81269a6a21e440da70c8aa37780",
+    "mergedAt": "2026-09-09T22:52:33Z",
+    "mergeCommit": {
+      "oid": "8838b4cdd7b23c2330a6bb1d26e63c01eef82bc1"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T22:51:52Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34413526408/job/102675488565",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T22:51:50Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 59,
+    "url": "https://github.com/lin594/sise/pull/59",
+    "state": "MERGED",
+    "head": "8782a350a1dcf695157c829115fa8c9487eec39b",
+    "mergedAt": "2026-09-09T23:03:17Z",
+    "mergeCommit": {
+      "oid": "397afb46915a5f33cbc233c43e8de876c2acbbd3"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T23:02:02Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34414360273/job/102677983118",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T23:02:00Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 60,
+    "url": "https://github.com/lin594/sise/pull/60",
+    "state": "MERGED",
+    "head": "346cd02ebd382d8815b8eccccc8821dacd1babd1",
+    "mergedAt": "2026-09-09T23:20:01Z",
+    "mergeCommit": {
+      "oid": "2de20dc7a31aacad03d540d77acb9c69f2368d80"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T23:19:29Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34415188935/job/102682157727",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T23:19:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 61,
+    "url": "https://github.com/lin594/sise/pull/61",
+    "state": "MERGED",
+    "head": "603f698f1c40eec431e7735c363cdc0360e7e14c",
+    "mergedAt": "2026-09-09T23:30:41Z",
+    "mergeCommit": {
+      "oid": "561bf84d7bd8d0e54661518e945c9b3fa19351bb"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T23:30:24Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34416484109/job/102684655207",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T23:30:20Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 62,
+    "url": "https://github.com/lin594/sise/pull/62",
+    "state": "MERGED",
+    "head": "06a11eda16a16f444199f3f567a39179cafa8506",
+    "mergedAt": "2026-09-09T23:43:38Z",
+    "mergeCommit": {
+      "oid": "5511428ccdbd1fcc2f2bb905f0402abc8b9ffd22"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T23:43:04Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34417286344/job/102687496406",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T23:43:02Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 63,
+    "url": "https://github.com/lin594/sise/pull/63",
+    "state": "MERGED",
+    "head": "d0a0c7b3b9d7228c749274108c6d66cfaf89eafe",
+    "mergedAt": "2026-09-09T23:54:17Z",
+    "mergeCommit": {
+      "oid": "13dcd0eab737b4020710f057a2ab8d23144b024c"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T23:53:54Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34418212884/job/102689837105",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T23:53:52Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 65,
+    "url": "https://github.com/lin594/sise/pull/65",
+    "state": "MERGED",
+    "head": "857c215af26144818ac69dcb13bc993b99e5eaab",
+    "mergedAt": "2026-09-10T00:10:03Z",
+    "mergeCommit": {
+      "oid": "6bf56142ad7182d16e551d018ef49ad26eb4d83f"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-10T00:09:40Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34419115060/job/102693336935",
+      "name": "CI gate",
+      "startedAt": "2026-09-10T00:09:37Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 66,
+    "url": "https://github.com/lin594/sise/pull/66",
+    "state": "MERGED",
+    "head": "2771f94dae5d06847ad4dd2215448093a2b292c6",
+    "mergedAt": "2026-09-09T20:22:37Z",
+    "mergeCommit": {
+      "oid": "8451bb5ad11bc772eed51f36f374b0558dbcf5ef"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T20:22:05Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34399838341/job/102631220791",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T20:22:01Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 67,
+    "url": "https://github.com/lin594/sise/pull/67",
+    "state": "MERGED",
+    "head": "fde24a9c7fbb7b85c0801a850dbb7601ca324c63",
+    "mergedAt": "2026-09-09T20:33:22Z",
+    "mergeCommit": {
+      "oid": "e9ac6e4ba88dea0afca6ec501ddb46ceaad76219"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T20:30:50Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34400725247/job/102634150726",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T20:30:48Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 69,
+    "url": "https://github.com/lin594/sise/pull/69",
+    "state": "MERGED",
+    "head": "6f82df2b14630a306ad5205dc3da374b42b5bdcc",
+    "mergedAt": "2026-09-09T20:45:51Z",
+    "mergeCommit": {
+      "oid": "6bf8bd88a1c9e2ec8d08d76bdda1e4135b060f70"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T20:45:44Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34402033625/job/102639052099",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T20:45:39Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  },
+  {
+    "pr": 71,
+    "url": "https://github.com/lin594/sise/pull/71",
+    "state": "MERGED",
+    "head": "fe428a99090d8d7727d182285d195098c20bc675",
+    "mergedAt": "2026-09-09T21:24:38Z",
+    "mergeCommit": {
+      "oid": "5754d9111e8d42240c74f0e0e7b0d0e2a70b080a"
+    },
+    "gate": {
+      "__typename": "CheckRun",
+      "completedAt": "2026-09-09T21:24:22Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/lin594/sise/actions/runs/34405741173/job/102651346607",
+      "name": "CI gate",
+      "startedAt": "2026-09-09T21:24:18Z",
+      "status": "COMPLETED",
+      "workflowName": "Validate contributions"
+    }
+  }
+]

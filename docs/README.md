@@ -23,6 +23,8 @@
 
 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) 记录任务、维护者决定、PR 和未完成验收。
 
+[产品化验证记录](validation/PRODUCTIZATION_2026-09-10.md) 汇总自动化证据与已知边界；[发布清单](RELEASE_CHECKLIST.md) 单独跟踪真实设备与实际部署。
+
 ## 权威关系
 
 - 游戏规则以 `GAME_RULES.md` 为准，界面体验以 `PRODUCT_UX.md` 为准，代码事实以 `ARCHITECTURE.md` 为准。
@@ -33,7 +35,7 @@
 ## 维护约定
 
 - 不新增 `SRS_v5`、`最终版2` 一类版本文件。
-- 已作废的整份需求或已完成方案移入 `archive/`；当前仍有效的内容直接合并进六份权威文档。
+- 已作废的整份需求或已完成方案移入 `archive/`；当前仍有效的内容直接合并进相应的权威文档。
 - 新增相对链接后运行 [TESTING.md](TESTING.md) 中的链接检查。
 
 ## 产品指标
