@@ -174,14 +174,14 @@ export function useRoomRecovery({ state, connected, connect, retryConnection, co
       return {
         kicker: "等待网络",
         title: "联网后会自动继续",
-        description: "你的座位和身份凭证仍保存在这台设备上，无需重新输入昵称。",
+        description: "联网后会自动找回原来的座位，无需重新输入昵称。",
         cancelLabel: "放弃恢复，返回玩法选择",
       };
     }
     return {
       kicker: "恢复牌局",
       title: "正在回到原来的牌桌",
-      description: "正在使用这台设备保存的房间身份恢复座位和手牌，请稍候。",
+      description: "正在找回你的座位和手牌，请稍候。",
       cancelLabel: "放弃恢复，返回玩法选择",
     };
   });
@@ -204,7 +204,7 @@ export function useRoomRecovery({ state, connected, connect, retryConnection, co
     }
     return {
       title: "放弃恢复原牌局？",
-      description: "系统正在为你找回原来的座位和手牌。确认放弃后会清除这台设备保存的房间身份并返回玩法选择。",
+      description: "正在找回你的座位和手牌。放弃后将返回玩法选择，无法再自动回到这局。",
       keepLabel: "继续恢复",
       confirmLabel: "放弃并返回玩法选择",
     };

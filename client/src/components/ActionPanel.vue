@@ -181,13 +181,13 @@ const timerAccessibleLabel = computed(() =>
 const panelAnnouncement = computed(() => {
   if (actionFeedback.value) return actionFeedback.value.message;
   if (props.pausedHint) return `操作已暂停。${props.pausedHint}`;
-  if (isEarlyCollectiveChoice.value) return "可以提交拦截；服务端会按动作优先级和座次顺序裁决。";
+  if (isEarlyCollectiveChoice.value) return "可以选择胡、开或碰；多人要牌时，按胡、开、碰的顺序，同种操作按座次先后。";
   const timing = props.untimed
     ? "练习不限时。"
     : secondsLeft.value === null || isEarlyCollectiveChoice.value
       ? ""
       : `还剩 ${secondsLeft.value} 秒。`;
-  if (props.canDiscard) return `该你操作了。${timing}可先选择手牌，再按出。`;
+  if (props.canDiscard) return `该你操作了。${timing}先选一张手牌，再点“出牌”。`;
   if (normalized.value.some((item) => item.action === "chi")) {
     return `该你操作了。${timing}可以直接选择手牌组成吃法，再按吃。`;
   }

@@ -42,10 +42,10 @@ async function performInviteAction(action: "copy" | "share", target: "invite" | 
   inviteCopyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   inviteActionPending.value = action;
   const inviteUrl = target === "invite" ? buildInviteUrl() : buildPublicShareUrl();
-  const title = "邀请你一起传承四色牌文化";
+  const title = "来一起玩四色牌";
   const shareText = target === "invite"
     ? `好友房 ${activeRoomId.value} · 不用注册，打开选座；不满四人可电脑补位`
-    : "象棋魂 · 麻将韵 · 纸牌趣——四色牌，一局见真章！";
+    : "不用注册，打开就能玩莆田四色牌。可以先练一局，也能邀请好友同桌。";
   let restoreFocus = true;
   try {
     if (action === "share" && navigator.share) {

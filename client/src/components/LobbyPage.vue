@@ -23,11 +23,11 @@
           type="button"
           aria-haspopup="dialog"
           :aria-expanded="guestProfileOpen"
-          aria-label="查看本机临时档案详情"
+          aria-label="查看我的战绩"
           @click="openGuestProfile"
         >
           <span class="guest-profile-summary-copy" aria-live="polite">
-            <strong>本机临时档案</strong>
+            <strong>我的战绩</strong>
             <span>{{ guestProfileSummary }}</span>
           </span>
           <span class="guest-profile-summary-view" aria-hidden="true">查看</span>
@@ -396,18 +396,18 @@
             <span aria-hidden="true">牌友</span>
             <div>
               <small>当前浏览器</small>
-              <h2 id="guest-profile-title">本机临时档案</h2>
+              <h2 id="guest-profile-title">我的战绩</h2>
             </div>
           </header>
           <p class="guest-profile-name">昵称：<strong>{{ guestProfileName || "牌友" }}</strong></p>
-          <div class="guest-profile-stats" aria-label="本机临时档案统计">
+          <div class="guest-profile-stats" aria-label="我的战绩统计">
             <div><span data-testid="guest-profile-rounds">{{ normalizedProfileRounds }}</span><small>已玩局数</small></div>
             <div><span data-testid="guest-profile-wins">{{ normalizedProfileWins }}</span><small>胡牌局数</small></div>
             <div><span data-testid="guest-profile-win-rate">{{ guestProfileWinRate }}</span><small>胡牌率</small></div>
             <div><span data-testid="guest-profile-score">{{ signedScore(normalizedProfileScore) }}分</span><small>累计总分</small></div>
           </div>
           <p id="guest-profile-description" class="guest-profile-explanation">
-            成绩按服务端结算记录，只凭当前浏览器保存的临时凭证找回。清除浏览器数据后无法找回，这不是正式账号。
+            每局结束后会更新战绩。请用当前浏览器查看；清除浏览器数据后无法找回。
           </p>
           <button
             ref="guestProfileCloseButtonRef"

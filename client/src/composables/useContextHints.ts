@@ -3,14 +3,14 @@ import { readStoredValue, writeStoredValue } from "@/utils/safeStorage";
 import { trackProductEvent } from "@/utils/productAnalytics";
 
 const COPY = {
-  hu: "「胡」已可用：服务端确认手牌可以全部成组，点胡后查看计分。",
-  kai: "「开」已可用：三张手牌可与中央牌开成组。开成功后可抵一组已声明的坎。",
+  hu: "接上这张牌就能胡，点“胡”查看结算。",
+  kai: "用手中的三张牌接上中央这张，点“开”组成一组。",
   peng: "「碰」已可用：用两张相同的手牌收下中央这张，再弃一张牌。",
   chi: "「吃」已可用：中央牌能与手牌成组；有多种组合时先选组合。",
   grab: "「抓」会放过上家的待响应牌，从牌堆翻一张，再判断能否成组。",
   pass: "「过」会放弃这张牌的响应机会，牌局继续。",
-  fish: "先亮鱼：从服务端给出的候选中选择要亮出的同牌组，再声明坎。",
-  kan: "声明坎按数量记录。新局须保坎，转开可抵扣，碰和鱼不抵扣；升级前旧局沿用原规则。",
+  fish: "选择开局要亮出的鱼，再点“确认鱼”。",
+  kan: "坎是三张同色同字的牌，三张金条也可成坎。亮鱼后再选择要声明的坎数。",
   general: "将已亮入公将区，不能当普通手牌主动打出。",
 } as const;
 export type HintConcept = keyof typeof COPY;

@@ -31,7 +31,7 @@ test("a passwordless local profile stays private and updates after settlement", 
 
   const summary = page.getByTestId("guest-profile-summary");
   await expect(summary).toBeVisible();
-  await expect(summary).toContainText("本机临时档案");
+  await expect(summary).toContainText("我的战绩");
   await expect(summary).toContainText("还没有完成牌局");
   const profileToken = await page.evaluate(() => localStorage.getItem("sise_guest_profile_token_v1"));
   expect(profileToken).toMatch(/^gp_[a-f0-9]{48}$/);
