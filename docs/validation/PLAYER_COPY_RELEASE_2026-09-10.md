@@ -19,7 +19,7 @@
 
 - 独立故障环境以 `REDIS_URL=redis://127.0.0.1:1` 和测试专用统计密钥启用采集，Chrome 实际完成抓、吃、碰、胡及教学结算；4 次上报均收到 202。未连接或干扰生产 Redis。
 - 文化页四种尺寸的构建产物截图已人工检查，无横向溢出；截图位于 `output/playwright/player-copy-review/culture-*.png`。
-- PR #75 首轮 CI 找出 `mobile-responsive.spec.ts` 一处遗漏的旧提示断言（仍要求“可先选择手牌，再按出”），已同步为新文案；其余交互与触控断言保留。
+- PR #75 首轮 CI 找出 `mobile-responsive.spec.ts` 一处遗漏的旧提示断言（仍要求“可先选择手牌，再按出”），已同步为新文案；其余交互与触控断言保留，对应小屏用例重跑通过。后续 Chromium 分组还找出好友竞争响应中匹配“提交拦截”的旧断言，已同步；通过旧文案四字片段扫描核对其他测试引用，功能断言未放宽。
 
 完整 CI gate 待当前 PR head 完成。真实设备、读屏及本地牌友复核统一由 [#74](https://github.com/lin594/sise/issues/74) 跟踪。
 

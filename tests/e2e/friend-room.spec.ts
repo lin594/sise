@@ -608,7 +608,7 @@ test("a later friend can preselect while the current peng winner receives the di
 
     await expect(host.getByTestId("action-peng")).toBeEnabled();
     await expect(guest.getByTestId("action-peng")).toBeEnabled();
-    await expect(host.getByTestId("action-guidance")).toContainText(/提交拦截/);
+    await expect(host.getByTestId("action-guidance")).toContainText(/可以选择胡、开或碰/);
     await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了/);
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
