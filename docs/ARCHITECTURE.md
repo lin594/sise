@@ -275,3 +275,7 @@ server/src/schema/                    公开同步 Schema
 `useRoomLifecycle` 复用 useRoom，集中练习/教学/好友房创建、快速配桌、模式切换及离房清理；`useRoomNavigation` 独立维护浏览器历史保护、监听器和释放计时器。App 仅组合当前最上层弹窗的返回优先级，保持各领域关闭/确认入口。
 
 `useRoomRecovery` 复用 useRoom 的恢复连接，集中旧房间凭证读取、首次入口选择、恢复/取消说明与焦点，以及以新权威 revision 和私有同步为条件的恢复指标。App 提供返回玩法入口；凭证仍只用于原身份验证，不进入指标。
+
+### 源码构建
+
+依据 [生成文件依赖审计](GENERATED_SOURCE_AUDIT.md)，客户端只跟踪 `.ts` / `.vue` 源码及手写声明，类型检查使用 noEmit，Vite 单独产出 dist。CI 同时检查误跟踪编译副本和构建对跟踪输入的改动；音频同步资源继续按原规则生成并核对。
