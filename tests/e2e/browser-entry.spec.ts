@@ -128,8 +128,8 @@ test("shares the public game card from mode selection", async ({ page }, testInf
   await shareButton.click();
   await expect(page.getByTestId("global-notice")).toHaveText("四色牌已分享到系统分享菜单");
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("sise_test_shared_game") ?? "{}"))).toEqual({
-    title: "邀请你一起传承四色牌文化",
-    text: "象棋魂 · 麻将韵 · 纸牌趣——四色牌，一局见真章！",
+    title: "来一起玩四色牌",
+    text: "不用注册，打开就能玩莆田四色牌。可以先练一局，也能邀请好友同桌。",
     url: `${new URL(page.url()).origin}/share`,
   });
 });

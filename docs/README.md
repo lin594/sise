@@ -44,5 +44,5 @@
 
 ## 素材与许可证
 
-[ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) 和逐项清单记录素材来源线索及尚待维护者确认的授权边界。
+[ASSET_PROVENANCE.md](ASSET_PROVENANCE.md) 和逐项清单记录素材来源、AGPL-3.0 许可证和维护者确认依据。
 - [客户端生成文件依赖审计与迁移决定](GENERATED_SOURCE_AUDIT.md)

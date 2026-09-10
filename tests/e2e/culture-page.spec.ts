@@ -7,7 +7,10 @@ for (const viewport of [{width:568,height:320},{width:375,height:667},{width:102
   await page.getByTestId('culture-entry').click();
   await expect(page).toHaveURL(/\/culture.html$/);
   await expect(page.getByRole('heading',{name:'把 117 张牌认清楚'})).toBeVisible();
-  await expect(page.locator('body')).toContainText('尚未最终确认');
+  await expect(page.locator('body')).not.toContainText(/待确认|尚未最终确认|维护者确认|交叉核对|服务端/);
+  await expect(page.getByRole('heading', { name: '这一桌怎么玩' })).toBeVisible();
+  await expect(page.locator('body')).toContainText('小胡赢家坐庄');
+  await expect(page.getByRole('link', { name: 'AGPL-3.0 许可证' })).toHaveAttribute('href', 'https://github.com/lin594/sise/blob/main/LICENSE');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByTestId('culture-practice').click();
   await expect(page.getByTestId('mode-practice_bots')).toBeVisible();

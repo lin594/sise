@@ -4,15 +4,15 @@
 
 | 阶段 | 任务 | 实现 PR | 状态与边界 |
 |---|---|---|---|
-| v0.2 | [规则 v1.0 #30](https://github.com/lin594/sise/issues/30) | [#45](https://github.com/lin594/sise/pull/45) | 全部已合并；真人交叉核对未完成 |
-| v0.2 | [匿名指标 #31](https://github.com/lin594/sise/issues/31) | [#48](https://github.com/lin594/sise/pull/48)、[#67](https://github.com/lin594/sise/pull/67) | 全部已合并；默认关闭；生产配置、采集和报告未验证 |
+| v0.2 | [规则 v1.0 #30](https://github.com/lin594/sise/issues/30) | [#45](https://github.com/lin594/sise/pull/45) | 规则已定版、实现已合并；本地牌友复核迁入 #74 |
+| v0.2 | [匿名指标 #31](https://github.com/lin594/sise/issues/31) | [#48](https://github.com/lin594/sise/pull/48)、[#67](https://github.com/lin594/sise/pull/67) | 功能已合并；生产部署与启用迁入 #73 |
 | v0.2 | [发布清单 #32](https://github.com/lin594/sise/issues/32) | [#44](https://github.com/lin594/sise/pull/44) | 全部已合并；流程已建立；物理设备验收未完成 |
-| v0.2 | [许可证与素材 #33](https://github.com/lin594/sise/issues/33) | [#46](https://github.com/lin594/sise/pull/46) | 全部已合并；盘点已完成；未知授权与许可证定版未完成 |
+| v0.2 | [许可证与素材 #33](https://github.com/lin594/sise/issues/33) | [#46](https://github.com/lin594/sise/pull/46) | 整体 AGPL-3.0 已确认；LICENSE 与逐项来源记录已落实 |
 | v0.3 | [教学局 #34](https://github.com/lin594/sise/issues/34) | [#50](https://github.com/lin594/sise/pull/50) | 全部已合并；固定演练已实现；实际学习时长与读屏未验证 |
-| v0.3 | [上下文解释 #35](https://github.com/lin594/sise/issues/35) | [#51](https://github.com/lin594/sise/pull/51) | 全部已合并；权威候选、一次提示与设置已实现；真实读屏验收未完成 |
+| v0.3 | [上下文解释 #35](https://github.com/lin594/sise/issues/35) | [#51](https://github.com/lin594/sise/pull/51) | 功能已合并；真实读屏验收迁入 #74 |
 | v0.3 | [好友邀请 #36](https://github.com/lin594/sise/issues/36) | [#52](https://github.com/lin594/sise/pull/52) | 全部已合并；首次昵称、保存昵称、恢复与分享降级已补齐 |
 | v0.3 | [结算复玩 #37](https://github.com/lin594/sise/issues/37) | [#53](https://github.com/lin594/sise/pull/53) | 全部已合并；三种模式动作、累计分与重复请求回归已补齐 |
-| Later | [文化页 #38](https://github.com/lin594/sise/issues/38) | [#54](https://github.com/lin594/sise/pull/54) | 全部已合并；静态页面与入口已实现；未知来源如实标记 |
+| Later | [文化页 #38](https://github.com/lin594/sise/issues/38) | [#54](https://github.com/lin594/sise/pull/54) | 文化页与入口已实现；本轮整理为面向玩家的认牌、术语与玩法说明 |
 | Later | [客户端治理 #39](https://github.com/lin594/sise/issues/39) | [#55](https://github.com/lin594/sise/pull/55)、[#56](https://github.com/lin594/sise/pull/56)、[#57](https://github.com/lin594/sise/pull/57)、[#58](https://github.com/lin594/sise/pull/58)、[#59](https://github.com/lin594/sise/pull/59)、[#60](https://github.com/lin594/sise/pull/60)、[#61](https://github.com/lin594/sise/pull/61)、[#62](https://github.com/lin594/sise/pull/62)、[#63](https://github.com/lin594/sise/pull/63)、[#65](https://github.com/lin594/sise/pull/65) | 全部已合并；八个领域独立拆分；先审计后迁移生成副本 |
 
 ## 当前提交门禁与合并证据
@@ -52,10 +52,10 @@
 
 [本轮验证记录](validation/PRODUCTIZATION_2026-09-10.md) 汇总环境、命令、需求覆盖、失败及修复证据；[PR 证据清单](validation/productization-pr-evidence.json) 保存可机读的提交与门禁信息。[发布清单](RELEASE_CHECKLIST.md) 的真机项仍为未验证。
 
-- [v0.2 milestone](https://github.com/lin594/sise/milestone/1) 保持开放：#30 真人规则核对、#31 生产指标、#33 素材授权和许可证仍有未完成项。
-- [v0.3 milestone](https://github.com/lin594/sise/milestone/2) 保持开放：代码已合并，#35 真实读屏验收、真实设备/真实新手试玩与实际发布分别跟踪；任务代码合并不代表上线。
-- 许可证仍为“倾向 AGPL-3.0，尚未最终确认”，没有新增 LICENSE。
-- 本轮未执行生产部署，线上运行提交未核验；物理 iPhone / Android / 微信、真实弱网及服务重建未在本轮执行；不据自动化通过关闭 milestone。
+- [v0.2 milestone](https://github.com/lin594/sise/milestone/1) 和 [v0.3 milestone](https://github.com/lin594/sise/milestone/2) 的剩余实际验收统一由 [#74](https://github.com/lin594/sise/issues/74) 跟踪；不得把功能 issue 关闭当成真机或真人验收通过。
+- #30 规则、#33 许可证均有维护者明确确认，#31/#35 剩余验收已拆分；相关功能任务随本轮交付收尾。
+- 生产部署及匿名指标启用由 [#73](https://github.com/lin594/sise/issues/73) 跟踪。本轮部署前实查生产仓库为 `34042e6`，统计关闭且没有配置密钥；本地和远端主分支基线为 `26b88e5`。
+- [本轮文案与发布记录](validation/PLAYER_COPY_RELEASE_2026-09-10.md) 记录验证和实际部署结果；在完成部署前不宣称已上线。
 
 ## 流程与工程记录
 

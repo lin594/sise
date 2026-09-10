@@ -182,7 +182,7 @@
       @set-lobby-ready="requestLobbyReady"
     >
       <template #recommendation>
-        <button v-if="showModeLobby && !state" class="ghost tutorial-entry" data-testid="tutorial-entry" :disabled="enteringLobby" @click="startPracticeLobby(true)">第一次玩？3 分钟学会</button>
+        <button v-if="showModeLobby && !state" class="ghost tutorial-entry" data-testid="tutorial-entry" :disabled="enteringLobby" @click="startPracticeLobby(true)">第一次玩？跟着提示学一局</button>
         <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
           <span>屏幕较小，紧凑布局能留出更多操作空间</span>
           <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>

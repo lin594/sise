@@ -367,7 +367,7 @@ test("invite card exposes cultural metadata and auto-joins with a confirmed loca
     const response = await guest.request.get(inviteUrl);
     expect(response.ok()).toBe(true);
     const html = await response.text();
-    expect(html).toContain('property="og:title" content="邀请你一起传承四色牌文化"');
+    expect(html).toContain('property="og:title" content="来一起玩四色牌"');
     expect(html).toContain(`好友房 ${roomId}`);
     expect(html).toContain("/share-thumbnail-v3.png");
     expect(html).toContain('property="og:image:width" content="800"');
@@ -822,7 +822,7 @@ test("opens the phone system share sheet for a friend invitation", async ({ page
   const roomId = new URL(page.url()).searchParams.get("roomId");
   const inviteUrl = invitationUrlFromRoomPage(page);
   expect(shared).toEqual({
-    title: "邀请你一起传承四色牌文化",
+    title: "来一起玩四色牌",
     text: `好友房 ${roomId} · 不用注册，打开选座；不满四人可电脑补位`,
     url: inviteUrl,
   });

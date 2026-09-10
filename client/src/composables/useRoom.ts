@@ -1521,7 +1521,7 @@ export function useRoom(playerName = "Player") {
     }
     const payload = (await response.json()) as { ok?: boolean; roomId?: string };
     if (!payload?.roomId) {
-      throw new Error("服务端未返回可用房间");
+      throw new Error("暂时无法进入牌桌，请重试。");
     }
     return payload.roomId;
   }

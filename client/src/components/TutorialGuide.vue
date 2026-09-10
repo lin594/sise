@@ -14,8 +14,8 @@ const copy = computed(() => {
   const action = expected[props.step];
   if (action && !props.actions.some(item => item.action === action && item.enabled !== false)) return "正在继续牌局，请稍候…";
   return ({
-    intro: "1/7 认牌：先看颜色，再看字。演练使用缩短手牌，不计入战绩。",
-    grab: "2/7 中央是待响应牌。白卒不合用，点「抓」从牌堆翻一张。",
+    intro: "1/7 认牌：先看颜色，再看字。这局用少量牌练习基本操作，不计入战绩。",
+    grab: "2/7 中央这张白卒用不上，点「抓」从牌堆翻一张。",
     eat: "3/7 红车、红马、红炮可成组。点「吃」收下红炮。",
     discard_chi: "4/7 吃后要弃一张。选白仕，再点「出牌」。",
     peng: "5/7 两张绿马遇到第三张可「碰」。三张遇到第四张可「开」。现在点碰。",

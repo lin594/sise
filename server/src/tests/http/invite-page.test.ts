@@ -4,7 +4,7 @@ import { buildInvitePage, buildPublicSharePage, normalizePublicWebOrigin } from 
 
 test("invite page provides a room-specific cultural share card and safe entry link", () => {
   const html = buildInvitePage("room_42", "https://cards.example.com");
-  assert.match(html, /邀请你一起传承四色牌文化/);
+  assert.match(html, /来一起玩四色牌/);
   assert.match(html, /好友房 room_42/);
   assert.match(html, /property="og:url" content="https:\/\/cards\.example\.com\/invite\/room_42"/);
   assert.match(html, /property="og:image" content="https:\/\/cards\.example\.com\/share-thumbnail-v3\.png"/);
@@ -21,8 +21,8 @@ test("invite page provides a room-specific cultural share card and safe entry li
 
 test("public share page exposes social metadata and returns to mode selection", () => {
   const html = buildPublicSharePage("https://cards.example.com");
-  assert.match(html, /邀请你一起传承四色牌文化/);
-  assert.match(html, /象棋魂 · 麻将韵 · 纸牌趣/);
+  assert.match(html, /来一起玩四色牌/);
+  assert.match(html, /不用注册，打开就能玩莆田四色牌/);
   assert.match(html, /property="og:url" content="https:\/\/cards\.example\.com\/share"/);
   assert.match(html, /property="og:image" content="https:\/\/cards\.example\.com\/share-thumbnail-v3\.png"/);
   assert.match(html, /itemprop="image" content="https:\/\/cards\.example\.com\/share-thumbnail-v3\.png"/);

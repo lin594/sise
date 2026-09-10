@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lin594/sise/actions/workflows/ci.yml/badge.svg)](https://github.com/lin594/sise/actions/workflows/ci.yml)
 
-基于 Vue 3、TypeScript 与 Colyseus 的莆田四色牌地方玩法游戏。支持服务端教学演练、单人练习、快速真人配桌和好友同桌；在线人数不足时快速桌会自动补电脑。大厅提供“第一次玩？3 分钟学会”，结算按房间模式提供继续练习、重新配桌或同桌下一局。
+基于 Vue 3、TypeScript 与 Colyseus 的莆田四色牌地方玩法游戏。支持新手教学、单人练习、快速真人配桌和好友同桌；在线人数不足时快速桌会自动补电脑。大厅提供“第一次玩？跟着提示学一局”，结算按房间模式提供继续练习、重新配桌或同桌下一局。
 
 ## 快速开始
 
@@ -84,4 +84,4 @@ docs/         当前权威文档与历史档案
 
 ## 许可证与素材
 
-代码许可证倾向 AGPL-3.0，尚未最终确认，暂未加入 LICENSE。图片、图标、音频与验证截图的来源和授权状态见 [素材来源清单](docs/ASSET_PROVENANCE.md)。不推定代码许可同时适用于全部素材。
+项目代码及随仓库分发的项目素材整体采用 [AGPL-3.0](LICENSE)。音频由维护者录制，SVG 等由维护者使用 Codex 生成；详细来源及确认记录见 [素材来源清单](docs/ASSET_PROVENANCE.md)。
