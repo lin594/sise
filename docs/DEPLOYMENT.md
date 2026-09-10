@@ -98,6 +98,12 @@ Web 镜像会同源提供 `/site.webmanifest`、favicon、手机主屏图标和�
 
 `PUBLIC_WEB_ORIGIN` 必须是玩家实际访问的 HTTPS Web 来源。服务端用它为 `/invite/{roomId}` 和 `/share` 生成绝对卡片链接及 `/share-thumbnail-v3.png` 分享图地址；不要填写 API 子域名，也不要包含路径、账号或密码。更换分享图时使用新的版本化文件名并同步分享页元数据，避免微信或 QQ 继续使用旧缩略图缓存。
 
+### 发布镜像的静态资源检查
+
+若使用 `git archive` 在临时目录预构建，源码展开应使用正常的公开读权限（如 `umask 022`）；备份 `.env` 的 `umask 077` 不应沿用到源码目录。Vite 会保留部分 public 资源的文件权限，0600 的文化页、图标或音频可导致 Nginx 返回 403，即使首页与 API 健康检查正常。
+
+发布前验证镜像内静态资源对 Nginx 运行用户可读；发布后实际请求首页、文化页、manifest、图标、分享图及一条音频。预构建镜像应记录源码树与镜像 ID，并在合并后核对源码树一致。具体回退与验证证据见 [玩家文案发布记录](validation/PLAYER_COPY_RELEASE_2026-09-10.md)。
+
 ## 6. iMac 试玩环境
 
 试玩机仓库位于 `~/workspace/lin594/sise`，主机名为 `imac.tajuren.cn`。它只用于受控测试，不承担正式部署。使用 `docker-compose.imac.yml` 后，由 Web Nginx 统一代理页面、HTTP API 和 WebSocket：
