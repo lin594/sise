@@ -5,7 +5,7 @@
 | 阶段 | 任务 | 实现 PR | 状态与边界 |
 |---|---|---|---|
 | v0.2 | [规则 v1.0 #30](https://github.com/lin594/sise/issues/30) | [#45](https://github.com/lin594/sise/pull/45) | 规则已定版、实现已合并；本地牌友复核迁入 #74 |
-| v0.2 | [匿名指标 #31](https://github.com/lin594/sise/issues/31) | [#48](https://github.com/lin594/sise/pull/48)、[#67](https://github.com/lin594/sise/pull/67) | 功能已合并；生产部署与启用迁入 #73 |
+| v0.2 | [匿名指标 #31](https://github.com/lin594/sise/issues/31) | [#48](https://github.com/lin594/sise/pull/48)、[#67](https://github.com/lin594/sise/pull/67) | 功能已合并；#73 已完成生产启用和受控聚合验收 |
 | v0.2 | [发布清单 #32](https://github.com/lin594/sise/issues/32) | [#44](https://github.com/lin594/sise/pull/44) | 全部已合并；流程已建立；物理设备验收未完成 |
 | v0.2 | [许可证与素材 #33](https://github.com/lin594/sise/issues/33) | [#46](https://github.com/lin594/sise/pull/46) | 整体 AGPL-3.0 已确认；LICENSE 与逐项来源记录已落实 |
 | v0.3 | [教学局 #34](https://github.com/lin594/sise/issues/34) | [#50](https://github.com/lin594/sise/pull/50) | 全部已合并；固定演练已实现；实际学习时长与读屏未验证 |
@@ -53,9 +53,9 @@
 [本轮验证记录](validation/PRODUCTIZATION_2026-09-10.md) 汇总环境、命令、需求覆盖、失败及修复证据；[PR 证据清单](validation/productization-pr-evidence.json) 保存可机读的提交与门禁信息。[发布清单](RELEASE_CHECKLIST.md) 的真机项仍为未验证。
 
 - [v0.2 milestone](https://github.com/lin594/sise/milestone/1) 和 [v0.3 milestone](https://github.com/lin594/sise/milestone/2) 的剩余实际验收统一由 [#74](https://github.com/lin594/sise/issues/74) 跟踪；不得把功能 issue 关闭当成真机或真人验收通过。
-- #30 规则、#33 许可证均有维护者明确确认，#31/#35 剩余验收已拆分；相关功能任务随本轮交付收尾。
-- 生产部署及匿名指标启用由 [#73](https://github.com/lin594/sise/issues/73) 跟踪。本轮部署前实查生产仓库为 `34042e6`，统计关闭且没有配置密钥；本地和远端主分支基线为 `26b88e5`。
-- [本轮文案与发布记录](validation/PLAYER_COPY_RELEASE_2026-09-10.md) 记录验证和实际部署结果；在完成部署前不宣称已上线。
+- #30 规则、#33 许可证均有维护者明确确认；#30/#31/#33/#35 已随 #75 合并关闭，剩余实际验收由 #74 跟踪。
+- 生产任务 [#73](https://github.com/lin594/sise/issues/73) 已完成：运行版本 `c7d8ad2`，统计已启用；教学、练习/好友局自然结算和复玩、邀请、旧局恢复及聚合增量通过。部署前版本为 `34042e6`，统计关闭。
+- [本轮文案与发布记录](validation/PLAYER_COPY_RELEASE_2026-09-10.md) 记录完整 CI、实际运行镜像、权限修正、恢复与线上验收结果；受控流量不代表自然增长。
 
 ## 流程与工程记录
 

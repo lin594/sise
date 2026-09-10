@@ -1,0 +1,214 @@
+{
+  "note": "生产受控验收前后匿名汇总；窗口内可能包含其他访问。不得解释为自然增长或留存表现。",
+  "applicationCommit": "c7d8ad25869b3b47174ec2cafc28397f6e4c2b59",
+  "controlledFlow": {
+    "startedAt": "2026-09-10T05:10:37.022Z",
+    "checks": {
+      "culture": true,
+      "wss": true,
+      "tutorialCompleted": true,
+      "practiceCompleted": true,
+      "practiceReplay": true,
+      "profile": true,
+      "inviteJoined": true,
+      "inviteSeatRestored": true,
+      "friendRoundStarted": true,
+      "friendRoundCompleted": true,
+      "friendReplay": true,
+      "quickMatchStarted": true
+    },
+    "errors": [],
+    "finishedAt": "2026-09-10T05:13:54.185Z"
+  },
+  "legacyRecovery": {
+    "restored": true,
+    "roomAndSeatUnchanged": true,
+    "privateHandUnchanged": true,
+    "discardAccepted": true,
+    "at": "2026-09-10T05:10:38.492Z"
+  },
+  "before": {
+    "daysWithData": 0,
+    "through": "2026-09-10",
+    "timezone": "Asia/Shanghai",
+    "contextHints": {
+      "shown": 0,
+      "disabled": 0
+    },
+    "tutorialCompletion": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "firstRoundActivation": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "firstRoundCompletion": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "invitationJoin": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "playAgain": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "playAgainClicks": 0,
+    "d1": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "d7": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "retentionCoverage": {
+      "d1": {
+        "matureCohorts": 0,
+        "measuredCohorts": 0,
+        "excludedParticipants": 0,
+        "missingTargetDays": []
+      },
+      "d7": {
+        "matureCohorts": 0,
+        "measuredCohorts": 0,
+        "excludedParticipants": 0,
+        "missingTargetDays": []
+      }
+    },
+    "joinFailure": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "recoverySuccess": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "latency": {
+      "practice": {
+        "samples": 0,
+        "p50UpperBoundMs": null,
+        "p95UpperBoundMs": null
+      },
+      "match": {
+        "samples": 0,
+        "p50UpperBoundMs": null,
+        "p95UpperBoundMs": null
+      },
+      "friends": {
+        "samples": 0,
+        "p50UpperBoundMs": null,
+        "p95UpperBoundMs": null
+      },
+      "tutorial": {
+        "samples": 0,
+        "p50UpperBoundMs": null,
+        "p95UpperBoundMs": null
+      }
+    },
+    "note": "仅代表已采集样本；统计故障可能丢数，空分母为 null。耗时为成功样本直方图分位数上界。"
+  },
+  "after": {
+    "daysWithData": 1,
+    "through": "2026-09-10",
+    "timezone": "Asia/Shanghai",
+    "contextHints": {
+      "shown": 10,
+      "disabled": 0
+    },
+    "tutorialCompletion": {
+      "numerator": 1,
+      "denominator": 1,
+      "rate": 1
+    },
+    "firstRoundActivation": {
+      "numerator": 2,
+      "denominator": 3,
+      "rate": 0.6666666666666666
+    },
+    "firstRoundCompletion": {
+      "numerator": 2,
+      "denominator": 2,
+      "rate": 1
+    },
+    "invitationJoin": {
+      "numerator": 2,
+      "denominator": 2,
+      "rate": 1
+    },
+    "playAgain": {
+      "numerator": 3,
+      "denominator": 8,
+      "rate": 0.375
+    },
+    "playAgainClicks": 2,
+    "d1": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "d7": {
+      "numerator": 0,
+      "denominator": 0,
+      "rate": null
+    },
+    "retentionCoverage": {
+      "d1": {
+        "matureCohorts": 0,
+        "measuredCohorts": 0,
+        "excludedParticipants": 0,
+        "missingTargetDays": []
+      },
+      "d7": {
+        "matureCohorts": 0,
+        "measuredCohorts": 0,
+        "excludedParticipants": 0,
+        "missingTargetDays": []
+      }
+    },
+    "joinFailure": {
+      "numerator": 0,
+      "denominator": 4,
+      "rate": 0
+    },
+    "recoverySuccess": {
+      "numerator": 2,
+      "denominator": 3,
+      "rate": 0.6666666666666666
+    },
+    "latency": {
+      "practice": {
+        "samples": 1,
+        "p50UpperBoundMs": 500,
+        "p95UpperBoundMs": 500
+      },
+      "match": {
+        "samples": 1,
+        "p50UpperBoundMs": 20000,
+        "p95UpperBoundMs": 20000
+      },
+      "friends": {
+        "samples": 1,
+        "p50UpperBoundMs": 5000,
+        "p95UpperBoundMs": 5000
+      },
+      "tutorial": {
+        "samples": 1,
+        "p50UpperBoundMs": 1000,
+        "p95UpperBoundMs": 1000
+      }
+    },
+    "note": "仅代表已采集样本；统计故障可能丢数，空分母为 null。耗时为成功样本直方图分位数上界。"
+  }
+}
