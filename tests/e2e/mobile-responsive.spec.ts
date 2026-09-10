@@ -1299,7 +1299,7 @@ test.describe("compact landscape gameplay", () => {
       cards.map((card) => (card as HTMLElement).dataset.testid),
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
-    await expect(page.getByTestId("action-guidance")).toContainText("可先选择手牌，再按出");
+    await expect(page.getByTestId("action-guidance")).toContainText("先选一张手牌，再点“出牌”");
     await expect(discardConfirm).toHaveText("出");
     await expect(discardConfirm).toHaveAttribute("aria-label", "出牌");
     const gameSettings = page.getByTestId("game-settings");

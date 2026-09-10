@@ -17,6 +17,10 @@
 - 小屏战绩截图已人工检查；文化页自动化覆盖 568×320、375×667、1024×768、1440×900，无横向溢出，入口、返回和许可证链接正常。
 - 本地浏览器使用系统 Chrome，构建和日志在 `/tmp/sise-copy-*.log`；失败 trace 和截图保存在未跟踪的 `output/playwright/player-copy-review/`。
 
+- 独立故障环境以 `REDIS_URL=redis://127.0.0.1:1` 和测试专用统计密钥启用采集，Chrome 实际完成抓、吃、碰、胡及教学结算；4 次上报均收到 202。未连接或干扰生产 Redis。
+- 文化页四种尺寸的构建产物截图已人工检查，无横向溢出；截图位于 `output/playwright/player-copy-review/culture-*.png`。
+- PR #75 首轮 CI 找出 `mobile-responsive.spec.ts` 一处遗漏的旧提示断言（仍要求“可先选择手牌，再按出”），已同步为新文案；其余交互与触控断言保留。
+
 完整 CI gate 待当前 PR head 完成。真实设备、读屏及本地牌友复核统一由 [#74](https://github.com/lin594/sise/issues/74) 跟踪。
 
 ## 部署
