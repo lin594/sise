@@ -1314,7 +1314,7 @@ t("room: local chi enters manual discard stage instead of auto discard", () => {
   assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
 });
 
-t("room: local upper pass opens a fresh local decision for the drawn card", () => {
+t("room: local upper pass auto-flows an uneatable ordinary draw to the next receiver", () => {
   const room = mkRoom(["A", "B", "C", "D"]);
   room.pendingResponse = {
     ownerId: "B",
@@ -1341,12 +1341,12 @@ t("room: local upper pass opens a fresh local decision for the drawn card", () =
 
   assert.equal((room.playerHands.get("B") ?? []).length, before);
   assert.equal(room.pendingResponse?.card.id, "draw1");
-  assert.equal(room.pendingResponse?.card.source, "draw");
-  assert.equal(room.pendingResponse?.ownerId, "B");
+  assert.equal(room.pendingResponse?.card.source, "upper");
+  assert.equal(room.pendingResponse?.ownerId, "C");
   assert.equal(room.pendingResponse?.responsePhaseAfterNoResponse, undefined);
-  assert.equal(room.state.players.get("B")?.discardPile.length ?? 0, 0);
-  assert.equal(room.state.currentPlayerId, "B");
-  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.state.players.get("B")?.discardPile.some((card: Card) => card.id === "draw1"), true);
+  assert.equal(room.state.currentPlayerId, "C");
+  assert.equal(room.state.responsePhase, "local_upper");
   room.clearCollectiveTimer();
 });
 
