@@ -215,6 +215,38 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.pollOriginPlayerId = originId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_draw_downstream_confirm") {
+    const selfIndex = context.playerOrder.indexOf(seatId);
+    const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id);
+      if (seat) seat.declaredKongs = id === seatId ? 1 : 0;
+      if (id !== seatId) {
+        context.playerHands.set(id, [
+          { id: `draw-bystander-${id}-shi-${seq}`, color: "green", type: "shi" },
+          { id: `draw-bystander-${id}-xiang-${seq}`, color: "white", type: "xiang" },
+        ]);
+      }
+    }
+    add("draw-red-ma-1", "red", "ma");
+    add("draw-red-ma-2", "red", "ma");
+    add("draw-red-ju", "red", "ju");
+    add("draw-red-pao", "red", "pao");
+    add("draw-yellow-pao-1", "yellow", "pao");
+    add("draw-yellow-pao-2", "yellow", "pao");
+    add("draw-yellow-pao-3", "yellow", "pao");
+    add("draw-spare", "green", "xiang");
+    context.setCollectiveResponseWindowMs(10_000);
+    context.setPendingResponse(
+      createPendingResponse(ownerId, { id: "draw-red-ma-target", color: "red", type: "ma" }, "draw"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.state.currentTurnPlayerId = ownerId;
+    context.state.pollOriginPlayerId = ownerId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_collective_confirm" || scenario === "chi_collective_only") {
     const selfIndex = context.playerOrder.indexOf(seatId);
     const originId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
@@ -649,6 +681,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "chi_collective_zu4" ||
     scenario === "chi_collective_confirm" ||
     scenario === "chi_collective_only" ||
+    scenario === "chi_draw_downstream_confirm" ||
     scenario === "hu_fail_case"
   ) {
     alignCollectivePublicTurn();
