@@ -46,17 +46,12 @@ test("drawer chooses an eat in the fresh local phase and its actual cards fly", 
   room.clearCollectiveTimer();
 });
 
-test("all-pass collective gives B a local decision before B passes the draw to C", () => {
+test("all-pass collective auto-flows an uneatable draw from B to C", () => {
   const room = fixture();
   room.pendingResponse = createPendingResponse("B", card("draw", "red", "ma"), "draw");
   for (const id of room.playerOrder) room.pendingResponse.collectives.set(id, { action: "pass" });
   room.startCollectivePolling = () => { throw new Error("second collective"); };
   room.resolveCollectivePhase();
-  assert.equal(room.pendingResponse.ownerId, "B");
-  assert.equal(room.state.responsePhase, "local_draw");
-  assert.equal(room.state.players.get("B").discardPile.length, 0);
-
-  room.executePassToNext("B");
   assert.equal(room.pendingResponse.ownerId, "C");
   assert.equal(room.state.responsePhase, "local_upper");
   assert.equal(room.state.pollOriginPlayerId, "B");
@@ -107,11 +102,16 @@ test("presentation blocks actions and starts the shared response window only aft
   room.clients.length = 0;
   room.collectiveResponseWindowMs = 40;
   room.startCollectivePolling();
-  // 内部游标可以停在无动作的 B 来保护隐私，但公开状态不暴露它；
-  // 真正可碰的 C 已能在同一共享窗口内并发提交。
+  // 内部游标可以停在 B 来保护隐私；B 自己未来可吃的选择允许提前预选，
+  // 真正可碰的 C 仍能在同一共享窗口内并发提交。
   assert.equal(room.collectiveResponderId, "B");
   assert.equal(room.state.activeResponderId, "");
-  assert.deepEqual(room.buildClientDecisionView("B").availableActions, []);
+  assert.equal(
+    room.buildClientDecisionView("B").availableActions.some(
+      (item: any) => item.action === "chi" && item.deferred,
+    ),
+    true,
+  );
   assert.equal(
     room.buildClientDecisionView("C").availableActions.some((item: any) => item.action === "peng"),
     true,
@@ -140,7 +140,8 @@ test("C's local eat removes only B's target discard and flies from B's flow", ()
   room.pendingResponse.collectives.set("B", { action: "pass" });
   room.ops.pushDiscard("B", card("old", "green", "ju"));
   room.resolveCollectivePhase();
-  room.executePassToNext("B");
+  assert.equal(room.pendingResponse.ownerId, "C");
+  assert.equal(room.state.responsePhase, "local_upper");
   const chi = room.getAvailableActions("C").find((item: any) => item.action === "chi").candidates[0];
   assert.equal(room.executeEat("C", chi.id), true);
   assert.deepEqual([...room.state.players.get("B").discardPile].map((c: Card) => c.id), ["old"]);
