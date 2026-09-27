@@ -1637,7 +1637,7 @@ function onPanelSubmit(request: ActionRequest) {
     sendAction("pass");
     return;
   }
-  if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source === "upper") {
+  if (state.value?.responsePhase === "collective" && action === "chi" && isDeferred) {
     if (pendingDeferredChiIntent.value) return;
     const candidateId = candidateIdFromRequest(request);
     const targetCardId = String(candidateTargetCard.value?.id ?? "");
@@ -1675,8 +1675,20 @@ function submitDeferredChiIfReady() {
   if (phase === "collective") {
     return;
   }
-  const isLocalChiPhase = phase === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+  const currentPlayerId = String(state.value?.currentPlayerId ?? "");
+  const isLocalChiPhase =
+    (phase === "local_upper" || phase === "local_draw") && currentPlayerId === mySeatId.value;
   if (!isLocalChiPhase) {
+    // A downstream player may preselect Chi while a drawn card is still in
+    // the drawer's local_draw choice. Keep that intent bound to the same card
+    // until the card either flows to this seat or is consumed elsewhere.
+    const waitingForUpstreamDrawOwner =
+      phase === "local_draw" &&
+      Boolean(currentPlayerId) &&
+      currentPlayerId !== mySeatId.value &&
+      Boolean(targetCardId) &&
+      targetCardId === intent.targetCardId;
+    if (waitingForUpstreamDrawOwner) return;
     pendingDeferredChiIntent.value = null;
     return;
   }

@@ -1045,7 +1045,7 @@ test("upper receiver sees both Peng and deferred Chi, then no options after pass
 });
 
 
-test("deferred Chi alone neither extends the public window nor becomes a draw preview", () => {
+test("deferred Chi alone neither extends the public window nor disappears for a drawn card", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.collectiveResponseWindowMs = undefined;
   room.state.players.get("A").connected = true;
@@ -1059,5 +1059,103 @@ test("deferred Chi alone neither extends the public window nor becomes a draw pr
   assert.equal(room.currentCollectiveResponseWindowMs(), 3_000);
   room.pendingResponse.ownerId = "B";
   room.pendingResponse.card.source = "draw";
-  assert.equal(room.buildClientDecisionView("B").availableActions.some((a: any) => a.action === "chi"), false);
+  assert.equal(room.buildClientDecisionView("B").availableActions.some((a: any) => a.action === "chi" && a.deferred), true);
+});
+
+test("drawn red horse exposes downstream Peng, deferred Chi and Pass while preserving a declared kan", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.state.players.get("A").connected = true;
+  room.state.players.get("B").connected = true;
+  room.state.players.get("B").declaredKongs = 1;
+  room.playerHands.set("B", [
+    mkCard("red-ma-1", "red", "ma", "upper"),
+    mkCard("red-ma-2", "red", "ma", "upper"),
+    mkCard("red-ju", "red", "ju", "upper"),
+    mkCard("red-pao", "red", "pao", "upper"),
+    mkCard("yellow-pao-1", "yellow", "pao", "upper"),
+    mkCard("yellow-pao-2", "yellow", "pao", "upper"),
+    mkCard("yellow-pao-3", "yellow", "pao", "upper"),
+    mkCard("spare", "green", "shi", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("target-red-ma", "red", "ma", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["A", "B", "C", "D"];
+  room.collectiveResponderId = "A";
+
+  const choices = room.buildClientDecisionView("B").availableActions;
+  assert.equal(choices.some((entry: any) => entry.action === "peng" && entry.enabled), true);
+  const chi = choices.find((entry: any) => entry.action === "chi");
+  assert.equal(Boolean(chi?.deferred && !chi?.enabled), true);
+  assert.equal(chi?.candidates?.some((candidate: any) => candidate.kind === "jmp"), true);
+  assert.equal(choices.some((entry: any) => entry.action === "pass" && entry.enabled), true);
+});
+
+test("ordinary drawn card skips the drawer local window when the drawer cannot Chi", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("draw-no-chi", "red", "ma", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.state.currentPlayerId = "A";
+  room.state.currentTurnPlayerId = "A";
+  room.state.pollOriginPlayerId = "A";
+  room.playerHands.set("A", [
+    mkCard("unrelated-1", "green", "shi", "upper"),
+    mkCard("unrelated-2", "white", "xiang", "upper"),
+  ]);
+
+  room.enterOwnerLocalPhaseAfterNoResponse("A");
+
+  assert.equal(room.pendingResponse.ownerId, "B");
+  assert.equal(room.pendingResponse.card.source, "upper");
+  assert.equal(room.state.responsePhase, "local_upper");
+  assert.equal(room.state.currentPlayerId, "B");
+  assert.equal(room.state.currentTurnPlayerId, "B");
+  assert.equal(room.state.lastAction, "A PASS");
+  room.clearCollectiveTimer();
+});
+
+test("explicit passes shorten a ten-second response window to the original-start three-second privacy floor", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.collectiveResponseWindowMs = undefined;
+  room.state.players.get("A").connected = true;
+  room.state.players.get("B").connected = true;
+  room.playerHands.set("B", [
+    mkCard("ma-1", "red", "ma", "upper"),
+    mkCard("ma-2", "red", "ma", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("privacy-target", "red", "ma", "draw"),
+    collectives: new Map([["B", { action: "pass" }]]),
+  };
+  room.state.responsePhase = "collective";
+
+  const startedAt = Date.now() - 2_000;
+  room.responseTimerTotalMs = 10_000;
+  room.collectiveResponseEndsAt = startedAt + 10_000;
+  room.state.responseEndsAt = room.collectiveResponseEndsAt;
+
+  assert.equal(room.shortenCollectiveWindowToPrivacyFloorIfReady(), true);
+  assert.equal(room.responseTimerTotalMs, 3_000);
+  assert.equal(room.collectiveResponseEndsAt, startedAt + 3_000);
+  const remainingMs = room.collectiveResponseEndsAt - Date.now();
+  assert.equal(remainingMs > 700 && remainingMs <= 1_050, true);
+
+  room.state.players.get("C").connected = true;
+  room.playerHands.set("C", [
+    mkCard("blocker-1", "red", "ma", "upper"),
+    mkCard("blocker-2", "red", "ma", "upper"),
+  ]);
+  room.responseTimerTotalMs = 10_000;
+  room.collectiveResponseEndsAt = startedAt + 10_000;
+  room.state.responseEndsAt = room.collectiveResponseEndsAt;
+  assert.equal(room.shortenCollectiveWindowToPrivacyFloorIfReady(), false);
+  assert.equal(room.responseTimerTotalMs, 10_000);
 });

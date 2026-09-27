@@ -89,3 +89,48 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect']
     }
   });
 }
+
+test('drawn red horse offers downstream Chi/Peng/Pass together and applies Chi after the shared privacy floor', async ({ browser }) => {
+  const hostContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  const guestContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  const host = await hostContext.newPage(), guest = await guestContext.newPage();
+  try {
+    await openGameAs(host, '/?e2eDebug=1', '截图复现');
+    await host.getByTestId('mode-friends').click();
+    await expect.poll(() => host.url()).toContain('roomId=');
+    await openGameAs(guest, host.url(), '旁观响应');
+    await guest.getByTestId('claim-seat-1').click();
+    await host.getByTestId('fill-bots').click();
+    await guest.getByTestId('lobby-ready').click();
+    await startLobbyAction(host);
+    await Promise.all([finishDeclarationIfNeeded(host), finishDeclarationIfNeeded(guest)]);
+
+    await inject(host, 'chi_draw_downstream_confirm');
+    await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
+    await expect(host.getByTestId('action-peng')).toBeEnabled();
+    await expect(host.getByTestId('action-chi')).toBeEnabled();
+    await expect(host.getByTestId('action-pass')).toBeEnabled();
+
+    await host.getByTestId('hand-card-draw-red-ju').click();
+    await host.getByTestId('hand-card-draw-red-pao').click();
+    await expect(host.getByTestId('hand-card-draw-red-ju')).toHaveAttribute('aria-pressed', 'true');
+    await expect(host.getByTestId('hand-card-draw-red-pao')).toHaveAttribute('aria-pressed', 'true');
+
+    const clickedAt = Date.now();
+    await host.getByTestId('action-chi').click();
+    await expect(host.getByTestId('decision-status')).toContainText('已选择吃，等待其他玩家响应');
+
+    const consumed = () => host.evaluate(() => {
+      const state = (window as any).__siseLocalTest.getRoomState();
+      const cards = state.players.flatMap((p: any) => p.exposedArea ?? []);
+      return ['draw-red-ma-target', 'draw-red-ju', 'draw-red-pao'].map(id =>
+        cards.filter((card: any) => card.id === id).length);
+    });
+    await expect.poll(consumed, { timeout: 5_000 }).toEqual([1, 1, 1]);
+    expect(Date.now() - clickedAt).toBeLessThan(5_000);
+    await expect(host.getByTestId('decision-status').filter({ hasText: '已选择吃，等待其他玩家响应' })).toHaveCount(0);
+  } finally {
+    await guestContext.close();
+    await hostContext.close();
+  }
+});

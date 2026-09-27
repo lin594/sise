@@ -138,12 +138,21 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     const pengCandidates = buildPengCandidates(input.hand, input.pending.card).map(
       (item) => item.candidate,
     );
+    const nextOwnerId = input.getNextPlayerId(input.pending.ownerId);
     const localOwnerId =
-      input.pending.card.source === "draw" ? input.pending.ownerId : input.getNextPlayerId(input.pending.ownerId);
+      input.pending.card.source === "draw" ? input.pending.ownerId : nextOwnerId;
     const localResponsePhase =
       input.pending.responsePhaseAfterNoResponse ?? (input.pending.card.source === "draw" ? "local_draw" : "local_upper");
+    // A drawn ordinary card may first be eaten by the drawer. If it is not,
+    // the same card flows directly to the next player without another
+    // collective poll. Preview that next player's Chi now as a deferred intent
+    // so the UI can present Chi/Peng/Pass in one decision without changing
+    // Hu/Kai/Peng priority.
+    const canPreviewChi =
+      input.seatId === localOwnerId ||
+      (input.pending.card.source === "draw" && input.seatId === nextOwnerId);
     const previewChiCandidates =
-      input.seatId === localOwnerId
+      canPreviewChi
         ? buildChiCandidates(input.getHandWithoutPending(input.seatId, input.pending.card), input.pending.card, []).map(
             (item) => item.candidate,
           )
