@@ -221,7 +221,11 @@ function onClick(item: PanelAction): void {
   if (item.deferredKind === "pass") {
     emit("submit", { action: "pass", deferred: true });
   } else if (item.action === "chi") {
-    emit("submit", { action: "chi", candidateId: props.selectedChiCandidateId ?? undefined });
+    emit("submit", {
+      action: "chi",
+      candidateId: props.selectedChiCandidateId ?? undefined,
+      ...(item.deferred ? { deferred: true } : {}),
+    });
   } else if ((item.action === "kai" || item.action === "peng") && item.candidates?.length) {
     emit("submit", { action: item.action, candidateId: item.candidates[0]!.id });
   } else {
