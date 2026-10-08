@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "./output/playwright/test-results",
@@ -10,9 +12,16 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173",
+    baseURL,
     headless: true,
     trace: "retain-on-failure",
+    storageState: {
+      cookies: [],
+      origins: [{
+        origin: baseURL,
+        localStorage: [{ name: "sise_layout_onboarding_v1", value: "done" }],
+      }],
+    },
   },
   projects: [
     {
@@ -24,7 +33,7 @@ export default defineConfig({
     },
     {
       name: "webkit-responsive",
-      testMatch: /(?:responsive-release|quick-phrase|appearance|mobile-table-appearance|declared-kans|product-analytics|tutorial|context-hints|invite-product|culture-page|replay-product|quick-matchmaking)\.spec\.ts/,
+      testMatch: /(?:responsive-release|quick-phrase|appearance|mobile-table-appearance|declared-kans|product-analytics|tutorial|onboarding|context-hints|invite-product|culture-page|replay-product|quick-matchmaking)\.spec\.ts/,
       use: {
         browserName: "webkit",
       },
@@ -40,7 +49,7 @@ export default defineConfig({
           env: {
             ...process.env,
             NODE_ENV: "test",
-            PUBLIC_WEB_ORIGIN: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4173",
+            PUBLIC_WEB_ORIGIN: baseURL,
             MIN_PLAYERS: "1",
             ROOM_CREATE_RATE_LIMIT: "1000",
             GUEST_PROFILE_RATE_LIMIT: "1000",

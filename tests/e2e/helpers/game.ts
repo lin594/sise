@@ -53,7 +53,10 @@ export async function stageDeclarationForTest(page: Page, timeout = 20_000): Pro
 
 /** Set a known local identity before boot, including automatic invitation entry. */
 export async function openGameAs(page: Page, url: string, nickname: string): Promise<void> {
-  await page.addInitScript((name) => { if (!localStorage.getItem("sise_entry_name")) localStorage.setItem("sise_entry_name", name); }, nickname);
+  await page.addInitScript((name) => {
+    if (!localStorage.getItem("sise_entry_name")) localStorage.setItem("sise_entry_name", name);
+    if (!localStorage.getItem("sise_layout_onboarding_v1")) localStorage.setItem("sise_layout_onboarding_v1", "done");
+  }, nickname);
   await page.goto(url);
 }
 

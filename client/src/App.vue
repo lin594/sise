@@ -259,7 +259,7 @@
         @submit-action="onPanelSubmit"
       >
         <template #guidance>
-          <ContextHint v-if="currentHint && !tutorial" :concept="currentHint" :text="contextHintText" @dismiss="dismissContextHint" @disable="setContextHintsEnabled(false)" />
+          <ContextHint v-if="currentHint && !tutorial" :concept="currentHint" :text="contextHintText" @dismiss="dismissContextHintAndRestoreFocus" @disable="disableContextHintsAndRestoreFocus" />
           <TutorialGuide v-if="tutorial" :step="tutorial.step" :actions="availableActions" @next="sendTutorialCommand('next')" @restart="sendTutorialCommand('restart')" />
         </template>
         <template #declaration>
@@ -286,6 +286,13 @@
         </template>
       </GameBoard>
     </template>
+
+    <FirstLayoutDialog
+      v-if="showFirstLayoutDialog"
+      v-model="displayPreferences"
+      :resolved-layout="resolvedTableLayout"
+      @confirm="confirmInitialLayout"
+    />
 
     <InviteLinkFallbackDialog
       v-if="inviteCopyFallbackUrl"
@@ -696,6 +703,7 @@
 <script setup lang="ts">
 import LoginPage from "./components/LoginPage.vue";
 import ContextHint from "./components/ContextHint.vue";
+import FirstLayoutDialog from "./components/FirstLayoutDialog.vue";
 import { useInviteActions } from "./composables/useInviteActions";
 import { useContextHints, type HintConcept } from "./composables/useContextHints";
 import TutorialGuide from "./components/TutorialGuide.vue";
@@ -1003,6 +1011,7 @@ const hintConcepts = computed<HintConcept[]>(() => {
   if (isDeclaring.value && !mePlayer.value?.declaredReady) return [mePlayer.value?.declarationStep === "fish" ? "fish" : "kan"];
   if (!isPlaying.value) return [];
   const concepts: HintConcept[] = [];
+  if (availableActions.value.some(item => item.action === "chi" && Boolean(item.deferred))) concepts.push("earlyChi");
   for (const action of ["hu", "kai", "peng", "chi"] as const) {
     if (availableActions.value.some(item => item.action === action && item.enabled && !item.deferred)) concepts.push(action);
   }
@@ -1011,7 +1020,37 @@ const hintConcepts = computed<HintConcept[]>(() => {
   if (canDiscard.value && (mePlayer.value?.generalArea?.length ?? 0) > 0) concepts.push("general");
   return concepts;
 });
-const { enabled: contextHintsEnabled, current: currentHint, text: contextHintText, dismiss: dismissContextHint, setEnabled: setContextHintsEnabled, reset: resetContextHints } = useContextHints(hintConcepts, computed(() => decisionTimer.value.decisionKey));
+const { enabled: contextHintsEnabled, current: currentHint, text: contextHintText, dismiss: dismissContextHint, acknowledge: acknowledgeContextHint, setEnabled: setContextHintsEnabled, reset: resetContextHints } = useContextHints(hintConcepts, computed(() => decisionTimer.value.decisionKey));
+
+function focusHintDecisionControl(concept: HintConcept | null): void {
+  const action = concept === "grab" || concept === "pass"
+    ? "pass"
+    : concept === "earlyChi"
+      ? "chi"
+      : concept === "hu" || concept === "kai" || concept === "peng" || concept === "chi"
+        ? concept
+        : "";
+  const target = action
+    ? document.querySelector<HTMLButtonElement>(`[data-testid='action-${action}']:not(:disabled)`)
+    : null;
+  if (target) {
+    target.focus({ preventScroll: true });
+    return;
+  }
+  focusReadyGameControl();
+}
+
+function dismissContextHintAndRestoreFocus(): void {
+  const concept = currentHint.value;
+  dismissContextHint();
+  void nextTick(() => focusHintDecisionControl(concept));
+}
+
+function disableContextHintsAndRestoreFocus(): void {
+  const concept = currentHint.value;
+  setContextHintsEnabled(false);
+  void nextTick(() => focusHintDecisionControl(concept));
+}
 
 const interactionPausedMessage = computed(() => {
   if (connected.value) {
@@ -1075,7 +1114,16 @@ const {
   viewportLeft,
   viewportTop,
 } = useResponsiveViewport(viewportGeometryBusy);
+const LAYOUT_ONBOARDING_KEY = "sise_layout_onboarding_v1";
+const displayPreferencesExistedAtBoot = Boolean(readStoredValue("sise_game_display_preferences_v2"));
 const displayPreferences = useDisplayPreferences();
+const layoutOnboardingComplete = ref(
+  !browserStoragePersistent || readStoredValue(LAYOUT_ONBOARDING_KEY) === "done"
+    || displayPreferencesExistedAtBoot || Boolean(storedEntryNameAtBoot),
+);
+const showFirstLayoutDialog = computed(() =>
+  !layoutOnboardingComplete.value && showModeLobby.value && !state.value && !enteringLobby.value && !entryInviteRoomId.value,
+);
 const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value));
 watch(() => [displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value] as const, ([layout, width, height], _, onCleanup) => {
   const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, width, height); }, 180);
@@ -1094,6 +1142,15 @@ function dismissLayoutRecommendation() {
 function acceptCompactLayout() {
   displayPreferences.value.tableLayout = "compact";
   dismissLayoutRecommendation();
+}
+
+function confirmInitialLayout(): void {
+  layoutOnboardingComplete.value = true;
+  writeStoredValue(LAYOUT_ONBOARDING_KEY, "done");
+  dismissLayoutRecommendation();
+  void nextTick(() => {
+    document.querySelector<HTMLButtonElement>(`[data-testid='mode-${selectedLobbyMode.value}']`)?.focus({ preventScroll: true });
+  });
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
@@ -1726,7 +1783,10 @@ function submitDeferredChiIfReady() {
     return;
   }
   const result = sendAction({ action: "chi", candidateId: intent.candidateId });
-  if (result === "sent" || result === "invalid") {
+  if (result === "sent") {
+    acknowledgeContextHint("earlyChi");
+    pendingDeferredChiIntent.value = null;
+  } else if (result === "invalid") {
     pendingDeferredChiIntent.value = null;
   }
 }

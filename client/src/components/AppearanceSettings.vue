@@ -1,13 +1,13 @@
 <template>
   <div class="appearance-settings">
     <fieldset v-if="section !== 'layout'"><legend>皮肤</legend><div class="appearance-options" role="radiogroup" aria-label="皮肤">
-      <button v-for="skin in skins" :key="skin.id" type="button" role="radio" :aria-checked="modelValue.skin === skin.id" :data-testid="`skin-${skin.id}`" @click="emit('update:modelValue', { ...modelValue, skin: skin.id })">
+      <button v-for="skin in skins" :key="skin.id" type="button" role="radio" :aria-checked="modelValue.skin === skin.id" :aria-label="`${skin.name}：${skin.description}`" :data-testid="`skin-${skin.id}`" @click="emit('update:modelValue', { ...modelValue, skin: skin.id })">
         <span class="skin-preview" :data-skin="skin.id" aria-hidden="true"><i>将</i><i>相</i></span>
         <strong>{{ skin.name }}</strong><small>{{ skin.description }}</small>
       </button>
     </div></fieldset>
     <fieldset v-if="section !== 'appearance'"><legend>牌桌布局</legend><div class="appearance-options" role="radiogroup" aria-label="牌桌布局">
-      <button v-for="layout in tableLayouts" :key="layout.id" type="button" role="radio" :aria-checked="modelValue.tableLayout === layout.id" :data-testid="`layout-${layout.id}`" @click="emit('update:modelValue', { ...modelValue, tableLayout: layout.id })">
+      <button v-for="layout in tableLayouts" :key="layout.id" type="button" role="radio" :aria-checked="modelValue.tableLayout === layout.id" :aria-label="layoutAccessibleLabel(layout)" :data-testid="`layout-${layout.id}`" @click="emit('update:modelValue', { ...modelValue, tableLayout: layout.id })">
         <span class="layout-preview" :class="layout.id" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <strong>{{ layout.name }}</strong><small>{{ layout.id === "adaptive" ? `当前${tableLayouts.find(item => item.id === resolvedLayout)?.name ?? "经典布局"}` : layout.description }}</small>
       </button>
@@ -17,8 +17,14 @@
 <script setup lang="ts">
 import type { GameDisplayPreferences, RenderedTableLayoutId } from "@/types/game";
 import { skins, tableLayouts } from "@/utils/appearance";
-defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "layout"; resolvedLayout?: RenderedTableLayoutId }>();
+const props = defineProps<{ modelValue: GameDisplayPreferences; section?: "appearance" | "layout"; resolvedLayout?: RenderedTableLayoutId }>();
 const emit = defineEmits<{ 'update:modelValue': [value: GameDisplayPreferences] }>();
+function layoutAccessibleLabel(layout: (typeof tableLayouts)[number]): string {
+  const description = layout.id === "adaptive"
+    ? `当前${tableLayouts.find(item => item.id === props.resolvedLayout)?.name ?? "经典布局"}`
+    : layout.description;
+  return `${layout.name}：${description}`;
+}
 </script>
 <style scoped>
 fieldset { border: 0; padding: 0; margin: .8rem 0; min-width: 0; }
