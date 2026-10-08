@@ -614,7 +614,10 @@ test("a later friend can preselect while the current peng winner receives the di
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 
-    await host.getByTestId("action-pass").click();
+    // The countdown also reflows this compact board while the first responder
+    // yields. Dispatch directly so CI cannot spend the response window waiting
+    // for Playwright's click-stability check.
+    await host.getByTestId("action-pass").evaluate((button: HTMLButtonElement) => button.click());
     const receipt = host.getByTestId("action-feedback");
     await expect(receipt).toHaveCount(0);
     await expect(host.getByTestId("action-pass")).toHaveCount(0);

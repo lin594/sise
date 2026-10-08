@@ -393,8 +393,9 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
     }
   } else if (scenario === "early_collective_choice") {
-    // 该场景需要让两个真人都来得及提交并发拦截，不能沿用 E2E 的 20ms 快速窗口。
-    context.setCollectiveResponseWindowMs(3_000);
+    // 该场景需要让两个真人都来得及提交并发拦截，且浏览器回归会在响应间
+    // 校验双方提示并截图；保留足够窗口，避免慢速 CI 在断言期间自动结算。
+    context.setCollectiveResponseWindowMs(30_000);
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
       if (tablePlayer) tablePlayer.declaredKongs = 0;

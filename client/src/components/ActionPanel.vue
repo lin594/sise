@@ -192,7 +192,8 @@ const panelAnnouncement = computed(() => {
   if (props.pausedHint) return `操作已暂停。${props.pausedHint}`;
   if (hasDeferredChi.value) {
     const choices = joinActionChoices(normalized.value);
-    return `可以提前吃；若无人胡、开、碰抢牌，稍后自动生效。当前可选择${choices}。`;
+    const turnPrompt = isEarlyCollectiveChoice.value ? "" : "该你操作了。";
+    return `${turnPrompt}可以提前吃；若无人胡、开、碰抢牌，稍后自动生效。当前可选择${choices}。`;
   }
   if (isEarlyCollectiveChoice.value) {
     const choices = joinActionChoices(normalized.value);
