@@ -161,6 +161,9 @@ const showPanel = computed(() => Boolean(needsDecision.value || (!props.fixedSta
 const isEarlyCollectiveChoice = computed(
   () => props.canAct && props.responsePhase === "collective" && !props.isCurrentTurn,
 );
+const hasDeferredChi = computed(
+  () => normalized.value.some((item) => item.action === "chi" && item.deferred),
+);
 const secondsLeft = computed<number | null>(() =>
   typeof props.secondsLeft === "number" && Number.isFinite(props.secondsLeft)
     ? Math.max(0, Math.ceil(props.secondsLeft))
@@ -178,10 +181,23 @@ const timerLabel = computed(() => {
 const timerAccessibleLabel = computed(() =>
   props.untimed ? "练习不限时" : secondsLeft.value === null ? "" : `还剩${secondsLeft.value}秒`,
 );
+function joinActionChoices(items: PanelAction[]): string {
+  const labels = items.map((item) => actionText(item));
+  if (labels.length <= 1) return labels[0] ?? "下一步";
+  return `${labels.slice(0, -1).join("、")}或${labels.at(-1)}`;
+}
+
 const panelAnnouncement = computed(() => {
   if (actionFeedback.value) return actionFeedback.value.message;
   if (props.pausedHint) return `操作已暂停。${props.pausedHint}`;
-  if (isEarlyCollectiveChoice.value) return "可以选择胡、开或碰；多人要牌时，按胡、开、碰的顺序，同种操作按座次先后。";
+  if (hasDeferredChi.value) {
+    const choices = joinActionChoices(normalized.value);
+    return `可以提前吃；若无人胡、开、碰抢牌，稍后自动生效。当前可选择${choices}。`;
+  }
+  if (isEarlyCollectiveChoice.value) {
+    const choices = joinActionChoices(normalized.value);
+    return `可以选择${choices}；多人要牌时，按胡、开、碰的顺序，同种操作按座次先后。`;
+  }
   const timing = props.untimed
     ? "练习不限时。"
     : secondsLeft.value === null || isEarlyCollectiveChoice.value
@@ -212,6 +228,9 @@ function actionText(item: PanelAction): string {
 }
 
 function actionAccessibleLabel(item: PanelAction): string {
+  if (item.action === "chi" && item.deferred) {
+    return "提前吃；若无人胡、开、碰抢牌，稍后自动生效";
+  }
   return actionText(item);
 }
 
