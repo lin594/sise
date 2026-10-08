@@ -34,5 +34,9 @@
     "concurrently": "^9.2.1",
     "start-server-and-test": "^2.1.2",
     "wait-on": "^8.0.5"
+  },
+  "overrides": {
+    "joi": "18.2.9",
+    "shell-quote": "1.12.0"
   }
 }
