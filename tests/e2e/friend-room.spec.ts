@@ -608,12 +608,16 @@ test("a later friend can preselect while the current peng winner receives the di
 
     await expect(host.getByTestId("action-peng")).toBeEnabled();
     await expect(guest.getByTestId("action-peng")).toBeEnabled();
-    await expect(host.getByTestId("action-guidance")).toContainText(/可以选择胡、开或碰/);
+    await expect(host.getByTestId("action-guidance")).toContainText(/可以选择碰或过/);
+    await expect(host.getByTestId("action-guidance")).not.toContainText(/提前吃/);
     await expect(guest.getByTestId("action-guidance")).toContainText(/该你操作了/);
     await expect(guest.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
     await host.screenshot({ path: testInfo.outputPath("friend-early-collective-choice.png") });
 
-    await host.getByTestId("action-pass").click();
+    // The countdown also reflows this compact board while the first responder
+    // yields. Dispatch directly so CI cannot spend the response window waiting
+    // for Playwright's click-stability check.
+    await host.getByTestId("action-pass").evaluate((button: HTMLButtonElement) => button.click());
     const receipt = host.getByTestId("action-feedback");
     await expect(receipt).toHaveCount(0);
     await expect(host.getByTestId("action-pass")).toHaveCount(0);

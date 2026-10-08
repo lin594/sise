@@ -1048,6 +1048,8 @@ const interactionPausedMessage = computed(() => {
 type DeferredChiIntent = {
   roundKey: string;
   targetCardId: string;
+  targetSource: "upper" | "draw";
+  responseOwnerId: string;
   candidateId: string;
   collectiveDecisionKey: string;
 };
@@ -1637,14 +1639,19 @@ function onPanelSubmit(request: ActionRequest) {
     sendAction("pass");
     return;
   }
-  if (state.value?.responsePhase === "collective" && action === "chi" && state.value?.responseCard?.source === "upper") {
+  if (state.value?.responsePhase === "collective" && action === "chi" && isDeferred) {
     if (pendingDeferredChiIntent.value) return;
     const candidateId = candidateIdFromRequest(request);
-    const targetCardId = String(candidateTargetCard.value?.id ?? "");
-    if (!candidateId || !targetCardId) return;
+    const responseCard = state.value?.responseCard;
+    const targetCardId = String(responseCard?.id ?? "");
+    const targetSource = responseCard?.source;
+    const responseOwnerId = String(state.value?.pollOriginPlayerId ?? state.value?.currentPlayerId ?? "");
+    if (!candidateId || !targetCardId || (targetSource !== "upper" && targetSource !== "draw")) return;
     pendingDeferredChiIntent.value = {
       roundKey: getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase),
       targetCardId,
+      targetSource,
+      responseOwnerId,
       candidateId,
       collectiveDecisionKey: decisionTimer.value.decisionKey,
     };
@@ -1666,22 +1673,44 @@ function submitDeferredChiIfReady() {
     return;
   }
   const currentRoundKey = getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase);
-  const targetCardId = String(candidateTargetCard.value?.id ?? "");
-  if (currentRoundKey !== intent.roundKey || (targetCardId && targetCardId !== intent.targetCardId)) {
+  const responseCard = state.value?.responseCard;
+  const targetCardId = String(responseCard?.id ?? "");
+  const targetSource = responseCard?.source;
+  const phase = String(state.value?.responsePhase ?? "");
+  const decisionKey = decisionTimer.value.decisionKey;
+  const lastAction = String(state.value?.lastAction ?? "");
+  const responseWasClaimed = /(?:^|\s)(?:HU|KAI|PENG|CHI)(?:\s|$)/.test(lastAction);
+  if (
+    currentRoundKey !== intent.roundKey ||
+    targetCardId !== intent.targetCardId ||
+    (phase === "collective" && targetSource !== intent.targetSource) ||
+    responseWasClaimed ||
+    (phase === "collective" && Boolean(decisionKey) && decisionKey !== intent.collectiveDecisionKey)
+  ) {
     pendingDeferredChiIntent.value = null;
     return;
   }
-  const phase = String(state.value?.responsePhase ?? "");
   if (phase === "collective") {
     return;
   }
-  const isLocalChiPhase = phase === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
+  const currentPlayerId = String(state.value?.currentPlayerId ?? "");
+  const isLocalChiPhase =
+    (phase === "local_upper" || phase === "local_draw") && currentPlayerId === mySeatId.value;
   if (!isLocalChiPhase) {
+    // A downstream player may preselect Chi while a drawn card is still in
+    // the drawer's local_draw choice. Keep that intent bound to the same card
+    // until the card either flows to this seat or is consumed elsewhere.
+    const waitingForUpstreamDrawOwner =
+      intent.targetSource === "draw" &&
+      phase === "local_draw" &&
+      Boolean(currentPlayerId) &&
+      currentPlayerId === intent.responseOwnerId &&
+      currentPlayerId !== mySeatId.value;
+    if (waitingForUpstreamDrawOwner) return;
     pendingDeferredChiIntent.value = null;
     return;
   }
   if (!connected.value || !privateHandSynchronized.value || !targetCardId) return;
-  const decisionKey = decisionTimer.value.decisionKey;
   if (!decisionKey || decisionKey === intent.collectiveDecisionKey) return;
   const chiEntry = availableActions.value.find((item) => item.action === "chi");
   if (!chiEntry?.enabled) {
@@ -1734,7 +1763,14 @@ function submitKongDeclaration(count: number) {
 }
 
 watch(
-  () => `${state.value?.phase ?? ""}|${state.value?.responsePhase ?? ""}|${state.value?.currentPlayerId ?? ""}`,
+  () => [
+    state.value?.phase ?? "",
+    state.value?.responsePhase ?? "",
+    state.value?.currentPlayerId ?? "",
+    state.value?.responseCard?.id ?? "",
+    state.value?.responseCard?.source ?? "",
+    state.value?.lastAction ?? "",
+  ].join("|"),
   () => {
     submitDeferredGrabIfReady();
     submitDeferredChiIfReady();

@@ -215,7 +215,51 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.pollOriginPlayerId = originId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
-  } else if (scenario === "chi_collective_confirm" || scenario === "chi_collective_only") {
+  } else if (scenario === "chi_draw_downstream_confirm" || scenario === "chi_draw_upstream_confirm") {
+    const selfIndex = context.playerOrder.indexOf(seatId);
+    const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id);
+      if (seat) seat.declaredKongs = id === seatId ? 1 : 0;
+      if (id !== seatId) {
+        context.playerHands.set(id, [
+          { id: `draw-bystander-${id}-shi-${seq}`, color: "green", type: "shi" },
+          { id: `draw-bystander-${id}-xiang-${seq}`, color: "white", type: "xiang" },
+        ]);
+      }
+    }
+    if (scenario === "chi_draw_upstream_confirm") {
+      context.playerHands.set(ownerId, [
+        { id: "draw-owner-red-ju", color: "red", type: "ju" },
+        { id: "draw-owner-red-pao", color: "red", type: "pao" },
+        { id: "draw-owner-spare", color: "green", type: "shi" },
+      ]);
+    }
+    add("draw-red-ma-1", "red", "ma");
+    add("draw-red-ma-2", "red", "ma");
+    add("draw-red-ju", "red", "ju");
+    add("draw-red-pao", "red", "pao");
+    add("draw-yellow-pao-1", "yellow", "pao");
+    add("draw-yellow-pao-2", "yellow", "pao");
+    add("draw-yellow-pao-3", "yellow", "pao");
+    add("draw-spare", "green", "xiang");
+    context.setCollectiveResponseWindowMs(10_000);
+    context.setPendingResponse(
+      createPendingResponse(ownerId, { id: "draw-red-ma-target", color: "red", type: "ma" }, "draw"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.state.currentTurnPlayerId = ownerId;
+    context.state.pollOriginPlayerId = ownerId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (
+    scenario === "chi_collective_confirm" ||
+    scenario === "chi_collective_only" ||
+    scenario === "chi_collective_intercept_kai" ||
+    scenario === "chi_collective_intercept_hu"
+  ) {
     const selfIndex = context.playerOrder.indexOf(seatId);
     const originId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
     for (const id of context.playerOrder) {
@@ -224,16 +268,22 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
       if (id !== seatId) context.playerHands.set(id, [{ id: `chi-spare-${id}-${seq}`, color: "green", type: "shi" }]);
     }
     add("confirm-ma", "red", "ma"); add("confirm-pao", "red", "pao"); add("confirm-spare", "green", "xiang");
-    if (scenario === "chi_collective_confirm") {
+    if (scenario !== "chi_collective_only") {
       add("confirm-ju1", "red", "ju"); add("confirm-ju2", "red", "ju");
       const competitor = context.getNextPlayerId(seatId);
-      context.playerHands.set(competitor, [
+      const competitorCards: Card[] = [
         { id: "competitor-ju1", color: "red", type: "ju" },
         { id: "competitor-ju2", color: "red", type: "ju" },
-        { id: "competitor-spare", color: "green", type: "xiang" },
-      ]);
+      ];
+      if (scenario === "chi_collective_intercept_kai") {
+        competitorCards.push({ id: "competitor-ju3", color: "red", type: "ju" });
+      }
+      if (scenario !== "chi_collective_intercept_hu") {
+        competitorCards.push({ id: "competitor-spare", color: "green", type: "xiang" });
+      }
+      context.playerHands.set(competitor, competitorCards);
     }
-    context.setCollectiveResponseWindowMs(scenario === "chi_collective_confirm" ? 10_000 : 3_000);
+    context.setCollectiveResponseWindowMs(scenario === "chi_collective_only" ? 3_000 : 10_000);
     context.setPendingResponse(createPendingResponse(originId, { id: "confirm-target", color: "red", type: "ju" }, "upper"));
     context.state.phase = "playing";
     context.state.responsePhase = "collective";
@@ -343,8 +393,9 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.lastAction = `DEBUG: collective_no_actions#${seq}`;
     }
   } else if (scenario === "early_collective_choice") {
-    // 该场景需要让两个真人都来得及提交并发拦截，不能沿用 E2E 的 20ms 快速窗口。
-    context.setCollectiveResponseWindowMs(3_000);
+    // 该场景需要让两个真人都来得及提交并发拦截，且浏览器回归会在响应间
+    // 校验双方提示并截图；保留足够窗口，避免慢速 CI 在断言期间自动结算。
+    context.setCollectiveResponseWindowMs(30_000);
     for (const id of context.playerOrder) {
       const tablePlayer = context.state.players.get(id);
       if (tablePlayer) tablePlayer.declaredKongs = 0;
@@ -649,6 +700,10 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "chi_collective_zu4" ||
     scenario === "chi_collective_confirm" ||
     scenario === "chi_collective_only" ||
+    scenario === "chi_collective_intercept_kai" ||
+    scenario === "chi_collective_intercept_hu" ||
+    scenario === "chi_draw_downstream_confirm" ||
+    scenario === "chi_draw_upstream_confirm" ||
     scenario === "hu_fail_case"
   ) {
     alignCollectivePublicTurn();

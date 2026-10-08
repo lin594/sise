@@ -2623,6 +2623,8 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         return;
       }
 
+      const shortenedCollectiveWindow =
+        action === "pass" && this.shortenCollectiveWindowToPrivacyFloorIfReady();
       const waitsForCollectiveWindow =
         action === "pass" &&
         isCurrentResponder &&
@@ -2652,6 +2654,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       if (isCurrentResponder && this.state.responsePhase === "collective" && this.pendingResponse === pending) {
         this.advanceCollectivePolling();
       } else {
+        if (shortenedCollectiveWindow && this.state.responsePhase === "collective" && this.pendingResponse === pending) {
+          this.scheduleCollectiveTimeout(
+            Math.max(1, this.collectiveResponseEndsAt - Date.now()),
+            true,
+          );
+        }
         this.broadcastAvailableActions();
       }
       return;
@@ -2837,6 +2845,51 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return 0;
     }
     return Math.max(0, this.collectiveResponseEndsAt - Date.now());
+  }
+
+  /**
+   * Once every human who can still Hu/Kai/Peng has explicitly answered, the
+   * ten-second thinking allowance is no longer useful. Keep only the shared
+   * privacy floor measured from the original collective start, so time the
+   * player already spent deciding counts toward those three seconds.
+   */
+  private shortenCollectiveWindowToPrivacyFloorIfReady(): boolean {
+    const pending = this.pendingResponse;
+    if (
+      !pending ||
+      this.state.responsePhase !== "collective" ||
+      (this.state.roomMode !== "friends" && this.state.roomMode !== "match") ||
+      this.collectiveResponseEndsAt <= 0 ||
+      this.responseTimerTotalMs <= 0
+    ) {
+      return false;
+    }
+
+    const hasUnansweredManualInterrupt = this.playerOrder.some((seatId) =>
+      this.isHumanCollectiveSeat(seatId) &&
+      !pending.collectives.has(seatId) &&
+      this.hasCollectiveActionBeyondPass(seatId),
+    );
+    if (hasUnansweredManualInterrupt) {
+      return false;
+    }
+
+    const previousTotalMs = this.responseTimerTotalMs;
+    const privacyFloorMs = Math.min(3_000, previousTotalMs);
+    const collectiveStartedAt = this.collectiveResponseEndsAt - previousTotalMs;
+    const privacyFloorEndsAt = collectiveStartedAt + privacyFloorMs;
+    if (privacyFloorEndsAt >= this.collectiveResponseEndsAt) {
+      return false;
+    }
+
+    this.responseTimerTotalMs = privacyFloorMs;
+    this.collectiveResponseEndsAt = privacyFloorEndsAt;
+    this.state.responseEndsAt = privacyFloorEndsAt;
+    this.traceStep(
+      "collective_window_shortened_to_privacy_floor",
+      `floorMs=${privacyFloorMs} remainingMs=${Math.max(0, privacyFloorEndsAt - Date.now())}`,
+    );
+    return true;
   }
 
   private isCollectiveInterruptAction(action: ActionType): boolean {
@@ -3066,8 +3119,26 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (pending?.card.source === "upper") {
       this.recordTableTransition("flow", [{ card: pending.card, from: { zone: "center" }, to: { zone: "flow", playerId: ownerId } }]);
     }
-    // 全局三秒只处理胡、开、碰。无人拦截后，无论是摸牌还是上家来牌，
-    // 都进入一个全新的本地决策窗，让牌主用完整时限选择吃、抓或过。
+    // A normal drawn card only needs a local_draw stop when the drawer really
+    // has a legal Chi choice. Otherwise GAME_RULES requires it to flow directly
+    // to the next player's local_upper decision instead of asking the drawer to
+    // press a no-choice Pass or wait for another timeout.
+    if (pending?.card.source === "draw" && !isDiscardRestricted(pending.card)) {
+      const drawerCanChi = buildChiCandidates(
+        this.ops.getHandWithoutPending(ownerId, pending.card),
+        pending.card,
+        [],
+      ).some((item) =>
+        this.preservesDeclaredKongsAfterAction(ownerId, "chi", pending.card, item.candidate.id),
+      );
+      if (!drawerCanChi) {
+        this.traceStep("local_draw_auto_pass_no_chi", `owner=${ownerId}`);
+        this.executePassToNext(ownerId);
+        return;
+      }
+    }
+    // 全局阶段只处理胡、开、碰。无人拦截后，仅在确有本地选择时进入
+    // local_upper/local_draw；提前选择的吃会由客户端在这里自动兑现。
     enterOwnerLocalPhaseAfterNoResponseFlow({
       pending: this.pendingResponse,
       ownerId,
@@ -3489,10 +3560,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         !this.pendingResponse.collectives.has(seatId) &&
         (this.collectiveResponderId === seatId || this.canSeatPreselectCollective(seatId)),
       );
-      // Preview only the next receiver's eat of an upper discard. It remains
-      // deferred: the wire action is Pass now, Chi in the later local window.
+      // Deferred Chi is still a wire-level Pass in this collective. It may
+      // belong either to the immediate receiver of an upper card or to a
+      // player who will receive a drawn card after the drawer declines it.
       const isDeferredChi = (entry: AvailableActionEntry) =>
-        this.pendingResponse?.card.source === "upper" && entry.action === "chi"
+        entry.action === "chi"
         && Boolean(entry.deferred) && Boolean(entry.candidates?.length);
       const hasMeaningfulChoice = internalActions.some(
         (entry) => (this.isCollectiveInterruptAction(entry.action) && entry.enabled) || isDeferredChi(entry),
