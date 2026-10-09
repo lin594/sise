@@ -7,6 +7,7 @@ const COPY = {
   kai: "用手中的三张牌接上中央这张，点“开”组成一组。",
   peng: "「碰」已可用：用两张相同的手牌收下中央这张，再弃一张牌。",
   chi: "「吃」已可用：中央牌能与手牌成组；有多种组合时先选组合。",
+  earlyChi: "可以提前吃。现在选择后会先记住你的选择；如果没有其他玩家用胡、开、碰拿走这张牌，轮到你时会自动吃。提前吃不会立即抢牌，胡、开、碰仍然优先。",
   grab: "「抓」会放过上家的待响应牌，从牌堆翻一张，再判断能否成组。",
   pass: "「过」会放弃这张牌的响应机会，牌局继续。",
   fish: "选择开局要亮出的鱼，再点“确认鱼”。",
@@ -29,9 +30,22 @@ export function useContextHints(concepts: Ref<HintConcept[]>, decisionKey: Ref<s
     if (!enabled.value) return;
     const concept = concepts.value.find(key => !seen.has(key));
     if (!concept) return;
-    seen.add(concept); persist(); current.value = concept;
+    // Existing compact hints keep their established show-once behavior. The
+    // longer early-Chi lesson remains eligible until the player dismisses it
+    // or an actual queued Chi is submitted successfully.
+    if (concept !== "earlyChi") {
+      seen.add(concept);
+      persist();
+    }
+    current.value = concept;
     trackProductEvent("context_hint_shown");
   }, { immediate: true, flush: "post" });
+  const acknowledge = (concept: HintConcept | null = current.value) => {
+    if (!concept) return;
+    seen.add(concept);
+    persist();
+    if (current.value === concept) current.value = null;
+  };
   const setEnabled = (value: boolean) => {
     if (enabled.value === value) return;
     enabled.value = value; persist();
@@ -39,7 +53,7 @@ export function useContextHints(concepts: Ref<HintConcept[]>, decisionKey: Ref<s
   };
   return {
     enabled, current, text: computed<string>(() => current.value ? COPY[current.value] : ""),
-    dismiss: () => { current.value = null; }, setEnabled,
+    dismiss: () => acknowledge(), acknowledge, setEnabled,
     reset: () => { seen.clear(); enabled.value = true; resetEpoch.value++; persist(); },
   };
 }
