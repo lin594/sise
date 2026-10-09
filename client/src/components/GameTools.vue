@@ -9,7 +9,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v15M12 5C9 3 5 3 3 4v14c3-1 6-1 9 2 3-3 6-3 9-2V4c-2-1-6-1-9 1Z" /></svg>
         <span class="tool-label">规则</span>
       </button>
-      <button v-if="inRoom" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" aria-controls="quick-phrase-panel" aria-label="快捷互动" title="快捷互动" @click="togglePhrases">
+      <button v-if="inRoom && props.onlineRoomFeatures" ref="interactionButtonRef" class="tool-button" type="button" data-testid="game-interaction" :aria-expanded="phraseOpen" aria-controls="quick-phrase-panel" aria-label="快捷互动" title="快捷互动" @click="togglePhrases">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM8 10h.01M12 10h.01M16 10h.01" /></svg>
         <span class="tool-label">互动</span>
       </button>
@@ -32,7 +32,7 @@
         <span class="tool-label">设置</span>
       </button>
       <button
-        v-if="inRoom && !props.tutorial"
+        v-if="inRoom && !props.tutorial && props.onlineRoomFeatures"
         ref="autoPlayButtonRef"
         class="tool-button auto-play"
         :class="{ active: props.autoPlay }"
@@ -362,7 +362,7 @@
         >
           <span>
             <strong>安装四色牌</strong>
-            <small>独立窗口打开，牌面空间更宽；游戏仍需联网</small>
+            <small>离线练习准备好后无需联网；真人玩法仍需联网</small>
           </span>
           <span class="switch-state install-state">安装</span>
         </button>
@@ -461,6 +461,7 @@ const props = withDefaults(
     mySeatId?: string;
     autoPlay?: boolean;
     autoPlayPending?: boolean;
+    onlineRoomFeatures?: boolean;
     spokenTurnGuidanceSupported?: boolean;
     screenWakeLockSupported?: boolean;
     installAppAvailable?: boolean;
@@ -478,6 +479,7 @@ const props = withDefaults(
     mySeatId: "",
     autoPlay: false,
     autoPlayPending: false,
+    onlineRoomFeatures: true,
     spokenTurnGuidanceSupported: false,
     screenWakeLockSupported: false,
     installAppAvailable: false,

@@ -1,4 +1,5 @@
-import { productVisitId } from "@/utils/productAnalytics";
+import { productVisitId, setOfflinePracticeAnalyticsDisabled } from "@/utils/productAnalytics";
+import { OfflinePracticeSession } from "@game-core/offline-practice-session";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import "@/config/browser-transport";
 import type { ListeningHints } from "@/types/game";
@@ -635,6 +636,57 @@ export function useRoom(playerName = "Player") {
   let reconnectAttempts = 0;
   let suppressReconnect = false;
   let actionFeedbackTimer: number | null = null;
+  let offlinePractice: OfflinePracticeSession | null = null;
+  let offlineAutomationGeneration = 0;
+
+  function applyOfflinePracticeView(): void {
+    if (!offlinePractice) return;
+    applySnapshot(offlinePractice.view(), "explicit");
+  }
+
+  async function pumpOfflinePractice(generation: number): Promise<void> {
+    let steps = 0;
+    while (offlinePractice && generation === offlineAutomationGeneration && steps < 50_000) {
+      if (offlinePractice.isHumanDecisionPending() || offlinePractice.view().phase === "ended") break;
+      if (!offlinePractice.advanceAutomation()) break;
+      steps += 1;
+      applyOfflinePracticeView();
+      if (steps % 12 === 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    if (steps >= 50_000) {
+      joinError.value = "离线牌局没有正常推进，请返回玩法选择后重试。";
+    }
+  }
+
+  function scheduleOfflineAutomation(): void {
+    const generation = ++offlineAutomationGeneration;
+    void pumpOfflinePractice(generation);
+  }
+
+  function startOfflinePractice(nameOverride?: string): boolean {
+    suppressReconnect = true;
+    activeConnectionSeq += 1;
+    clearReconnectTimer();
+    clearConnectionProbeTimers();
+    clearRestoredNoticeTimer();
+    resetClientRoomState();
+    setOfflinePracticeAnalyticsDisabled(true);
+    localPlayerName.value = String(nameOverride ?? playerName).trim().slice(0, 16) || "玩家";
+    offlinePractice = new OfflinePracticeSession(localPlayerName.value);
+    offlinePractice.startRound();
+    room.value = null;
+    connected.value = true;
+    connectionState.value = "connected";
+    myId.value = "offline-local";
+    mySeatId.value = offlinePractice.humanSeatId;
+    activeRoomId.value = "offline-practice";
+    joinError.value = "";
+    applyOfflinePracticeView();
+    scheduleOfflineAutomation();
+    return true;
+  }
 
   function clearActionFeedbackTimer(): void {
     if (actionFeedbackTimer !== null) {
@@ -945,6 +997,7 @@ export function useRoom(playerName = "Player") {
   }
 
   function handleBrowserOffline() {
+    if (offlinePractice) return;
     if (suppressReconnect || !activeRoomId.value || !playerToken.value) {
       return;
     }
@@ -958,6 +1011,7 @@ export function useRoom(playerName = "Player") {
   }
 
   function handleBrowserOnline() {
+    if (offlinePractice) return;
     if (suppressReconnect || connected.value || !activeRoomId.value || !playerToken.value) {
       return;
     }
@@ -969,6 +1023,7 @@ export function useRoom(playerName = "Player") {
       clearPendingConnectionProbe();
       return;
     }
+    if (offlinePractice) return;
     if (!connected.value) {
       handleBrowserOnline();
       return;
@@ -2024,6 +2079,19 @@ export function useRoom(playerName = "Player") {
   }
 
   function sendAction(input: ActionRequest): ActionSendResult {
+    if (offlinePractice) {
+      const rawAction = typeof input === "string" ? input : input.action;
+      const action = normalizeAction(rawAction);
+      if (!action) return "invalid";
+      const candidateId = typeof input === "string" ? undefined : input.candidateId;
+      const deferred = typeof input === "string" ? undefined : input.deferred;
+      const accepted = offlinePractice.submitAction({ action, candidateId, deferred });
+      if (!accepted) return "invalid";
+      clearActionFeedback();
+      applyOfflinePracticeView();
+      scheduleOfflineAutomation();
+      return "sent";
+    }
     if (!room.value) {
       return "disconnected";
     }
@@ -2072,6 +2140,14 @@ export function useRoom(playerName = "Player") {
   }
 
   function sendDiscardCard(cardId: string) {
+    if (offlinePractice) {
+      if (cardId && offlinePractice.discard(cardId)) {
+        clearActionFeedback();
+        applyOfflinePracticeView();
+        scheduleOfflineAutomation();
+      }
+      return;
+    }
     if (!room.value || !cardId) {
       return;
     }
@@ -2088,6 +2164,13 @@ export function useRoom(playerName = "Player") {
 
   function declareFish(fishCardIds: string[]) {
     declareError.value = "";
+    if (offlinePractice) {
+      const accepted = offlinePractice.declareFish(fishCardIds);
+      if (!accepted) declareError.value = "亮鱼组合不合法或牌已变化，请重新选择。";
+      applyOfflinePracticeView();
+      scheduleOfflineAutomation();
+      return accepted;
+    }
     if (!connected.value || !safeRoomSend("declare_fish", { fishCardIds })) {
       declareError.value = "网络连接不稳定，亮鱼声明没有发出；恢复后请重新提交。";
       return false;
@@ -2097,6 +2180,13 @@ export function useRoom(playerName = "Player") {
 
   function declareKongs(count: number) {
     declareError.value = "";
+    if (offlinePractice) {
+      const accepted = offlinePractice.declareKongs(count);
+      if (!accepted) declareError.value = "坎数超过当前手牌可声明数量，请重新选择。";
+      applyOfflinePracticeView();
+      scheduleOfflineAutomation();
+      return accepted;
+    }
     if (!connected.value || !safeRoomSend("declare_kongs", count)) {
       declareError.value = "网络连接不稳定，坎声明没有发出；恢复后请重新提交。";
       return false;
@@ -2108,14 +2198,60 @@ export function useRoom(playerName = "Player") {
     safeRoomSend("debug_setup", scenario);
   }
 
+  function debugAdvanceOfflinePracticeAsBot(): boolean {
+    if (!offlinePractice) return false;
+    const view = offlinePractice.view();
+    const human = view.players[0];
+    let accepted = false;
+    if (view.phase === "declaring" && human?.declarationStep === "fish") {
+      const payload = offlinePractice.gameSession.buildDefaultDeclarationPayload(view.privateHand);
+      accepted = offlinePractice.declareFish(payload.fishCardIds);
+    } else if (view.phase === "declaring" && human?.declarationStep === "kong") {
+      const maximum = offlinePractice.gameSession.buildDeclarationSelection(
+        view.privateHand,
+        { declaredKongs: Number.MAX_SAFE_INTEGER },
+      ).declaredKongs;
+      accepted = offlinePractice.declareKongs(maximum);
+    } else if (view.decisionTimer.legalDiscardCardIds.length > 0) {
+      const discard = offlinePractice.gameSession.chooseBotDiscard({
+        hand: view.privateHand,
+        visibleCards: [],
+        declaredKongs: Number(human?.declaredKongs ?? 0),
+        strength: 50,
+        random: Math.random,
+      });
+      accepted = offlinePractice.discard(discard?.id ?? view.decisionTimer.legalDiscardCardIds[0]!);
+    } else if (view.availableActions.length > 0 && view.responseCard) {
+      const entry = view.availableActions.find((item) => item.action === "hu" && item.enabled)
+        ?? view.availableActions.find((item) => item.action === "chi" && item.deferred && item.candidates?.length)
+        ?? view.availableActions.find((item) => item.enabled && item.action !== "pass")
+        ?? view.availableActions.find((item) => item.enabled);
+      accepted = entry ? offlinePractice.submitAction({
+        action: entry.action,
+        candidateId: entry.candidates?.[0]?.id,
+        deferred: entry.deferred,
+      }) : false;
+    }
+    if (!accepted) return false;
+    applyOfflinePracticeView();
+    scheduleOfflineAutomation();
+    return true;
+  }
+
   function startGame(): boolean {
     clearActionLogs();
     joinError.value = "";
-    return safeRoomSend("start_game");
+    return offlinePractice ? true : safeRoomSend("start_game");
   }
 
   function nextRound(): boolean {
     clearActionLogs();
+    if (offlinePractice) {
+      offlinePractice.startRound();
+      applyOfflinePracticeView();
+      scheduleOfflineAutomation();
+      return true;
+    }
     return safeRoomSend("next_round");
   }
 
@@ -2159,6 +2295,16 @@ export function useRoom(playerName = "Player") {
   }
 
   async function leaveRoom(targetRoomId = ""): Promise<void> {
+    if (offlinePractice) {
+      offlineAutomationGeneration += 1;
+      offlinePractice = null;
+      setOfflinePracticeAnalyticsDisabled(false);
+      connected.value = false;
+      connectionState.value = "idle";
+      activeRoomId.value = "";
+      resetClientRoomState();
+      return;
+    }
     const departingRoom = room.value;
     const departingRoomId = targetRoomId.trim() || activeRoomId.value.trim() || pendingConnectionRoomId;
     suppressReconnect = true;
@@ -2258,6 +2404,9 @@ export function useRoom(playerName = "Player") {
     document.removeEventListener("pointerdown", primeQuickPhraseAudio, { capture: true });
     document.removeEventListener("keydown", primeQuickPhraseAudio, { capture: true });
     suppressReconnect = true;
+    offlineAutomationGeneration += 1;
+    offlinePractice = null;
+    setOfflinePracticeAnalyticsDisabled(false);
     room.value?.leave();
   });
 
@@ -2291,6 +2440,7 @@ export function useRoom(playerName = "Player") {
     matchClockSync,
     decisionTimer,
     connect,
+    startOfflinePractice,
     retryConnection,
     clearActionLogs,
     sendAction,
@@ -2298,6 +2448,7 @@ export function useRoom(playerName = "Player") {
     declareFish,
     declareKongs,
     debugSetup,
+    debugAdvanceOfflinePracticeAsBot,
     startGame,
     nextRound,
     returnLobby,

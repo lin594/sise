@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       name: "webkit-responsive",
-      testMatch: /(?:responsive-release|quick-phrase|appearance|mobile-table-appearance|declared-kans|product-analytics|tutorial|onboarding|context-hints|invite-product|culture-page|replay-product|quick-matchmaking)\.spec\.ts/,
+      testMatch: /(?:responsive-release|quick-phrase|appearance|mobile-table-appearance|declared-kans|product-analytics|tutorial|onboarding|context-hints|invite-product|culture-page|replay-product|quick-matchmaking|offline-practice)\.spec\.ts/,
       use: {
         browserName: "webkit",
       },

@@ -7,16 +7,20 @@ ARG NPM_CONFIG_REGISTRY=https://registry.npmjs.org
 ENV NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY}
 
 FROM base AS development
-COPY package.json package-lock.json* ./
+COPY client/package.json client/package-lock.json* ./
 RUN npm install
-COPY . .
+COPY client/ ./client/
+COPY server/src ./server/src
+WORKDIR /app/client
 EXPOSE 80
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "80"]
 
 FROM base AS build
-COPY package.json package-lock.json* ./
+COPY client/package.json client/package-lock.json* ./
 RUN npm ci
-COPY . .
+COPY client/ ./client/
+COPY server/src ./server/src
+WORKDIR /app/client
 ARG VITE_SERVER_URL
 ARG VITE_SERVER_HTTP_URL
 ARG VITE_SERVER_SAME_ORIGIN
@@ -26,7 +30,7 @@ ENV VITE_SERVER_SAME_ORIGIN=${VITE_SERVER_SAME_ORIGIN}
 RUN npm run build
 
 FROM ${NGINX_IMAGE} AS production
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY client/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/client/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

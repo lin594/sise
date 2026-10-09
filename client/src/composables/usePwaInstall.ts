@@ -62,7 +62,7 @@ function guideFor(family: Exclude<BrowserFamily, "unsupported">): PwaInstallGuid
     return {
       kind: family,
       title: "添加到主屏幕",
-      description: "添加后会以独立窗口打开，牌面空间更宽；游戏仍需联网。",
+      description: "添加后打开一次并等离线资源准备完成，即可断网使用“离线练习”；联网房间仍需联网。",
       steps: ["点浏览器的“分享”按钮", "选择“添加到主屏幕”", "打开“作为 Web App 打开”，再点“添加”"],
     };
   }
@@ -70,7 +70,7 @@ function guideFor(family: Exclude<BrowserFamily, "unsupported">): PwaInstallGuid
     return {
       kind: family,
       title: "添加到程序坞",
-      description: "添加后可像普通应用一样从程序坞或聚焦搜索打开；游戏仍需联网。",
+      description: "添加后打开一次并等离线资源准备完成，即可断网使用“离线练习”；联网房间仍需联网。",
       steps: ["打开 Safari 的“文件”菜单", "选择“添加到程序坞…”", "确认名称为“四色牌”，再点“添加”"],
     };
   }
@@ -78,14 +78,14 @@ function guideFor(family: Exclude<BrowserFamily, "unsupported">): PwaInstallGuid
     return {
       kind: family,
       title: "安装四色牌",
-      description: "当前浏览器没有提供一键安装框，可以从浏览器菜单添加；游戏仍需联网。",
+      description: "从浏览器菜单添加后，先联网打开一次并等离线资源准备完成，即可断网使用“离线练习”。",
       steps: ["打开浏览器右上角菜单", "选择“安装应用”或“添加到主屏幕”", "按系统提示确认安装"],
     };
   }
   return {
     kind: family,
     title: "安装四色牌",
-    description: "当前浏览器没有提供一键安装框，可以从浏览器菜单安装；游戏仍需联网。",
+    description: "从浏览器菜单安装后，先联网打开一次并等离线资源准备完成，即可断网使用“离线练习”。",
     steps: ["打开浏览器菜单", "选择“安装四色牌”或“安装应用”", "按系统提示确认安装"],
   };
 }

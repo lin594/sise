@@ -52,7 +52,8 @@ services:
 
   web:
     build:
-      context: ./client
+      context: .
+      dockerfile: client/Dockerfile
       target: production
       args:
         NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}"

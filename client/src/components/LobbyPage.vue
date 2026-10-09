@@ -79,6 +79,14 @@
             <span>{{ startPending && selectedMode === mode.id ? "正在进入…" : mode.badge }}</span>
           </div>
           <p>{{ mode.description }}</p>
+          <small
+            v-if="mode.id === 'offline_practice'"
+            class="offline-readiness"
+            :data-state="offlineReadinessState"
+            data-testid="offline-readiness"
+            role="status"
+            aria-live="polite"
+          >{{ offlineReadinessLabel }}</small>
           <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "开始练习" }} <span aria-hidden="true">↗</span></span>
         </button>
       </div>
@@ -513,6 +521,8 @@ const props = defineProps<{
   guestProfileRounds: number;
   guestProfileWins: number;
   guestProfileScore: number;
+  offlineReadinessState: "unsupported" | "preparing" | "ready" | "error";
+  offlineReadinessLabel: string;
 }>();
 
 const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
@@ -975,7 +985,23 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.offline-readiness {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--ui-accent-text, #bae6fd);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.offline-readiness[data-state="ready"] {
+  color: var(--ui-success-text, #86efac);
+}
+
+.offline-readiness[data-state="error"] {
+  color: var(--ui-danger-text, #fda4af);
 }
 
 .seat-grid {

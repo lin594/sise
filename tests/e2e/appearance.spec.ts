@@ -129,7 +129,7 @@ test("lobby boots with a saved name and edits without an entry screen", async ({
   await page.getByTestId("login-submit").click();
   await page.reload();
   await expect(page.getByTestId("change-entry-name")).toContainText("湄洲牌友");
-  await expect(page.locator(".mode-card")).toHaveCount(3);
+  await expect(page.locator(".mode-card")).toHaveCount(4);
 });
 
 test('invalid fields fall back independently and preserve valid preferences', async ({page}) => {

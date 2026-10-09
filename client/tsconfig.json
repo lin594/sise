@@ -5,8 +5,13 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "@game-core/*": [
+        "../server/src/game-core/*"
       ]
     },
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "noEmit": true
   },
   "include": [

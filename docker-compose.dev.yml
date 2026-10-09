@@ -45,16 +45,18 @@ services:
 
   client:
     build:
-      context: ./client
+      context: .
+      dockerfile: client/Dockerfile
       target: development
       args:
         NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}"
         NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
-    working_dir: /app
-    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0 --port 80"
+    working_dir: /app/client
+    command: npm run dev -- --host 0.0.0.0 --port 80
     restart: unless-stopped
     volumes:
-      - ./client:/app
+      - ./client:/app/client
+      - ./server/src:/app/server/src:ro
     ports:
       - "3000:80"
     environment:
