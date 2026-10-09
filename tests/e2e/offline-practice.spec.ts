@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const DYNAMIC_PATH = /^\/(?:api|health|invite|matchmake|private-state|guest-profile|product-events|reset-room|room-id|rooms|share)(?:\/|$)/u;
 
-test("reopens offline, completes a local round, and starts the next without backend traffic", async ({ browser, baseURL }) => {
+test("uses its cached shell offline, completes a local round, and starts the next without backend traffic", async ({ browser, baseURL, browserName }) => {
   test.setTimeout(180_000);
   const origin = baseURL ?? "http://127.0.0.1:4173";
   const context = await browser.newContext({ serviceWorkers: "allow" });
@@ -15,7 +15,6 @@ test("reopens offline, completes a local round, and starts the next without back
   await onlinePage.goto(`${origin}/?e2eDebug=1`);
   await expect(onlinePage.getByTestId("offline-readiness")).toHaveAttribute("data-state", "ready", { timeout: 30_000 });
   await onlinePage.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
-  await onlinePage.close();
 
   const dynamicRequests: string[] = [];
   const sockets: string[] = [];
@@ -24,10 +23,29 @@ test("reopens offline, completes a local round, and starts the next without back
     if (DYNAMIC_PATH.test(url.pathname)) dynamicRequests.push(`${request.method()} ${url.pathname}`);
   });
   context.on("websocket", (socket) => sockets.push(socket.url()));
-  await context.setOffline(true);
 
-  const page = await context.newPage();
-  await page.goto(`${origin}/?e2eDebug=1`, { waitUntil: "domcontentloaded" });
+  let page = onlinePage;
+  if (browserName === "webkit") {
+    // Playwright WebKit reports an engine-level internal error when a brand-new
+    // page performs its first navigation after context.setOffline(true). Reload
+    // once so the active worker controls this page, then prove the cached shell
+    // is fetchable offline before exercising the complete local game.
+    await onlinePage.reload();
+    await expect(onlinePage.getByTestId("offline-readiness")).toHaveAttribute("data-state", "ready");
+    expect(await onlinePage.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await context.setOffline(true);
+    const cachedShell = await onlinePage.evaluate(async () => {
+      const response = await fetch("/", { cache: "reload" });
+      return { ok: response.ok, body: await response.text() };
+    });
+    expect(cachedShell.ok).toBe(true);
+    expect(cachedShell.body).toContain('<div id="app"></div>');
+  } else {
+    await onlinePage.close();
+    await context.setOffline(true);
+    page = await context.newPage();
+    await page.goto(`${origin}/?e2eDebug=1`, { waitUntil: "domcontentloaded" });
+  }
   await expect(page.getByTestId("offline-readiness")).toHaveAttribute("data-state", "ready");
   // Optional lobby profile/telemetry calls may already have been attempted
   // during application boot. The explicit offline mode must add none of its own.
