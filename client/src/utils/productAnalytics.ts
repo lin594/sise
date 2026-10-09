@@ -7,6 +7,7 @@ type ClientEvent = "context_hint_shown" | "context_hint_disabled" | "app_open" |
 let visitId = "";
 let activeRequests = 0;
 let modeAttempt: { id: string; mode: Mode; at: number } | null = null;
+let networkDisabledForOfflinePractice = false;
 const once = new Set<string>();
 const modeEvent = (mode: Mode): ClientEvent => (mode === "practice" || mode === "tutorial") ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
 export function productVisitId(): string {
@@ -14,6 +15,8 @@ export function productVisitId(): string {
 }
 export function trackProductEvent(name: ClientEvent, fields: { id?: string; mode?: Mode; outcome?: "started" | "ready" | "failed"; durationMs?: number; persistent?: boolean } = {}): void {
   try {
+    if (networkDisabledForOfflinePractice) return;
+    if (!navigator.onLine) return;
     if (activeRequests >= 4) return;
     const id = fields.id ?? crypto.randomUUID();
     const key = `${name}:${id}:${fields.outcome ?? "started"}`;
@@ -30,6 +33,10 @@ export function trackProductEvent(name: ClientEvent, fields: { id?: string; mode
       signal: controller.signal, cache: "no-store", keepalive: true,
     }).catch(() => {}).finally(() => { clearTimeout(timer); activeRequests--; });
   } catch { /* Optional measurement must never affect entry or gameplay. */ }
+}
+export function setOfflinePracticeAnalyticsDisabled(disabled: boolean): void {
+  networkDisabledForOfflinePractice = disabled;
+  if (disabled) modeAttempt = null;
 }
 export function openProductSession(invited: boolean): void {
   trackProductEvent("app_open", { id: productVisitId(), persistent: hasPersistentBrowserStorage() });

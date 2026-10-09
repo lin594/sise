@@ -63,6 +63,7 @@ export function useGuestProfile() {
 
   async function request(method: "GET" | "PUT", nickname = ""): Promise<GuestProfile | null> {
     const sequence = ++requestSequence;
+    if (!navigator.onLine) return null;
     try {
       const response = await fetch(`${BACKEND_HTTP_URL}/guest-profile`, {
         method,

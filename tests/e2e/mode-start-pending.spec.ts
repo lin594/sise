@@ -48,7 +48,7 @@ for (const scenario of [
     await expect(page.locator(".lobby")).toHaveAttribute("aria-busy", "true");
     await expect(start).toBeDisabled();
     await expect(start).toContainText("正在进入…");
-    await expect(page.locator(".mode-card:disabled")).toHaveCount(3);
+    await expect(page.locator(".mode-card:disabled")).toHaveCount(4);
     expect(roomRequests).toBe(1);
 
     releaseRequest();

@@ -88,6 +88,7 @@
         :my-seat-id="mySeatId"
         :auto-play="Boolean(mePlayer?.isAutoPlay)"
         :auto-play-pending="isEnded && !Boolean(mePlayer?.isAutoPlay)"
+        :online-room-features="activeRoomId !== 'offline-practice'"
         :spoken-turn-guidance-supported="spokenTurnGuidanceSupported"
         :screen-wake-lock-supported="screenWakeLockSupported"
         :install-app-available="canOfferPwaInstall"
@@ -159,6 +160,8 @@
       :guest-profile-rounds="guestProfile?.roundsPlayed || 0"
       :guest-profile-wins="guestProfile?.huWins || 0"
       :guest-profile-score="guestProfile?.totalScore || 0"
+      :offline-readiness-state="offlineReadinessState"
+      :offline-readiness-label="offlineReadinessLabel"
       :players="players"
       :can-share-invite="canShareInvite"
       :invite-pending="inviteActionPending"
@@ -727,6 +730,7 @@ import { useLobbyPresentation, lobbyModes, type LobbyModeId } from "@/composable
 import { useSettlement } from "@/composables/useSettlement";
 import { useDisplayPreferences } from "@/composables/useDisplayPreferences";
 import { useInstallGuide } from "@/composables/useInstallGuide";
+import { useOfflineReadiness } from "@/composables/useOfflineReadiness";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
@@ -758,11 +762,13 @@ const { canOfferPwaInstall, pwaInstallGuide, requestPwaInstall, closePwaInstallG
   onNotice: showGlobalNotice,
   onGuideClosed: () => { decisionControlFocusPending = false; },
 });
+const { offlineReadinessState, offlineReadinessLabel } = useOfflineReadiness();
 
 const { guestProfile, refreshGuestProfileAfterSettlement, updateGuestProfileNickname, guestProfileSummary, storedEntryNameAtBoot, nicknameHistoryAtBoot, entryName, nicknameHistory, nicknameDialogOpen, nicknameDraftRandom, generateRandomNickname, writeNicknameHistory, openNicknameDialog, closeNicknameDialog, saveNickname } = useEntryProfile({ browserStoragePersistent, canChangeName: () => !hasLobbySession.value && !enteringLobby.value });
 
 const {
   connect,
+  startOfflinePractice,
   connected,
   connectionState,
   reconnectAttempt,
@@ -802,6 +808,7 @@ const {
   setLobbyReady,
   setAutoPlay,
   debugApplyRoomSnapshot,
+  debugAdvanceOfflinePracticeAsBot,
   leaveRoom,
   claimSeat,
   addBot,
@@ -832,6 +839,7 @@ type LocalTestBridgeWindow = Window & {
     getDeferredChiDebug: () => unknown;
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
     setListeningHintsOverride: (hints: typeof listeningHints.value) => void;
+    advanceOfflinePracticeAsBot: () => boolean;
   };
 };
 
@@ -867,6 +875,7 @@ function installLocalTestBridge(): void {
     setListeningHintsOverride: (hints) => {
       localTestListeningHintsOverride.value = hints;
     },
+    advanceOfflinePracticeAsBot: () => debugAdvanceOfflinePracticeAsBot(),
   };
 }
 
@@ -2091,7 +2100,7 @@ async function enterLobby() {
 }
 
 const { returnToModeSelectionFromRoom, handleLeaveRoom, startLobbyMode, startSelectedMode, finishTutorial, startPracticeLobby } = useRoomLifecycle({
-  state, tutorial, connected, connect, leaveRoom, joinError, activeRoomId,
+  state, tutorial, connected, connect, startOfflinePractice, leaveRoom, joinError, activeRoomId,
   entryName, entryInviteRoomId, globalError, enteredFrontLobby, enteringLobby, restoringStoredSession, joiningFriendInvite, startingRoomMode, pendingPracticeAutoStart, selectedLobbyMode, hasLobbySession, generateRandomNickname, clearRoundStartPending, clearSeatClaimPending, clearLobbyReadyPending, clearSettlementTransitionPending, requestRoundStart, maybeAutoStartPractice
 });
 
@@ -2143,7 +2152,7 @@ let lastGuestProfileRoundKey = "";
 watch(
   () => `${activeRoomId.value}:${roundResult.value?.roundNumber ?? 0}`,
   (roundKey) => {
-    if (!roundResult.value || roundKey === lastGuestProfileRoundKey) return;
+    if (!roundResult.value || activeRoomId.value === "offline-practice" || roundKey === lastGuestProfileRoundKey) return;
     lastGuestProfileRoundKey = roundKey;
     refreshGuestProfileAfterSettlement();
   },

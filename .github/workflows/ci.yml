@@ -283,7 +283,8 @@ jobs:
       - name: Build web image with reusable layers
         uses: docker/build-push-action@v7
         with:
-          context: ./client
+          context: .
+          file: ./client/Dockerfile
           push: false
           build-args: |
             NODE_IMAGE=${{ env.NODE_IMAGE }}

@@ -97,17 +97,17 @@ test("publishes a recognizable browser and home-screen identity", async ({ page 
   expect(legacyIconResponse.headers()["content-type"]).toMatch(/image\/(?:x-icon|vnd\.microsoft\.icon)/u);
 });
 
-test("does not disguise missing icon files as the app shell", async () => {
+test("does not disguise missing static files as the app shell and serves an updateable worker", async ({ page }) => {
   const nginxConfig = await readFile(path.join(process.cwd(), "client/nginx/default.conf"), "utf8");
 
   expect(nginxConfig).toMatch(/location\s+~\*\s+\\\.\(\?:css\|js\|ico\|svg\|png\)\$[\s\S]*?try_files\s+\$uri\s+=404;/u);
   expect(nginxConfig).toMatch(/location\s+=\s+\/site\.webmanifest[\s\S]*?default_type\s+application\/manifest\+json;[\s\S]*?try_files\s+\$uri\s+=404;/u);
 
-  const sourceFiles = await Promise.all([
-    "client/src/main.ts",
-    "client/src/App.vue",
-  ].map((relativePath) => readFile(path.join(process.cwd(), relativePath), "utf8")));
-  expect(sourceFiles.join("\n")).not.toContain("serviceWorker.register");
+  expect(nginxConfig).toMatch(/location\s+=\s+\/sw\.js[\s\S]*?Cache-Control\s+"no-cache";/u);
+  const workerResponse = await page.request.get("/sw.js");
+  expect(workerResponse.ok()).toBe(true);
+  expect(workerResponse.headers()["content-type"]).toContain("javascript");
+  expect(await workerResponse.text()).toContain("precacheAndRoute");
 });
 
 test("shares the public game card from mode selection", async ({ page }, testInfo) => {

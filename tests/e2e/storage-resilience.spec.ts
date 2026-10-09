@@ -35,7 +35,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     await nickname.fill("隐私浏览器牌友");
     await page.getByTestId("login-submit").click();
     await expect(page.getByText("游戏模式选择")).toBeVisible();
-    await expect(page.locator(".mode-card")).toHaveCount(3);
+    await expect(page.locator(".mode-card")).toHaveCount(4);
     await expect(page.getByTestId("guest-profile-summary")).toHaveCount(0);
 
     await startLobbyAction(page);

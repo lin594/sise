@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig(({ mode }) => {
@@ -12,11 +13,29 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [vue()],
+    plugins: [
+      vue(),
+      VitePWA({
+        strategies: "generateSW",
+        injectRegister: false,
+        registerType: "prompt",
+        manifest: false,
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
+          navigateFallback: "/index.html",
+          navigateFallbackDenylist: [
+            /^\/invite(?:\/|$)/,
+            /^\/(?:api|health|matchmake|private-state|guest-profile|product-events|reset-room|room-id|rooms|share)(?:\/|$)/,
+          ],
+          cleanupOutdatedCaches: true,
+        },
+      }),
+    ],
     resolve: {
       extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".json", ".vue"],
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
+        "@game-core": fileURLToPath(new URL("../server/src/game-core", import.meta.url)),
       },
     },
     server: {

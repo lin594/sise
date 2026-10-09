@@ -79,6 +79,14 @@
             <span>{{ startPending && selectedMode === mode.id ? "正在进入…" : mode.badge }}</span>
           </div>
           <p>{{ mode.description }}</p>
+          <small
+            v-if="mode.id === 'offline_practice'"
+            class="offline-readiness"
+            :data-state="offlineReadinessState"
+            data-testid="offline-readiness"
+            role="status"
+            aria-live="polite"
+          >{{ offlineReadinessLabel }}</small>
           <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "开始练习" }} <span aria-hidden="true">↗</span></span>
         </button>
       </div>
@@ -513,6 +521,8 @@ const props = defineProps<{
   guestProfileRounds: number;
   guestProfileWins: number;
   guestProfileScore: number;
+  offlineReadinessState: "unsupported" | "preparing" | "ready" | "error";
+  offlineReadinessLabel: string;
 }>();
 
 const seatNames = ["A位（1号）", "B位（2号）", "C位（3号）", "D位（4号）"];
@@ -975,7 +985,23 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .mode-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.offline-readiness {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--ui-accent-text, #bae6fd);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.offline-readiness[data-state="ready"] {
+  color: var(--ui-success-text, #86efac);
+}
+
+.offline-readiness[data-state="error"] {
+  color: var(--ui-danger-text, #fda4af);
 }
 
 .seat-grid {
@@ -1645,11 +1671,32 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection .mode-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .mode-selection .mode-card {
-    padding-block: 0.45rem;
+    padding: 0.45rem 0.4rem;
+  }
+
+  .mode-selection .mode-head span,
+  .mode-selection .mode-card p {
+    display: none;
+  }
+
+  .mode-selection .mode-head strong {
+    font-size: 0.95rem;
+  }
+
+  .mode-selection .offline-readiness {
+    margin-top: 0.1rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  .mode-selection .mode-enter {
+    margin-top: 0.2rem;
+    padding-top: 0.25rem;
+    font-size: 0.78rem;
   }
 
   .lobby-scroll {
@@ -1697,7 +1744,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     display: none;
   }
 
-  .mode-head strong {
+  .lobby:not(.mode-selection) .mode-head strong {
     font-size: 1.05rem;
   }
 
@@ -1705,7 +1752,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     font-size: 0.82rem;
   }
 
-  .mode-card p {
+  .lobby:not(.mode-selection) .mode-card p {
     margin: 0;
     font-size: 0.875rem;
     line-height: 1.35;
@@ -1875,7 +1922,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 .mode-enter { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--ui-border, #475569); color: var(--ui-accent-text, #bae6fd); font-weight: 800; }
 .mode-selection .mode-card { min-height: 9rem; }
-@media (max-height: 450px) { .mode-selection .mode-card { min-height: 0; padding: .65rem; } .mode-enter { margin-top: .5rem; padding-top: .4rem; } }
+@media (min-height: 381px) and (max-height: 450px) { .mode-selection .mode-card { min-height: 0; padding: .65rem; } .mode-enter { margin-top: .5rem; padding-top: .4rem; } }
 
 .friend-table-settings > summary, .bot-settings > summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; background: rgba(128, 104, 70, .1); }
 .friend-table-settings > summary::before, .bot-settings > summary::before { content: "▸"; }

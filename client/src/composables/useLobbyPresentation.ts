@@ -2,7 +2,7 @@ import { computed, ref, watch, type Ref } from "vue";
 import type { useRoom } from "./useRoom";
 
 type Room = ReturnType<typeof useRoom>;
-export type LobbyModeId = "practice_bots" | "quick_match" | "friends";
+export type LobbyModeId = "practice_bots" | "offline_practice" | "quick_match" | "friends";
 export type LobbyMode = {
   id: LobbyModeId;
   name: string;
@@ -14,9 +14,16 @@ export type LobbyMode = {
 export const lobbyModes: LobbyMode[] = [
   {
     id: "practice_bots" as const,
-    name: "单人练习",
-    description: "系统补 3 位电脑，马上开一局。适合第一次玩和熟悉规则。",
+    name: "联网练习",
+    description: "系统补 3 位电脑，马上开一局；换设备或刷新仍可恢复。",
     badge: "推荐新手",
+    enabled: true,
+  },
+  {
+    id: "offline_practice" as const,
+    name: "离线练习",
+    description: "在本机和 3 位电脑打一整局；退出或刷新后重新开局，不保存中途进度。",
+    badge: "无需联网",
     enabled: true,
   },
   {
@@ -74,6 +81,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
       !roundStartPending.value &&
       ((!hasLobbySession.value &&
           (selectedLobbyMode.value === "practice_bots" ||
+            selectedLobbyMode.value === "offline_practice" ||
             selectedLobbyMode.value === "quick_match" ||
             selectedLobbyMode.value === "friends")) ||
         canPressStartGame.value),
@@ -122,7 +130,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
   });
   const lobbySubtitle = computed(() => {
     if (!isWaiting.value) {
-      return "选择一种玩法。第一次玩，建议选单人练习。";
+      return "选择一种玩法。第一次玩，建议选联网练习。";
     }
     if (state.value?.roomMode === "match") {
       const humanCount = players.value.filter((player) => !player.isConfiguredBot).length;
@@ -134,7 +142,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
         : "正在准备开局，请稍候。";
     }
     if (state.value?.roomMode !== "friends") {
-      return "正在补齐机器人并准备开始单人练习。";
+      return "正在补齐机器人并准备开始联网练习。";
     }
     if (!mySeatId.value) {
       return "请选择一个写着“等待入座”的空座位；入座后等待房主开始。";
@@ -160,10 +168,12 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
     if (!hasLobbySession.value) {
       if (enteringLobby.value) {
         if (selectedLobbyMode.value === "friends") return "正在创建好友房…";
+        if (selectedLobbyMode.value === "offline_practice") return "正在打开离线牌局…";
         return selectedLobbyMode.value === "quick_match" ? "正在寻找牌友…" : "正在创建练习房…";
       }
       if (selectedLobbyMode.value === "friends") return "创建好友房";
-      return selectedLobbyMode.value === "quick_match" ? "开始快速配桌" : "开始单人练习";
+      if (selectedLobbyMode.value === "offline_practice") return "开始离线练习";
+      return selectedLobbyMode.value === "quick_match" ? "开始快速配桌" : "开始联网练习";
     }
     if (roundStartPending.value) {
       if (state.value?.roomMode === "match") return "正在补齐并开局…";
@@ -178,7 +188,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
     if (state.value?.roomMode === "match") {
       return "电脑补位，立即开始";
     }
-    return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始单人练习") : "等待房主开始";
+    return isHost.value ? (state.value?.roomMode === "friends" ? "开始好友对局" : "开始联网练习") : "等待房主开始";
   });
   const lobbyStartHint = computed(() => {
     if (!hasLobbySession.value) return enteringLobby.value ? "请稍候，不用重复点击" : "";

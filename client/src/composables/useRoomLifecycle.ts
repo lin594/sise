@@ -5,10 +5,10 @@ import { BACKEND_HTTP_URL } from "@/config/backend";
 import { apiErrorMessage } from "@/utils/http";
 import { beginProductMode, failProductMode, trackProductEvent } from "@/utils/productAnalytics";
 
-export type StartingRoomMode = "practice" | "friends" | "quick_match" | null;
+export type StartingRoomMode = "practice" | "offline_practice" | "friends" | "quick_match" | null;
 const HTTP_URL = BACKEND_HTTP_URL;
 type Room = ReturnType<typeof useRoom>;
-type LifecycleOptions = Pick<Room, "state" | "tutorial" | "connected" | "connect" | "leaveRoom" | "joinError" | "activeRoomId"> & {
+type LifecycleOptions = Pick<Room, "state" | "tutorial" | "connected" | "connect" | "startOfflinePractice" | "leaveRoom" | "joinError" | "activeRoomId"> & {
   entryName: Ref<string>;
   entryInviteRoomId: Ref<string>;
   globalError: Ref<string>;
@@ -30,7 +30,7 @@ type LifecycleOptions = Pick<Room, "state" | "tutorial" | "connected" | "connect
 };
 
 /** Mode creation/entry and exit orchestration over the existing room client. */
-export function useRoomLifecycle({ state, tutorial, connected, connect, leaveRoom, joinError, activeRoomId, entryName, entryInviteRoomId, globalError, enteredFrontLobby, enteringLobby, restoringStoredSession, joiningFriendInvite, startingRoomMode, pendingPracticeAutoStart, selectedLobbyMode, hasLobbySession, generateRandomNickname, clearRoundStartPending, clearSeatClaimPending, clearLobbyReadyPending, clearSettlementTransitionPending, requestRoundStart, maybeAutoStartPractice }: LifecycleOptions) {
+export function useRoomLifecycle({ state, tutorial, connected, connect, startOfflinePractice, leaveRoom, joinError, activeRoomId, entryName, entryInviteRoomId, globalError, enteredFrontLobby, enteringLobby, restoringStoredSession, joiningFriendInvite, startingRoomMode, pendingPracticeAutoStart, selectedLobbyMode, hasLobbySession, generateRandomNickname, clearRoundStartPending, clearSeatClaimPending, clearLobbyReadyPending, clearSettlementTransitionPending, requestRoundStart, maybeAutoStartPractice }: LifecycleOptions) {
   async function returnToModeSelectionFromRoom(): Promise<void> {
     const departingRoomId = entryInviteRoomId.value || activeRoomId.value;
     restoringStoredSession.value = false;
@@ -70,6 +70,8 @@ export function useRoomLifecycle({ state, tutorial, connected, connect, leaveRoo
         void startFriendLobby();
       } else if (selectedLobbyMode.value === "quick_match") {
         void startQuickMatchLobby();
+      } else if (selectedLobbyMode.value === "offline_practice") {
+        startOfflinePracticeLobby();
       } else {
         void startPracticeLobby();
       }
@@ -79,6 +81,23 @@ export function useRoomLifecycle({ state, tutorial, connected, connect, leaveRoo
       requestRoundStart();
     } else {
       requestPracticeAutoStart();
+    }
+  }
+
+  function startOfflinePracticeLobby() {
+    if (enteringLobby.value) return;
+    const nickname = entryName.value.trim().slice(0, 16) || generateRandomNickname();
+    entryName.value = nickname;
+    startingRoomMode.value = "offline_practice";
+    enteringLobby.value = true;
+    globalError.value = "";
+    try {
+      if (!startOfflinePractice(nickname)) throw new Error("离线练习启动失败，请重试。");
+    } catch (error) {
+      globalError.value = error instanceof Error ? error.message : "离线练习启动失败，请重试。";
+      startingRoomMode.value = null;
+    } finally {
+      enteringLobby.value = false;
     }
   }
 
