@@ -30,10 +30,12 @@ export function createDeck(): Card[] {
   return cards;
 }
 
-export function shuffle<T>(arr: T[]): T[] {
+export function shuffle<T>(arr: T[], random: () => number = Math.random): T[] {
   const cloned = [...arr];
   for (let i = cloned.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const sample = Number(random());
+    const bounded = Number.isFinite(sample) ? Math.min(Math.max(sample, 0), 0.999999999) : 0;
+    const j = Math.floor(bounded * (i + 1));
     [cloned[i], cloned[j]] = [cloned[j], cloned[i]];
   }
   return cloned;

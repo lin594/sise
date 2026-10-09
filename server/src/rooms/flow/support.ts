@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { MapSchema } from "@colyseus/schema";
 import type { ActionType, Card } from "../../rules/types.js";
 import type { GameState, PlayerState } from "../../schema/game-state.schema.js";
@@ -323,15 +322,13 @@ export function normalizeToken(input: unknown): string {
   return String(input ?? "").trim().slice(0, 128);
 }
 
-export function generateToken(): string {
-  return `pt_${randomBytes(24).toString("hex")}`;
-}
-
-export function pickRandomDealerId(playerOrder: string[]): string {
+export function pickRandomDealerId(playerOrder: string[], random: () => number = Math.random): string {
   if (!playerOrder.length) {
     return "";
   }
-  const idx = Math.floor(Math.random() * playerOrder.length);
+  const sample = Number(random());
+  const bounded = Number.isFinite(sample) ? Math.min(Math.max(sample, 0), 0.999999999) : 0;
+  const idx = Math.floor(bounded * playerOrder.length);
   return playerOrder[idx];
 }
 

@@ -2,7 +2,6 @@ import { emitProductEvent } from "../analytics/runtime.js";
 
 
 import { createTutorialDeal, advanceTutorial, type TutorialProgress } from "./tutorial.js";
-import { explainHand } from "../rules/hu.js";
 import { countHiddenKans } from "../rules/declared-kans.js";
 import {
   buildVisibleRemainingByFace,
@@ -14,18 +13,14 @@ import { Room, Client, CloseCode } from "@colyseus/core";
 import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { quickPhraseWindowMs, quickPhrases } from "../generated/quickPhrases.js";
-import { createDeck, isDiscardRestricted, shuffle } from "../rules/deck.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { tryExecuteChi } from "./flow/actions/chi.js";
 import { tryExecuteKai } from "./flow/actions/kai.js";
 import { tryExecutePeng } from "./flow/actions/peng.js";
 import { buildChiCandidates, buildKaiCandidates, buildPengCandidates } from "./flow/action-candidates.js";
-import { executeResponseWinner } from "./flow/response-winner.js";
 import { applyDebugScenario as applyDebugScenarioFlow } from "./flow/debug-scenarios.js";
 import {
   areAllDeclarationsReady as areAllDeclarationsReadyUtil,
-  buildDefaultDeclarationPayload,
-  buildDeclarationSelection,
   buildFishGroupSizes,
   buildRoundResultPlayers as buildRoundResultPlayersFlow,
   calculateVisibleGroupScore,
@@ -52,7 +47,6 @@ import {
   buildHuSummaryBySeat,
   canAcceptDiscardRequest,
   createPendingResponse,
-  generateToken as generateTokenUtil,
   getCollectiveOrder,
   getNextPlayerId as getNextPlayerIdOrder,
   getPreviousPlayerId as getPreviousPlayerIdOrder,
@@ -61,36 +55,23 @@ import {
   normalizeName as normalizeNameUtil,
   normalizeToken as normalizeTokenUtil,
   planLocalPhaseAfterNoResponse,
-  pickCollectiveWinner,
-  pickRandomDealerId as pickRandomDealerIdUtil,
-  resolveDealerFromAnchorAndCard,
   shouldEndDrawAfterUpperPass,
   shouldLogStateSnapshot as shouldLogStateSnapshotUtil,
   summarizeAllPlayersCards,
   summarizeCards,
 } from "./flow/support.js";
-import {
-  decideActionDispatch,
-  type AvailableActionEntry,
-  getAvailableActionsFlow,
-  enterOwnerLocalPhaseAfterNoResponseFlow,
-  executeEatFlow,
-  executeGrabFlow,
-  beginCollectiveFromDiscardFlow,
-  discardFromAndCollectiveFlow,
-  drawForOwnerFlow,
-  enterDiscardStageFlow,
-  resolveCollectivePhaseFlow,
-  resolveLocalDrawIdleAction,
-  planTickBots,
-  runBotStep,
-  startCollectiveFlow,
-  advanceCollectiveFlow,
-} from "./flow/playing-flow.js";
+import type { AvailableActionEntry } from "./flow/playing-flow.js";
 import { createRoomStateOps, syncAllPrivateHands as syncAllPrivateHandsFlow, type RoomStateOps } from "./flow/room-state-ops.js";
 import { registerRoom, unregisterRoom, type PrivateStateSnapshot } from "./room-registry.js";
 import { GAME_TIMING_CONFIG } from "./game-timing-config.js";
-import { chooseBotAction, chooseBotDiscard } from "./bot-strategy.js";
+import { GameSession, type PendingResponse } from "../game-core/game-session.js";
+import {
+  PUTIAN_V1_RULE_REF,
+  legacyVersionFromRuleRef,
+  ruleRefFromLegacyVersion,
+  type RoundBootstrapSetup,
+} from "../game-core/ruleset.js";
+import { generateRoomToken } from "./server-token.js";
 import { normalizeGuestProfileToken } from "../profiles/guest-profile-store.js";
 import {
   recordActiveGuestRoundResults,
@@ -107,13 +88,6 @@ import {
   removeRoomSnapshot,
   scheduleRoomSnapshot,
 } from "../persistence/room-snapshot-runtime.js";
-
-interface PendingResponse {
-  ownerId: string;
-  card: Card;
-  collectives: Map<string, { action: ActionType; candidateId?: string }>;
-  responsePhaseAfterNoResponse?: "local_upper" | "local_draw";
-}
 
 type ActionRequest =
   | ActionType
@@ -143,10 +117,6 @@ interface RoomJoinOptions {
   profileToken?: string;
   hostKey?: string;
 }
-
-type RoundBootstrapSetup =
-  | { mode: "picker"; pickerId: string }
-  | { mode: "fixed"; dealerId: string };
 
 type HuLogMode = "off" | "all" | "success" | "fail";
 type StateLogMode = "off" | "all" | "compact";
@@ -195,10 +165,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private pendingPresentationEnd: { lastAction: string; winnerId: string | null; groups: string[] } | null = null;
   private tutorial: TutorialProgress | null = null;
   private tutorialActionAccepted = false;
-  private deck: Card[] = [];
-  private playerHands = new Map<string, Card[]>(); // seatId -> cards
-  private playerOrder: string[] = []; // seatIds in round order
-  private botIds = new Set<string>(); // currently bot-controlled seatIds
   private configuredBotIds = new Set<string>(); // seats intentionally occupied by lobby bots
   private seatBySession = new Map<string, string>(); // sessionId -> seatId
   private seatByToken = new Map<string, string>(); // token -> seatId
@@ -215,12 +181,6 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private roomIdleExpiresAt = 0;
   private hostKey = "";
   private hostKeyConsumed = false;
-  private pendingResponse: PendingResponse | null = null;
-  private publicGeneralPool: Card[] = [];
-  private dealerCard: Card | null = null;
-  private dealerPickerId: string | null = null;
-  private nextRoundSetup: RoundBootstrapSetup | null = null;
-  private awaitingDiscardOwnerId: string | null = null;
   private readonly botThinkMinMs = GAME_TIMING_CONFIG.botThinkMinMs;
   private readonly botThinkMaxMs = GAME_TIMING_CONFIG.botThinkMaxMs;
   private readonly botCollectiveThinkMinMs = GAME_TIMING_CONFIG.botCollectiveThinkMinMs;
@@ -275,18 +235,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private declareTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroTimer: ReturnType<typeof setTimeout> | null = null;
   private declareIntroStageTimers: ReturnType<typeof setTimeout>[] = [];
-  private readonly pendingFishDeclarations = new Map<string, Card[]>();
   private collectiveTimer: ReturnType<typeof setTimeout> | null = null;
   private declareTimerTotalMs = 0;
   private responseTimerTotalMs = 0;
   private declareDecisionWindowId = 0;
   private responseDecisionWindowId = 0;
   private collectiveResponseEndsAt = 0;
-  private collectiveQueue: string[] = [];
-  private collectiveCursor = 0;
-  private collectiveResponderId: string | null = null;
   private debugSeq = 0;
-  private roundDealerId: string | null = null;
   private lastRoundResult: {
     winnerId: string | null;
     groups: string[];
@@ -295,12 +250,55 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     scoringMode: "single" | "cumulative";
     roundNumber: number;
   } | null = null;
-  private ruleVersion: "legacy" | "1.0" = "1.0";
+  private readonly gameSession = new GameSession(PUTIAN_V1_RULE_REF);
   private stateOps: RoomStateOps | null = null;
+
+  private get deck(): Card[] { return this.gameSession.state.deck; }
+  private set deck(value: Card[]) { this.gameSession.state.deck = value; }
+  private get playerHands(): Map<string, Card[]> { return this.gameSession.state.playerHands; }
+  private set playerHands(value: Map<string, Card[]>) { this.gameSession.state.playerHands = value; }
+  private get playerOrder(): string[] { return this.gameSession.state.playerOrder; }
+  private set playerOrder(value: string[]) { this.gameSession.state.playerOrder = value; }
+  private get botIds(): Set<string> { return this.gameSession.state.botIds; }
+  private set botIds(value: Set<string>) { this.gameSession.state.botIds = value; }
+  private get pendingResponse(): PendingResponse | null { return this.gameSession.state.pendingResponse; }
+  private set pendingResponse(value: PendingResponse | null) { this.gameSession.state.pendingResponse = value; }
+  private get publicGeneralPool(): Card[] { return this.gameSession.state.publicGeneralPool; }
+  private set publicGeneralPool(value: Card[]) { this.gameSession.state.publicGeneralPool = value; }
+  private get dealerCard(): Card | null { return this.gameSession.state.dealerCard; }
+  private set dealerCard(value: Card | null) { this.gameSession.state.dealerCard = value; }
+  private get dealerPickerId(): string | null { return this.gameSession.state.dealerPickerId; }
+  private set dealerPickerId(value: string | null) { this.gameSession.state.dealerPickerId = value; }
+  private get nextRoundSetup(): RoundBootstrapSetup | null { return this.gameSession.state.nextRoundSetup; }
+  private set nextRoundSetup(value: RoundBootstrapSetup | null) { this.gameSession.state.nextRoundSetup = value; }
+  private get awaitingDiscardOwnerId(): string | null { return this.gameSession.state.awaitingDiscardOwnerId; }
+  private set awaitingDiscardOwnerId(value: string | null) { this.gameSession.state.awaitingDiscardOwnerId = value; }
+  private get pendingFishDeclarations(): Map<string, Card[]> { return this.gameSession.state.pendingFishDeclarations; }
+  private get collectiveQueue(): string[] { return this.gameSession.state.collectiveQueue; }
+  private set collectiveQueue(value: string[]) { this.gameSession.state.collectiveQueue = value; }
+  private get collectiveCursor(): number { return this.gameSession.state.collectiveCursor; }
+  private set collectiveCursor(value: number) { this.gameSession.state.collectiveCursor = value; }
+  private get collectiveResponderId(): string | null { return this.gameSession.state.collectiveResponderId; }
+  private set collectiveResponderId(value: string | null) { this.gameSession.state.collectiveResponderId = value; }
+  private get roundDealerId(): string | null { return this.gameSession.state.roundDealerId; }
+  private set roundDealerId(value: string | null) { this.gameSession.state.roundDealerId = value; }
+
+  private get ruleVersion(): "legacy" | "1.0" {
+    return legacyVersionFromRuleRef(this.gameSession.ruleRef);
+  }
+
+  private set ruleVersion(value: "legacy" | "1.0") {
+    this.gameSession.useRuleSet(ruleRefFromLegacyVersion(value));
+  }
 
   private get ops(): RoomStateOps {
     if (!this.stateOps) {
-      this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null, () => this.ruleVersion === "1.0");
+      this.stateOps = createRoomStateOps(
+        this.state,
+        this.playerHands,
+        () => this.pendingResponse?.ownerId ?? null,
+        () => this.gameSession.rules.enforceDeclaredKans,
+      );
     }
     return this.stateOps;
   }
@@ -334,7 +332,12 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.roomMode === "match") {
       this.maxClients = this.targetSeats;
     }
-    this.stateOps = createRoomStateOps(this.state, this.playerHands, () => this.pendingResponse?.ownerId ?? null, () => this.ruleVersion === "1.0");
+    this.stateOps = createRoomStateOps(
+      this.state,
+      this.playerHands,
+      () => this.pendingResponse?.ownerId ?? null,
+      () => this.gameSession.rules.enforceDeclaredKans,
+    );
     this.syncRoomMetadata();
     registerRoom(this.roomId, this);
 
@@ -520,7 +523,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.hostKeyConsumed = true;
       this.pendingNameBySession.set(client.sessionId, inputName);
       this.rememberPendingProfile(client.sessionId, inputProfileToken);
-      this.claimSeatForClient(client, 0, inputToken || generateTokenUtil());
+      this.claimSeatForClient(client, 0, inputToken || generateRoomToken());
       return;
     }
 
@@ -546,7 +549,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       this.pendingNameBySession.set(client.sessionId, inputName);
       this.rememberPendingProfile(client.sessionId, inputProfileToken);
-      this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil());
+      this.claimSeatForClient(client, firstEmpty, inputToken || generateRoomToken());
       return;
     }
 
@@ -559,14 +562,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
       this.pendingNameBySession.set(client.sessionId, inputName);
       this.rememberPendingProfile(client.sessionId, inputProfileToken);
-      if (this.claimSeatForClient(client, firstEmpty, inputToken || generateTokenUtil())) {
+      if (this.claimSeatForClient(client, firstEmpty, inputToken || generateRoomToken())) {
         this.onMatchRosterChanged();
       }
       return;
     }
 
     this.pendingNameBySession.set(client.sessionId, inputName || "玩家");
-    this.pendingTokenBySession.set(client.sessionId, inputToken || generateTokenUtil());
+    this.pendingTokenBySession.set(client.sessionId, inputToken || generateRoomToken());
     this.rememberPendingProfile(client.sessionId, inputProfileToken);
     client.send("lobby_presence", { roomId: this.roomId, seated: false });
     this.broadcastAvailableActions();
@@ -700,6 +703,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       expiresAt,
       state: JSON.parse(JSON.stringify(this.state)) as Record<string, unknown>,
       privateState: {
+        ruleRef: { ...this.gameSession.ruleRef },
         ruleVersion: this.ruleVersion,
         tutorial: this.tutorial ? { ...this.tutorial } : null,
         roomIdleExpiresAt: idleExpiry,
@@ -748,7 +752,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private restoreRecoveryPrivateState(snapshot: RoomRecoverySnapshot): void {
     const privateState = snapshot.privateState;
-    this.ruleVersion = privateState.ruleVersion ?? "legacy";
+    this.gameSession.useRuleSet(privateState.ruleRef ?? ruleRefFromLegacyVersion(privateState.ruleVersion));
     this.tutorial = privateState.tutorial ? { ...privateState.tutorial } : null;
     if (this.tutorial) this.collectiveResponseWindowMs = 120_000;
     this.pendingPresentationEnd = privateState.pendingPresentationEnd ?? null;
@@ -1136,7 +1140,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const currentSeatId = this.seatBySession.get(client.sessionId);
     const token = currentSeatId
       ? this.findTokenBySeatId(currentSeatId)
-      : this.pendingTokenBySession.get(client.sessionId) || generateTokenUtil();
+      : this.pendingTokenBySession.get(client.sessionId) || generateRoomToken();
     this.claimSeatForClient(client, seatIndex, token);
   }
 
@@ -1824,7 +1828,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     return {
       mode: "picker",
-      pickerId: pickRandomDealerIdUtil(this.playerOrder),
+      pickerId: this.gameSession.pickInitialDealer(this.playerOrder),
     };
   }
 
@@ -1954,7 +1958,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     this.clearDeclareTimer();
     this.clearDeclareIntroTimer();
     this.state.phase = "declaring";
-    this.deck = shuffle(createDeck());
+    this.deck = this.gameSession.createShuffledDeck();
     this.publicGeneralPool = [];
     this.dealerCard = null;
     this.dealerPickerId = null;
@@ -1984,7 +1988,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (setup.mode === "picker") {
       dealerCard = this.deck.shift() ?? null;
       dealerId = dealerCard
-        ? resolveDealerFromAnchorAndCard(this.playerOrder, setup.pickerId, dealerCard)
+        ? this.gameSession.resolveDealer(this.playerOrder, setup.pickerId, dealerCard)
         : setup.pickerId;
     }
 
@@ -2042,7 +2046,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     // 声明面板才能越过一个没有任何选择的阶段。
     for (const seatId of this.playerOrder) {
       const hand = this.playerHands.get(seatId) ?? [];
-      if (buildDefaultDeclarationPayload(hand).fishCardIds.length === 0) {
+      if (this.gameSession.buildDefaultDeclarationPayload(hand).fishCardIds.length === 0) {
         this.submitFishDeclaration(seatId, { fishCardIds: [] });
         if (this.state.phase !== "declaring") return;
       }
@@ -2288,9 +2292,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     const hand = this.playerHands.get(seatId) ?? [];
     const requestedIds = force
-      ? buildDefaultDeclarationPayload(hand).fishCardIds
+      ? this.gameSession.buildDefaultDeclarationPayload(hand).fishCardIds
       : Array.isArray(payload.fishCardIds) ? payload.fishCardIds : [];
-    const selection = buildDeclarationSelection(hand, { declaredKongs: 0, fishCardIds: requestedIds });
+    const selection = this.gameSession.buildDeclarationSelection(hand, { declaredKongs: 0, fishCardIds: requestedIds });
     if (!selection.idMatch || !selection.fishValid) {
       this.rejectDeclaration(seatId, "亮鱼组合不合法或牌不在手中");
       return;
@@ -2307,7 +2311,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
     // 剩余手牌没有坎时不存在玩家决策，直接完成第二阶段，避免闪现空面板。
     const remaining = this.playerHands.get(seatId) ?? [];
-    const maximum = buildDeclarationSelection(remaining, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
+    const maximum = this.gameSession.buildDeclarationSelection(remaining, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
     if (maximum === 0) this.submitKongDeclaration(seatId, 0, true);
   }
 
@@ -2317,7 +2321,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const player = this.state.players.get(seatId);
     if (!player || player.declaredReady || player.declarationStep !== "kong") return;
     const hand = this.playerHands.get(seatId) ?? [];
-    const maximum = buildDeclarationSelection(hand, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
+    const maximum = this.gameSession.buildDeclarationSelection(hand, { declaredKongs: Number.MAX_SAFE_INTEGER }).declaredKongs;
     const requested = Number.isFinite(Number(rawCount)) ? Math.floor(Number(rawCount)) : maximum;
     if (!force && (requested < 0 || requested > maximum)) {
       this.rejectDeclaration(seatId, "声明坎数超过当前手牌可声明数量");
@@ -2368,7 +2372,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private drawForOwner(ownerId: string, tag: string): void {
     this.traceStep("draw_for_owner:begin", `owner=${ownerId} tag=${tag}`);
-    drawForOwnerFlow(
+    this.gameSession.drawForOwner(
       {
         phase: this.state.phase,
         deck: this.deck,
@@ -2413,7 +2417,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.phase !== "playing" || this.awaitingDiscardOwnerId !== ownerId) {
       return;
     }
-    discardFromAndCollectiveFlow(
+    this.gameSession.discardFromAndCollective(
       {
         pickDiscardCard: (ownerIdArg) =>
           (cardId ? this.ops.discardCardById(ownerIdArg, cardId) : null) ?? this.ops.pickDiscardCard(ownerIdArg),
@@ -2435,7 +2439,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
     this.traceStep("collective_from_discard", `owner=${ownerId} discard=${this.formatTraceCard(discard)}`);
-    beginCollectiveFromDiscardFlow(
+    this.gameSession.beginCollectiveFromDiscard(
       {
         createPendingResponse: ({ ownerId: ownerIdArg, card, source }) => createPendingResponse(ownerIdArg, card, source),
         setPendingResponse: (pending) => {
@@ -2581,7 +2585,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const availableActions = this.getAvailableActions(seatId);
     const enabledActions = availableActions.filter((x) => x.enabled).map((x) => x.action);
     const canCollectivePreselect = this.canSeatPreselectCollective(seatId);
-    const decision = decideActionDispatch({
+    const decision = this.gameSession.decideAction({
       pendingOwnerId: pending.ownerId,
       seatId,
       action,
@@ -2756,13 +2760,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private enterDiscardStage(ownerId: string, tag: string): void {
     const hand = this.playerHands.get(ownerId) ?? [];
-    if (this.ruleVersion === "1.0" && !hand.some(card => this.ops.canDiscardCard(ownerId, card.id))
-      && countHiddenKans(hand) >= (this.state.players.get(ownerId)?.declaredKongs ?? 0) && explainHand(hand).valid) {
+    if (this.gameSession.rules.enforceDeclaredKans && !hand.some(card => this.ops.canDiscardCard(ownerId, card.id))
+      && countHiddenKans(hand) >= (this.state.players.get(ownerId)?.declaredKongs ?? 0)
+      && this.gameSession.rules.explainHand(hand).valid) {
       this.declareNoDiscardWin(ownerId, tag);
       return;
     }
     this.traceStep("enter_discard_stage", `owner=${ownerId} tag=${tag}`);
-    enterDiscardStageFlow(
+    this.gameSession.enterDiscardStage(
       {
         playerHand: this.playerHands.get(ownerId) ?? [],
         declareNoDiscardWin: (ownerIdArg, tagArg) => this.declareNoDiscardWin(ownerIdArg, tagArg),
@@ -2812,7 +2817,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     this.collectiveResponseEndsAt = 0;
     this.traceStep("resolve_collective:begin");
-    resolveCollectivePhaseFlow({
+    this.gameSession.resolveCollective({
       pending: this.pendingResponse,
       playerOrder: this.playerOrder,
       executeResponseWinner: (winnerId, action) => this.executeResponseWinner(winnerId, action),
@@ -2893,7 +2898,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private isCollectiveInterruptAction(action: ActionType): boolean {
-    return action === "hu" || action === "kai" || action === "peng";
+    return this.gameSession.rules.collectivePriority(action) > 0;
   }
 
   /** 已提交候选不再有更高或更靠前的潜在阻塞者时，立即完成全局裁决。 */
@@ -2901,19 +2906,18 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     const pending = this.pendingResponse;
     if (!pending || this.state.responsePhase !== "collective") return false;
     const order = this.getCollectiveOrder(pending);
-    const winner = pickCollectiveWinner(order, pending.collectives);
+    const winner = this.gameSession.rules.pickCollectiveWinner(order, pending.collectives);
     if (!winner) return false;
 
-    const rank = (action: ActionType): number => action === "hu" ? 2 : action === "kai" || action === "peng" ? 1 : 0;
-    const winnerRank = rank(winner.choice.action);
+    const winnerRank = this.gameSession.rules.collectivePriority(winner.choice.action);
     const winnerIndex = order.indexOf(winner.id);
     const blockers = order.filter((seatId, index) => {
       if (pending.collectives.has(seatId)) return false;
       const enabled = this.getAvailableActions(seatId, true).filter((item) => item.enabled).map((item) => item.action);
-      const canHu = enabled.includes("hu");
-      const canPeer = enabled.includes("kai") || enabled.includes("peng");
-      return canHu && (winnerRank < 2 || index < winnerIndex)
-        || winnerRank === 1 && canPeer && index < winnerIndex;
+      return enabled.some((action) => {
+        const actionRank = this.gameSession.rules.collectivePriority(action);
+        return actionRank > winnerRank || actionRank === winnerRank && actionRank > 0 && index < winnerIndex;
+      });
     });
 
     for (const seatId of order) {
@@ -3005,7 +3009,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       `winner=${winnerId} action=${choice.action} candidate=${choice.candidateId ?? "-"}`,
     );
     const operationDeps = this.ops.buildOperationExecutorDeps();
-    executeResponseWinner(
+    this.gameSession.executeResponseWinner(
       {
         getHand: (seatId) => this.playerHands.get(seatId) ?? [],
         explainHuForSeat: (seatId, hand, responseCard) =>
@@ -3123,13 +3127,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     // has a legal Chi choice. Otherwise GAME_RULES requires it to flow directly
     // to the next player's local_upper decision instead of asking the drawer to
     // press a no-choice Pass or wait for another timeout.
-    if (pending?.card.source === "draw" && !isDiscardRestricted(pending.card)) {
-      const drawerCanChi = buildChiCandidates(
+    if (pending?.card.source === "draw" && !this.gameSession.rules.isDiscardRestricted(pending.card)) {
+      const drawerCanChi = this.gameSession.rules.buildChiCandidates(
         this.ops.getHandWithoutPending(ownerId, pending.card),
         pending.card,
         [],
-      ).some((item) =>
-        this.preservesDeclaredKongsAfterAction(ownerId, "chi", pending.card, item.candidate.id),
+      ).some((candidate) =>
+        this.preservesDeclaredKongsAfterAction(ownerId, "chi", pending.card, candidate.id),
       );
       if (!drawerCanChi) {
         this.traceStep("local_draw_auto_pass_no_chi", `owner=${ownerId}`);
@@ -3139,7 +3143,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     // 全局阶段只处理胡、开、碰。无人拦截后，仅在确有本地选择时进入
     // local_upper/local_draw；提前选择的吃会由客户端在这里自动兑现。
-    enterOwnerLocalPhaseAfterNoResponseFlow({
+    this.gameSession.enterOwnerLocal({
       pending: this.pendingResponse,
       ownerId,
       getNextPlayerId: (playerId) => this.getNextPlayerId(playerId),
@@ -3178,7 +3182,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private executeEat(ownerId: string, candidateId?: string): boolean {
     const operationDeps = this.ops.buildOperationExecutorDeps();
-    const ok = executeEatFlow(
+    const ok = this.gameSession.executeEat(
       {
         pending: this.pendingResponse,
         executeChiOperation: (ownerIdArg, pendingCard) => {
@@ -3216,7 +3220,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       !pending ||
       pending.ownerId !== ownerId ||
       this.state.responsePhase !== "local_draw" ||
-      !isDiscardRestricted(pending.card)
+      !this.gameSession.rules.isDiscardRestricted(pending.card)
     ) {
       return false;
     }
@@ -3235,7 +3239,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private executeGrab(ownerId: string): void {
     this.traceStep("execute_grab", `owner=${ownerId}`);
-    executeGrabFlow(
+    this.gameSession.executeGrab(
       {
         pending: this.pendingResponse,
         deck: this.deck,
@@ -3274,7 +3278,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private executePassToNext(ownerId: string): void {
     const pending = this.pendingResponse;
-    if (!pending || isDiscardRestricted(pending.card)) return;
+    if (!pending || this.gameSession.rules.isDiscardRestricted(pending.card)) return;
     this.ops.pushDiscard(ownerId, pending.card);
     const nextId = this.getNextPlayerId(ownerId);
     this.pendingResponse = createPendingResponse(nextId, pending.card, "upper");
@@ -3295,7 +3299,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private buildRoundResultPlayers(winnerId: string | null, groups: string[]): RoundResultPlayer[] {
     const response = this.pendingResponse?.card;
     const alreadyExposed = winnerId && this.state.players.get(winnerId)?.exposedArea.some((card) => card.id === response?.id);
-    return buildRoundResultPlayersFlow(
+    const players = buildRoundResultPlayersFlow(
       this.playerOrder,
       this.state.players,
       this.playerHands,
@@ -3304,6 +3308,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       groups,
       response && !alreadyExposed ? { ...response } : null,
     );
+    return this.gameSession.settleRound(players);
   }
 
   private buildRemainingDeckPreview(): Card[] {
@@ -3494,7 +3499,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (this.state.presentationUntil > Date.now() && !probeCollectiveResponder) return [];
     const hand = this.playerHands.get(seatId) ?? [];
     const allowCollectivePreselection = !probeCollectiveResponder && this.canSeatPreselectCollective(seatId);
-    const entries = getAvailableActionsFlow({
+    const entries = this.gameSession.getAvailableActions({
       phase: this.state.phase,
       seatId,
       pending: this.pendingResponse,
@@ -3878,7 +3883,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
 
   private declareNoDiscardWin(ownerId: string, tag: string): void {
     const hand = this.playerHands.get(ownerId) ?? [];
-    if (this.ruleVersion === "1.0" && (!explainHand(hand).valid ||
+    if (this.gameSession.rules.enforceDeclaredKans && (!this.gameSession.rules.explainHand(hand).valid ||
       countHiddenKans(hand) < (this.state.players.get(ownerId)?.declaredKongs ?? 0))) return;
     this.traceStep("no_discard_win", `owner=${ownerId} tag=${tag}`);
     this.endRound(`${ownerId} HU`, ownerId, []);
@@ -4071,22 +4076,13 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private prepareNextRoundSetup(winnerId: string | null, huType: "small" | "big" | null): void {
-    if (winnerId && huType === "small") {
-      this.nextRoundSetup = { mode: "fixed", dealerId: winnerId };
-      return;
-    }
-    if (winnerId && huType === "big") {
-      this.nextRoundSetup = { mode: "picker", pickerId: this.getOppositePlayerId(winnerId) };
-      return;
-    }
-    const fallbackDealerId = this.roundDealerId && this.state.players.has(this.roundDealerId)
-      ? this.roundDealerId
-      : this.playerOrder[0];
-    if (fallbackDealerId) {
-      this.nextRoundSetup = this.ruleVersion === "1.0"
-        ? { mode: "picker", pickerId: this.getOppositePlayerId(fallbackDealerId) }
-        : { mode: "fixed", dealerId: fallbackDealerId };
-    }
+    this.nextRoundSetup = this.gameSession.prepareNextRound({
+      winnerId,
+      huType,
+      roundDealerId: this.roundDealerId,
+      playerOrder: this.playerOrder,
+      hasPlayer: (seatId) => this.state.players.has(seatId),
+    });
   }
 
   // ===== AI 与计时器 =====
@@ -4152,7 +4148,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
     const pending = this.pendingResponse;
-    const plan = planTickBots({
+    const plan = this.gameSession.planBots({
       hasPending: !!pending,
       phase: this.state.phase,
       responsePhase: this.state.responsePhase,
@@ -4241,7 +4237,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.responseDecisionWindowId += 1;
     }
     this.traceStep("start_collective_polling");
-    startCollectiveFlow({
+    this.gameSession.startCollective({
       pending: this.pendingResponse,
       responsePhase: this.state.responsePhase,
       pollOriginPlayerId: this.state.pollOriginPlayerId,
@@ -4358,7 +4354,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
 
       if (this.state.responsePhase === "local_draw") {
-        const idleAction = resolveLocalDrawIdleAction(this.awaitingDiscardOwnerId === ownerId, pending.card);
+        const idleAction = this.gameSession.resolveLocalDrawIdle(this.awaitingDiscardOwnerId === ownerId, pending.card);
         if (idleAction === "discard") {
           this.traceStep("local_timeout_discard", `owner=${ownerId}`);
           this.discardFromAndCollective(ownerId);
@@ -4387,7 +4383,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
    */
   private advanceCollectivePolling(): void {
     this.traceStep("advance_collective_polling:begin");
-    advanceCollectiveFlow({
+    this.gameSession.advanceCollective({
       pending: this.pendingResponse,
       hasResponded: (seatId) => this.pendingResponse?.collectives.has(seatId) ?? false,
       responsePhase: this.state.responsePhase,
@@ -4470,7 +4466,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return;
     }
     this.traceStep("run_bot_step", `owner=${pending.ownerId} responder=${this.collectiveResponderId ?? "-"}`);
-    runBotStep({
+    this.gameSession.runBot({
       phase: this.state.phase,
       responsePhase: this.state.responsePhase,
       pendingOwnerId: pending.ownerId,
@@ -4480,7 +4476,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
       getAvailableActions: (seatId) => this.getAvailableActions(seatId),
       chooseAction: (seatId, actions) =>
-        chooseBotAction({
+        this.gameSession.chooseBotAction({
           hand: this.playerHands.get(seatId) ?? [],
           pendingCard: pending.card,
           actions,
@@ -4488,11 +4484,11 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           strength: this.state.players.get(seatId)?.botStrength ?? 50,
         }),
       chooseDiscardCardId: (seatId) =>
-        chooseBotDiscard({
+        this.gameSession.chooseBotDiscard({
           hand: this.playerHands.get(seatId) ?? [],
           visibleCards: this.buildBotVisibleCards(),
           declaredKongs: this.state.players.get(seatId)?.declaredKongs ?? 0,
-          enforceDeclaredKans: this.ruleVersion === "1.0",
+          enforceDeclaredKans: this.gameSession.rules.enforceDeclaredKans,
           strength: this.state.players.get(seatId)?.botStrength ?? 50,
         })?.id ?? null,
       setCollectiveChoice: (seatId, choice) => this.acceptBotCollectiveChoice(seatId, choice),

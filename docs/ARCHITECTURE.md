@@ -212,12 +212,18 @@ client/src/components/ActionPanel.vue 合法动作和弃牌确认
 server/src/index.ts                   HTTP/Colyseus 启动与辅助接口
 server/src/profiles/                  访客档案领域、Redis 持久化与内存降级
 server/src/persistence/               活动房快照存储、防抖写入与关停编排
-server/src/rooms/GameRoom.ts          房间生命周期、座位和消息路由
+server/src/game-core/game-session.ts  可序列化的权威局内运行态与共享回合入口
+server/src/game-core/ruleset.ts       RuleRef 注册、v1.0/legacy 规则策略与下一局策略
+server/src/rooms/GameRoom.ts          在线适配：房间生命周期、座位、计时、消息与投影
 server/src/rooms/room-recovery.ts     私有恢复快照格式、版本与校验
-server/src/rooms/flow/                牌局状态机、动作执行与结算
-server/src/rules/                     牌堆、动作候选、胡牌拆解
+server/src/rooms/flow/                可供在线与本地宿主共用的阶段推进、动作执行与结算原语
+server/src/rules/                     浏览器安全的牌堆、声明、动作候选与胡牌拆解
 server/src/schema/                    公开同步 Schema
 ```
+
+在线房间不再单独拥有牌堆、四家私有手牌、待响应选择、集体响应游标和下一局定庄等核心运行态；这些字段由 `GameSession` 持有并可序列化，`GameRoom` 只把它们投影到既有 Colyseus Schema、私有消息和恢复快照。规则相关入口统一从当前 `RuleRef` 解析出的 `RuleSet` 调用，包括牌堆、声明、动作候选、弃牌限制、响应优先级、胡牌解释、结算收口和下一局定庄。计时器、连接身份、Redis、日志与广播仍留在在线适配层，因此浏览器共享核心不依赖 Node 加密或网络房间身份。
+
+增加下一套规则时，应新增或组合一个 `RuleSet`，注册新的稳定 `{ id, version }`，并先用仅测试的 RuleSet 验证至少一个真实动作或结算差异；再补该规则的固定牌堆/动作序列差异测试。只有产品确实允许玩家选择多套规则后才增加选择 UI。不得复制 `GameRoom`、`GameSession` 或整套回合循环，也不得在宿主中散落 `rulesetId` 分支。
 
 `GameTools` 由页面层传入 `decisionUntimed`、`decisionSecondsLeft`，并通过 `returnToDecision` 通知牌桌恢复当前操作焦点；这些字段只描述现有服务端决策窗口，不暂停或改写计时。`GameBoard` 接收同一决定状态并持有真实手牌上的弃牌预选、吃牌组合草稿与统一操作坞，打开顶栏弹层不能销毁这些本地交互状态。
 
