@@ -298,9 +298,13 @@ test("recovery retains v1 kan enforcement and treats unversioned active snapshot
   const snapshot = source.exportRecoverySnapshot();
   source.onDispose();
   assert.equal(snapshot.privateState.ruleVersion, "1.0");
+  assert.deepEqual(snapshot.privateState.ruleRef, { id: "putian-standard", version: "1.0" });
   for (const version of ["1.0", undefined]) {
     const copy = structuredClone(snapshot);
-    if (version === undefined) delete copy.privateState.ruleVersion;
+    if (version === undefined) {
+      delete copy.privateState.ruleRef;
+      delete copy.privateState.ruleVersion;
+    }
     const restored = new FourColorGameRoom() as any;
     restored.onCreate({ recoverySnapshot: copy });
     try {
@@ -308,4 +312,16 @@ test("recovery retains v1 kan enforcement and treats unversioned active snapshot
       assert.equal(restored.exportRecoverySnapshot().privateState.ruleVersion, version ?? "legacy");
     } finally { restored.onDispose(); }
   }
+});
+
+test("recovery rejects an unknown RuleRef instead of silently changing rules", () => {
+  const source = createRecoverableRoom();
+  const snapshot = source.exportRecoverySnapshot();
+  source.onDispose();
+  snapshot.privateState.ruleRef = { id: "putian-standard", version: "future" };
+  const restored = new FourColorGameRoom() as any;
+  assert.throws(
+    () => restored.onCreate({ recoverySnapshot: snapshot }),
+    /unknown or incompatible ruleset/,
+  );
 });

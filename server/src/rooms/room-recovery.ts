@@ -1,5 +1,6 @@
 import { isTutorialProgress, type TutorialProgress } from "./tutorial.js";
 import type { ActionType, Card } from "../rules/types.js";
+import { isRuleRef, type RuleRef } from "../game-core/ruleset.js";
 
 export const ROOM_RECOVERY_VERSION = 2;
 export const ACTIVE_ROOM_SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -14,6 +15,7 @@ export interface RecoveryPendingResponse {
 
 export interface RoomRecoveryPrivateState {
   tutorial?: TutorialProgress | null;
+  ruleRef?: RuleRef;
   ruleVersion?: "legacy" | "1.0";
   roomIdleExpiresAt: number;
   deck: Card[];
@@ -96,6 +98,7 @@ export function isRoomRecoverySnapshot(value: unknown): value is RoomRecoverySna
   }
   return (
     (privateState.tutorial == null || (state.roomMode === "practice" && isTutorialProgress(privateState.tutorial))) &&
+    (privateState.ruleRef === undefined || isRuleRef(privateState.ruleRef)) &&
     (privateState.ruleVersion === undefined || privateState.ruleVersion === "legacy" || privateState.ruleVersion === "1.0") &&
     isFiniteInteger(privateState.roomIdleExpiresAt) &&
     privateState.roomIdleExpiresAt >= 0 &&

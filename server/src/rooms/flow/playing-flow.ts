@@ -89,6 +89,12 @@ export interface ActionPanelInput {
   logHuCheck: (stage: string, seatId: SeatId, hand: Card[], response: Card, valid: boolean) => void;
   getHandWithoutPending: (seatId: SeatId, pendingCard: Card) => Card[];
   getNextPlayerId: (seatId: SeatId) => SeatId;
+  ruleSet?: {
+    isDiscardRestricted: (card: Card) => boolean;
+    buildKaiCandidates: (hand: Card[], response: Card, wildcardPool: Card[]) => ActionCandidate[];
+    buildPengCandidates: (hand: Card[], response: Card) => ActionCandidate[];
+    buildChiCandidates: (hand: Card[], response: Card, wildcardPool: Card[]) => ActionCandidate[];
+  };
 }
 
 export interface AvailableActionEntry {
@@ -104,6 +110,15 @@ export interface AvailableActionEntry {
  * 副作用：无（仅调用日志探针回调）。
  */
 export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActionEntry[] {
+  const candidateRules = input.ruleSet ?? {
+    isDiscardRestricted,
+    buildKaiCandidates: (hand: Card[], response: Card, wildcardPool: Card[]) =>
+      buildKaiCandidates(hand, response, wildcardPool).map((item) => item.candidate),
+    buildPengCandidates: (hand: Card[], response: Card) =>
+      buildPengCandidates(hand, response).map((item) => item.candidate),
+    buildChiCandidates: (hand: Card[], response: Card, wildcardPool: Card[]) =>
+      buildChiCandidates(hand, response, wildcardPool).map((item) => item.candidate),
+  };
   const disabled = [
     { action: "hu", enabled: false },
     { action: "kai", enabled: false },
@@ -134,10 +149,8 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
     }
     const huProbe = input.explainHuForSeat(input.seatId, input.hand, input.pending.card);
     input.logHuCheck("collective", input.seatId, input.hand, input.pending.card, huProbe.valid);
-    const kaiCandidates = buildKaiCandidates(input.hand, input.pending.card, []).map((item) => item.candidate);
-    const pengCandidates = buildPengCandidates(input.hand, input.pending.card).map(
-      (item) => item.candidate,
-    );
+    const kaiCandidates = candidateRules.buildKaiCandidates(input.hand, input.pending.card, []);
+    const pengCandidates = candidateRules.buildPengCandidates(input.hand, input.pending.card);
     const nextOwnerId = input.getNextPlayerId(input.pending.ownerId);
     const localOwnerId =
       input.pending.card.source === "draw" ? input.pending.ownerId : nextOwnerId;
@@ -153,9 +166,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
       (input.pending.card.source === "draw" && input.seatId === nextOwnerId);
     const previewChiCandidates =
       canPreviewChi
-        ? buildChiCandidates(input.getHandWithoutPending(input.seatId, input.pending.card), input.pending.card, []).map(
-            (item) => item.candidate,
-          )
+        ? candidateRules.buildChiCandidates(input.getHandWithoutPending(input.seatId, input.pending.card), input.pending.card, [])
         : [];
     return [
       { action: "hu", enabled: huProbe.valid },
@@ -169,7 +180,7 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
       },
       {
         action: "pass",
-        enabled: !(input.pending.card.source === "draw" && isOwner && isDiscardRestricted(input.pending.card)),
+        enabled: !(input.pending.card.source === "draw" && isOwner && candidateRules.isDiscardRestricted(input.pending.card)),
         deferred: localResponsePhase === "local_upper" && input.seatId === localOwnerId,
       },
     ];
@@ -185,11 +196,9 @@ export function getAvailableActionsFlow(input: ActionPanelInput): AvailableActio
 
   if (input.responsePhase === "local_upper" || input.responsePhase === "local_draw") {
     const handNoPending = input.getHandWithoutPending(input.seatId, input.pending.card);
-    const chiCandidates = buildChiCandidates(handNoPending, input.pending.card, []).map(
-      (item) => item.candidate,
-    );
+    const chiCandidates = candidateRules.buildChiCandidates(handNoPending, input.pending.card, []);
     const mustRetainSpecial =
-      input.responsePhase === "local_draw" && isDiscardRestricted(input.pending.card);
+      input.responsePhase === "local_draw" && candidateRules.isDiscardRestricted(input.pending.card);
     return [
       { action: "hu", enabled: false },
       { action: "kai", enabled: false },
@@ -576,6 +585,7 @@ export interface ResolveCollectiveDeps {
   executeResponseWinner: (winnerId: SeatId, choice: { action: ActionType; candidateId?: string }) => void;
   setLastAction: (action: string) => void;
   enterOwnerLocalPhaseAfterNoResponse: (ownerId: SeatId) => void;
+  pickWinner?: typeof pickCollectiveWinner;
 }
 
 /**
@@ -589,7 +599,7 @@ export function resolveCollectivePhaseFlow(deps: ResolveCollectiveDeps): void {
     return;
   }
   const order = getCollectiveOrder(deps.playerOrder, pending);
-  const winner = pickCollectiveWinner(order, pending.collectives);
+  const winner = (deps.pickWinner ?? pickCollectiveWinner)(order, pending.collectives);
   if (winner) {
     deps.executeResponseWinner(winner.id, winner.choice);
     return;

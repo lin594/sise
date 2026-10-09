@@ -16,7 +16,8 @@ import {
 } from "../rooms/flow/match-runtime.js";
 import { createRoomStateOps } from "../rooms/flow/room-state-ops.js";
 import { resolveLocalDrawIdleAction } from "../rooms/flow/playing-flow.js";
-import { generateToken, normalizeName, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
+import { normalizeName, normalizeToken, resolveDealerFromAnchorAndCard } from "../rooms/flow/support.js";
+import { generateRoomToken } from "../rooms/server-token.js";
 import {
   DEFAULT_DECLARE_TIMEOUT_MS,
   DEFAULT_OPERATION_TIMEOUT_MS,
@@ -41,7 +42,7 @@ function c(id: string, color: Card["color"], type: Card["type"], source?: "upper
 }
 
 t("identity: generated room tokens use cryptographically random 192-bit values", () => {
-  const tokens = Array.from({ length: 256 }, () => generateToken());
+  const tokens = Array.from({ length: 256 }, () => generateRoomToken());
 
   assert.equal(new Set(tokens).size, tokens.length);
   assert.equal(tokens.every((token) => /^pt_[0-9a-f]{48}$/.test(token)), true);
