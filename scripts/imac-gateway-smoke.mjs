@@ -8,6 +8,7 @@ const baseUrl = new URL(process.env.IMAC_GATEWAY_BASE_URL || "http://imac.tajure
 const sshHost = process.env.IMAC_GATEWAY_SSH_HOST || "imac";
 const remotePath = process.env.IMAC_GATEWAY_REMOTE_PATH || "~/workspace/lin594/sise";
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL || "chrome";
+const localDocker = process.env.IMAC_GATEWAY_LOCAL === "1";
 
 assert.match(baseUrl.protocol, /^https?:$/u);
 assert.match(sshHost, /^[A-Za-z0-9_.-]+$/u, "SSH host contains unsupported characters");
@@ -18,11 +19,17 @@ async function fetchWithTimeout(url, init = {}, timeoutMs = 5_000) {
 }
 
 const composeFiles = "-f docker-compose.yml -f docker-compose.imac.yml";
-const { stderr: nginxCheck } = await execFileAsync(
-  "ssh",
-  [sshHost, `cd ${remotePath} && docker compose ${composeFiles} exec -T web nginx -t`],
-  { timeout: 30_000, maxBuffer: 1024 * 1024 },
-);
+const { stderr: nginxCheck } = localDocker
+  ? await execFileAsync(
+      "docker",
+      ["compose", "-f", "docker-compose.yml", "-f", "docker-compose.imac.yml", "exec", "-T", "web", "nginx", "-t"],
+      { timeout: 30_000, maxBuffer: 1024 * 1024 },
+    )
+  : await execFileAsync(
+      "ssh",
+      [sshHost, `cd ${remotePath} && docker compose ${composeFiles} exec -T web nginx -t`],
+      { timeout: 30_000, maxBuffer: 1024 * 1024 },
+    );
 assert.match(nginxCheck, /syntax is ok/u, "Nginx configuration check did not pass");
 
 const pageResponse = await fetchWithTimeout(baseUrl);
@@ -71,6 +78,7 @@ assert.equal(directBackendReachable, false, "backend port 2567 is still reachabl
 const browser = await chromium.launch({ channel: browserChannel, headless: true });
 let roomApiSeen = false;
 let sameOriginWebSocket = false;
+let productEventProxied = false;
 try {
   const context = await browser.newContext({
     viewport: { width: 667, height: 375 },
@@ -80,6 +88,9 @@ try {
   const page = await context.newPage();
   page.on("response", (response) => {
     const url = new URL(response.url());
+    if (response.request().method() === "POST" && url.origin === baseUrl.origin && url.pathname === "/product-events") {
+      productEventProxied ||= response.status() === 202;
+    }
     if (response.request().method() === "POST" && url.origin === baseUrl.origin && url.pathname === "/rooms") {
       roomApiSeen = response.ok();
     }
@@ -95,14 +106,27 @@ try {
   });
 
   await page.goto(baseUrl.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await page.getByTestId("random-nickname").click();
-  await page.getByTestId("login-submit").click();
-  await page.getByText("游戏模式选择").waitFor({ state: "visible", timeout: 15_000 });
-  await page.getByTestId("lobby-start").click();
+  const nicknameAction = page.getByTestId("random-nickname");
+  if (await nicknameAction.isVisible().catch(() => false)) {
+    await nicknameAction.click();
+    await page.getByTestId("login-submit").click();
+  }
+  const layoutOnboarding = page.getByTestId("confirm-layout-onboarding");
+  if (await layoutOnboarding.isVisible().catch(() => false)) await layoutOnboarding.click();
+  await page.waitForFunction(() =>
+    Boolean(document.querySelector('[data-testid="mode-practice_bots"], [data-testid="lobby-start"]')),
+    undefined,
+    { timeout: 15_000 },
+  );
+  const practiceMode = page.getByTestId("mode-practice_bots");
+  if (await practiceMode.isVisible()) await practiceMode.click();
+  else await page.getByTestId("lobby-start").click();
   await page.getByTestId("game-board").waitFor({ state: "visible", timeout: 30_000 });
+  assert.equal(productEventProxied, true, "product analytics did not use the same-origin HTTP proxy");
   assert.equal(roomApiSeen, true, "room creation did not use the same-origin HTTP proxy");
   assert.equal(sameOriginWebSocket, true, "room connection did not use the same-origin WebSocket proxy");
 
+  await page.getByTestId("game-settings").click();
   await page.getByTestId("game-exit").click();
   await page.getByTestId("confirm-exit").click();
   await page.getByText("游戏模式选择").waitFor({ state: "visible", timeout: 15_000 });
@@ -117,6 +141,7 @@ console.log(JSON.stringify({
   browserIdentity: true,
   missingStatic404: true,
   health: true,
+  productEvents: productEventProxied,
   roomApi: roomApiSeen,
   websocket: sameOriginWebSocket,
   legacyPort: true,

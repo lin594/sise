@@ -10,6 +10,7 @@ FROM base AS development
 COPY client/package.json client/package-lock.json* ./
 RUN npm install
 COPY client/ ./client/
+COPY server/tsconfig.json ./server/tsconfig.json
 COPY server/src ./server/src
 WORKDIR /app/client
 EXPOSE 80
@@ -19,6 +20,7 @@ FROM base AS build
 COPY client/package.json client/package-lock.json* ./
 RUN npm ci
 COPY client/ ./client/
+COPY server/tsconfig.json ./server/tsconfig.json
 COPY server/src ./server/src
 WORKDIR /app/client
 ARG VITE_SERVER_URL
