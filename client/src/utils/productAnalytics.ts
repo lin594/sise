@@ -10,26 +10,37 @@ let modeAttempt: { id: string; mode: Mode; at: number } | null = null;
 let networkDisabledForOfflinePractice = false;
 const once = new Set<string>();
 const modeEvent = (mode: Mode): ClientEvent => (mode === "practice" || mode === "tutorial") ? "practice_start" : mode === "match" ? "quick_match_start" : "friend_room_create";
+function randomProductId(): string {
+  try {
+    if (typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  } catch { return ""; }
+}
 export function productVisitId(): string {
-  try { return visitId ||= crypto.randomUUID(); } catch { return ""; }
+  return visitId ||= randomProductId();
 }
 export function trackProductEvent(name: ClientEvent, fields: { id?: string; mode?: Mode; outcome?: "started" | "ready" | "failed"; durationMs?: number; persistent?: boolean } = {}): void {
   try {
     if (networkDisabledForOfflinePractice) return;
     if (!navigator.onLine) return;
     if (activeRequests >= 4) return;
-    const id = fields.id ?? crypto.randomUUID();
+    const { id: requestedId, ...eventFields } = fields;
+    const id = requestedId || randomProductId();
+    if (!id) return;
     const key = `${name}:${id}:${fields.outcome ?? "started"}`;
     if (once.has(key)) return;
     once.add(key);
     if (once.size > 256) once.delete(once.values().next().value!);
     const token = ensureGuestProfileToken();
+    const currentVisitId = productVisitId();
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 1500);
     activeRequests++;
     void fetch(`${BACKEND_HTTP_URL}/product-events`, {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name, id, visitId: productVisitId(), ...fields }),
+      body: JSON.stringify({ name, id, ...(currentVisitId ? { visitId: currentVisitId } : {}), ...eventFields }),
       signal: controller.signal, cache: "no-store", keepalive: true,
     }).catch(() => {}).finally(() => { clearTimeout(timer); activeRequests--; });
   } catch { /* Optional measurement must never affect entry or gameplay. */ }
@@ -44,7 +55,12 @@ export function openProductSession(invited: boolean): void {
 }
 export function beginProductMode(mode: Mode): void {
   try {
-    modeAttempt = { id: crypto.randomUUID(), mode, at: performance.now() };
+    const id = randomProductId();
+    if (!id) {
+      modeAttempt = null;
+      return;
+    }
+    modeAttempt = { id, mode, at: performance.now() };
     trackProductEvent(modeEvent(mode), { id: modeAttempt.id, mode });
   } catch { modeAttempt = null; }
 }

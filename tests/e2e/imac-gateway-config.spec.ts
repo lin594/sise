@@ -27,12 +27,25 @@ test("Nginx forwards every browser-facing game route and websocket upgrade", asy
   expect(nginx).toContain("error_page 418 = @game_websocket;");
   expect(nginx).toContain("if ($connection_upgrade = upgrade)");
   expect(nginx).toContain("location @game_websocket");
-  for (const route of ["/health", "/guest-profile", "/room-id", "/rooms", "/reset-room", "/private-state"]) {
+  for (const route of ["/health", "/guest-profile", "/product-events", "/room-id", "/rooms", "/reset-room", "/private-state"]) {
     expect(nginx).toContain(`location = ${route}`);
   }
   expect(nginx).toContain("proxy_set_header Upgrade $http_upgrade;");
   expect(nginx).toContain("proxy_set_header Connection $connection_upgrade;");
   expect(nginx).toContain("proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;");
+});
+
+test("the production web image preserves the shared schema compiler contract", async () => {
+  const [dockerfile, clientPackage, serverLock] = await Promise.all([
+    readFile(path.join(repositoryRoot, "client/Dockerfile"), "utf8"),
+    readFile(path.join(repositoryRoot, "client/package.json"), "utf8").then(JSON.parse),
+    readFile(path.join(repositoryRoot, "server/package-lock.json"), "utf8").then(JSON.parse),
+  ]);
+
+  expect(dockerfile.match(/COPY server\/tsconfig\.json \.\/server\/tsconfig\.json/gu)).toHaveLength(2);
+  expect(clientPackage.dependencies["@colyseus/schema"]).toBe(
+    serverLock.packages["node_modules/@colyseus/schema"].version,
+  );
 });
 
 test("the recovery smoke can replace only the backend container", async () => {
