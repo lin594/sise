@@ -48,6 +48,12 @@ test("the production web image preserves the shared schema compiler contract", a
   );
 });
 
+test("the production web image makes every public asset readable", async () => {
+  const dockerfile = await readFile(path.join(repositoryRoot, "client/Dockerfile"), "utf8");
+
+  expect(dockerfile).toContain("RUN chmod -R a+rX /usr/share/nginx/html");
+});
+
 test("the recovery smoke can replace only the backend container", async () => {
   const smoke = await readFile(path.join(repositoryRoot, "scripts/live-room-recovery-smoke.mjs"), "utf8");
 
