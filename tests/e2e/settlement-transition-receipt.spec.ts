@@ -1,4 +1,4 @@
-import { openGameAs, finishDeclarationIfNeeded } from "./helpers/game";
+import { openGameAs, finishDeclarationIfNeeded, startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
 type HeldSocketMessages = {
@@ -8,7 +8,7 @@ type HeldSocketMessages = {
 
 async function reachPracticeSettlement(page: Page): Promise<void> {
   await openGameAs(page, "/?e2eDebug=1", "结算房主");
-  await page.getByTestId("mode-practice_bots").click();
+  await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);
   await page.evaluate(() => {
     const bridge = (window as Window & {

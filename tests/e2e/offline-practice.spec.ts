@@ -14,8 +14,13 @@ function observeDynamicTraffic(context: BrowserContext) {
 }
 
 async function completeLocalRound(page: Page): Promise<void> {
-  await page.getByTestId("mode-offline_practice").click();
+  await expect(page.getByTestId("mode-offline_practice")).toHaveCount(0);
+  await page.getByTestId("mode-practice_bots").click();
   await expect(page.getByTestId("game-board")).toBeVisible();
+  await expect(page.locator(".dealer-reveal")).toBeVisible();
+  await expect(page.locator(".deal-overlay")).toBeVisible({ timeout: 8_000 });
+  await expect.poll(() => page.locator("[data-testid^='hand-card-'].deal-concealed").count()).toBeGreaterThan(0);
+  await expect(page.locator(".deal-overlay")).toHaveCount(0, { timeout: 12_000 });
   await expect(page.getByTestId("opponent-hand-count")).toHaveCount(3);
   await expect(page.getByTestId("game-auto-play")).toHaveCount(0);
   await expect(page.getByTestId("game-interaction")).toHaveCount(0);
@@ -70,7 +75,7 @@ test("reopens offline from the cached shell and completes a local round without 
   await page.goto(`${origin}/?e2eDebug=1`, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("offline-readiness")).toHaveAttribute("data-state", "ready");
   // Optional lobby profile/telemetry calls may already have been attempted
-  // during application boot. The explicit offline mode must add none of its own.
+  // during application boot. The single-player offline fallback must add none of its own.
   await page.waitForTimeout(100);
   dynamicRequests.length = 0;
   sockets.length = 0;

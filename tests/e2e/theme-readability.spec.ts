@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { startLobbyAction } from './helpers/game';
 import { revealSetting, revealTool } from './helpers/settings';
 
 async function readableText(panel: Locator) {
@@ -60,7 +61,7 @@ for (const scheme of ['dark','light'] as const) for (const skin of ['cyber-minim
     await page.addInitScript(skin => localStorage.setItem('sise_game_display_preferences_v2',JSON.stringify({skin})),skin);
     await page.goto('/?new=1&e2eDebug=1');
     await readableText(page.locator('main'));
-    await page.getByTestId('mode-practice_bots').click();
+    await startLobbyAction(page);
     await expect(page.getByTestId('game-board')).toBeVisible();
     await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
     await expect(page.getByTestId('confirm-declaration')).toBeVisible();

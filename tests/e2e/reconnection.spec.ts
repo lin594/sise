@@ -22,7 +22,7 @@ test.describe("牌局断线恢复", () => {
 
   test("半开连接无回包时主动提示网络不稳并恢复", async ({ page }, testInfo) => {
     test.setTimeout(45_000);
-    await page.goto("/");
+    await page.goto("/?e2eDebug=1");
 
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
@@ -57,7 +57,7 @@ test.describe("牌局断线恢复", () => {
         roomSocketCount += 1;
       }
     });
-    await page.goto("/");
+    await page.goto("/?e2eDebug=1");
 
     await expect(page.getByText("游戏模式选择")).toBeVisible();
 
@@ -231,7 +231,7 @@ test.describe("牌局断线恢复", () => {
 
   test("刷新页面后无需重新输入昵称即可回到原座", async ({ page }) => {
     test.setTimeout(90_000);
-    await page.goto("/");
+    await page.goto("/?e2eDebug=1");
 
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
@@ -346,7 +346,7 @@ test.describe("牌局断线恢复", () => {
 
   test("新窗口接管原座位后旧窗口停止抢回", async ({ context, page }) => {
     test.setTimeout(90_000);
-    await page.goto("/");
+    await page.goto("/?e2eDebug=1");
 
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });
@@ -396,7 +396,7 @@ test.describe("牌局断线恢复", () => {
 
   test("个人退出后忽略迟到的旧房间私有状态", async ({ page }) => {
     test.setTimeout(90_000);
-    await page.goto("/");
+    await page.goto("/?e2eDebug=1");
 
     await startLobbyAction(page);
     await expect(page.getByTestId("game-board")).toBeVisible({ timeout: 15_000 });

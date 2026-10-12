@@ -10,12 +10,6 @@ async function enterModeLobby(page: import("@playwright/test").Page): Promise<vo
 
 for (const scenario of [
   {
-    name: "practice",
-    modeTestId: "mode-practice_bots",
-    pendingLabel: "正在创建练习房…",
-    readyLabel: "开始单人练习",
-  },
-  {
     name: "friend room",
     modeTestId: "mode-friends",
     pendingLabel: "正在创建好友房…",
@@ -48,7 +42,7 @@ for (const scenario of [
     await expect(page.locator(".lobby")).toHaveAttribute("aria-busy", "true");
     await expect(start).toBeDisabled();
     await expect(start).toContainText("正在进入…");
-    await expect(page.locator(".mode-card:disabled")).toHaveCount(4);
+    await expect(page.locator(".mode-card:disabled")).toHaveCount(3);
     expect(roomRequests).toBe(1);
 
     releaseRequest();
@@ -60,6 +54,25 @@ for (const scenario of [
     await expect(page.locator(".mode-card:disabled")).toHaveCount(0);
   });
 }
+
+test("single-player practice starts locally without creating a room or socket", async ({ page }) => {
+  let roomRequests = 0;
+  let sockets = 0;
+  await page.route("**/rooms", async (route) => {
+    roomRequests += 1;
+    await route.abort();
+  });
+  await enterModeLobby(page);
+  page.on("websocket", () => {
+    sockets += 1;
+  });
+  await page.getByTestId("mode-practice_bots").click();
+
+  await expect(page.getByTestId("game-board")).toBeVisible();
+  await expect(page.locator(".dealer-reveal")).toBeVisible();
+  expect(roomRequests).toBe(0);
+  expect(sockets).toBe(0);
+});
 
 test("quick match uses joining language and can return to mode selection", async ({ page }) => {
   await page.route("**/matchmake/**", async (route) => {

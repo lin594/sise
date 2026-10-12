@@ -378,7 +378,7 @@ test.describe("clear first-time entry", () => {
     await expect(page.getByTestId("change-entry-name")).toBeFocused();
     for (const [width, height] of [[568, 320], [320, 568], [1280, 720]]) {
       await page.setViewportSize({ width, height });
-      await expect(page.locator(".mode-card")).toHaveCount(4);
+      await expect(page.locator(".mode-card")).toHaveCount(3);
       const geometry = await page.locator(".lobby").evaluate(el => {
         const scroll = el.querySelector<HTMLElement>("[data-testid='lobby-scroll']")!;
         return {
@@ -1582,7 +1582,7 @@ test.describe("compact landscape gameplay", () => {
   });
 
   test("lets a human hand control to a bot and take it back", async ({ page }, testInfo) => {
-    await enterLobby(page);
+    await enterLobby(page, "/?e2eDebug=1");
     await startLobbyAction(page);
 
     await finishOpeningIfNeeded(page);

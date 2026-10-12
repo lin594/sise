@@ -70,10 +70,8 @@ export function useRoomLifecycle({ state, tutorial, connected, connect, startOff
         void startFriendLobby();
       } else if (selectedLobbyMode.value === "quick_match") {
         void startQuickMatchLobby();
-      } else if (selectedLobbyMode.value === "offline_practice") {
-        startOfflinePracticeLobby();
       } else {
-        void startPracticeLobby();
+        startOfflinePracticeLobby();
       }
       return;
     }
@@ -92,9 +90,9 @@ export function useRoomLifecycle({ state, tutorial, connected, connect, startOff
     enteringLobby.value = true;
     globalError.value = "";
     try {
-      if (!startOfflinePractice(nickname)) throw new Error("离线练习启动失败，请重试。");
+      if (!startOfflinePractice(nickname)) throw new Error("单人练习启动失败，请重试。");
     } catch (error) {
-      globalError.value = error instanceof Error ? error.message : "离线练习启动失败，请重试。";
+      globalError.value = error instanceof Error ? error.message : "单人练习启动失败，请重试。";
       startingRoomMode.value = null;
     } finally {
       enteringLobby.value = false;

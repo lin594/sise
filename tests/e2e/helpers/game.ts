@@ -60,13 +60,21 @@ export async function openGameAs(page: Page, url: string, nickname: string): Pro
   await page.goto(url);
 }
 
-/** Start the default practice directly, or use the host's existing room start action. */
+/** Start a test-only server practice when the local debug bridge is present, otherwise use the public action. */
 export async function startLobbyAction(page: Page): Promise<void> {
   await expect.poll(async () =>
     await page.getByTestId("mode-practice_bots").isVisible() || await page.getByTestId("lobby-start").isVisible(),
   ).toBe(true);
   if (await page.getByTestId("mode-practice_bots").isVisible()) {
-    await page.getByTestId("mode-practice_bots").click();
+    const startedServerPractice = await page.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: { startServerPractice?: () => void };
+      }).__siseLocalTest;
+      if (!bridge?.startServerPractice) return false;
+      bridge.startServerPractice();
+      return true;
+    });
+    if (!startedServerPractice) await page.getByTestId("mode-practice_bots").click();
     // The board can mount during initial room synchronization, before the
     // auto-start request has filled the three computer seats. A debug scenario
     // applied in that gap changes phase and prevents the real start entirely.

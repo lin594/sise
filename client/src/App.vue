@@ -840,6 +840,7 @@ type LocalTestBridgeWindow = Window & {
     setPrivateHandReadyOverride: (ready: boolean | null) => void;
     setListeningHintsOverride: (hints: typeof listeningHints.value) => void;
     advanceOfflinePracticeAsBot: () => boolean;
+    startServerPractice: () => void;
   };
 };
 
@@ -876,6 +877,7 @@ function installLocalTestBridge(): void {
       localTestListeningHintsOverride.value = hints;
     },
     advanceOfflinePracticeAsBot: () => debugAdvanceOfflinePracticeAsBot(),
+    startServerPractice: () => void startPracticeLobby(),
   };
 }
 

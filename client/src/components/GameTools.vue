@@ -362,7 +362,7 @@
         >
           <span>
             <strong>安装四色牌</strong>
-            <small>离线练习准备好后无需联网；真人玩法仍需联网</small>
+            <small>单人练习资源备好后可断网进入；真人玩法仍需联网</small>
           </span>
           <span class="switch-state install-state">安装</span>
         </button>

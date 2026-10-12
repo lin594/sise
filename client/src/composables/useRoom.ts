@@ -638,10 +638,83 @@ export function useRoom(playerName = "Player") {
   let actionFeedbackTimer: number | null = null;
   let offlinePractice: OfflinePracticeSession | null = null;
   let offlineAutomationGeneration = 0;
+  let offlineViewRevision = 0;
+  let offlineOpeningPresentation: { lastAction: string; responseEndsAt: number } | null = null;
+  let offlineOpeningPresentationTimers: number[] = [];
+
+  const OFFLINE_DEALER_PICK_INTRO_MS = 2_200;
+  const OFFLINE_DEALER_REVEAL_INTRO_MS = 3_400;
+  const OFFLINE_OPENING_DEAL_MS = 3_200;
+
+  function clearOfflineOpeningPresentation(): void {
+    offlineOpeningPresentationTimers.forEach((timer) => window.clearTimeout(timer));
+    offlineOpeningPresentationTimers = [];
+    offlineOpeningPresentation = null;
+  }
 
   function applyOfflinePracticeView(): void {
     if (!offlinePractice) return;
-    applySnapshot(offlinePractice.view(), "explicit");
+    const view = offlinePractice.view();
+    applySnapshot(offlineOpeningPresentation
+      ? {
+          ...view,
+          stateRevision: ++offlineViewRevision,
+          phase: "declaring",
+          lastAction: offlineOpeningPresentation.lastAction,
+          responseEndsAt: offlineOpeningPresentation.responseEndsAt,
+          availableActions: [],
+          decisionTimer: {
+            ...view.decisionTimer,
+            legalDiscardCardIds: [],
+            decisionKey: "",
+          },
+        }
+      : { ...view, stateRevision: ++offlineViewRevision }, "explicit");
+  }
+
+  function scheduleOfflineOpeningStage(delayMs: number, run: () => void): void {
+    offlineOpeningPresentationTimers.push(window.setTimeout(() => {
+      if (!offlinePractice) return;
+      run();
+    }, delayMs));
+  }
+
+  function beginOfflineOpeningPresentation(): void {
+    clearOfflineOpeningPresentation();
+    if (!offlinePractice) return;
+    const view = offlinePractice.view();
+    const dealerId = String(view.dealerId ?? "");
+    const pickerId = String(view.dealerPickerId ?? "");
+    if (!dealerId) {
+      applyOfflinePracticeView();
+      return;
+    }
+    const pickMs = pickerId ? OFFLINE_DEALER_PICK_INTRO_MS : 0;
+    const revealAt = pickMs;
+    const dealAt = pickMs + OFFLINE_DEALER_REVEAL_INTRO_MS;
+    const finishAt = dealAt + OFFLINE_OPENING_DEAL_MS;
+    const responseEndsAt = Date.now() + finishAt;
+    offlineOpeningPresentation = {
+      lastAction: pickerId ? `DEALER_PICK ${pickerId}` : `DEALER_CARD ${dealerId}`,
+      responseEndsAt,
+    };
+    applyOfflinePracticeView();
+    if (pickerId) {
+      scheduleOfflineOpeningStage(revealAt, () => {
+        offlineOpeningPresentation = { lastAction: `DEALER_CARD ${dealerId}`, responseEndsAt };
+        applyOfflinePracticeView();
+      });
+    }
+    scheduleOfflineOpeningStage(dealAt, () => {
+      offlineOpeningPresentation = { lastAction: `DEALER ${dealerId}`, responseEndsAt };
+      applyOfflinePracticeView();
+    });
+    scheduleOfflineOpeningStage(finishAt, () => {
+      offlineOpeningPresentation = null;
+      offlineOpeningPresentationTimers = [];
+      applyOfflinePracticeView();
+      scheduleOfflineAutomation();
+    });
   }
 
   async function pumpOfflinePractice(generation: number): Promise<void> {
@@ -661,17 +734,20 @@ export function useRoom(playerName = "Player") {
   }
 
   function scheduleOfflineAutomation(): void {
+    if (offlineOpeningPresentation) return;
     const generation = ++offlineAutomationGeneration;
     void pumpOfflinePractice(generation);
   }
 
   function startOfflinePractice(nameOverride?: string): boolean {
+    clearOfflineOpeningPresentation();
     suppressReconnect = true;
     activeConnectionSeq += 1;
     clearReconnectTimer();
     clearConnectionProbeTimers();
     clearRestoredNoticeTimer();
     resetClientRoomState();
+    offlineViewRevision = 0;
     setOfflinePracticeAnalyticsDisabled(true);
     localPlayerName.value = String(nameOverride ?? playerName).trim().slice(0, 16) || "玩家";
     offlinePractice = new OfflinePracticeSession(localPlayerName.value);
@@ -683,7 +759,7 @@ export function useRoom(playerName = "Player") {
     mySeatId.value = offlinePractice.humanSeatId;
     activeRoomId.value = "offline-practice";
     joinError.value = "";
-    applyOfflinePracticeView();
+    beginOfflineOpeningPresentation();
     scheduleOfflineAutomation();
     return true;
   }
@@ -2199,7 +2275,7 @@ export function useRoom(playerName = "Player") {
   }
 
   function debugAdvanceOfflinePracticeAsBot(): boolean {
-    if (!offlinePractice) return false;
+    if (!offlinePractice || offlineOpeningPresentation) return false;
     const view = offlinePractice.view();
     const human = view.players[0];
     let accepted = false;
@@ -2248,7 +2324,7 @@ export function useRoom(playerName = "Player") {
     clearActionLogs();
     if (offlinePractice) {
       offlinePractice.startRound();
-      applyOfflinePracticeView();
+      beginOfflineOpeningPresentation();
       scheduleOfflineAutomation();
       return true;
     }
@@ -2297,6 +2373,7 @@ export function useRoom(playerName = "Player") {
   async function leaveRoom(targetRoomId = ""): Promise<void> {
     if (offlinePractice) {
       offlineAutomationGeneration += 1;
+      clearOfflineOpeningPresentation();
       offlinePractice = null;
       setOfflinePracticeAnalyticsDisabled(false);
       connected.value = false;
@@ -2405,6 +2482,7 @@ export function useRoom(playerName = "Player") {
     document.removeEventListener("keydown", primeQuickPhraseAudio, { capture: true });
     suppressReconnect = true;
     offlineAutomationGeneration += 1;
+    clearOfflineOpeningPresentation();
     offlinePractice = null;
     setOfflinePracticeAnalyticsDisabled(false);
     room.value?.leave();

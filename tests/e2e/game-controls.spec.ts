@@ -2,7 +2,7 @@ import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from "./helpe
 import { expect, test } from "@playwright/test";
 
 test("a player can explicitly enable and cancel auto play", async ({ page }) => {
-  await openGameAs(page, "/", "托管体验玩家");
+  await openGameAs(page, "/?e2eDebug=1", "托管体验玩家");
   await expect(page.getByText("游戏模式选择")).toBeVisible();
   await startLobbyAction(page);
 
