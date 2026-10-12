@@ -25,7 +25,7 @@ test("compatibility practice entries always receive different rooms", async ({ r
   expect(first.roomId).not.toBe(second.roomId);
 });
 
-test("two simultaneous single-player sessions never see each other", async ({ browser }) => {
+test("two simultaneous browser-local single-player sessions never see each other", async ({ browser }) => {
   const firstContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const secondContext = await browser.newContext({ viewport: { width: 667, height: 375 } });
   const first = await firstContext.newPage();
@@ -49,9 +49,8 @@ test("two simultaneous single-player sessions never see each other", async ({ br
       first.evaluate(() => localStorage.getItem("four_room_id")),
       second.evaluate(() => localStorage.getItem("four_room_id")),
     ]);
-    expect(firstRoomId).toBeTruthy();
-    expect(secondRoomId).toBeTruthy();
-    expect(firstRoomId).not.toBe(secondRoomId);
+    expect(firstRoomId).toBeNull();
+    expect(secondRoomId).toBeNull();
     await expect(first.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
     await expect(second.locator(".player-card [data-testid='player-status-icon'][data-status-kind='computer']")).toHaveCount(3);
     await expect(first.getByText("练习乙", { exact: true })).toHaveCount(0);

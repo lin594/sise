@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
 
 async function enterGame(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?e2eDebug=1");
 
   await startLobbyAction(page);
   await finishDeclarationIfNeeded(page);

@@ -6,8 +6,8 @@ type StartGameHold = {
   release: () => void;
 };
 
-async function enterModeLobby(page: Page, nickname: string): Promise<void> {
-  await openGameAs(page, "/", nickname);
+async function enterModeLobby(page: Page, nickname: string, path = "/"): Promise<void> {
+  await openGameAs(page, path, nickname);
   await expect(page.getByText("游戏模式选择")).toBeVisible();
 }
 
@@ -57,10 +57,16 @@ async function releaseStartGameMessages(page: Page): Promise<void> {
 
 test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true });
 
-test("practice auto-start stays visibly pending until the server advances", async ({ page }) => {
-  await enterModeLobby(page, "练习牌友");
+test("compatibility practice auto-start stays visibly pending until the server advances", async ({ page }) => {
+  await enterModeLobby(page, "练习牌友", "/?e2eDebug=1");
   await holdStartGameMessages(page);
-  await page.getByTestId("mode-practice_bots").click();
+  await page.evaluate(() => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: { startServerPractice?: () => void };
+    }).__siseLocalTest;
+    if (!bridge?.startServerPractice) throw new Error("Local test bridge is unavailable");
+    bridge.startServerPractice();
+  });
 
   const start = page.getByTestId("lobby-start");
   await expect.poll(() => heldStartGameCount(page)).toBe(1);

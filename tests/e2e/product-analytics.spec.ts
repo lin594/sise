@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { startLobbyAction, finishDeclarationIfNeeded } from "./helpers/game";
 
-test("optional analytics uses only allowlisted bodies and unavailable collection cannot block play", async ({ page }) => {
+test("browser-local practice disables gameplay analytics and unavailable collection cannot block play", async ({ page }) => {
   const bodies: Array<Record<string, unknown>> = [];
   await page.addInitScript(() => {
     Object.defineProperty(globalThis.crypto, "randomUUID", { configurable: true, value: undefined });
@@ -15,7 +15,7 @@ test("optional analytics uses only allowlisted bodies and unavailable collection
   await finishDeclarationIfNeeded(page);
   await expect(page.locator('main.layout')).toHaveClass(/playing/);
   await expect.poll(() => bodies.some(body => body.name === 'app_open')).toBe(true);
-  await expect.poll(() => bodies.some(body => body.name === 'practice_start')).toBe(true);
+  expect(bodies.some(body => body.name === 'practice_start')).toBe(false);
   const allowed = new Set(['name', 'id', 'visitId', 'mode', 'outcome', 'durationMs', 'persistent']);
   for (const body of bodies) {
     expect(Object.keys(body).every(key => allowed.has(key))).toBe(true);

@@ -80,7 +80,7 @@
           </div>
           <p>{{ mode.description }}</p>
           <small
-            v-if="mode.id === 'offline_practice'"
+            v-if="mode.id === 'practice_bots'"
             class="offline-readiness"
             :data-state="offlineReadinessState"
             data-testid="offline-readiness"
