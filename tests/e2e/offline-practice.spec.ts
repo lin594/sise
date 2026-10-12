@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { finishDeclarationIfNeeded } from "./helpers/game";
 
 const DYNAMIC_PATH = /^\/(?:api|health|invite|matchmake|private-state|guest-profile|product-events|reset-room|room-id|rooms|share)(?:\/|$)/u;
 
@@ -84,6 +85,103 @@ test("reopens offline from the cached shell and completes a local round without 
   expect(sockets).toEqual([]);
 
   await context.close();
+});
+
+test("a drawn general can be eaten locally and continues to the discard step", async ({ browser, baseURL }) => {
+  test.setTimeout(60_000);
+  const origin = baseURL ?? "http://127.0.0.1:4173";
+  const context = await browser.newContext({ serviceWorkers: "allow" });
+  await prepareContext(context);
+
+  const page = await context.newPage();
+  try {
+    await page.goto(`${origin}/?e2eDebug=1`);
+    await page.evaluate(() => {
+      let state = 1;
+      Math.random = () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x100000000;
+      };
+    });
+    await page.getByTestId("mode-practice_bots").click();
+    await finishDeclarationIfNeeded(page);
+
+    await expect.poll(() => page.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: {
+          advanceOfflinePracticeAsBot: () => boolean;
+          getDeferredChiDebug: () => {
+            actions?: Array<{ action: string; deferred?: boolean }>;
+          };
+          getRoomState: () => {
+            phase?: string;
+            currentPlayerId?: string;
+            responseCard?: { id?: string; color?: string; type?: string } | null;
+          } | null;
+        };
+      }).__siseLocalTest;
+      const room = bridge?.getRoomState();
+      const actions = bridge?.getDeferredChiDebug().actions ?? [];
+      if (
+        room?.phase === "playing" &&
+        room.currentPlayerId === "seat_0" &&
+        room.responseCard?.color === "white" &&
+        room.responseCard.type === "jiang" &&
+        actions.some((action) => action.action === "chi" && action.deferred)
+      ) {
+        return room.responseCard.id ?? "";
+      }
+      bridge?.advanceOfflinePracticeAsBot();
+      return "";
+    }), { timeout: 30_000, intervals: [5, 10, 20] }).not.toBe("");
+    const targetCardId = await page.evaluate(() =>
+      (window as Window & {
+        __siseLocalTest?: {
+          getRoomState: () => { responseCard?: { id?: string } | null } | null;
+        };
+      }).__siseLocalTest?.getRoomState()?.responseCard?.id ?? "",
+    );
+    const chiCardIds = await page.evaluate(() => {
+      const actions = (window as Window & {
+        __siseLocalTest?: {
+          getDeferredChiDebug: () => {
+            actions?: Array<{
+              action: string;
+              candidates?: Array<{ cardIds?: string[] }>;
+            }>;
+          };
+        };
+      }).__siseLocalTest?.getDeferredChiDebug().actions ?? [];
+      const candidates = actions.find((action) => action.action === "chi")?.candidates ?? [];
+      return candidates.find((candidate) => candidate.cardIds?.length)?.cardIds ?? [];
+    });
+
+    await expect(page.getByTestId("action-chi")).toBeEnabled();
+    for (const cardId of chiCardIds) {
+      const card = page.getByTestId(`hand-card-${cardId}`);
+      if (await card.getAttribute("aria-pressed") !== "true") await card.click();
+    }
+    await page.getByTestId("action-chi").click();
+    await expect.poll(() => page.evaluate((cardId) => {
+      const room = (window as Window & {
+        __siseLocalTest?: {
+          getRoomState: () => {
+            players?: Array<{
+              clientId?: string;
+              exposedArea?: Array<{ id?: string }>;
+              generalArea?: Array<{ id?: string }>;
+            }>;
+          } | null;
+        };
+      }).__siseLocalTest?.getRoomState();
+      const human = room?.players?.find((player) => player.clientId === "seat_0");
+      return [...(human?.exposedArea ?? []), ...(human?.generalArea ?? [])]
+        .some((card) => card.id === cardId);
+    }, targetCardId)).toBe(true);
+    await expect(page.getByTestId("discard-confirm")).toBeVisible();
+  } finally {
+    await context.close();
+  }
 });
 
 test("WebKit runs the Service Worker-controlled local game without backend traffic", async ({ browser, baseURL, browserName }) => {

@@ -57,6 +57,17 @@
         @leave="returnToModeSelectionFromRoom"
       />
       <button
+        v-if="offlineUpdateAvailable"
+        class="ghost reset-btn update-app-entry"
+        type="button"
+        data-testid="pwa-update-entry"
+        aria-label="新版本已准备好，刷新到最新版"
+        @click="reloadForOfflineUpdate"
+      >
+        <span class="update-label-full">新版本已准备好 · 刷新</span>
+        <span class="update-label-short">新版 · 刷新</span>
+      </button>
+      <button
         v-if="!showGameTools && canOfferPwaInstall"
         class="ghost reset-btn install-app-entry"
         type="button"
@@ -762,7 +773,12 @@ const { canOfferPwaInstall, pwaInstallGuide, requestPwaInstall, closePwaInstallG
   onNotice: showGlobalNotice,
   onGuideClosed: () => { decisionControlFocusPending = false; },
 });
-const { offlineReadinessState, offlineReadinessLabel } = useOfflineReadiness();
+const {
+  offlineReadinessState,
+  offlineReadinessLabel,
+  offlineUpdateAvailable,
+  reloadForOfflineUpdate,
+} = useOfflineReadiness();
 
 const { guestProfile, refreshGuestProfileAfterSettlement, updateGuestProfileNickname, guestProfileSummary, storedEntryNameAtBoot, nicknameHistoryAtBoot, entryName, nicknameHistory, nicknameDialogOpen, nicknameDraftRandom, generateRandomNickname, writeNicknameHistory, openNicknameDialog, closeNicknameDialog, saveNickname } = useEntryProfile({ browserStoragePersistent, canChangeName: () => !hasLobbySession.value && !enteringLobby.value });
 
@@ -1708,6 +1724,16 @@ function onPanelSubmit(request: ActionRequest) {
     return;
   }
   if (state.value?.responsePhase === "collective" && action === "chi" && isDeferred) {
+    // The offline engine owns the whole collective window, so it can retain
+    // the candidate and resolve the computer players in one local operation.
+    // The network path instead records the intent in this client and sends a
+    // public Pass until the server opens the later local Chi window.
+    if (activeRoomId.value === "offline-practice") {
+      pendingDeferredChiIntent.value = null;
+      pendingDeferredGrab.value = false;
+      sendAction(request);
+      return;
+    }
     if (pendingDeferredChiIntent.value) return;
     const candidateId = candidateIdFromRequest(request);
     const responseCard = state.value?.responseCard;
@@ -2261,6 +2287,15 @@ watch(
 }
 
 .install-label-short {
+  display: none;
+}
+
+.update-app-entry {
+  border-color: var(--ui-accent, #38bdf8);
+  color: var(--ui-accent-text, #bae6fd);
+}
+
+.update-label-short {
   display: none;
 }
 
@@ -3446,6 +3481,14 @@ watch(
   }
 
   .layout.ultra-compact-viewport .install-label-short {
+    display: inline;
+  }
+
+  .layout.ultra-compact-viewport .update-label-full {
+    display: none;
+  }
+
+  .layout.ultra-compact-viewport .update-label-short {
     display: inline;
   }
 
