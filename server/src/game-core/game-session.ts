@@ -293,6 +293,10 @@ export class GameSession {
   }
 
   chooseBotDiscard(input: BotDiscardInput) {
-    return chooseBotDiscard({ ...input, enforceDeclaredKans: this.rules.enforceDeclaredKans });
+    return chooseBotDiscard({
+      ...input,
+      enforceDeclaredKans: this.rules.enforceDeclaredKans,
+      canDiscard: (hand, cardId, declaredKongs) => this.rules.canDiscard(hand, cardId, declaredKongs),
+    });
   }
 }

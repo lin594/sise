@@ -26,6 +26,7 @@ export interface BotDiscardInput {
   visibleCards: Card[];
   declaredKongs?: number;
   enforceDeclaredKans?: boolean;
+  canDiscard?: (hand: readonly Card[], cardId: string, declaredKongs: number) => boolean;
   strength: number;
   random?: RandomSource;
 }
@@ -156,8 +157,10 @@ export function chooseBotAction(input: BotDecisionInput): BotDecision {
 export function chooseBotDiscard(input: BotDiscardInput): Card | null {
   const s = normalizedStrength(input.strength);
   const defenseWeight = 0.8 * s * s;
+  const canDiscard = input.canDiscard ?? ((hand: readonly Card[], cardId: string, declaredKongs: number) =>
+    canDiscardPreservingKans(hand, cardId, input.enforceDeclaredKans === false ? 0 : declaredKongs));
   let choices: Array<ScoredChoice<Card>> = input.hand
-    .filter((card) => canDiscardPreservingKans(input.hand, card.id, input.enforceDeclaredKans === false ? 0 : input.declaredKongs ?? 0))
+    .filter((card) => canDiscard(input.hand, card.id, input.declaredKongs ?? 0))
     .map((card) => ({
       choice: card,
       score:
@@ -171,8 +174,9 @@ export function chooseBotDiscard(input: BotDiscardInput): Card | null {
   const listeningIds = new Set(
     findListeningDiscards(input.hand, input.declaredKongs ?? 0, visibleRemaining).map((route) => route.discardCardId),
   );
-  if (listeningIds.size > 0) {
-    choices = choices.filter((item) => listeningIds.has(item.choice.id));
+  const listeningChoices = choices.filter((item) => listeningIds.has(item.choice.id));
+  if (listeningChoices.length > 0) {
+    choices = listeningChoices;
   } else {
     const bestShape = Math.max(...choices.map((item) => shapeUtility(input.hand.filter((card) => card.id !== item.choice.id))));
     choices = choices.filter((item) =>

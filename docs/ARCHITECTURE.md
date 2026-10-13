@@ -233,6 +233,8 @@ server/src/schema/                    公开同步 Schema
 
 增加下一套规则时，应新增或组合一个 `RuleSet`，注册新的稳定 `{ id, version }`，并先用仅测试的 RuleSet 验证至少一个真实动作或结算差异；再补该规则的固定牌堆/动作序列差异测试。只有产品确实允许玩家选择多套规则后才增加选择 UI。不得复制 `GameRoom`、`GameSession` 或整套回合循环，也不得在宿主中散落 `rulesetId` 分支。
 
+弃牌合法性由当前 `RuleSet.canDiscard` 同时决定在线／离线的合法牌 ID、主动弃牌验收、自动弃牌及机器人候选；宿主注入动态回调，恢复或切换规则后不必重建状态操作器。机器人仍用完整手牌评分，既有 Putian 听牌启发式只在与合法候选存在交集时缩小候选。此入口不表示任意规则已经可直接运行：胡牌解释、动作执行计划、可见牌组评分和听牌启发式仍有 Putian 原语，在线新局仍使用 v1.0；未来规则涉及这些差异时需先补对应共享入口及流程测试。
+
 `GameTools` 由页面层传入 `decisionUntimed`、`decisionSecondsLeft`，并通过 `returnToDecision` 通知牌桌恢复当前操作焦点；这些字段只描述现有服务端决策窗口，不暂停或改写计时。`GameBoard` 接收同一决定状态并持有真实手牌上的弃牌预选、吃牌组合草稿与统一操作坞，打开顶栏弹层不能销毁这些本地交互状态。
 
 触屏手机竖持时，根 `.layout` 负责把物理视口映射为横向有效画布。`useResponsiveViewport` 把 `window.innerWidth/innerHeight` 暴露为随尺寸变化更新的 `--physical-viewport-width/height` 像素变量；根布局在普通方向直接引用它们，自动旋转时交换宽高，再通过 `--effective-viewport-width/height` 向下游组件提供唯一游戏坐标来源。根节点在脚本加载前保留 `100vh` 后备，不能把旧浏览器不认识的 `dvh/dvw` 当作唯一尺寸。设置、记录、确认层和紧凑牌桌的底部手牌操作行都使用上述变量或容器百分比，`GameBoard` 不再直接把物理高度当成游戏高度。牌桌内部三行只能分配实际剩余空间，内容溢出由各牌区自行滚动，牌桌根网格不得产生被 `overflow: hidden` 裁掉的行。显示偏好由根布局统一持久化；游戏内 `reduceMotion` 或操作系统 `prefers-reduced-motion` 任一生效时，根布局对所有子组件统一关闭非必要动画，手牌滚动逻辑同时改用即时行为，不改变服务端状态机时间。

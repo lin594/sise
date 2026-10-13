@@ -109,6 +109,7 @@ export class OfflinePracticeSession {
     this.gameSession.state.playerHands,
     () => this.pendingResponse?.ownerId ?? null,
     () => this.gameSession.rules.enforceDeclaredKans,
+    (hand, cardId, declaredKongs) => this.gameSession.rules.canDiscard(hand, cardId, declaredKongs),
   );
   private lastRoundResult: OfflineRoundResult | null = null;
 

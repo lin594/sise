@@ -299,6 +299,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
         this.playerHands,
         () => this.pendingResponse?.ownerId ?? null,
         () => this.gameSession.rules.enforceDeclaredKans,
+        (hand, cardId, declaredKongs) => this.gameSession.rules.canDiscard(hand, cardId, declaredKongs),
       );
     }
     return this.stateOps;
@@ -338,6 +339,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.playerHands,
       () => this.pendingResponse?.ownerId ?? null,
       () => this.gameSession.rules.enforceDeclaredKans,
+      (hand, cardId, declaredKongs) => this.gameSession.rules.canDiscard(hand, cardId, declaredKongs),
     );
     this.syncRoomMetadata();
     registerRoom(this.roomId, this);
