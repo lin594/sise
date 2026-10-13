@@ -227,6 +227,8 @@ server/src/schema/                    公开同步 Schema
 
 离线宿主固定一名本机玩家和三名标准机器人，通过同一 `GameSession` 提交声明、动作、弃牌和下一局命令，再投影为已有 `RoomStateSnapshot` 形态供同一套牌桌 UI 使用。它不创建 Colyseus 房间，不调用匹配、档案、指标、Redis 或重连路径；机器人继续复用 `chooseBotAction` / `chooseBotDiscard`。首版只保留内存状态，刷新、关闭或退出会放弃当前局并重新开局。
 
+提前吃由同一页面流程提交 `{ action: "chi", candidateId, deferred: true }`，页面不按离线/联网分叉。联网宿主验证候选后只登记公开 Pass，保留胡／开／碰优先级与共享响应窗口，再由页面在新本地决策中提交普通 Chi；将／金的普通 Pass 仍不可用。离线宿主把候选绑定在当前待响牌的 collective 记录上，牌流到本人时兑现；牌被抢走后意图随该待响上下文一起结束，不能作用于下一张同类牌。
+
 生产构建由 `vite-plugin-pwa`/Workbox `generateSW` 预缓存应用壳、JS/CSS、Manifest、图标和牌面皮肤。`/invite/*`、匹配、私有状态、档案、指标及建房接口不进入导航 fallback；活动牌局不会因新版本强制重载。页面只在 Service Worker 实际激活后显示“离线资源已备好”。安装与离线准备是两个状态，正式手机仍须在最终 HTTPS 浏览器或主屏 Web App 环境中分别确认。
 
 增加下一套规则时，应新增或组合一个 `RuleSet`，注册新的稳定 `{ id, version }`，并先用仅测试的 RuleSet 验证至少一个真实动作或结算差异；再补该规则的固定牌堆/动作序列差异测试。只有产品确实允许玩家选择多套规则后才增加选择 UI。不得复制 `GameRoom`、`GameSession` 或整套回合循环，也不得在宿主中散落 `rulesetId` 分支。

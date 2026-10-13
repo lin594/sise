@@ -2198,7 +2198,7 @@ export function useRoom(playerName = "Player") {
       return "locked";
     }
     if (candidateId) {
-      if (safeRoomSend("action", { action, candidateId, ...(decisionKey ? { decisionKey } : {}) })) {
+      if (safeRoomSend("action", { action, candidateId, ...(input.deferred ? { deferred: true } : {}), ...(decisionKey ? { decisionKey } : {}) })) {
         beginActionSubmission(decisionKey);
         return "sent";
       } else {
@@ -2206,7 +2206,7 @@ export function useRoom(playerName = "Player") {
         return "disconnected";
       }
     }
-    if (safeRoomSend("action", { action, ...(decisionKey ? { decisionKey } : {}) })) {
+    if (safeRoomSend("action", { action, ...(input.deferred ? { deferred: true } : {}), ...(decisionKey ? { decisionKey } : {}) })) {
       beginActionSubmission(decisionKey);
       return "sent";
     } else {

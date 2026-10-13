@@ -178,6 +178,11 @@ test("a drawn general can be eaten locally and continues to the discard step", a
       return [...(human?.exposedArea ?? []), ...(human?.generalArea ?? [])]
         .some((card) => card.id === cardId);
     }, targetCardId)).toBe(true);
+    await expect.poll(() => page.evaluate(() =>
+      (window as Window & {
+        __siseLocalTest?: { getDeferredChiDebug: () => { intent?: unknown } };
+      }).__siseLocalTest?.getDeferredChiDebug().intent ?? null,
+    )).toBeNull();
     await expect(page.getByTestId("discard-confirm")).toBeVisible();
   } finally {
     await context.close();

@@ -141,6 +141,62 @@ test('drawn red horse offers downstream Chi/Peng/Pass together and applies Chi a
   }
 });
 
+test('a drawn general accepts one deferred Chi and resolves after the shared privacy floor', async ({ browser }) => {
+  const hostContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  const guestContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  const host = await hostContext.newPage(), guest = await guestContext.newPage();
+  try {
+    await openGameAs(host, '/?e2eDebug=1', '白将提前吃');
+    await host.getByTestId('mode-friends').click();
+    await expect.poll(() => host.url()).toContain('roomId=');
+    await openGameAs(guest, host.url(), '隐私窗口牌友');
+    await guest.getByTestId('claim-seat-1').click();
+    await host.getByTestId('fill-bots').click();
+    await guest.getByTestId('lobby-ready').click();
+    await startLobbyAction(host);
+    await Promise.all([finishDeclarationIfNeeded(host), finishDeclarationIfNeeded(guest)]);
+
+    await inject(host, 'chi_draw_special_confirm');
+    await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
+    await expect(host.getByTestId('action-chi')).toBeEnabled();
+    await expect(host.getByTestId('action-pass')).toHaveCount(0);
+    await expect(host.getByTestId('action-guidance')).toContainText('可以提前吃');
+    await expect.poll(() => host.evaluate(() =>
+      (window as any).__siseLocalTest.getDecisionTimer().totalMs,
+    )).toBe(3_000);
+
+    await host.getByTestId('hand-card-special-owner-white-shi').click();
+    await host.getByTestId('hand-card-special-owner-white-xiang').click();
+    await expect(host.getByTestId('hand-card-special-owner-white-shi')).toHaveAttribute('aria-pressed', 'true');
+    await expect(host.getByTestId('hand-card-special-owner-white-xiang')).toHaveAttribute('aria-pressed', 'true');
+
+    const privacyEndsAt = await host.evaluate(() =>
+      Number((window as any).__siseLocalTest.getDecisionTimer().endsAt ?? 0),
+    );
+    await host.getByTestId('action-chi').click();
+    await expect(host.getByTestId('decision-status')).toContainText('已选择吃，等待其他玩家响应');
+    await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
+
+    const consumed = () => host.evaluate(() => {
+      const state = (window as any).__siseLocalTest.getRoomState();
+      const cards = state.players.flatMap((player: any) => player.exposedArea ?? []);
+      return ['special-white-jiang-target', 'special-owner-white-shi', 'special-owner-white-xiang'].map(id =>
+        cards.filter((card: any) => card.id === id).length);
+    });
+    expect(await consumed()).toEqual([0, 0, 0]);
+    await expect.poll(consumed, { timeout: 8_000 }).toEqual([1, 1, 1]);
+    expect(Date.now()).toBeGreaterThanOrEqual(privacyEndsAt - 250);
+    await expect.poll(() => host.evaluate(() =>
+      (window as any).__siseLocalTest.getDeferredChiDebug().intent,
+    )).toBeNull();
+    await expect(host.getByTestId('discard-confirm')).toBeVisible();
+    await host.waitForTimeout(350);
+    expect(await consumed()).toEqual([1, 1, 1]);
+  } finally {
+    await guestContext.close(); await hostContext.close();
+  }
+});
+
 for (const interceptor of ['kai', 'hu'] as const) {
   test(`a competing ${interceptor} clears a confirmed deferred Chi before the next decision`, async ({ browser }) => {
     const hostContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });

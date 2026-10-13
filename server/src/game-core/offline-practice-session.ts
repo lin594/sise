@@ -111,7 +111,6 @@ export class OfflinePracticeSession {
     () => this.gameSession.rules.enforceDeclaredKans,
   );
   private lastRoundResult: OfflineRoundResult | null = null;
-  private deferredHumanChiCandidate: string | null = null;
 
   constructor(humanName: string, private readonly random: () => number = Math.random) {
     this.state.roomMode = "practice";
@@ -154,7 +153,6 @@ export class OfflinePracticeSession {
     this.state.previousWinnerName = previousWinner?.name ?? "";
     this.state.previousHuType = previousWinner?.huType ?? "";
     this.lastRoundResult = null;
-    this.deferredHumanChiCandidate = null;
     this.state.phase = "declaring";
     this.state.responseEndsAt = 0;
     this.state.declareEndsAt = 0;
@@ -233,8 +231,9 @@ export class OfflinePracticeSession {
 
     if (this.state.responsePhase === "collective") {
       if (request.action === "chi" && entry.deferred) {
-        this.deferredHumanChiCandidate = request.candidateId ?? null;
-        this.pendingResponse.collectives.set(HUMAN_ID, { action: "pass" });
+        // Keep the intent on this response, so a competing claim cannot carry
+        // it into a later card with the same candidate combination.
+        this.pendingResponse.collectives.set(HUMAN_ID, { action: "pass", candidateId: request.candidateId });
       } else {
         this.pendingResponse.collectives.set(HUMAN_ID, {
           action: request.action,
@@ -557,11 +556,7 @@ export class OfflinePracticeSession {
       syncAllPrivateHands: () => undefined,
       tickBots: () => undefined,
     });
-    if (this.pendingResponse?.ownerId === HUMAN_ID && this.deferredHumanChiCandidate) {
-      const candidateId = this.deferredHumanChiCandidate;
-      this.deferredHumanChiCandidate = null;
-      this.executeEat(HUMAN_ID, candidateId);
-    }
+    this.applyDeferredHumanChiIfReady();
   }
 
   private executeResponseWinner(winnerId: string, choice: { action: ActionType; candidateId?: string }): void {
@@ -662,6 +657,14 @@ export class OfflinePracticeSession {
     this.state.loopStage = "local_poll";
     this.ops.setResponseCard(pending.card, "upper");
     this.state.lastAction = `${ownerId} PASS`;
+    this.applyDeferredHumanChiIfReady(pending.collectives.get(HUMAN_ID)?.candidateId);
+  }
+
+  private applyDeferredHumanChiIfReady(
+    candidateId = this.pendingResponse?.collectives.get(HUMAN_ID)?.candidateId,
+  ): void {
+    if (this.pendingResponse?.ownerId !== HUMAN_ID || !candidateId) return;
+    this.executeEat(HUMAN_ID, candidateId);
   }
 
   private retainPendingSpecial(ownerId: string): void {

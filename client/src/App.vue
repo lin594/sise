@@ -1724,16 +1724,6 @@ function onPanelSubmit(request: ActionRequest) {
     return;
   }
   if (state.value?.responsePhase === "collective" && action === "chi" && isDeferred) {
-    // The offline engine owns the whole collective window, so it can retain
-    // the candidate and resolve the computer players in one local operation.
-    // The network path instead records the intent in this client and sends a
-    // public Pass until the server opens the later local Chi window.
-    if (activeRoomId.value === "offline-practice") {
-      pendingDeferredChiIntent.value = null;
-      pendingDeferredGrab.value = false;
-      sendAction(request);
-      return;
-    }
     if (pendingDeferredChiIntent.value) return;
     const candidateId = candidateIdFromRequest(request);
     const responseCard = state.value?.responseCard;
@@ -1749,7 +1739,7 @@ function onPanelSubmit(request: ActionRequest) {
       candidateId,
       collectiveDecisionKey: decisionTimer.value.decisionKey,
     };
-    if (sendAction("pass") !== "sent") pendingDeferredChiIntent.value = null;
+    if (sendAction(request) !== "sent") pendingDeferredChiIntent.value = null;
     return;
   }
   pendingDeferredChiIntent.value = null;
@@ -1775,6 +1765,8 @@ function submitDeferredChiIfReady() {
   const lastAction = String(state.value?.lastAction ?? "");
   const responseWasClaimed = /(?:^|\s)(?:HU|KAI|PENG|CHI)(?:\s|$)/.test(lastAction);
   if (
+    (actionFeedback.value?.status === "rejected" &&
+      actionFeedback.value.decisionKey === intent.collectiveDecisionKey) ||
     currentRoundKey !== intent.roundKey ||
     targetCardId !== intent.targetCardId ||
     (phase === "collective" && targetSource !== intent.targetSource) ||
