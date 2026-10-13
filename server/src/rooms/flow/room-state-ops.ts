@@ -24,6 +24,7 @@ export class RoomStateOps {
     private readonly playerHands: Map<SeatId, Card[]>,
     private readonly getPendingOwnerId: () => SeatId | null,
     private readonly enforceDeclaredKans: () => boolean = () => true,
+    private readonly canDiscard?: (hand: readonly Card[], cardId: string, declaredKongs: number) => boolean,
   ) {}
 
   /**
@@ -49,8 +50,11 @@ export class RoomStateOps {
    * 副作用：修改 `playerHands`。
    */
   canDiscardCard(playerId: SeatId, cardId: string): boolean {
-    return canDiscardPreservingKans(this.playerHands.get(playerId) ?? [], cardId,
-      this.enforceDeclaredKans() ? this.state.players.get(playerId)?.declaredKongs ?? 0 : 0);
+    const hand = this.playerHands.get(playerId) ?? [];
+    const declaredKongs = this.state.players.get(playerId)?.declaredKongs ?? 0;
+    return this.canDiscard
+      ? this.canDiscard(hand, cardId, declaredKongs)
+      : canDiscardPreservingKans(hand, cardId, this.enforceDeclaredKans() ? declaredKongs : 0);
   }
 
   pickDiscardCard(playerId: SeatId): Card | null {
@@ -452,6 +456,7 @@ export function createRoomStateOps(
   playerHands: Map<string, Card[]>,
   getPendingOwnerId: () => string | null,
   enforceDeclaredKans: () => boolean = () => true,
+  canDiscard?: (hand: readonly Card[], cardId: string, declaredKongs: number) => boolean,
 ): RoomStateOps {
-  return new RoomStateOps(state, playerHands, getPendingOwnerId, enforceDeclaredKans);
+  return new RoomStateOps(state, playerHands, getPendingOwnerId, enforceDeclaredKans, canDiscard);
 }
