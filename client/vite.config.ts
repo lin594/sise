@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         strategies: "generateSW",
         injectRegister: false,
-        registerType: "prompt",
+        registerType: "autoUpdate",
         manifest: false,
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
@@ -28,6 +28,11 @@ export default defineConfig(({ mode }) => {
             /^\/(?:api|health|matchmake|private-state|guest-profile|product-events|reset-room|room-id|rooms|share)(?:\/|$)/,
           ],
           cleanupOutdatedCaches: true,
+          // injectRegister is disabled because the app registers the worker itself.
+          // Keep these explicit so an older client cannot leave the new worker
+          // waiting forever.
+          skipWaiting: true,
+          clientsClaim: true,
         },
       }),
     ],

@@ -499,6 +499,127 @@ test("the prepared receiver can confirm a deferred Chi before the collective win
   room.clearCollectiveTimer();
 });
 
+test("a deferred Chi request records a public Pass without changing collective priority", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [
+    mkCard("chi-ju", "yellow", "ju", "upper"),
+    mkCard("chi-ma", "yellow", "ma", "upper"),
+    mkCard("spare", "green", "shi", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("chi-target", "yellow", "pao", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveResponderId = "B";
+  room.seatBySession.set("session-B", "B");
+  room.advanceCollectivePolling = () => undefined;
+  const candidateId = room.getAvailableActions("B")
+    .find((entry: any) => entry.action === "chi" && entry.deferred)
+    ?.candidates?.[0]?.id;
+  assert.ok(candidateId);
+  const sent: Array<{ event: string; payload: any }> = [];
+
+  room.handleAction(
+    { sessionId: "session-B", send: (event: string, payload: any) => sent.push({ event, payload }) },
+    { action: "chi", candidateId, deferred: true },
+  );
+
+  assert.deepEqual(room.pendingResponse.collectives.get("B"), { action: "pass", candidateId: undefined });
+  assert.equal(sent.some((message) => message.event === "action_rejected"), false);
+  assert.equal(sent.find((message) => message.event === "action_received")?.payload?.action, "chi");
+});
+
+test("a drawn restricted card accepts only a valid deferred Chi, not an ordinary Pass", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands.set("A", [
+    mkCard("owner-shi", "white", "shi", "upper"),
+    mkCard("owner-xiang", "white", "xiang", "upper"),
+    mkCard("owner-spare", "green", "ma", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("restricted-general", "white", "jiang", "draw"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["A", "B", "C", "D"];
+  room.collectiveResponderId = "A";
+  room.collectiveResponseEndsAt = Date.now() + 1_000;
+  room.state.responseEndsAt = room.collectiveResponseEndsAt;
+  room.state.players.get("A").connected = true;
+  room.seatBySession.set("session-A", "A");
+  const actions = room.getAvailableActions("A");
+  const chi = actions.find((entry: any) => entry.action === "chi");
+  assert.equal(Boolean(chi?.deferred && !chi?.enabled), true);
+  assert.equal(actions.find((entry: any) => entry.action === "pass")?.enabled, false);
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-A",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleAction(client, { action: "pass" });
+  assert.equal(room.pendingResponse.collectives.size, 0);
+  assert.equal(
+    sent.find((message) => message.event === "action_rejected")?.payload?.reason,
+    "action_unavailable",
+  );
+
+  sent.length = 0;
+  room.handleAction(client, { action: "chi", candidateId: chi?.candidates?.[0]?.id, deferred: true });
+  assert.deepEqual(room.pendingResponse.collectives.get("A"), { action: "pass", candidateId: undefined });
+  assert.equal(sent.some((message) => message.event === "action_rejected"), false);
+  assert.equal(room.state.responsePhase, "collective");
+  assert.equal(room.collectiveResponseEndsAt > Date.now(), true);
+  room.clearCollectiveTimer();
+});
+
+test("a deferred Chi rejects an invalid candidate and is unavailable outside collective", () => {
+  const room = mkRoomWithSeats(["A", "B", "C", "D"]);
+  room.playerHands.set("B", [
+    mkCard("chi-ju", "yellow", "ju", "upper"),
+    mkCard("chi-ma", "yellow", "ma", "upper"),
+    mkCard("spare", "green", "shi", "upper"),
+  ]);
+  room.pendingResponse = {
+    ownerId: "A",
+    card: mkCard("chi-target", "yellow", "pao", "upper"),
+    collectives: new Map(),
+  };
+  room.state.responsePhase = "collective";
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveResponderId = "B";
+  room.seatBySession.set("session-B", "B");
+  const sent: Array<{ event: string; payload: any }> = [];
+  const client = {
+    sessionId: "session-B",
+    send: (event: string, payload: any) => sent.push({ event, payload }),
+  };
+
+  room.handleAction(client, { action: "chi", candidateId: "not-a-candidate", deferred: true });
+  assert.equal(room.pendingResponse.collectives.size, 0);
+  assert.equal(sent.at(-1)?.payload?.reason, "invalid_candidate");
+
+  sent.length = 0;
+  room.pendingResponse.ownerId = "B";
+  room.state.responsePhase = "local_upper";
+  room.state.currentPlayerId = "B";
+  room.state.currentTurnPlayerId = "B";
+  const localCandidateId = room.getAvailableActions("B")
+    .find((entry: any) => entry.action === "chi" && entry.enabled)
+    ?.candidates?.[0]?.id;
+  assert.ok(localCandidateId);
+  room.handleAction(client, { action: "chi", candidateId: localCandidateId, deferred: true });
+  assert.equal(
+    sent.find((message) => message.event === "action_rejected")?.payload?.reason,
+    "action_unavailable",
+  );
+  assert.equal(room.awaitingDiscardOwnerId, null);
+});
+
 test("no-response on upper enters local_upper for next player", () => {
   const room = mkRoomWithSeats(["A", "B", "C", "D"]);
   room.pendingResponse = {

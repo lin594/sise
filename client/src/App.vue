@@ -57,6 +57,17 @@
         @leave="returnToModeSelectionFromRoom"
       />
       <button
+        v-if="offlineUpdateAvailable"
+        class="ghost reset-btn update-app-entry"
+        type="button"
+        data-testid="pwa-update-entry"
+        aria-label="新版本已准备好，刷新到最新版"
+        @click="reloadForOfflineUpdate"
+      >
+        <span class="update-label-full">新版本已准备好 · 刷新</span>
+        <span class="update-label-short">新版 · 刷新</span>
+      </button>
+      <button
         v-if="!showGameTools && canOfferPwaInstall"
         class="ghost reset-btn install-app-entry"
         type="button"
@@ -762,7 +773,12 @@ const { canOfferPwaInstall, pwaInstallGuide, requestPwaInstall, closePwaInstallG
   onNotice: showGlobalNotice,
   onGuideClosed: () => { decisionControlFocusPending = false; },
 });
-const { offlineReadinessState, offlineReadinessLabel } = useOfflineReadiness();
+const {
+  offlineReadinessState,
+  offlineReadinessLabel,
+  offlineUpdateAvailable,
+  reloadForOfflineUpdate,
+} = useOfflineReadiness();
 
 const { guestProfile, refreshGuestProfileAfterSettlement, updateGuestProfileNickname, guestProfileSummary, storedEntryNameAtBoot, nicknameHistoryAtBoot, entryName, nicknameHistory, nicknameDialogOpen, nicknameDraftRandom, generateRandomNickname, writeNicknameHistory, openNicknameDialog, closeNicknameDialog, saveNickname } = useEntryProfile({ browserStoragePersistent, canChangeName: () => !hasLobbySession.value && !enteringLobby.value });
 
@@ -1723,7 +1739,7 @@ function onPanelSubmit(request: ActionRequest) {
       candidateId,
       collectiveDecisionKey: decisionTimer.value.decisionKey,
     };
-    if (sendAction("pass") !== "sent") pendingDeferredChiIntent.value = null;
+    if (sendAction(request) !== "sent") pendingDeferredChiIntent.value = null;
     return;
   }
   pendingDeferredChiIntent.value = null;
@@ -1749,6 +1765,8 @@ function submitDeferredChiIfReady() {
   const lastAction = String(state.value?.lastAction ?? "");
   const responseWasClaimed = /(?:^|\s)(?:HU|KAI|PENG|CHI)(?:\s|$)/.test(lastAction);
   if (
+    (actionFeedback.value?.status === "rejected" &&
+      actionFeedback.value.decisionKey === intent.collectiveDecisionKey) ||
     currentRoundKey !== intent.roundKey ||
     targetCardId !== intent.targetCardId ||
     (phase === "collective" && targetSource !== intent.targetSource) ||
@@ -2261,6 +2279,15 @@ watch(
 }
 
 .install-label-short {
+  display: none;
+}
+
+.update-app-entry {
+  border-color: var(--ui-accent, #38bdf8);
+  color: var(--ui-accent-text, #bae6fd);
+}
+
+.update-label-short {
   display: none;
 }
 
@@ -3446,6 +3473,14 @@ watch(
   }
 
   .layout.ultra-compact-viewport .install-label-short {
+    display: inline;
+  }
+
+  .layout.ultra-compact-viewport .update-label-full {
+    display: none;
+  }
+
+  .layout.ultra-compact-viewport .update-label-short {
     display: inline;
   }
 

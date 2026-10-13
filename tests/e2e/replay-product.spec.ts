@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { openGameAs, startLobbyAction, finishDeclarationIfNeeded } from './helpers/game';
+
+// This suite counts requests with page.route. A controlling Service Worker can
+// bypass that interception; offline-practice.spec.ts covers the real worker.
+test.use({ serviceWorkers: 'block' });
+
 async function settle(page: Page) {
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('settlement_hu'));
   await expect(page.getByTestId('settlement-panel')).toHaveAttribute('aria-busy','false');

@@ -5,6 +5,7 @@ export type OfflineReadinessState = "unsupported" | "preparing" | "ready" | "err
 
 export function useOfflineReadiness() {
   const state = ref<OfflineReadinessState>("preparing");
+  const updateAvailable = ref(false);
 
   const label = computed(() => {
     if (state.value === "ready") return "离线资源已备好，可断网重新打开";
@@ -21,6 +22,12 @@ export function useOfflineReadiness() {
 
     registerSW({
       immediate: true,
+      // The worker may activate immediately, but reloading during a live round
+      // would discard an offline practice session. Let the user choose when to
+      // switch the document to the newly cached application instead.
+      onNeedReload: () => {
+        updateAvailable.value = true;
+      },
       onOfflineReady: () => {
         state.value = "ready";
       },
@@ -41,5 +48,14 @@ export function useOfflineReadiness() {
       });
   });
 
-  return { offlineReadinessState: state, offlineReadinessLabel: label };
+  function reloadForUpdate() {
+    window.location.reload();
+  }
+
+  return {
+    offlineReadinessState: state,
+    offlineReadinessLabel: label,
+    offlineUpdateAvailable: updateAvailable,
+    reloadForOfflineUpdate: reloadForUpdate,
+  };
 }

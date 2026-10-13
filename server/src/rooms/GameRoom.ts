@@ -94,6 +94,7 @@ type ActionRequest =
   | {
       action: ActionType;
       candidateId?: string;
+      deferred?: boolean;
       decisionKey?: string;
     };
 
@@ -2471,6 +2472,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   private normalizeActionRequest(payload: ActionRequest): {
     action: ActionType;
     candidateId?: string;
+    deferred?: boolean;
     decisionKey?: string;
   } | null {
     if (typeof payload === "string") {
@@ -2489,8 +2491,14 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       return null;
     }
     const candidateId = typeof payload.candidateId === "string" ? payload.candidateId.trim() : "";
+    const deferred = payload.deferred === true;
     const decisionKey = typeof payload.decisionKey === "string" ? payload.decisionKey.trim() : "";
-    return { action, candidateId: candidateId || undefined, decisionKey: decisionKey || undefined };
+    return {
+      action,
+      candidateId: candidateId || undefined,
+      deferred: deferred || undefined,
+      decisionKey: decisionKey || undefined,
+    };
   }
 
   private acceptsDecisionKey(seatId: string, decisionKey?: string): boolean {
@@ -2569,7 +2577,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       this.rejectAction(client, "invalid_action_payload", seatId);
       return;
     }
-    const { action, candidateId, decisionKey } = parsed;
+    const { action, candidateId, deferred, decisionKey } = parsed;
     if (!this.acceptsDecisionKey(seatId, decisionKey)) {
       this.traceStep("action_stale", `seat=${seatId} decision=${decisionKey ?? "-"}`);
       this.rejectAction(client, "stale_decision", seatId);
@@ -2584,21 +2592,36 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     }
     const availableActions = this.getAvailableActions(seatId);
     const enabledActions = availableActions.filter((x) => x.enabled).map((x) => x.action);
+    const actionItem = availableActions.find((item) => item.action === action);
+    const requestedDeferredChi = action === "chi" && deferred === true;
+    const isDeferredChi = Boolean(
+      requestedDeferredChi &&
+      this.state.responsePhase === "collective" &&
+      actionItem?.deferred,
+    );
+    // Deferred Chi is a confirmed local intent, but its public collective
+    // signal must remain Pass so Hu/Kai/Peng priority and the privacy floor do
+    // not change. Only the explicit deferred request may opt into this path;
+    // ordinary Pass still has to be enabled by the rules.
+    const dispatchEnabledActions = isDeferredChi
+      ? [...enabledActions, "chi" as ActionType]
+      : requestedDeferredChi
+        ? enabledActions.filter((enabledAction) => enabledAction !== "chi")
+        : enabledActions;
     const canCollectivePreselect = this.canSeatPreselectCollective(seatId);
     const decision = this.gameSession.decideAction({
       pendingOwnerId: pending.ownerId,
       seatId,
       action,
-      enabledActions,
+      enabledActions: dispatchEnabledActions,
       responsePhase: this.state.responsePhase,
       collectiveResponderId: this.collectiveResponderId,
       canCollectivePreselect,
       awaitingDiscardOwnerId: this.awaitingDiscardOwnerId,
     });
-    const actionItem = availableActions.find((item) => item.action === action);
     this.traceStep(
       "action_dispatch",
-      `seat=${seatId} action=${action} candidate=${candidateId ?? "-"} decision=${decision} enabled=${enabledActions.join(",") || "-"}`,
+      `seat=${seatId} action=${action} deferred=${isDeferredChi ? "1" : "0"} candidate=${candidateId ?? "-"} decision=${decision} enabled=${enabledActions.join(",") || "-"}`,
     );
 
     const requireCandidate =
@@ -2613,9 +2636,10 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
     if (decision === "collective_accept") {
       this.acknowledgeAction(client, seatId, action, decisionKey);
       const isCurrentResponder = this.collectiveResponderId === seatId;
+      const collectiveAction = isDeferredChi ? "pass" : action;
       pending.collectives.set(seatId, {
-        action: action === "pass" ? "pass" : action,
-        candidateId: action === "pass" ? undefined : candidateId,
+        action: collectiveAction,
+        candidateId: collectiveAction === "pass" ? undefined : candidateId,
       });
 
       // 任何拦截信号都交给服务端统一裁决。若已有候选胜者，当前这个“过”
@@ -2628,9 +2652,9 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
       }
 
       const shortenedCollectiveWindow =
-        action === "pass" && this.shortenCollectiveWindowToPrivacyFloorIfReady();
+        collectiveAction === "pass" && this.shortenCollectiveWindowToPrivacyFloorIfReady();
       const waitsForCollectiveWindow =
-        action === "pass" &&
+        collectiveAction === "pass" &&
         isCurrentResponder &&
         this.collectiveResponseRemainingMsForSeat(seatId) > 0;
       if (isCurrentResponder && !waitsForCollectiveWindow) {
@@ -2642,7 +2666,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           : isCurrentResponder
             ? "collective_accept"
             : "collective_preselect",
-        `seat=${seatId} action=${action} candidate=${candidateId ?? "-"}`,
+        `seat=${seatId} action=${action} collective=${collectiveAction} candidate=${candidateId ?? "-"}`,
       );
       if (waitsForCollectiveWindow) {
         this.scheduleCollectiveTimeout(

@@ -215,6 +215,30 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.pollOriginPlayerId = originId;
     context.setResponseCard(context.getPendingResponse()!.card, "upper");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_draw_special_confirm") {
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id);
+      if (seat) seat.declaredKongs = 0;
+      if (id !== seatId) {
+        context.playerHands.set(id, [
+          { id: `special-bystander-${id}-shi-${seq}`, color: "green", type: "shi" },
+        ]);
+      }
+    }
+    add("special-owner-white-shi", "white", "shi");
+    add("special-owner-white-xiang", "white", "xiang");
+    add("special-owner-spare", "green", "ma");
+    context.setCollectiveResponseWindowMs(3_000);
+    context.setPendingResponse(
+      createPendingResponse(seatId, { id: "special-white-jiang-target", color: "white", type: "jiang" }, "draw"),
+    );
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = seatId;
+    context.state.currentTurnPlayerId = seatId;
+    context.state.pollOriginPlayerId = seatId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_draw_downstream_confirm" || scenario === "chi_draw_upstream_confirm") {
     const selfIndex = context.playerOrder.indexOf(seatId);
     const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
@@ -702,6 +726,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "chi_collective_only" ||
     scenario === "chi_collective_intercept_kai" ||
     scenario === "chi_collective_intercept_hu" ||
+    scenario === "chi_draw_special_confirm" ||
     scenario === "chi_draw_downstream_confirm" ||
     scenario === "chi_draw_upstream_confirm" ||
     scenario === "hu_fail_case"
