@@ -165,8 +165,10 @@ test('a drawn general accepts one deferred Chi and resolves after the shared pri
       (window as any).__siseLocalTest.getDecisionTimer().totalMs,
     )).toBe(3_000);
 
-    await host.getByTestId('hand-card-special-owner-white-shi').click();
-    await host.getByTestId('hand-card-special-owner-white-xiang').click();
+    for (const id of ['special-owner-white-shi', 'special-owner-white-xiang']) {
+      const card = host.getByTestId(`hand-card-${id}`);
+      if (await card.getAttribute('aria-pressed') !== 'true') await card.click();
+    }
     await expect(host.getByTestId('hand-card-special-owner-white-shi')).toHaveAttribute('aria-pressed', 'true');
     await expect(host.getByTestId('hand-card-special-owner-white-xiang')).toHaveAttribute('aria-pressed', 'true');
 
