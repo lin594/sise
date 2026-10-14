@@ -3,7 +3,6 @@
   "redisSchemaVersion": 1,
   "serverSourceTree": "87098d9600ce21e96f0576aa3d6f7103186b64ca",
   "testedSourceSHAs": [
-    "a4a2f7714011382082285e531d0498fabaf1f6b5",
     "86c58bac13d79e0ff154f2cdd4cb359187e497c1"
   ],
   "testedImageIDs": [

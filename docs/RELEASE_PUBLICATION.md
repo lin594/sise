@@ -29,9 +29,10 @@ snapshot changes require a fresh upgrade and rollback test. Matching version
 numbers alone do not establish safe rollback. Current room snapshots use schema
 2 in Redis namespace 1 and do not contain their originating source SHA.
 
-The compatibility set includes source `a4a2f7714011382082285e531d0498fabaf1f6b5`,
-source `86c58bac13d79e0ff154f2cdd4cb359187e497c1`, and releases with the verified
-server source tree. Because the existing production image has no OCI revision
+The verified source set includes `86c58bac13d79e0ff154f2cdd4cb359187e497c1`
+and releases with the verified server source tree. The production checkout's
+`a4a2f7714011382082285e531d0498fabaf1f6b5` is not treated as proof of the
+running image's source. Because the existing production image has no OCI revision
 label, its actual image ID is recorded independently:
 `sha256:5cbb1fac7b87fd05c84488649167a14f3d045caaeaabcb0cd265357edbd14c1a`.
 A source checkout alone does not attest the contents of that old image.
