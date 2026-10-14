@@ -1,0 +1,170 @@
+name: Publish production images
+
+on:
+  workflow_run:
+    workflows: [Validate contributions]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full current main SHA with successful CI
+        required: true
+      ci_run_id:
+        description: Successful Validate contributions run for that exact main SHA
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-image-publication
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Verify trusted main and CI gate
+    if: github.repository == 'lin594/sise' && (github.event_name == 'workflow_run' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      source_sha: ${{ steps.verify.outputs.source_sha }}
+      ci_run_id: ${{ steps.verify.outputs.ci_run_id }}
+    steps:
+      # No checkout or package credentials until GitHub's own run/job records
+      # establish that this is a successful exact-head main build.
+      - uses: actions/github-script@v8
+        id: verify
+        env:
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+          REQUESTED_CI_RUN_ID: ${{ inputs.ci_run_id }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const triggered = context.payload.workflow_run;
+            const runId = triggered?.id ?? Number(process.env.REQUESTED_CI_RUN_ID);
+            const sha = triggered?.head_sha ?? process.env.REQUESTED_SHA;
+            if (!/^[0-9a-f]{40}$/.test(sha ?? '') || !Number.isSafeInteger(runId) || runId < 1) {
+              throw new Error('A full source SHA and valid CI run ID are required');
+            }
+            const [{ data: main }, { data: workflow }, { data: run }] = await Promise.all([
+              github.rest.repos.getBranch({ owner, repo, branch: 'main' }),
+              github.rest.actions.getWorkflow({ owner, repo, workflow_id: 'ci.yml' }),
+              github.rest.actions.getWorkflowRun({ owner, repo, run_id: runId }),
+            ]);
+            if (main.commit.sha !== sha || run.head_sha !== sha || run.head_branch !== 'main'
+              || run.head_repository?.full_name !== 'lin594/sise' || run.repository?.full_name !== 'lin594/sise'
+              || run.workflow_id !== workflow.id || !['push', 'workflow_dispatch'].includes(run.event)
+              || run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('Publication requires successful CI for the current trusted main SHA');
+            }
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner, repo, run_id: runId, filter: 'latest', per_page: 100,
+            });
+            const gate = jobs.find(job => job.name === 'CI gate');
+            if (!gate || gate.status !== 'completed' || gate.conclusion !== 'success') {
+              throw new Error('The required CI gate did not pass');
+            }
+            core.setOutput('source_sha', sha);
+            core.setOutput('ci_run_id', String(runId));
+
+  publish:
+    name: Publish immutable production images
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SOURCE_SHA: ${{ needs.authorize.outputs.source_sha }}
+      CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+      NODE_IMAGE: node:22-alpine
+      NGINX_IMAGE: nginx:1.27-alpine
+      VITE_SERVER_URL: wss://api.sise.tajuren.cn
+      VITE_SERVER_HTTP_URL: https://api.sise.tajuren.cn
+      VITE_SERVER_SAME_ORIGIN: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - name: Confirm current main before registry login
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            if (data.commit.sha !== process.env.SOURCE_SHA) throw new Error('main advanced; publish its CI run instead');
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse to overwrite an existing source SHA tag
+        env:
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/assert-release-tags-absent.mjs
+      - name: Build and publish server
+        id: server
+        uses: docker/build-push-action@v7
+        with:
+          context: ./server
+          target: production
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ghcr.io/lin594/sise-server:sha-${{ env.SOURCE_SHA }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
+            org.opencontainers.image.source=https://github.com/lin594/sise
+          build-args: |
+            NODE_IMAGE=${{ env.NODE_IMAGE }}
+            NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+          cache-from: type=gha,scope=sise-server
+          cache-to: type=gha,mode=max,scope=sise-server
+      - name: Build and publish web
+        id: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./client/Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ghcr.io/lin594/sise-web:sha-${{ env.SOURCE_SHA }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
+            org.opencontainers.image.source=https://github.com/lin594/sise
+          build-args: |
+            NODE_IMAGE=${{ env.NODE_IMAGE }}
+            NGINX_IMAGE=${{ env.NGINX_IMAGE }}
+            NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+            VITE_SERVER_URL=${{ env.VITE_SERVER_URL }}
+            VITE_SERVER_HTTP_URL=${{ env.VITE_SERVER_HTTP_URL }}
+            VITE_SERVER_SAME_ORIGIN=${{ env.VITE_SERVER_SAME_ORIGIN }}
+          cache-from: type=gha,scope=sise-web
+          cache-to: type=gha,mode=max,scope=sise-web
+      - name: Inspect the immutable registry objects and write release manifest
+        env:
+          SERVER_DIGEST: ${{ steps.server.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          mkdir release
+          for service in server web; do
+            if [ "$service" = server ]; then digest="$SERVER_DIGEST"; else digest="$WEB_DIGEST"; fi
+            image="ghcr.io/lin594/sise-$service@$digest"
+            docker buildx imagetools inspect "$image" --raw > "release/$service-manifest.json"
+            docker buildx imagetools inspect "$image" --format '{{json .Image}}' > "release/$service-config.json"
+          done
+          node scripts/create-release-manifest.mjs release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest
+          path: release/release-manifest.json
+          if-no-files-found: error
+          retention-days: 90

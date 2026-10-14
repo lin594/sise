@@ -19,6 +19,13 @@ services:
         NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-alpine}"
         NPM_CONFIG_REGISTRY: "${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
     restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     environment:
       NODE_ENV: "production"
       PORT: "2567"
