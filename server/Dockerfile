@@ -27,4 +27,4 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist /app/dist
 EXPOSE 2567
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/index.js"]

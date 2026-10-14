@@ -276,9 +276,20 @@ jobs:
         with:
           context: ./server
           push: false
+          load: true
+          platforms: linux/amd64
+          tags: sise-recovery-test:ci
           build-args: NODE_IMAGE=${{ env.NODE_IMAGE }}
           cache-from: type=gha,scope=sise-server
           cache-to: type=gha,mode=max,scope=sise-server
+
+      - name: Install client SDK for isolated recovery test
+        run: npm ci --prefix client
+
+      - name: Verify real container SIGTERM and room recovery
+        env:
+          RECOVERY_TEST_IMAGE: sise-recovery-test:ci
+        run: node scripts/container-recovery-smoke.mjs
 
       - name: Build web image with reusable layers
         uses: docker/build-push-action@v7
