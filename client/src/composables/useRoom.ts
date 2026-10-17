@@ -638,16 +638,21 @@ export function useRoom(playerName = "Player") {
   let actionFeedbackTimer: number | null = null;
   let offlinePractice: OfflinePracticeSession | null = null;
   let offlineAutomationGeneration = 0;
+  let offlineAutomationTimer: number | null = null;
+  let offlineAutomationFrame: number | null = null;
+  let offlineHiddenAt: number | null = null;
   let offlineViewRevision = 0;
   let offlineOpeningPresentation: { lastAction: string; responseEndsAt: number } | null = null;
-  let offlineOpeningPresentationTimers: number[] = [];
+  let offlineOpeningGeneration = 0;
+  let offlineOpeningPresentationTimers: Array<{ id: number | null; at: number; run: () => void }> = [];
 
   const OFFLINE_DEALER_PICK_INTRO_MS = 2_200;
   const OFFLINE_DEALER_REVEAL_INTRO_MS = 3_400;
   const OFFLINE_OPENING_DEAL_MS = 3_200;
 
   function clearOfflineOpeningPresentation(): void {
-    offlineOpeningPresentationTimers.forEach((timer) => window.clearTimeout(timer));
+    offlineOpeningGeneration += 1;
+    offlineOpeningPresentationTimers.forEach(timer => { if (timer.id !== null) window.clearTimeout(timer.id); });
     offlineOpeningPresentationTimers = [];
     offlineOpeningPresentation = null;
   }
@@ -673,10 +678,21 @@ export function useRoom(playerName = "Player") {
   }
 
   function scheduleOfflineOpeningStage(delayMs: number, run: () => void): void {
-    offlineOpeningPresentationTimers.push(window.setTimeout(() => {
-      if (!offlinePractice) return;
-      run();
-    }, delayMs));
+    const stage = { id: null as number | null, at: Date.now() + delayMs, run };
+    offlineOpeningPresentationTimers.push(stage);
+    armOfflineOpeningStage(stage);
+  }
+
+  function armOfflineOpeningStage(stage: { id: number | null; at: number; run: () => void }): void {
+    const session = offlinePractice;
+    const generation = offlineOpeningGeneration;
+    if (document.visibilityState !== "visible") return;
+    stage.id = window.setTimeout(() => {
+      stage.id = null;
+      if (session !== offlinePractice || generation !== offlineOpeningGeneration || document.visibilityState !== "visible") return;
+      offlineOpeningPresentationTimers = offlineOpeningPresentationTimers.filter(item => item !== stage);
+      stage.run();
+    }, Math.max(0, stage.at - Date.now()));
   }
 
   function beginOfflineOpeningPresentation(): void {
@@ -701,12 +717,12 @@ export function useRoom(playerName = "Player") {
     applyOfflinePracticeView();
     if (pickerId) {
       scheduleOfflineOpeningStage(revealAt, () => {
-        offlineOpeningPresentation = { lastAction: `DEALER_CARD ${dealerId}`, responseEndsAt };
+        if (offlineOpeningPresentation) offlineOpeningPresentation.lastAction = `DEALER_CARD ${dealerId}`;
         applyOfflinePracticeView();
       });
     }
     scheduleOfflineOpeningStage(dealAt, () => {
-      offlineOpeningPresentation = { lastAction: `DEALER ${dealerId}`, responseEndsAt };
+      if (offlineOpeningPresentation) offlineOpeningPresentation.lastAction = `DEALER ${dealerId}`;
       applyOfflinePracticeView();
     });
     scheduleOfflineOpeningStage(finishAt, () => {
@@ -717,29 +733,59 @@ export function useRoom(playerName = "Player") {
     });
   }
 
-  async function pumpOfflinePractice(generation: number): Promise<void> {
-    let steps = 0;
-    while (offlinePractice && generation === offlineAutomationGeneration && steps < 50_000) {
-      if (offlinePractice.isHumanDecisionPending() || offlinePractice.view().phase === "ended") break;
-      if (!offlinePractice.advanceAutomation()) break;
-      steps += 1;
-      applyOfflinePracticeView();
-      if (steps % 12 === 0) {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      }
-    }
-    if (steps >= 50_000) {
-      joinError.value = "离线牌局没有正常推进，请返回玩法选择后重试。";
-    }
+  function cancelOfflineAutomation(): void {
+    offlineAutomationGeneration += 1;
+    if (offlineAutomationTimer !== null) window.clearTimeout(offlineAutomationTimer);
+    if (offlineAutomationFrame !== null) cancelAnimationFrame(offlineAutomationFrame);
+    offlineAutomationTimer = null;
+    offlineAutomationFrame = null;
   }
 
   function scheduleOfflineAutomation(): void {
-    if (offlineOpeningPresentation) return;
-    const generation = ++offlineAutomationGeneration;
-    void pumpOfflinePractice(generation);
+    cancelOfflineAutomation();
+    const session = offlinePractice;
+    const generation = offlineAutomationGeneration;
+    if (!session || offlineOpeningPresentation || document.visibilityState !== "visible") return;
+    let steps = 0;
+    const active = () => offlinePractice === session && generation === offlineAutomationGeneration && !offlineOpeningPresentation && document.visibilityState === "visible";
+    const queue = () => {
+      if (!active()) return;
+      const remaining = session.state.presentationUntil - Date.now();
+      if (remaining > 0) {
+        offlineAutomationTimer = window.setTimeout(() => {
+          offlineAutomationTimer = null;
+          queue();
+        }, remaining);
+        return;
+      }
+      // Vue must commit, then the browser must paint each published state.
+      // This also yields internal no-choice transitions without inventing a delay.
+      offlineAutomationFrame = requestAnimationFrame(() => {
+        if (!active()) return;
+        offlineAutomationFrame = requestAnimationFrame(() => {
+          offlineAutomationFrame = null;
+          if (!active() || session.isHumanDecisionPending() || session.state.phase === "ended") return;
+          if (++steps > 50_000) {
+            joinError.value = "离线牌局没有正常推进，请返回玩法选择后重试。";
+            return;
+          }
+          if (!session.advanceAutomation()) return;
+          applyOfflinePracticeView();
+          queue();
+        });
+      });
+    };
+    queue();
+  }
+
+  function offlineInputLocked(): boolean {
+    return Boolean(offlineOpeningPresentation || document.visibilityState !== "visible" ||
+      offlinePractice && offlinePractice.state.presentationUntil > Date.now());
   }
 
   function startOfflinePractice(nameOverride?: string): boolean {
+    cancelOfflineAutomation();
+    offlineHiddenAt = null;
     clearOfflineOpeningPresentation();
     suppressReconnect = true;
     activeConnectionSeq += 1;
@@ -1095,6 +1141,24 @@ export function useRoom(playerName = "Player") {
   }
 
   function handleVisibilityChange() {
+    if (offlinePractice) {
+      if (document.visibilityState !== "visible") {
+        offlineHiddenAt ??= Date.now();
+        cancelOfflineAutomation();
+        offlineOpeningPresentationTimers.forEach(stage => { if (stage.id !== null) window.clearTimeout(stage.id); stage.id = null; });
+      } else {
+        if (offlineHiddenAt !== null) {
+          const elapsed = Date.now() - offlineHiddenAt;
+          offlinePractice.shiftPresentation(elapsed);
+          if (offlineOpeningPresentation) offlineOpeningPresentation.responseEndsAt += elapsed;
+          offlineOpeningPresentationTimers.forEach(stage => { stage.at += elapsed; armOfflineOpeningStage(stage); });
+          offlineHiddenAt = null;
+          applyOfflinePracticeView();
+        }
+        scheduleOfflineAutomation();
+      }
+      return;
+    }
     if (document.visibilityState !== "visible") {
       clearPendingConnectionProbe();
       return;
@@ -2156,6 +2220,7 @@ export function useRoom(playerName = "Player") {
 
   function sendAction(input: ActionRequest): ActionSendResult {
     if (offlinePractice) {
+      if (offlineInputLocked()) return "locked";
       const rawAction = typeof input === "string" ? input : input.action;
       const action = normalizeAction(rawAction);
       if (!action) return "invalid";
@@ -2217,6 +2282,7 @@ export function useRoom(playerName = "Player") {
 
   function sendDiscardCard(cardId: string) {
     if (offlinePractice) {
+      if (offlineInputLocked()) return;
       if (cardId && offlinePractice.discard(cardId)) {
         clearActionFeedback();
         applyOfflinePracticeView();
@@ -2241,6 +2307,7 @@ export function useRoom(playerName = "Player") {
   function declareFish(fishCardIds: string[]) {
     declareError.value = "";
     if (offlinePractice) {
+      if (offlineInputLocked()) return false;
       const accepted = offlinePractice.declareFish(fishCardIds);
       if (!accepted) declareError.value = "亮鱼组合不合法或牌已变化，请重新选择。";
       applyOfflinePracticeView();
@@ -2257,6 +2324,7 @@ export function useRoom(playerName = "Player") {
   function declareKongs(count: number) {
     declareError.value = "";
     if (offlinePractice) {
+      if (offlineInputLocked()) return false;
       const accepted = offlinePractice.declareKongs(count);
       if (!accepted) declareError.value = "坎数超过当前手牌可声明数量，请重新选择。";
       applyOfflinePracticeView();
@@ -2275,7 +2343,7 @@ export function useRoom(playerName = "Player") {
   }
 
   function debugAdvanceOfflinePracticeAsBot(): boolean {
-    if (!offlinePractice || offlineOpeningPresentation) return false;
+    if (!offlinePractice || offlineInputLocked()) return false;
     const view = offlinePractice.view();
     const human = view.players[0];
     let accepted = false;
@@ -2323,6 +2391,8 @@ export function useRoom(playerName = "Player") {
   function nextRound(): boolean {
     clearActionLogs();
     if (offlinePractice) {
+      if (offlineInputLocked() || offlinePractice.state.phase !== "ended") return false;
+      cancelOfflineAutomation();
       offlinePractice.startRound();
       beginOfflineOpeningPresentation();
       scheduleOfflineAutomation();
@@ -2372,7 +2442,8 @@ export function useRoom(playerName = "Player") {
 
   async function leaveRoom(targetRoomId = ""): Promise<void> {
     if (offlinePractice) {
-      offlineAutomationGeneration += 1;
+      cancelOfflineAutomation();
+      offlineHiddenAt = null;
       clearOfflineOpeningPresentation();
       offlinePractice = null;
       setOfflinePracticeAnalyticsDisabled(false);
@@ -2481,7 +2552,7 @@ export function useRoom(playerName = "Player") {
     document.removeEventListener("pointerdown", primeQuickPhraseAudio, { capture: true });
     document.removeEventListener("keydown", primeQuickPhraseAudio, { capture: true });
     suppressReconnect = true;
-    offlineAutomationGeneration += 1;
+    cancelOfflineAutomation();
     clearOfflineOpeningPresentation();
     offlinePractice = null;
     setOfflinePracticeAnalyticsDisabled(false);

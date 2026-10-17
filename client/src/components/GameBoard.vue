@@ -1582,8 +1582,8 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
 
   const elapsed = presentationNow.value - event.startsAt;
   const draw = event.kind === "draw";
-  // Arrive before the 350ms server handoff ends, then hold the exact rectangle
-  // for 150ms so low-frame devices can paint a stable landing.
+  // Travel in 200ms, then hold the exact rectangle for the rest of the shared
+  // presentation window so players can recognize the actor and result.
   const progress = Math.min(1, elapsed / 200);
   const eased = 1 - Math.pow(1 - progress, 3);
   const flipping = draw && elapsed >= 700;
@@ -1836,7 +1836,8 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const latestSeatAction = computed<{ actorId: string; label: string } | null>(() => {
-  const action = String(props.state?.lastAction ?? "").trim();
+  const active = rawTableEvents.value.find(event => event.startsAt <= presentationNow.value && event.endsAt > presentationNow.value);
+  const action = String(active?.action ?? props.state?.lastAction ?? "").trim();
   if (!action) {
     return null;
   }
@@ -3166,11 +3167,11 @@ watch(
     if (props.state?.phase === "declaring" && /^DECLARING\b/.test(String(action ?? ""))) {
       clearDealAnimationRuntime(true);
     }
-    if (props.state?.tablePresentationVersion) return;
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {
       triggerActorFlash(actor);
     }
+    if (props.state?.tablePresentationVersion) return;
     if (keyword === "DISCARD" && actor) {
       const isLocalAcknowledgement = actor === props.mySeatId && Boolean(locallyAnimatedDiscardCardId.value);
       if (isLocalAcknowledgement) {

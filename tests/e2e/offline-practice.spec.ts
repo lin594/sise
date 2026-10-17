@@ -26,16 +26,23 @@ async function completeLocalRound(page: Page): Promise<void> {
   await expect(page.getByTestId("game-auto-play")).toHaveCount(0);
   await expect(page.getByTestId("game-interaction")).toHaveCount(0);
 
-  await expect.poll(async () => page.evaluate(() => {
-    const bridge = (window as Window & {
-      __siseLocalTest?: {
-        advanceOfflinePracticeAsBot: () => boolean;
-        getRoomState: () => { phase?: string } | null;
-      };
-    }).__siseLocalTest;
-    bridge?.advanceOfflinePracticeAsBot();
-    return bridge?.getRoomState()?.phase ?? "missing";
-  }), { timeout: 120_000, intervals: [5, 10, 20] }).toBe("ended");
+  // Opening and the presentation contract are checked at real speed above
+  // and in offline-action-presentation. Advance the same timers for a full round.
+  await page.clock.install();
+  await expect.poll(async () => {
+    await page.clock.fastForward(1500);
+    await page.clock.runFor(64);
+    return page.evaluate(() => {
+      const bridge = (window as Window & {
+        __siseLocalTest?: {
+          advanceOfflinePracticeAsBot: () => boolean;
+          getRoomState: () => { phase?: string } | null;
+        };
+      }).__siseLocalTest;
+      bridge?.advanceOfflinePracticeAsBot();
+      return bridge?.getRoomState()?.phase ?? "missing";
+    });
+  }, { timeout: 120_000, intervals: [5, 10, 20] }).toBe("ended");
 
   await expect(page.getByTestId("settlement-panel")).toHaveAttribute("aria-busy", "false");
   await expect.poll(() => page.evaluate(() => {
@@ -88,7 +95,7 @@ test("reopens offline from the cached shell and completes a local round without 
 });
 
 test("a drawn general can be eaten locally and continues to the discard step", async ({ browser, baseURL }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const origin = baseURL ?? "http://127.0.0.1:4173";
   const context = await browser.newContext({ serviceWorkers: "allow" });
   await prepareContext(context);
@@ -105,35 +112,40 @@ test("a drawn general can be eaten locally and continues to the discard step", a
     });
     await page.getByTestId("mode-practice_bots").click();
     await finishDeclarationIfNeeded(page);
+    await page.clock.install();
 
-    await expect.poll(() => page.evaluate(() => {
-      const bridge = (window as Window & {
-        __siseLocalTest?: {
-          advanceOfflinePracticeAsBot: () => boolean;
-          getDeferredChiDebug: () => {
-            actions?: Array<{ action: string; deferred?: boolean }>;
+    await expect.poll(async () => {
+      await page.clock.fastForward(1500);
+      await page.clock.runFor(64);
+      return page.evaluate(() => {
+        const bridge = (window as Window & {
+          __siseLocalTest?: {
+            advanceOfflinePracticeAsBot: () => boolean;
+            getDeferredChiDebug: () => {
+              actions?: Array<{ action: string; deferred?: boolean }>;
+            };
+            getRoomState: () => {
+              phase?: string;
+              currentPlayerId?: string;
+              responseCard?: { id?: string; color?: string; type?: string } | null;
+            } | null;
           };
-          getRoomState: () => {
-            phase?: string;
-            currentPlayerId?: string;
-            responseCard?: { id?: string; color?: string; type?: string } | null;
-          } | null;
-        };
-      }).__siseLocalTest;
-      const room = bridge?.getRoomState();
-      const actions = bridge?.getDeferredChiDebug().actions ?? [];
-      if (
-        room?.phase === "playing" &&
-        room.currentPlayerId === "seat_0" &&
-        room.responseCard?.color === "white" &&
-        room.responseCard.type === "jiang" &&
-        actions.some((action) => action.action === "chi" && action.deferred)
-      ) {
-        return room.responseCard.id ?? "";
-      }
-      bridge?.advanceOfflinePracticeAsBot();
-      return "";
-    }), { timeout: 30_000, intervals: [5, 10, 20] }).not.toBe("");
+        }).__siseLocalTest;
+        const room = bridge?.getRoomState();
+        const actions = bridge?.getDeferredChiDebug().actions ?? [];
+        if (
+          room?.phase === "playing" &&
+          room.currentPlayerId === "seat_0" &&
+          room.responseCard?.color === "white" &&
+          room.responseCard.type === "jiang" &&
+          actions.some((action) => action.action === "chi" && action.deferred)
+        ) {
+          return room.responseCard.id ?? "";
+        }
+        bridge?.advanceOfflinePracticeAsBot();
+        return "";
+      });
+    }, { timeout: 60_000, intervals: [5, 10, 20] }).not.toBe("");
     const targetCardId = await page.evaluate(() =>
       (window as Window & {
         __siseLocalTest?: {
@@ -162,6 +174,8 @@ test("a drawn general can be eaten locally and continues to the discard step", a
       if (await card.getAttribute("aria-pressed") !== "true") await card.click();
     }
     await page.getByTestId("action-chi").click();
+    await page.clock.fastForward(5000);
+    await page.clock.runFor(64);
     await expect.poll(() => page.evaluate((cardId) => {
       const room = (window as Window & {
         __siseLocalTest?: {

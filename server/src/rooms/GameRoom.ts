@@ -10,7 +10,7 @@ import {
   type ListeningHints,
 } from "./flow/listening-hints.js";
 import { Room, Client, CloseCode } from "@colyseus/core";
-import { readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
+import { appendTableTransition, readTableTransitions, type TableTransition, type TableLocation } from "./flow/table-presentation.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
 import { quickPhraseWindowMs, quickPhrases } from "../generated/quickPhrases.js";
 import type { ActionType, Card } from "../rules/types.js";
@@ -3047,7 +3047,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           }
           const before = [...(this.playerHands.get(seatId) ?? [])];
           const ok = tryExecuteKai(operationDeps, seatId, pendingCard, candidateId);
-          if (ok) this.recordMeld(seatId, pendingCard, before);
+          if (ok) this.recordMeld(seatId, pendingCard, before, "meld", "KAI");
           if (ok) {
             this.consumeDeclaredKongForKai(seatId);
           }
@@ -3059,7 +3059,7 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
           }
           const before = [...(this.playerHands.get(seatId) ?? [])];
           const ok = tryExecutePeng(operationDeps, seatId, pendingCard, candidateId);
-          if (ok) this.recordMeld(seatId, pendingCard, before);
+          if (ok) this.recordMeld(seatId, pendingCard, before, "meld", "PENG");
           return ok;
         },
         executeChiOperation: (seatId, pendingCard, candidateId) => {
@@ -4127,29 +4127,25 @@ export class FourColorGameRoom extends Room<{ state: GameState }> {
   }
 
   private recordTableTransition(kind: TableTransition["kind"], moves: TableTransition["moves"]): void {
-    const startsAt = Math.max(Date.now(), this.state.presentationUntil);
-    // Headless simulations do not need display delays. Real rooms use the same
-    // timeline for every viewer, independent of client acknowledgements.
-    const duration = this.clients.length ? (kind === "draw" ? 1200 : 350) : 0;
-    const event: TableTransition = { id: ++this.state.tableEventSeq, round: this.state.completedRounds + 1,
-      kind, startsAt, endsAt: startsAt + duration, moves };
-    const previous = readTableTransitions(this.state.tableTransitionsJson).filter((item) => item.round === event.round);
-    this.state.tableTransitionsJson = JSON.stringify([...previous, event].slice(-32));
-    this.state.presentationUntil = event.endsAt;
+    const actor = kind === "draw" ? this.pendingResponse?.ownerId : moves[0]?.from.playerId ?? moves[0]?.to.playerId;
+    const action = kind === "draw" ? "ZHUA" : kind === "discard" ? "DISCARD" : "PASS";
+    appendTableTransition(this.state, kind, moves, `${actor ?? ""} ${action}`, Date.now(), this.clients.length > 0);
     this.clearBotTimer();
     this.clearCollectiveTimer();
   }
 
-  private recordMeld(ownerId: string, response: Card, before: Card[], kind: "meld" | "hu" = "meld"): void {
+  private recordMeld(ownerId: string, response: Card, before: Card[], kind: "meld" | "hu" = "meld", action = "CHI"): void {
     const remaining = new Set((this.playerHands.get(ownerId) ?? []).map((card) => card.id));
     const handCards = kind === "hu" ? before : before.filter((card) => !remaining.has(card.id));
     const from: TableLocation = this.state.responsePhase === "local_upper"
       ? { zone: "flow", playerId: this.state.pollOriginPlayerId } : { zone: "center" };
     const to: TableLocation = { zone: "meld", playerId: ownerId };
-    this.recordTableTransition(kind, [
+    appendTableTransition(this.state, kind, [
       { card: response, from, to },
       ...handCards.filter((card) => card.id !== response.id).map((card) => ({ card, from: { zone: "hand" as const, playerId: ownerId }, to })),
-    ]);
+    ], `${ownerId} ${kind === "hu" ? "HU" : action}`, Date.now(), this.clients.length > 0);
+    this.clearBotTimer();
+    this.clearCollectiveTimer();
   }
 
   private waitForPresentation(): boolean {
