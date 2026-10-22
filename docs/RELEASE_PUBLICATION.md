@@ -29,13 +29,21 @@ snapshot changes require a fresh upgrade and rollback test. Matching version
 numbers alone do not establish safe rollback. Current room snapshots use schema
 2 in Redis namespace 1 and do not contain their originating source SHA.
 
-The verified source set includes `86c58bac13d79e0ff154f2cdd4cb359187e497c1`
-and releases with the verified server source tree. The production checkout's
-`a4a2f7714011382082285e531d0498fabaf1f6b5` is not treated as proof of the
-running image's source. Because the existing production image has no OCI revision
-label, its actual image ID is recorded independently:
+The historical 2026-10-14 source set included
+`86c58bac13d79e0ff154f2cdd4cb359187e497c1` and its verified server source tree.
+The then-production checkout `a4a2f7714011382082285e531d0498fabaf1f6b5`
+was not treated as proof of the running image's source. That legacy image had no
+OCI revision label and was recorded independently as
 `sha256:5cbb1fac7b87fd05c84488649167a14f3d045caaeaabcb0cd265357edbd14c1a`.
 A source checkout alone does not attest the contents of that old image.
+
+On 2026-10-22, read-only production status confirmed managed release
+`b64fae642433285de50baac2226772c2104a7dfc`, whose actual server image
+`sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b`
+has a matching OCI revision. [Fresh current-baseline acceptance](validation/RELEASE_RECOVERY_2026-10-22.md)
+binds the action-presentation server tree to that exact baseline through real
+synthetic-room upgrade and rollback tests. Its compatibility declaration does not
+carry the older legacy image forward as an untested promise for the new tree.
 
 The reusable smoke harness creates its own Docker network, Redis container and
 server container, exposes only a random loopback port, and removes only those
