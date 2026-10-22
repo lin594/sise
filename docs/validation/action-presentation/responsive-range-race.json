@@ -1,0 +1,18 @@
+{
+  "before": {
+    "text": "1–10 / 20",
+    "ariaLabel": "当前显示第 1 到 10 张，共 20 张"
+  },
+  "after": {
+    "text": "1–12 / 20",
+    "ariaLabel": "当前显示第 1 到 12 张，共 20 张"
+  },
+  "geometry": {
+    "total": 20,
+    "fullyVisible": 12,
+    "minimumWidth": 44,
+    "minimumHeight": 52,
+    "viewportWidth": 680
+  },
+  "staleSnapshotWouldMismatch": true
+}

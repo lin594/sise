@@ -1,0 +1,243 @@
+{
+  "actions": [
+    {
+      "accepted": true,
+      "before": {
+        "revision": 4,
+        "action": "seat_0 OPENING_DISCARD"
+      },
+      "after": {
+        "revision": 11,
+        "action": "seat_2 DISCARD"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 11,
+        "action": "seat_2 DISCARD"
+      },
+      "after": {
+        "revision": 12,
+        "action": "seat_0 PENG"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 12,
+        "action": "seat_0 PENG"
+      },
+      "after": {
+        "revision": 22,
+        "action": "seat_3 DISCARD"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 22,
+        "action": "seat_3 DISCARD"
+      },
+      "after": {
+        "revision": 23,
+        "action": "seat_0 CHI"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 23,
+        "action": "seat_0 CHI"
+      },
+      "after": {
+        "revision": 34,
+        "action": "seat_3 DISCARD"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 34,
+        "action": "seat_3 DISCARD"
+      },
+      "after": {
+        "revision": 35,
+        "action": "seat_0 CHI"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 35,
+        "action": "seat_0 CHI"
+      },
+      "after": {
+        "revision": 47,
+        "action": "NO_RESPONSE"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 47,
+        "action": "NO_RESPONSE"
+      },
+      "after": {
+        "revision": 48,
+        "action": "seat_0 ZHUA"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 48,
+        "action": "seat_0 ZHUA"
+      },
+      "after": {
+        "revision": 49,
+        "action": "seat_0 FORCE_TAKE"
+      }
+    },
+    {
+      "accepted": true,
+      "before": {
+        "revision": 49,
+        "action": "seat_0 FORCE_TAKE"
+      },
+      "after": {
+        "revision": 61,
+        "action": "seat_3 PASS"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "at": 1309,
+      "revision": 1,
+      "action": "DEALER_PICK seat_3",
+      "phase": "declaring",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 3445.300000011921,
+      "revision": 2,
+      "action": "DEALER_CARD seat_0",
+      "phase": "declaring",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 6844.399999976158,
+      "revision": 3,
+      "action": "DEALER seat_0",
+      "phase": "declaring",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 10047.899999976158,
+      "revision": 4,
+      "action": "seat_0 OPENING_DISCARD",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 11416.899999976158,
+      "revision": 11,
+      "action": "seat_2 DISCARD",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 11630.100000023842,
+      "revision": 12,
+      "action": "seat_0 PENG",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 11966.399999976158,
+      "revision": 22,
+      "action": "seat_3 DISCARD",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 12178.399999976158,
+      "revision": 23,
+      "action": "seat_0 CHI",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 12448.5,
+      "revision": 34,
+      "action": "seat_3 DISCARD",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 12660.899999976158,
+      "revision": 35,
+      "action": "seat_0 CHI",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 12910.699999988079,
+      "revision": 47,
+      "action": "NO_RESPONSE",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 13127.899999976158,
+      "revision": 48,
+      "action": "seat_0 ZHUA",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 13333.899999976158,
+      "revision": 49,
+      "action": "seat_0 FORCE_TAKE",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    },
+    {
+      "at": 13578.300000011921,
+      "revision": 61,
+      "action": "seat_3 PASS",
+      "phase": "playing",
+      "until": 0,
+      "transitions": [],
+      "flights": 0
+    }
+  ],
+  "errors": []
+}

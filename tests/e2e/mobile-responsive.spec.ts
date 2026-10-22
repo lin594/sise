@@ -11,13 +11,21 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
-  const text = (await locator.textContent())?.trim() ?? "";
+async function readVisibleHandRangeSnapshot(locator: Locator) {
+  const { text, ariaLabel } = await locator.evaluate((element) => ({
+    text: element.textContent?.trim() ?? "",
+    ariaLabel: element.getAttribute("aria-label"),
+  }));
   const match = text.match(/^(\d+)–(\d+) \/ (\d+)$/);
   if (!match) {
     throw new Error(`Unexpected hand range: ${text}`);
   }
-  return { start: Number(match[1]), end: Number(match[2]), total: Number(match[3]) };
+  return { start: Number(match[1]), end: Number(match[2]), total: Number(match[3]), ariaLabel };
+}
+
+async function readVisibleHandRange(locator: Locator): Promise<{ start: number; end: number; total: number }> {
+  const { start, end, total } = await readVisibleHandRangeSnapshot(locator);
+  return { start, end, total };
 }
 
 async function enterLobby(page: Page, path = "/"): Promise<void> {
@@ -2056,11 +2064,11 @@ test.describe("legacy small landscape gameplay", () => {
     await expect(declarationHandTools).toBeVisible();
     await expect(declarationHandPrev).toBeDisabled();
     await expect(declarationHandNext).toBeEnabled();
-    const initialDeclarationRange = await readVisibleHandRange(declarationHandRange);
+    // ResizeObserver may change the visible range between separate Playwright reads.
+    const initialDeclarationRange = await readVisibleHandRangeSnapshot(declarationHandRange);
     expect(initialDeclarationRange.start).toBe(1);
     expect(initialDeclarationRange.end).toBeLessThan(initialDeclarationRange.total);
-    await expect(declarationHandRange).toHaveAttribute(
-      "aria-label",
+    expect(initialDeclarationRange.ariaLabel).toBe(
       `当前显示第 ${initialDeclarationRange.start} 到 ${initialDeclarationRange.end} 张，共 ${initialDeclarationRange.total} 张`,
     );
     const declarationHandBefore = await declarationHand.locator(".card").evaluateAll((cards) =>

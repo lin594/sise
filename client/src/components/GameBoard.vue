@@ -1429,7 +1429,8 @@ const activeTableEvents = computed(() => tableEvents.value.filter((event) => eve
 const centerCardVisible = computed(() => {
   if (responseCardPlacement.value !== "center") return false;
   if (!props.state?.tablePresentationVersion) return true;
-  return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === responseCard.value?.id));
+  return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value &&
+    event.moves.some((move) => move.card.id === responseCard.value?.id && hasTableMoveLanding(move)));
 });
 const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
@@ -1453,7 +1454,13 @@ onBeforeUpdate(() => {
 });
 function isMovingCard(id: string): boolean {
   if (coordinateMotionSuppressed.value) return false;
-  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
+  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id &&
+    (event.kind !== "hu" || hasTableMoveLanding(move))));
+}
+function hasTableMoveLanding(move: TableTransition["moves"][number]): boolean {
+  // A winning hand may only become public in the settlement. Until its real
+  // destination exists, keep the source cards visible alongside the Hu label.
+  return Boolean(tableLocationExactRect(move.to, move.card.id));
 }
 function movingCardStyle(id: string): Record<string, string> {
   return isMovingCard(id) ? { visibility: "hidden" } : {};
@@ -1582,8 +1589,8 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
 
   const elapsed = presentationNow.value - event.startsAt;
   const draw = event.kind === "draw";
-  // Arrive before the 350ms server handoff ends, then hold the exact rectangle
-  // for 150ms so low-frame devices can paint a stable landing.
+  // Travel in 200ms, then hold the exact rectangle for the rest of the shared
+  // presentation window so players can recognize the actor and result.
   const progress = Math.min(1, elapsed / 200);
   const eased = 1 - Math.pow(1 - progress, 3);
   const flipping = draw && elapsed >= 700;
@@ -1836,7 +1843,8 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const latestSeatAction = computed<{ actorId: string; label: string } | null>(() => {
-  const action = String(props.state?.lastAction ?? "").trim();
+  const active = rawTableEvents.value.find(event => event.startsAt <= presentationNow.value && event.endsAt > presentationNow.value);
+  const action = String(active?.action ?? props.state?.lastAction ?? "").trim();
   if (!action) {
     return null;
   }
@@ -3166,11 +3174,11 @@ watch(
     if (props.state?.phase === "declaring" && /^DECLARING\b/.test(String(action ?? ""))) {
       clearDealAnimationRuntime(true);
     }
-    if (props.state?.tablePresentationVersion) return;
     const { actor, keyword } = parseActionDescriptor(String(action ?? ""));
     if (actor) {
       triggerActorFlash(actor);
     }
+    if (props.state?.tablePresentationVersion) return;
     if (keyword === "DISCARD" && actor) {
       const isLocalAcknowledgement = actor === props.mySeatId && Boolean(locallyAnimatedDiscardCardId.value);
       if (isLocalAcknowledgement) {

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "candidateSourceSHA": "2dab7fb8062c0a2a4b7dbb31cb82049a93fde341",
+  "candidateServerSourceTree": "70b4143b5db67bcedfd1c9d6d76c26ab16f3ec6a",
+  "candidateImageID": "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd",
+  "baselineSourceSHA": "b64fae642433285de50baac2226772c2104a7dfc",
+  "baselineImageID": "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b",
+  "baselineIdentitySource": "read-only supported deploy.py status; matching exact local image ID and OCI revision",
+  "platform": "linux/amd64",
+  "testRedisImageID": "sha256:aa189b5a1954929c393585e6dc5717a75b18f75a931df8bdcc00a3d3bd546be6",
+  "data": "fresh synthetic local rooms only; no production Redis or private hands accessed",
+  "cases": [
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "declaring",
+      "images": [
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd",
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 20,
+      "privateHandHash": "101338ac4ab3afeef03feffef3c15012d4bf732c48da0bf73009d7f30b49a93d",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "declaring",
+      "images": [
+        "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b",
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd",
+        "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 21,
+      "privateHandHash": "2e4bf104a1c55316fb50d1898aa958b6de4f72d98a0216c5b623811d53dd2705",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "playing",
+      "images": [
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd",
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 18,
+      "privateHandHash": "5516e4cd8790074eaab2582a97bdaae27bd826ebe8e828f218b8ebb83a09a5d2",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "playing",
+      "images": [
+        "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b",
+        "sha256:53210d9aed869e4839f3bdf9b646ba591cabc7241510f5fe764ac912d97499bd",
+        "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 18,
+      "privateHandHash": "3af6422c904d5a35b81b12961ff12c411032524e6db3d0215d1fe54f4c42eb00",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    }
+  ]
+}

@@ -238,5 +238,6 @@ export interface TableTransition {
   kind: "draw" | "discard" | "flow" | "meld" | "hu";
   startsAt: number;
   endsAt: number;
+  action?: string;
   moves: Array<{ card: Card; from: TableLocation; to: TableLocation }>;
 }

@@ -291,10 +291,19 @@ for (const action of ["hu", "chi"] as const) {
   });
 }
 
-test("ordinary winning response displays Peng rather than Kan", async ({ page }) => {
+for (const reducedMotion of [false, true]) test(`ordinary winning response displays Peng rather than Kan${reducedMotion ? " with reduced motion" : ""}`, async ({ page }, info) => {
+  await page.emulateMedia({ reducedMotion: reducedMotion ? "reduce" : "no-preference" });
   await start(page, "draw_peng_settlement");
   await expect(page.getByTestId("action-hu")).toBeEnabled();
+  const winningCardId = await page.evaluate(() => (window as any).__siseLocalTest.getRoomState().responseCard.id);
   await page.getByTestId("action-hu").click();
+  await expect(page.locator(".center-seat-action")).toHaveText("胡");
+  await expect(page.getByTestId("settlement-panel")).toHaveCount(0);
+  await expect(page.getByTestId("pending-card")).toBeVisible();
+  for (const id of [winningCardId, "red-ma-1", "red-ma-2"]) {
+    await expect(page.locator(`[data-face-id="${id}"]:visible`)).toHaveCount(1);
+  }
+  await page.screenshot({ path: info.outputPath("hu-before-settlement.png") });
   await expect(page.getByTestId("settlement-panel")).toBeVisible();
   const result = await page.evaluate(() => (window as any).__siseLocalTest.getRoundResult());
   const winner = result.players.find((p: any) => p.clientId === result.winnerId);

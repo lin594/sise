@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
   "redisSchemaVersion": 1,
-  "serverSourceTree": "87098d9600ce21e96f0576aa3d6f7103186b64ca",
+  "serverSourceTree": "70b4143b5db67bcedfd1c9d6d76c26ab16f3ec6a",
   "testedSourceSHAs": [
-    "86c58bac13d79e0ff154f2cdd4cb359187e497c1"
+    "b64fae642433285de50baac2226772c2104a7dfc"
   ],
   "testedImageIDs": [
-    "sha256:5cbb1fac7b87fd05c84488649167a14f3d045caaeaabcb0cd265357edbd14c1a"
+    "sha256:8650c4178ac39b34ce4bb5e8906738ce72188e4565c7bc0a76473b59f210d32b"
   ],
-  "evidence": "docs/RELEASE_PUBLICATION.md"
+  "evidence": "docs/validation/RELEASE_RECOVERY_2026-10-22.md"
 }

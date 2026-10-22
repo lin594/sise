@@ -29,6 +29,7 @@ import {
 import type { AvailableActionEntry } from "../rooms/flow/playing-flow.js";
 import { GameSession, type PendingResponse } from "./game-session.js";
 import { PUTIAN_V1_RULE_REF, type RoundBootstrapSetup } from "./ruleset.js";
+import { appendTableTransition, readTableTransitions, type TableTransition, type TableLocation } from "../rooms/flow/table-presentation.js";
 
 const HUMAN_ID = "seat_0";
 const SEATS = [HUMAN_ID, "seat_1", "seat_2", "seat_3"] as const;
@@ -72,7 +73,9 @@ export interface OfflinePracticeView {
   pendingReceiverId: string;
   responsePhase: string;
   responseEndsAt: 0;
-  presentationUntil: 0;
+  presentationUntil: number;
+  tablePresentationVersion: 1;
+  tableTransitions: TableTransition[];
   lastAction: string;
   deckCount: number;
   isMoCard: boolean;
@@ -112,6 +115,8 @@ export class OfflinePracticeSession {
     (hand, cardId, declaredKongs) => this.gameSession.rules.canDiscard(hand, cardId, declaredKongs),
   );
   private lastRoundResult: OfflineRoundResult | null = null;
+  private deferredHumanChi: { cardId: string; candidateId: string } | null = null;
+  private pendingRoundEnd: { lastAction: string; winnerId: string | null; groups: string[] } | null = null;
 
   constructor(humanName: string, private readonly random: () => number = Math.random) {
     this.state.roomMode = "practice";
@@ -154,6 +159,10 @@ export class OfflinePracticeSession {
     this.state.previousWinnerName = previousWinner?.name ?? "";
     this.state.previousHuType = previousWinner?.huType ?? "";
     this.lastRoundResult = null;
+    this.deferredHumanChi = null;
+    this.pendingRoundEnd = null;
+    this.state.presentationUntil = 0;
+    this.state.tableTransitionsJson = "[]";
     this.state.phase = "declaring";
     this.state.responseEndsAt = 0;
     this.state.declareEndsAt = 0;
@@ -241,7 +250,7 @@ export class OfflinePracticeSession {
           candidateId: request.candidateId,
         });
       }
-      this.resolveCollectiveIfReady();
+      // Resolve on the next automatic unit, after this submission is painted.
     } else if (request.action === "chi") {
       this.executeEat(HUMAN_ID, request.candidateId);
     } else if (request.action === "pass" && this.state.responsePhase === "local_upper") {
@@ -268,7 +277,26 @@ export class OfflinePracticeSession {
 
   /** Executes at most one automatic unit so the browser adapter can yield. */
   advanceAutomation(): boolean {
-    if (this.state.phase !== "playing" || this.isHumanDecisionPending()) return false;
+    if (this.state.phase !== "playing") return false;
+    if (this.pendingRoundEnd) {
+      const end = this.pendingRoundEnd;
+      this.pendingRoundEnd = null;
+      this.finishRound(end.lastAction, end.winnerId, end.groups);
+      this.touch();
+      return true;
+    }
+    if (this.deferredHumanChi) {
+      const intent = this.deferredHumanChi;
+      this.deferredHumanChi = null;
+      if (this.pendingResponse?.card.id === intent.cardId && this.pendingResponse.ownerId === HUMAN_ID) {
+        this.executeEat(HUMAN_ID, intent.candidateId);
+      }
+      this.touch();
+      // Consuming a stale intent still changes the public decision: publish
+      // fresh human choices instead of leaving the host on a locked old view.
+      return true;
+    }
+    if (this.isHumanDecisionPending()) return false;
     if (this.awaitingDiscardOwnerId) {
       const ownerId = this.awaitingDiscardOwnerId;
       if (!this.botIds.has(ownerId)) return false;
@@ -309,6 +337,7 @@ export class OfflinePracticeSession {
   }
 
   isHumanDecisionPending(): boolean {
+    if (this.pendingRoundEnd) return false;
     if (this.state.phase === "declaring") {
       return !Boolean(this.state.players.get(HUMAN_ID)?.declaredReady);
     }
@@ -348,7 +377,9 @@ export class OfflinePracticeSession {
       pendingReceiverId: this.state.pendingReceiverId,
       responsePhase: this.state.responsePhase,
       responseEndsAt: 0,
-      presentationUntil: 0,
+      presentationUntil: this.state.presentationUntil,
+      tablePresentationVersion: 1,
+      tableTransitions: readTableTransitions(this.state.tableTransitionsJson),
       lastAction: this.state.lastAction,
       deckCount: this.state.deckCount,
       isMoCard: this.state.isMoCard,
@@ -488,6 +519,7 @@ export class OfflinePracticeSession {
   }
 
   private getHumanAvailableActions(): AvailableActionEntry[] {
+    if (this.deferredHumanChi || this.pendingRoundEnd) return [];
     if (this.state.phase !== "playing" || !this.pendingResponse) return [];
     if (this.awaitingDiscardOwnerId === HUMAN_ID) return [];
     const entries = this.getAvailableActions(HUMAN_ID, this.state.responsePhase === "collective");
@@ -532,6 +564,8 @@ export class OfflinePracticeSession {
   private enterOwnerLocalAfterNoResponse(ownerId: string): void {
     const pending = this.pendingResponse;
     if (!pending) return;
+    if (pending.card.source === "upper") this.recordTransition("flow", [{ card: pending.card,
+      from: { zone: "center" }, to: { zone: "flow", playerId: this.state.pollOriginPlayerId || ownerId } }], `${this.state.pollOriginPlayerId || ownerId} PASS`);
     if (pending.card.source === "draw" && !this.gameSession.rules.isDiscardRestricted(pending.card)) {
       const canChi = this.gameSession.rules.buildChiCandidates(
         this.ops.getHandWithoutPending(ownerId, pending.card),
@@ -575,8 +609,10 @@ export class OfflinePracticeSession {
       logHuCheck: () => undefined,
       executeKaiOperation: (id, response, candidateId) => {
         if (!candidateId || !this.preservesDeclaredKongsAfterAction(id, "kai", response, candidateId)) return false;
+        const before = [...(this.playerHands.get(id) ?? [])];
         const ok = tryExecuteKai(operationDeps, id, response, candidateId);
         if (ok) {
+          this.recordMeld(id, response, before, "KAI");
           consumePendingDiscard();
           const player = this.state.players.get(id);
           if (player) player.declaredKongs = Math.max(0, player.declaredKongs - 1);
@@ -584,15 +620,17 @@ export class OfflinePracticeSession {
         return ok;
       },
       executePengOperation: (id, response, candidateId) => {
+        const before = [...(this.playerHands.get(id) ?? [])];
         const ok = Boolean(candidateId && this.preservesDeclaredKongsAfterAction(id, "peng", response, candidateId) &&
           tryExecutePeng(operationDeps, id, response, candidateId));
-        if (ok) consumePendingDiscard();
+        if (ok) { this.recordMeld(id, response, before, "PENG"); consumePendingDiscard(); }
         return ok;
       },
       executeChiOperation: (id, response, candidateId) => {
+        const before = [...(this.playerHands.get(id) ?? [])];
         const ok = Boolean(candidateId && this.preservesDeclaredKongsAfterAction(id, "chi", response, candidateId) &&
           tryExecuteChi(operationDeps, id, response, candidateId).ok);
-        if (ok) consumePendingDiscard();
+        if (ok) { this.recordMeld(id, response, before, "CHI"); consumePendingDiscard(); }
         return ok;
       },
       isEatResponder: (owner, responder) => getNextPlayerId(this.playerOrder, owner) === responder,
@@ -614,7 +652,9 @@ export class OfflinePracticeSession {
     return this.gameSession.executeEat({
       pending,
       executeChiOperation: (id, response) => {
+        const before = [...(this.playerHands.get(id) ?? [])];
         const result = tryExecuteChi(this.ops.buildOperationExecutorDeps(), id, response, candidateId);
+        if (result.ok) this.recordMeld(id, response, before, "CHI");
         if (result.ok && response.source === "upper") {
           this.ops.consumePendingDiscard(this.state.pollOriginPlayerId || pending.ownerId, response);
         }
@@ -637,6 +677,7 @@ export class OfflinePracticeSession {
         this.state.responsePhase = "collective";
         this.ops.setResponseCard(card, "draw");
         applyCollectivePollState(this.state, id, getPreviousPlayerId(this.playerOrder, id), id, `${id} ZHUA`);
+        this.recordTransition("draw", [{ card, from: { zone: "deck" }, to: { zone: "center" } }], `${id} ZHUA`);
       },
       setLastAction: (value) => { this.state.lastAction = value; },
       syncAllPrivateHands: () => undefined,
@@ -658,6 +699,7 @@ export class OfflinePracticeSession {
     this.state.loopStage = "local_poll";
     this.ops.setResponseCard(pending.card, "upper");
     this.state.lastAction = `${ownerId} PASS`;
+    this.recordTransition("flow", [{ card: pending.card, from: { zone: "center" }, to: { zone: "flow", playerId: ownerId } }], `${ownerId} PASS`);
     this.applyDeferredHumanChiIfReady(pending.collectives.get(HUMAN_ID)?.candidateId);
   }
 
@@ -665,13 +707,14 @@ export class OfflinePracticeSession {
     candidateId = this.pendingResponse?.collectives.get(HUMAN_ID)?.candidateId,
   ): void {
     if (this.pendingResponse?.ownerId !== HUMAN_ID || !candidateId) return;
-    this.executeEat(HUMAN_ID, candidateId);
+    this.deferredHumanChi = { cardId: this.pendingResponse.card.id, candidateId };
   }
 
   private retainPendingSpecial(ownerId: string): void {
     const pending = this.pendingResponse;
     if (!pending) return;
     this.ops.pushExposedGroup(ownerId, [pending.card], true, "chi");
+    this.recordMeld(ownerId, pending.card, [], "FORCE_TAKE");
     this.state.lastAction = `${ownerId} FORCE_TAKE`;
     this.enterDiscardStage(ownerId, "FORCE_TAKE");
   }
@@ -691,7 +734,10 @@ export class OfflinePracticeSession {
       applyCollectivePollState: (id, previous, origin, lastAction) => applyCollectivePollState(this.state, id, previous, origin, lastAction),
       getPreviousPlayerId: (id) => getPreviousPlayerId(this.playerOrder, id),
       syncAllPrivateHands: () => undefined,
-      startCollectivePolling: () => undefined,
+      startCollectivePolling: () => {
+        const card = this.pendingResponse?.card;
+        if (card) this.recordTransition("draw", [{ card, from: { zone: "deck" }, to: { zone: "center" } }], `${ownerId} ZHUA`);
+      },
     }, ownerId, tag);
   }
 
@@ -728,6 +774,7 @@ export class OfflinePracticeSession {
   }
 
   private beginCollectiveFromDiscard(ownerId: string, discard: Card): void {
+    this.recordTransition("discard", [{ card: discard, from: { zone: "hand", playerId: ownerId }, to: { zone: "center" } }], `${ownerId} DISCARD`);
     this.gameSession.beginCollectiveFromDiscard({
       createPendingResponse: ({ ownerId: id, card, source }) => createPendingResponse(id, card, source),
       setPendingResponse: (value) => { this.pendingResponse = value; },
@@ -773,6 +820,24 @@ export class OfflinePracticeSession {
   private endRound(lastAction: string, winnerId: string | null = null, groups: string[] = []): void {
     if (this.state.phase === "ended") return;
     const response = this.pendingResponse?.card ?? null;
+    const winner = winnerId ? this.state.players.get(winnerId) : undefined;
+    const responseAlreadyMelded = response && winner &&
+      [...winner.exposedArea, ...winner.generalArea].some(card => card.id === response.id);
+    // An eat/peng that leaves no discard has already moved this card. Keep
+    // that presentation window rather than flying it into the meld twice.
+    if (winnerId && response && !responseAlreadyMelded) {
+      const result = this.ops.explainHuForSeat(winnerId, this.playerHands.get(winnerId) ?? [], response, 0);
+      const group = result.details?.find(item => item.cards.some(card => card.id === response.id));
+      this.recordMeld(winnerId, response, group?.cards.filter(card => card.id !== response.id) ?? [], "HU");
+    }
+    this.deferredHumanChi = null;
+    // The host presents the winning action before exposing the settlement.
+    this.state.lastAction = lastAction;
+    this.pendingRoundEnd = { lastAction, winnerId, groups };
+  }
+
+  private finishRound(lastAction: string, winnerId: string | null, groups: string[]): void {
+    const response = this.pendingResponse?.card ?? null;
     const players = this.gameSession.settleRound(buildRoundResultPlayers(
       this.playerOrder,
       this.state.players,
@@ -817,6 +882,31 @@ export class OfflinePracticeSession {
       player.handCount = this.playerHands.get(seatId)?.length ?? 0;
       player.visibleGroupScore = calculateVisibleGroupScore(player);
     }
+  }
+
+  private recordTransition(kind: TableTransition["kind"], moves: TableTransition["moves"], action: string): void {
+    appendTableTransition(this.state, kind, moves, action);
+  }
+
+  private recordMeld(ownerId: string, response: Card, before: Card[], action: string): void {
+    const remaining = new Set((this.playerHands.get(ownerId) ?? []).map(card => card.id));
+    const handCards = action === "HU" ? before : before.filter(card => !remaining.has(card.id));
+    const from: TableLocation = this.state.responsePhase === "local_upper"
+      ? { zone: "flow", playerId: this.state.pollOriginPlayerId } : { zone: "center" };
+    const to: TableLocation = { zone: "meld", playerId: ownerId };
+    this.recordTransition(action === "HU" ? "hu" : "meld", [
+      { card: response, from, to },
+      ...handCards.filter(card => card.id !== response.id).map(card => ({ card, from: { zone: "hand" as const, playerId: ownerId }, to })),
+    ], `${ownerId} ${action}`);
+  }
+
+  /** Background time is not viewing time. Keep the pending visual transaction. */
+  shiftPresentation(deltaMs: number): void {
+    if (deltaMs <= 0) return;
+    const events = readTableTransitions(this.state.tableTransitionsJson);
+    this.state.tableTransitionsJson = JSON.stringify(events.map(event => ({ ...event,
+      startsAt: event.startsAt + deltaMs, endsAt: event.endsAt + deltaMs })));
+    if (this.state.presentationUntil) this.state.presentationUntil += deltaMs;
   }
 
   private touch(): void {

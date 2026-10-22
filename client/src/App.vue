@@ -936,7 +936,7 @@ const isConnectingWithoutState = computed(
       connectionState.value === "connecting" ||
       connectionState.value === "reconnecting" ||
       connectionState.value === "retry_wait" ||
-      connectionState.value === "offline" ||
+      (connectionState.value === "offline" && Boolean(activeRoomId.value || startingRoomMode.value || entryInviteRoomId.value)) ||
       connectionState.value === "closed"),
 );
 const showEntry = computed(() => !enteredFrontLobby.value && !hasLobbySession.value);
