@@ -44,15 +44,25 @@ test("each local action is painted, held through its animation, then hands contr
     };
     requestAnimationFrame(sample);
   });
-  expect(await humanStep(page)).toBe(true);
-  const first = await state(page);
+  // Anchor the real 250ms probe to the action in the browser. Screenshot
+  // encoding and protocol round trips must not consume its 700ms window.
+  const probe = await page.evaluate(async () => {
+    const bridge = (window as any).__siseLocalTest;
+    const accepted = bridge.advanceOfflinePracticeAsBot();
+    const first = JSON.parse(JSON.stringify(bridge.getRoomState()));
+    const acceptedAgain = bridge.advanceOfflinePracticeAsBot();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return { accepted, first, acceptedAgain, at: Date.now(), revision: bridge.getRoomState().stateRevision };
+  });
+  expect(probe.accepted).toBe(true);
+  const first = probe.first;
   expect(first.tablePresentationVersion).toBe(1);
   expect(first.tableTransitions.at(-1).kind).toBe("discard");
+  expect(probe.acceptedAgain).toBe(false);
+  expect(probe.at, "the native 250ms probe must finish within the presentation window").toBeLessThan(first.presentationUntil);
+  expect(probe.revision).toBe(first.stateRevision);
   await expect(page.locator('[data-transition-kind="discard"]')).not.toHaveCount(0);
   await page.screenshot({ path: info.outputPath("human-discard.png") });
-  expect(await humanStep(page)).toBe(false);
-  await page.waitForTimeout(250);
-  expect((await state(page)).stateRevision).toBe(first.stateRevision);
 
   await expect.poll(async () => {
     const room = await state(page);
@@ -81,6 +91,11 @@ test("each local action is painted, held through its animation, then hands contr
   await writeFile(timelinePath, JSON.stringify(samples, null, 2));
   await info.attach("painted-action-timeline", { path: timelinePath, contentType: "application/json" });
   expect(samples.length).toBeGreaterThan(3);
+  const firstPaint = samples.find((sample: any) => sample.event?.id === first.tableTransitions.at(-1).id);
+  expect(firstPaint, "the first action must reach a painted frame").toBeDefined();
+  expect(firstPaint.revision).toBe(first.stateRevision);
+  expect(firstPaint.labels).toContain("出牌");
+  expect(firstPaint.flights).toBeGreaterThan(0);
   for (let index = 1; index < samples.length; index++) {
     // A collective submission may only remove private choices, so useRoom
     // deliberately keeps its identical public object. Every actual table

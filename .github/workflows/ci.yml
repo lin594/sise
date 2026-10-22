@@ -108,7 +108,7 @@ jobs:
   browser-tests:
     needs: [build, configuration]
     name: "2 · Browser regression (${{ matrix.label }})"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -167,6 +167,26 @@ jobs:
       - name: Disable unrelated Chrome apt source
         run: |
           sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+
+      # Avoid the Azure mirror path that exhausted the job timeout before tests.
+      # These are the runner's existing signed Ubuntu archive/security fallbacks.
+      - name: Use official Ubuntu archive mirrors
+        run: |
+          sudo python3 - <<'PYAPT'
+          from pathlib import Path
+          mirror_list = Path('/etc/apt/apt-mirrors.txt')
+          sources = Path('/etc/apt/sources.list.d/ubuntu.sources')
+          if 'mirror+file:/etc/apt/apt-mirrors.txt' not in sources.read_text():
+              raise SystemExit('Expected Ubuntu runner mirror configuration is missing')
+          lines = mirror_list.read_text().splitlines(keepends=True)
+          entries = [line.split() for line in lines]
+          for url, priority in [('https://archive.ubuntu.com/ubuntu/', 'priority:2'),
+                                ('https://security.ubuntu.com/ubuntu/', 'priority:3')]:
+              if [url, priority] not in entries:
+                  raise SystemExit('Expected signed Ubuntu archive/security fallback is missing')
+          azure = 'http://azure.archive.ubuntu.com/ubuntu/'
+          mirror_list.write_text(''.join(line for line in lines if not line.split() or line.split()[0] != azure))
+          PYAPT
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps "${{ matrix.browser }}"
