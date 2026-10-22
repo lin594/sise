@@ -1429,7 +1429,8 @@ const activeTableEvents = computed(() => tableEvents.value.filter((event) => eve
 const centerCardVisible = computed(() => {
   if (responseCardPlacement.value !== "center") return false;
   if (!props.state?.tablePresentationVersion) return true;
-  return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value && event.moves.some((move) => move.card.id === responseCard.value?.id));
+  return !tableEvents.value.some((event) => event.kind === "hu" && event.startsAt <= presentationNow.value &&
+    event.moves.some((move) => move.card.id === responseCard.value?.id && hasTableMoveLanding(move)));
 });
 const systemReducedMotion = ref(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const reducedTableMotion = computed(() => props.reduceMotion || systemReducedMotion.value);
@@ -1453,7 +1454,13 @@ onBeforeUpdate(() => {
 });
 function isMovingCard(id: string): boolean {
   if (coordinateMotionSuppressed.value) return false;
-  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id));
+  return activeTableEvents.value.some((event) => event.moves.some((move) => move.card.id === id &&
+    (event.kind !== "hu" || hasTableMoveLanding(move))));
+}
+function hasTableMoveLanding(move: TableTransition["moves"][number]): boolean {
+  // A winning hand may only become public in the settlement. Until its real
+  // destination exists, keep the source cards visible alongside the Hu label.
+  return Boolean(tableLocationExactRect(move.to, move.card.id));
 }
 function movingCardStyle(id: string): Record<string, string> {
   return isMovingCard(id) ? { visibility: "hidden" } : {};
