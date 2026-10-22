@@ -1,0 +1,23 @@
+{
+  "ciRun": 39831484953,
+  "ciJob": 120008733794,
+  "sourceSHA": "654ab761f98f41aa15080d67fef36133927a59aa",
+  "firstRevision": 5,
+  "nextRevision": 6,
+  "firstEvent": {
+    "id": 1,
+    "kind": "discard",
+    "startsAt": 1792693729612,
+    "endsAt": 1792693730312
+  },
+  "nextEvent": {
+    "id": 2,
+    "kind": "flow",
+    "startsAt": 1792693730354,
+    "endsAt": 1792693731054
+  },
+  "nextStartsAfterDeadlineMs": 42,
+  "snapshotGapMs": 757.189,
+  "screenshotDurationMs": 253.104,
+  "originalNativeProbeMs": 250
+}
