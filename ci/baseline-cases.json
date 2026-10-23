@@ -1,0 +1,3407 @@
+[
+  {
+    "file": "action-feedback.spec.ts",
+    "title": [
+      "an invalid meld is explained and immediately becomes retryable"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "action-feedback.spec.ts",
+    "title": [
+      "an accepted meld yields immediately to the next discard instruction"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "action-history.spec.ts",
+    "title": [
+      "action history identifies actors in both server action formats"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "action-history.spec.ts",
+    "title": [
+      "action history exposes only player-facing Chinese events"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "api-errors.spec.ts",
+    "title": [
+      "room creation explains a rate limit and its retry time"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "api-errors.spec.ts",
+    "title": [
+      "room creation does not expose a server-side failure detail"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "global appearance settings are reachable before joining and retain other preferences"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin cyber-minimal applies across the page and settings"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin licheng-water applies across the page and settings"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin puxian-house applies across the page and settings"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin meizhou-sea applies across the page and settings"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "adaptive is the default while explicit classic still offers a small-screen recommendation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "all skins and layouts keep actual cards and actions inside representative viewports"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "draw backs and faces retain large card geometry"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "draw backs and faces retain long card geometry"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "settings use categories outside play and restore navigation focus"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "lobby boots with a saved name and edits without an entry screen"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "invalid fields fall back independently and preserve valid preferences"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "blocked storage retains choices and recommendation dismissal within the session"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a recent historical name supplies the automatic lobby identity"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "mobile tools keep habits nested and session mute never changes saved preferences"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "rotated PWA respects visual viewport offsets and safe edges"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "declaration guidance follows fish and kong confirmation without covering controls"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "classic table places actual exposed groups around the felt"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "dealer ceremony counts from the picker to the authoritative dealer for every color"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a clock-only snapshot cannot leave rotation waiting on an expired animation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "rules open from the toolbar and from each open tool panel"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "settings group table placement under layout without a turn reminder"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "opening auto play from interaction leaves no hidden modal behind"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "interaction dismisses on a header outside click and restores its entry"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a newer toolbar choice cancels a pending rules transition"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "toolbar panels switch, trap focus and dismiss without selecting cards 568x320"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "toolbar panels switch, trap focus and dismiss without selecting cards 320x568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "superseded panel openings cannot swallow confirmation clicks"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "global appearance settings are reachable before joining and retain other preferences"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin cyber-minimal applies across the page and settings"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin licheng-water applies across the page and settings"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin puxian-house applies across the page and settings"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "skin meizhou-sea applies across the page and settings"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "adaptive is the default while explicit classic still offers a small-screen recommendation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "all skins and layouts keep actual cards and actions inside representative viewports"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "draw backs and faces retain large card geometry"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "draw backs and faces retain long card geometry"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "settings use categories outside play and restore navigation focus"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "lobby boots with a saved name and edits without an entry screen"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "invalid fields fall back independently and preserve valid preferences"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "blocked storage retains choices and recommendation dismissal within the session"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a recent historical name supplies the automatic lobby identity"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "mobile tools keep habits nested and session mute never changes saved preferences"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "rotated PWA respects visual viewport offsets and safe edges"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "declaration guidance follows fish and kong confirmation without covering controls"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "classic table places actual exposed groups around the felt"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "dealer ceremony counts from the picker to the authoritative dealer for every color"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a clock-only snapshot cannot leave rotation waiting on an expired animation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "rules open from the toolbar and from each open tool panel"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "settings group table placement under layout without a turn reminder"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "opening auto play from interaction leaves no hidden modal behind"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "interaction dismisses on a header outside click and restores its entry"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "a newer toolbar choice cancels a pending rules transition"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "toolbar panels switch, trap focus and dismiss without selecting cards 568x320"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "toolbar panels switch, trap focus and dismiss without selecting cards 320x568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "appearance.spec.ts",
+    "title": [
+      "superseded panel openings cannot swallow confirmation clicks"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "same-origin gateway keeps the page port for both HTTP and WebSocket"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "secure pages default both backend channels to encrypted transport"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "an explicit HTTPS API address derives its matching WSS endpoint"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "an explicit WSS endpoint derives its matching HTTPS API address"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "the iMac-style HTTP deployment keeps HTTP and WS fallback transport"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "explicit iMac gateway addresses keep both channels on the HTTP test origin"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "backend-config.spec.ts",
+    "title": [
+      "IPv6 development hosts remain valid backend URLs"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "publishes a recognizable browser and home-screen identity"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "does not disguise missing static files as the app shell and serves an updateable worker"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "shares the public game card from mode selection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "offers one-click installation when Chromium exposes the install prompt"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "guides WeChat visitors to keep the current link and open it in a browser"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "does not offer installation inside an installed standalone app"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "does not offer installation when Chromium reports the related PWA is already installed"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "restores the install entry when installed-app detection does not answer"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "browser-entry.spec.ts",
+    "title": [
+      "keeps installation discoverable in game settings without occupying the table header"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "card-text.spec.ts",
+    "title": [
+      "card text preserves the traditional face while naming its color"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "card-text.spec.ts",
+    "title": [
+      "gold cards are announced as gold bars with their individual face"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "card-text.spec.ts",
+    "title": [
+      "the active response card is announced without relying on its star marker"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "red Xiang Peng hands off all three large cards to the public meld without a geometry jump"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "a CPU-throttled meld still holds the exact final rectangles"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "draw flies face down, pauses, flips, then accepts B's eat with real cards"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "gold hu settles gong separately with no kan or duplicate"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "gold chi settles gong separately with no kan or duplicate"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "ordinary winning response displays Peng rather than Kan"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "ordinary winning response displays Peng rather than Kan with reduced motion"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "declining a draw lands it in the drawer's outgoing flow without a second poll"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "reduced motion reveals at the central landing point without flight or flip"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "central-draw.spec.ts",
+    "title": [
+      "desktop long-card meld handoff",
+      "red Xiang Peng converges to long-card meld geometry"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "confirmed collective chi respects pass and consumes each card once"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "confirmed collective chi respects peng and consumes each card once"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "confirmed collective chi respects only-chi and consumes each card once"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "confirmed collective chi respects delayed-hand and consumes each card once"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "confirmed collective chi respects disconnect and consumes each card once"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "drawn red horse offers downstream Chi/Peng/Pass together and applies Chi after the shared privacy floor"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "a drawn general accepts one deferred Chi and resolves after the shared privacy floor"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "a competing kai clears a confirmed deferred Chi before the next decision"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "a competing hu clears a confirmed deferred Chi before the next decision"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "collective-chi.spec.ts",
+    "title": [
+      "the drawer taking a drawn card by Chi clears the downstream deferred Chi"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "early Chi teaching explains priority once and restores focus to the action"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "context hints explain only authority, dismiss and reset with blocked storage=false"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "context hints explain only authority, dismiss and reset with blocked storage=true"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "early Chi teaching explains priority once and restores focus to the action"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "context hints explain only authority, dismiss and reset with blocked storage=false"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "context-hints.spec.ts",
+    "title": [
+      "context hints explain only authority, dismiss and reset with blocked storage=true"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 1024"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 1440"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 375"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 1024"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "culture-page.spec.ts",
+    "title": [
+      "culture page is reachable, readable and returns to practice at 1440"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "cumulative-scoring.spec.ts",
+    "title": [
+      "friend-room cumulative scoring survives a lobby return and adds the next round"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declaration-model.spec.ts",
+    "title": [
+      "declaration model recommends every regular fish and the five-card gold fish"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declaration-model.spec.ts",
+    "title": [
+      "gold fish sizes are mutually exclusive"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declaration-model.spec.ts",
+    "title": [
+      "selected fish cards are excluded from hidden kong analysis"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declaration-model.spec.ts",
+    "title": [
+      "untouched hidden kong count follows recommendations while a manual value is preserved and clamped"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declaration-recovery.spec.ts",
+    "title": [
+      "a disconnected declaration stays visible and becomes retryable after recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 568x320"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 375x667"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 1280x800"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 568x320"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 375x667"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "declared-kans.spec.ts",
+    "title": [
+      "server-issued kan protection survives refresh at 1280x800"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "a player composes chi directly from the real hand without a candidate dialog"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "the only visible chi composition is selected without submitting it"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "duplicate physical cards still count as one visible chi composition"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "a complete local chi draft survives an authoritative refresh for the same card"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "a confirmed local chi is applied exactly once after the collective window clears"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "a player can freely choose a three-color or four-color zu chi from the hand"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "direct-card-selection.spec.ts",
+    "title": [
+      "the operation dock has no visible waiting narration"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "flow-stability.spec.ts",
+    "title": [
+      "flow lanes keep seat relationships, DOM identity, and one animation per action"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "four-human-game-flow.spec.ts",
+    "title": [
+      "four real friends keep every crowded action reachable in the reserved action strip"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "four-human-game-flow.spec.ts",
+    "title": [
+      "four real quick-match players share one complete dealer-card presentation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "single row and embedded declaration 1280x800"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "single row and embedded declaration 568x320"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "single row and embedded declaration 667x375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "single row and embedded declaration 375x667"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "friend waiting room rules entry opens the shared guide"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "listening marks stay in the hand and only discard selection opens a preview"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "opening deal keeps one authoritative scale and a stable hand viewport"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "single-row hand stays stable at key counts from 21 to 5 cards"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "21-card single row adapts to both card styles and layout preference survives refresh"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room-usability.spec.ts",
+    "title": [
+      "many listening candidates scroll without covering discard and stay open during keyboard focus"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "both friend-room clients receive one concealed deal sequence in the first and second rounds"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "host invites a friend, configures bots, and starts a shared game"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "invite card exposes cultural metadata and auto-joins with a confirmed local nickname"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "a host refresh keeps ownership while a confirmed exit transfers it immediately"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "a later friend can preselect while the current peng winner receives the discard turn"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "legacy small waiting room keeps seats clear and allows a safe personal exit"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "opens the phone system share sheet for a friend invitation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "keeps the friend room unchanged when system sharing is cancelled"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "copies an invite link on an insecure LAN deployment"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "failed sharing copies the URL using the clipboard"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "failed sharing copies the URL using legacy copy after clipboard rejection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "locks invitation actions while copy is pending"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "locks invitation actions while share is pending"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "offers an accessible in-app fallback when invite copy cannot copy"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "offers an accessible in-app fallback when invite share cannot copy"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "friend room invitation QR",
+      "is local, readable, and safe on a legacy phone"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "friend room invitation QR",
+      "falls back to a selectable local link when canvas generation fails"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "rotated legacy friend waiting room",
+      "keeps the leave confirmation inside the rotated canvas"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "friend-room.spec.ts",
+    "title": [
+      "all invitation buttons on mobile",
+      "keeps copying, sharing and QR reachable without hiding seats"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "game-controls.spec.ts",
+    "title": [
+      "a player can explicitly enable and cancel auto play"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "game-flow-presentation.spec.ts",
+    "title": [
+      "collective turn marker follows only the public pending receiver"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "game-flow-presentation.spec.ts",
+    "title": [
+      "first and later rounds use one stable presentation key"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "game-flow-presentation.spec.ts",
+    "title": [
+      "upper response card placement is projected for each viewer"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "guest-profile.spec.ts",
+    "title": [
+      "a passwordless local profile stays private and updates after settlement"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "imac-gateway-config.spec.ts",
+    "title": [
+      "the iMac override exposes only the same-origin web gateway"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "imac-gateway-config.spec.ts",
+    "title": [
+      "Nginx forwards every browser-facing game route and websocket upgrade"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "imac-gateway-config.spec.ts",
+    "title": [
+      "the production web image preserves the shared schema compiler contract"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "imac-gateway-config.spec.ts",
+    "title": [
+      "the production web image makes every public asset readable"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "imac-gateway-config.spec.ts",
+    "title": [
+      "the recovery smoke can replace only the backend container"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-entry-submit-lock.spec.ts",
+    "title": [
+      "an impatient invitee starts only one clearly labelled join"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-entry-submit-lock.spec.ts",
+    "title": [
+      "an expired invite leaves the retry loop for mode selection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-entry-submit-lock.spec.ts",
+    "title": [
+      "a temporary invite network failure stays retryable and then joins"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-entry-submit-lock.spec.ts",
+    "title": [
+      "cancelling an in-flight invite clears its temporary room credential"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-product.spec.ts",
+    "title": [
+      "invitation prioritizes joining and preserves first nickname and seat recovery at 568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-product.spec.ts",
+    "title": [
+      "invitation prioritizes joining and preserves first nickname and seat recovery at 375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-product.spec.ts",
+    "title": [
+      "invitation prioritizes joining and preserves first nickname and seat recovery at 568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "invite-product.spec.ts",
+    "title": [
+      "invitation prioritizes joining and preserves first nickname and seat recovery at 375"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "lobby-ready-receipt.spec.ts",
+    "title": [
+      "friend ready and cancel each wait for one authoritative update"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "lobby-ready.spec.ts",
+    "title": [
+      "friend-room guests explicitly prepare before the host can start"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "adaptive respects both dimensions, exact boundaries and explicit preferences"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "adaptive changes on resize and rotation while saved mahjong stays fixed"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long keeps crowded rivers central and cards accessible"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large keeps crowded rivers central and cards accessible"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long color labels stay upright and classic restores its lettering"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large color labels stay upright and classic restores its lettering"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "rotated river flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "horizontal meld flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "assisted rotated river flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "assisted horizontal meld flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "empty rivers, changed seat direction and new cards retain the correct owner and scroll access"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "twelve eats at every seat are completely visible without scrolling in long mode"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "twelve eats at every seat are completely visible without scrolling in large mode"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long overflow keeps every card reachable at a readable minimum size"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large overflow keeps every card reachable at a readable minimum size"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "touch swipes reach overflowing long eats after portrait rotation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "touch swipes reach overflowing large eats after portrait rotation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long keeps shorter hands and declaration marks inside short viewports"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large keeps shorter hands and declaration marks inside short viewports"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "paged hands retain full touch targets beside many eats"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "color assistance keeps long meld labels unobscured at every scale"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "color assistance keeps large meld labels unobscured at every scale"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance classic long fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance classic large fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance compact long fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance compact large fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance mahjong long fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance mahjong large fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance adaptive long fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance adaptive large fits fixed faces and short tables"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing classic long keeps first cards aligned across assistance toggles"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing classic large keeps first cards aligned across assistance toggles"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing compact long keeps first cards aligned across assistance toggles"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing compact large keeps first cards aligned across assistance toggles"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "adaptive respects both dimensions, exact boundaries and explicit preferences"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "adaptive changes on resize and rotation while saved mahjong stays fixed"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long keeps crowded rivers central and cards accessible"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large keeps crowded rivers central and cards accessible"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long color labels stay upright and classic restores its lettering"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large color labels stay upright and classic restores its lettering"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "rotated river flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "horizontal meld flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "assisted rotated river flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "assisted horizontal meld flights land on the exact face and defer layout changes until finished"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "empty rivers, changed seat direction and new cards retain the correct owner and scroll access"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "twelve eats at every seat are completely visible without scrolling in long mode"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "twelve eats at every seat are completely visible without scrolling in large mode"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long overflow keeps every card reachable at a readable minimum size"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large overflow keeps every card reachable at a readable minimum size"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "touch swipes reach overflowing long eats after portrait rotation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "touch swipes reach overflowing large eats after portrait rotation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong long keeps shorter hands and declaration marks inside short viewports"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "mahjong large keeps shorter hands and declaration marks inside short viewports"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "paged hands retain full touch targets beside many eats"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "color assistance keeps long meld labels unobscured at every scale"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "color assistance keeps large meld labels unobscured at every scale"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance classic long fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance classic large fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance compact long fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance compact large fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance mahjong long fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance mahjong large fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance adaptive long fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "global assistance adaptive large fits fixed faces and short tables"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing classic long keeps first cards aligned across assistance toggles"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing classic large keeps first cards aligned across assistance toggles"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing compact long keeps first cards aligned across assistance toggles"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "title": [
+      "meld spacing compact large keeps first cards aligned across assistance toggles"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "clear first-time entry",
+      "keeps nickname editing and direct play reachable on legacy phones"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "phone portrait landscape canvas",
+      "renders a fully interactive rotated canvas without an orientation guard"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "phone portrait landscape canvas",
+      "keeps a portrait-locked game equivalent to native landscape without unsafe flights"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "phone portrait landscape canvas",
+      "rotates a legacy 320x568 portrait into the supported small canvas"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "phone portrait landscape canvas",
+      "keeps the in-game exit confirmation inside the rotated canvas"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "phone portrait landscape canvas",
+      "keeps settings and history reachable inside the rotated effective viewport"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "keeps lobby actions reachable and gameplay controls touch sized"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "keeps the self dealer card visible and reveals it before the static dealer mark appears"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "lets a human hand control to a bot and take it back"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "keeps exposed cards readable and opponent groups folded in every mode"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "shows one clear waiting state instead of disabled actions"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "compact landscape gameplay",
+      "keeps settings and rules available while a turn needs attention"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "legacy small landscape gameplay",
+      "keeps eight readable hand cards and every control inside the canvas"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "desktop declaration",
+      "uses the same grouped declaration workflow without compact styling"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "responsive viewport tiers",
+      "740x360 selects the expected layout tier"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "responsive viewport tiers",
+      "844x390 selects the expected layout tier"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "responsive viewport tiers",
+      "1024x768 selects the expected layout tier"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "responsive viewport tiers",
+      "1280x720 selects the expected layout tier"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-responsive.spec.ts",
+    "title": [
+      "display preference compatibility",
+      "migrates the previous full table preference into the new model"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "dense classic table remains readable across phones: long"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "dense classic table remains readable across phones: large"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "other skins and layouts preserve dense card access"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "SE single mode fits all cards and paged mode preserves access through switches and rotation: long"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "SE single mode fits all cards and paged mode preserves access through switches and rotation: large"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "new and invalid settings use Puxian without replacing a saved skin"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "fish and kan badges remain readable above the cards in every skin"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "touch swipes follow overflowing hands and flows after portrait rotation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "long flows follow new cards without pulling a reader away from older cards"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "header tools retain icons and collapse labels only on very small screens"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "dense classic table remains readable across phones: long"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "dense classic table remains readable across phones: large"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "other skins and layouts preserve dense card access"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "SE single mode fits all cards and paged mode preserves access through switches and rotation: long"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "SE single mode fits all cards and paged mode preserves access through switches and rotation: large"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "new and invalid settings use Puxian without replacing a saved skin"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "fish and kan badges remain readable above the cards in every skin"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "touch swipes follow overflowing hands and flows after portrait rotation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "long flows follow new cards without pulling a reader away from older cards"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "header tools retain icons and collapse labels only on very small screens"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "desktop density",
+      "dense classic desktop table: long"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "desktop density",
+      "dense classic desktop table: large"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "desktop density",
+      "dense classic desktop table: long"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "title": [
+      "desktop density",
+      "dense classic desktop table: large"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "mode-start-pending.spec.ts",
+    "title": [
+      "friend room creation shows one stable pending action"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mode-start-pending.spec.ts",
+    "title": [
+      "single-player practice starts locally without creating a room or socket"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "mode-start-pending.spec.ts",
+    "title": [
+      "quick match uses joining language and can return to mode selection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "next-round-confirm.spec.ts",
+    "title": [
+      "a friend-room host confirms before pulling other players out of settlement"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "observer-card-placement.spec.ts",
+    "title": [
+      "the local upper receiver always keeps the card centered while observers see its flow lane"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "observer-card-placement.spec.ts",
+    "title": [
+      "a player's own discard stays centered without adding a waiting prompt"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "observer-card-placement.spec.ts",
+    "title": [
+      "previous winner and Hu type remain visible after dealing"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "observer-card-placement.spec.ts",
+    "title": [
+      "previous winner guidance follows a new lobby dealer selection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "each local action is painted, held through its animation, then hands control back to the human"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "reduced motion keeps the readable action window and releases local controls"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "hidden time pauses local automation and resumes the pending presentation"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "leaving during a pending action cancels old automation before a new deal"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "the opening deadline remains shifted through reveal and deal after background recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "each local action is painted, held through its animation, then hands control back to the human"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "reduced motion keeps the readable action window and releases local controls"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "hidden time pauses local automation and resumes the pending presentation"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "leaving during a pending action cancels old automation before a new deal"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-action-presentation.spec.ts",
+    "title": [
+      "the opening deadline remains shifted through reveal and deal after background recovery"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "reopens offline from the cached shell and completes a local round without backend traffic"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "a drawn general can be eaten locally and continues to the discard step"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "WebKit runs the Service Worker-controlled local game without backend traffic"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "reopens offline from the cached shell and completes a local round without backend traffic"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "a drawn general can be eaten locally and continues to the discard step"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "title": [
+      "WebKit runs the Service Worker-controlled local game without backend traffic"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "onboarding.spec.ts",
+    "title": [
+      "a fresh player chooses a table layout once and keyboard focus returns to the lobby"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "onboarding.spec.ts",
+    "title": [
+      "an existing player is not mistaken for a first-time visitor after the feature ships"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "onboarding.spec.ts",
+    "title": [
+      "a fresh player chooses a table layout once and keyboard focus returns to the lobby"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "onboarding.spec.ts",
+    "title": [
+      "an existing player is not mistaken for a first-time visitor after the feature ships"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "passive-collective.spec.ts",
+    "title": [
+      "a shared three-second public clock preserves the ten-second manual response deadline"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "practice-isolation.spec.ts",
+    "title": [
+      "compatibility practice entries always receive different rooms"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "practice-isolation.spec.ts",
+    "title": [
+      "two simultaneous browser-local single-player sessions never see each other"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "practice-isolation.spec.ts",
+    "title": [
+      "an occupied practice room rejects a new identity but still restores its owner"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "practice-untimed.spec.ts",
+    "title": [
+      "single-player practice keeps human decisions untimed"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "private-hand-readiness.spec.ts",
+    "title": [
+      "private hand readiness requires the authoritative player and exact card count"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "product-analytics.spec.ts",
+    "title": [
+      "browser-local practice disables gameplay analytics and unavailable collection cannot block play"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "product-analytics.spec.ts",
+    "title": [
+      "HTTP collector rejects forged authority and sensitive payloads without echoing them"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "product-analytics.spec.ts",
+    "title": [
+      "browser-local practice disables gameplay analytics and unavailable collection cannot block play"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "product-analytics.spec.ts",
+    "title": [
+      "HTTP collector rejects forged authority and sensitive payloads without echoing them"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick match groups humans, fixes their seats, and can start with computers"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick match keeps its countdown through refresh and auto-starts on a rotated legacy phone"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "leaving quick-match waiting clears its local room identity"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick-match players rematch independently without pulling others from settlement"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick match groups humans, fixes their seats, and can start with computers"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick match keeps its countdown through refresh and auto-starts on a rotated legacy phone"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "leaving quick-match waiting clears its local room identity"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-matchmaking.spec.ts",
+    "title": [
+      "quick-match players rematch independently without pulling others from settlement"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-phrase.spec.ts",
+    "title": [
+      "folder-driven quick phrases are visible and played once for sender and tablemates"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "quick-phrase.spec.ts",
+    "title": [
+      "folder-driven quick phrases are visible and played once for sender and tablemates"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "半开连接无回包时主动提示网络不稳并恢复"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "保留当前牌桌并在联网后自动恢复"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "刷新页面后无需重新输入昵称即可回到原座"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "失效的历史房间停止自动重试并可清除凭证"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "失效的好友邀请提供直接出口并清除失败连接身份"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "新窗口接管原座位后旧窗口停止抢回"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reconnection.spec.ts",
+    "title": [
+      "牌局断线恢复",
+      "个人退出后忽略迟到的旧房间私有状态"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "reduced-motion.spec.ts",
+    "title": [
+      "the game motion preference is immediate, persistent, and still defers to the operating system"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "practice replay rejects old settlement and dedupes double click at 568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "practice replay rejects old settlement and dedupes double click at 375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "friend settlement exposes host replay, guest waiting, invitation and personal exit at 568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "friend settlement exposes host replay, guest waiting, invitation and personal exit at 375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "practice replay rejects old settlement and dedupes double click at 568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "practice replay rejects old settlement and dedupes double click at 375"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "friend settlement exposes host replay, guest waiting, invitation and personal exit at 568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "replay-product.spec.ts",
+    "title": [
+      "friend settlement exposes host replay, guest waiting, invitation and personal exit at 375"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "responsive-release.spec.ts",
+    "title": [
+      "mobile responsive release gate",
+      "keeps critical play and deterministic settlement geometry inside every representative viewport"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "responsive-release.spec.ts",
+    "title": [
+      "mobile responsive release gate",
+      "keeps critical play and deterministic settlement geometry inside every representative viewport"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-back-navigation.spec.ts",
+    "title": [
+      "browser back closes a game layer before offering a safe room exit"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-back-navigation.spec.ts",
+    "title": [
+      "the visible waiting-room exit also releases browser history protection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-back-navigation.spec.ts",
+    "title": [
+      "browser back asks before abandoning a recoverable saved-room connection"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-back-navigation.spec.ts",
+    "title": [
+      "browser back directly leaves a terminal saved-room recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "a missing initial join acknowledgment recovers without showing an empty table"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser blob frames preserve room initialization and recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser view frames preserve room initialization and recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser mixed frames preserve room initialization and recovery"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after socket-close"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after pagehide"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after beforeunload"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "a missing initial join acknowledgment recovers without showing an empty table"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser blob frames preserve room initialization and recovery"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser view frames preserve room initialization and recovery"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "browser mixed frames preserve room initialization and recovery"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after socket-close"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after pagehide"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-bootstrap-appearance.spec.ts",
+    "title": [
+      "queued Blob frames stop decoding after beforeunload"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "room-dissolve.spec.ts",
+    "title": [
+      "a host can dissolve a waiting friend table for everyone"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "room-dissolve.spec.ts",
+    "title": [
+      "the host can dissolve after the whole table returns from settlement"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "round-start-receipt.spec.ts",
+    "title": [
+      "compatibility practice auto-start stays visibly pending until the server advances"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "round-start-receipt.spec.ts",
+    "title": [
+      "friend-room start accepts one impatient double click"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "round-start-receipt.spec.ts",
+    "title": [
+      "quick match explains that bots and the round are being prepared"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "seat-claim-receipt.spec.ts",
+    "title": [
+      "a slow friend-room seat claim keeps the first deliberate choice"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "settlement-transition-receipt.spec.ts",
+    "title": [
+      "practice next round locks settlement actions and recovers after no receipt"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "settlement-transition-receipt.spec.ts",
+    "title": [
+      "practice settlement returns personally to the complete mode picker"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "single-practice.spec.ts",
+    "title": [
+      "each practice round presents one bounded deal sequence"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "single-practice.spec.ts",
+    "title": [
+      "practice settlement stays readable and reachable on legacy phones"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "spoken-turn-guidance.spec.ts",
+    "title": [
+      "optional spoken guidance explains each new decision once and persists"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "spoken-turn-guidance.spec.ts",
+    "title": [
+      "unsupported browsers explain why spoken guidance is unavailable"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "spoken-turn-guidance.spec.ts",
+    "title": [
+      "insecure or unsupported browsers do not pretend screen wake lock is active"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "state-revision.spec.ts",
+    "title": [
+      "newer room revisions win and same revisions only enrich private state"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "storage-resilience.spec.ts",
+    "title": [
+      "storage-restricted browsers can still enter a practice game"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "all settings and rules are readable with system dark colors"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "all settings and rules are readable with system light colors"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: cyber-minimal dark"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: licheng-water dark"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: puxian-house dark"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: meizhou-sea dark"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: cyber-minimal light"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: licheng-water light"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: puxian-house light"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "theme-readability.spec.ts",
+    "title": [
+      "lobby and game panels remain readable: meizhou-sea light"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 1280"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 568"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 375"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "tutorial creation accepts no client fixture or non-practice tutorial"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "tutorial works with storage disabled and explicit exit clears guidance"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "public matchmaking cannot submit teaching or recovery state"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 1280"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 568"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "authoritative tutorial completes and resumes at 375"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "tutorial creation accepts no client fixture or non-practice tutorial"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "tutorial works with storage disabled and explicit exit clears guidance"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "tutorial.spec.ts",
+    "title": [
+      "public matchmaking cannot submit teaching or recovery state"
+    ],
+    "project": "webkit-responsive",
+    "expected": "passed"
+  },
+  {
+    "file": "unseated-private-sync.spec.ts",
+    "title": [
+      "an unseated friend-room visitor waits for a seat before polling private state"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "viewport-fallback.spec.ts",
+    "title": [
+      "the document keeps a traditional viewport-height fallback"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  },
+  {
+    "file": "viewport-fallback.spec.ts",
+    "title": [
+      "critical layouts do not depend on unsupported dynamic viewport units"
+    ],
+    "project": "chromium",
+    "expected": "passed"
+  }
+]

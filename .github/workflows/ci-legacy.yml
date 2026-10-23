@@ -1,0 +1,387 @@
+name: Legacy CI comparison
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+
+jobs:
+  build:
+    name: "1 · Build and source checks"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install application dependencies
+        run: |
+          npm ci --prefix server
+          npm ci --prefix client
+
+      - name: Build server and client
+        run: npm run build
+
+      - name: Check contributor documentation
+        run: npm run check:docs
+
+      - name: Verify source-only client and unchanged tracked build inputs
+        run: |
+          npm run check:generated
+          git diff --exit-code
+
+      - name: Record this same-head legacy build identity
+        run: |
+          mkdir -p output/ci-migration/legacy-build
+          node scripts/ci/artifact.mjs identity > output/ci-migration/legacy-build/identity.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: legacy-identity
+          path: output/ci-migration/legacy-build/identity.json
+          retention-days: 7
+
+      - name: Package this checkout's build for regression jobs
+        run: tar -czf build-output.tar.gz server/dist client/dist
+
+      - name: Share verified build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacy-build-output
+          path: build-output.tar.gz
+          retention-days: 1
+
+  server-tests:
+    needs: [build, configuration]
+    name: "2 · Server regression"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      analytics-test-redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      ANALYTICS_TEST_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Download this workflow's build
+        uses: actions/download-artifact@v8
+        with:
+          name: legacy-build-output
+
+      - name: Restore build output
+        run: tar -xzf build-output.tar.gz
+
+      - name: Run server regression suite
+        run: npm --prefix server run test:built
+
+  browser-tests:
+    needs: [build, configuration]
+    name: "2 · Browser regression (${{ matrix.label }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: chromium-1-of-4
+            project: chromium
+            browser: chromium
+            shard: 1/4
+          - label: chromium-2-of-4
+            project: chromium
+            browser: chromium
+            shard: 2/4
+          - label: chromium-3-of-4
+            project: chromium
+            browser: chromium
+            shard: 3/4
+          - label: chromium-4-of-4
+            project: chromium
+            browser: chromium
+            shard: 4/4
+          - label: webkit-1-of-3
+            project: webkit-responsive
+            browser: webkit
+            shard: 1/3
+          - label: webkit-2-of-3
+            project: webkit-responsive
+            browser: webkit
+            shard: 2/3
+          - label: webkit-3-of-3
+            project: webkit-responsive
+            browser: webkit
+            shard: 3/3
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install all dependencies
+        run: |
+          npm ci
+          npm ci --prefix server
+          npm ci --prefix client
+
+      # Playwright downloads its own pinned browsers. The runner's unrelated
+      # Chrome apt index can be temporarily inconsistent during publication.
+      - name: Disable unrelated Chrome apt source
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+
+      # Avoid the Azure mirror path that exhausted the job timeout before tests.
+      # These are the runner's existing signed Ubuntu archive/security fallbacks.
+      - name: Use official Ubuntu archive mirrors
+        run: |
+          sudo python3 - <<'PYAPT'
+          from pathlib import Path
+          mirror_list = Path('/etc/apt/apt-mirrors.txt')
+          sources = Path('/etc/apt/sources.list.d/ubuntu.sources')
+          if 'mirror+file:/etc/apt/apt-mirrors.txt' not in sources.read_text():
+              raise SystemExit('Expected Ubuntu runner mirror configuration is missing')
+          lines = mirror_list.read_text().splitlines(keepends=True)
+          entries = [line.split() for line in lines]
+          for url, priority in [('https://archive.ubuntu.com/ubuntu/', 'priority:2'),
+                                ('https://security.ubuntu.com/ubuntu/', 'priority:3')]:
+              if [url, priority] not in entries:
+                  raise SystemExit('Expected signed Ubuntu archive/security fallback is missing')
+          azure = 'http://azure.archive.ubuntu.com/ubuntu/'
+          mirror_list.write_text(''.join(line for line in lines if not line.split() or line.split()[0] != azure))
+          PYAPT
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
+
+      - name: Download this workflow's build
+        uses: actions/download-artifact@v8
+        with:
+          name: legacy-build-output
+
+      - name: Restore build output
+        run: tar -xzf build-output.tar.gz
+
+
+      - name: Restore frozen baseline test harness against this application checkout
+        run: node scripts/ci/legacy-harness.mjs
+
+      - name: Run browser regression suite
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: output/ci-migration/legacy/results.json
+        run: npx playwright test --project="${{ matrix.project }}" --shard="${{ matrix.shard }}" --reporter=line,json
+
+      - name: Preserve legacy comparison identity and first-attempt result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evidence-legacy-${{ matrix.label }}-${{ github.run_attempt }}
+          path: output/ci-migration/legacy/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Playwright failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacy-playwright-${{ matrix.label }}-${{ github.run_attempt }}
+          path: output/playwright/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dependency-audit:
+    name: "1 · Dependency audit"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+
+      - name: Audit CI and development dependencies
+        run: npm audit
+
+      - name: Audit server production dependencies
+        run: npm --prefix server audit --omit=dev
+
+      - name: Audit client production dependencies
+        run: npm --prefix client audit --omit=dev
+
+  configuration:
+    name: "1 · Deployment configuration"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NODE_IMAGE: node:22-alpine
+      NGINX_IMAGE: nginx:1.27-alpine
+      CORS_ALLOWED_ORIGINS: https://sise.example.com
+      PUBLIC_WEB_ORIGIN: https://sise.example.com
+      VITE_SERVER_URL: wss://sise-api.example.com
+      VITE_SERVER_HTTP_URL: https://sise-api.example.com
+      TRAEFIK_WEB_RULE: Host(`sise.example.com`)
+      TRAEFIK_SERVER_RULE: Host(`sise-api.example.com`)
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+
+      - name: Validate Compose configurations
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.traefik.yml config --quiet
+          npm run compose:imac:check
+
+
+  container-build:
+    needs: [build, configuration, server-tests, browser-tests, dependency-audit]
+    name: "3 · Production containers"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NODE_IMAGE: node:22-alpine
+      NGINX_IMAGE: nginx:1.27-alpine
+      CORS_ALLOWED_ORIGINS: https://sise.example.com
+      PUBLIC_WEB_ORIGIN: https://sise.example.com
+      VITE_SERVER_URL: wss://sise-api.example.com
+      VITE_SERVER_HTTP_URL: https://sise-api.example.com
+      TRAEFIK_WEB_RULE: Host(`sise.example.com`)
+      TRAEFIK_SERVER_RULE: Host(`sise-api.example.com`)
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.23.3
+
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build server image with reusable layers
+        uses: docker/build-push-action@v7
+        with:
+          context: ./server
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: sise-recovery-test:ci
+          build-args: NODE_IMAGE=${{ env.NODE_IMAGE }}
+          cache-from: type=gha,scope=legacy-sise-server
+          cache-to: type=gha,mode=max,scope=legacy-sise-server
+
+      - name: Install client SDK for isolated recovery test
+        run: npm ci --prefix client
+
+      - name: Verify real container SIGTERM and room recovery
+        env:
+          RECOVERY_TEST_IMAGE: sise-recovery-test:ci
+        run: node scripts/container-recovery-smoke.mjs
+
+      - name: Build web image with reusable layers
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./client/Dockerfile
+          push: false
+          build-args: |
+            NODE_IMAGE=${{ env.NODE_IMAGE }}
+            NGINX_IMAGE=${{ env.NGINX_IMAGE }}
+            VITE_SERVER_URL=${{ env.VITE_SERVER_URL }}
+            VITE_SERVER_HTTP_URL=${{ env.VITE_SERVER_HTTP_URL }}
+          cache-from: type=gha,scope=legacy-sise-web
+          cache-to: type=gha,mode=max,scope=legacy-sise-web
+
+  ci-gate:
+    name: Legacy comparison gate
+    if: always()
+    needs:
+      - build
+      - configuration
+      - server-tests
+      - browser-tests
+      - dependency-audit
+      - container-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to pass
+        env:
+          CONFIGURATION_RESULT: ${{ needs.configuration.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          SERVER_TESTS_RESULT: ${{ needs.server-tests.result }}
+          BROWSER_TESTS_RESULT: ${{ needs.browser-tests.result }}
+          DEPENDENCY_AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+          CONTAINER_BUILD_RESULT: ${{ needs.container-build.result }}
+        run: |
+          for result in \
+            "$BUILD_RESULT" \
+            "$CONFIGURATION_RESULT" \
+            "$SERVER_TESTS_RESULT" \
+            "$BROWSER_TESTS_RESULT" \
+            "$DEPENDENCY_AUDIT_RESULT" \
+            "$CONTAINER_BUILD_RESULT"
+          do
+            test "$result" = "success"
+          done

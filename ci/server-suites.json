@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "suites": {
+    "core": {
+      "description": "Legacy rule regressions and shared GameSession rules; includes the 85-check custom runner.",
+      "files": [
+        "server/src/tests/run.ts",
+        "server/src/tests/rules/actions.test.ts",
+        "server/src/tests/rules/game-session.test.ts",
+        "server/src/tests/rules/hu.test.ts",
+        "server/src/tests/rules/listening-hints.test.ts",
+        "server/src/tests/rules/offline-practice-session.test.ts",
+        "server/src/tests/rules/shared-discard-rules.test.ts"
+      ]
+    },
+    "protocol": {
+      "description": "In-process HTTP handlers, room state machines, and snapshot stores; includes the custom 1 + 20 + 100 full-game checks. These are not WebSocket integration tests.",
+      "files": [
+        "server/src/tests/http/guest-profile-api.test.ts",
+        "server/src/tests/http/guest-profile-resilience.test.ts",
+        "server/src/tests/http/guest-profile-store.test.ts",
+        "server/src/tests/http/invite-page.test.ts",
+        "server/src/tests/http/origin-policy.test.ts",
+        "server/src/tests/http/practice-room-creation.test.ts",
+        "server/src/tests/http/private-state-auth.test.ts",
+        "server/src/tests/http/rate-limit.test.ts",
+        "server/src/tests/persistence/room-snapshot-runtime.test.ts",
+        "server/src/tests/persistence/room-snapshot-store.test.ts",
+        "server/src/tests/rooms/auto-play.test.ts",
+        "server/src/tests/rooms/bot-full-game.test.ts",
+        "server/src/tests/rooms/central-draw.test.ts",
+        "server/src/tests/rooms/cumulative-scoring.test.ts",
+        "server/src/tests/rooms/declared-kans.test.ts",
+        "server/src/tests/rooms/game-loop.test.ts",
+        "server/src/tests/rooms/game-timing-config.test.ts",
+        "server/src/tests/rooms/guest-profile-settlement.test.ts",
+        "server/src/tests/rooms/listening-hints.test.ts",
+        "server/src/tests/rooms/lobby-ready.test.ts",
+        "server/src/tests/rooms/practice-room-admission.test.ts",
+        "server/src/tests/rooms/quick-matchmaking.test.ts",
+        "server/src/tests/rooms/reconnect-grace.test.ts",
+        "server/src/tests/rooms/room-dissolve.test.ts",
+        "server/src/tests/rooms/room-idle.test.ts",
+        "server/src/tests/rooms/room-recovery.test.ts",
+        "server/src/tests/rooms/round-presentation.test.ts",
+        "server/src/tests/rooms/tutorial.test.ts"
+      ]
+    },
+    "services": {
+      "description": "Analytics checks including real Redis atomic deduplication, retention TTLs, and data isolation. Requires ANALYTICS_TEST_REDIS_URL.",
+      "files": [
+        "server/src/tests/persistence/product-analytics.test.ts"
+      ]
+    }
+  }
+}
