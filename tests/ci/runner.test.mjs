@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { tmpdir } from "node:os";
+import { tmpdir, devNull } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +12,8 @@ const repository = fileURLToPath(new URL("../../", import.meta.url));
 const payload = ["node_modules", "server/node_modules", "client/node_modules", "server/dist", "client/dist"];
 // Never inherit the outer workflow's event file, merge SHA or run identity.
 const environment = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GITHUB_"))),
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GITHUB_") && !key.startsWith("GIT_"))),
+  GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: devNull,
   CI: "false", GITHUB_ACTIONS: "false", GITHUB_RUN_ID: "123", GITHUB_RUN_ATTEMPT: "2",
 };
 
