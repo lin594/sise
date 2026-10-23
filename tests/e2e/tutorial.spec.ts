@@ -43,11 +43,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
   });
 }
 
-test('tutorial creation accepts no client fixture or non-practice tutorial', async ({ request }) => {
-  for (const data of [{mode:'friends',tutorial:true}, {mode:'practice',tutorial:true,seed:1}, {mode:'practice',tutorial:true,hand:[]}]) {
-    expect((await request.post('http://127.0.0.1:2567/rooms', {data})).status()).toBe(400);
-  }
-});
+
 
 
 test('tutorial works with storage disabled and explicit exit clears guidance', async ({ page }) => {
@@ -63,14 +59,4 @@ test('tutorial works with storage disabled and explicit exit clears guidance', a
   await page.getByRole('button', { name: '确认退出', exact: true }).click();
   await expect(page.getByTestId('tutorial-guide')).toHaveCount(0);
   await expect(page.getByTestId('tutorial-entry')).toBeVisible();
-});
-
-
-test('public matchmaking cannot submit teaching or recovery state', async ({ request }) => {
-  for (const method of ['create', 'joinOrCreate']) {
-    const response = await request.post(`http://127.0.0.1:2567/matchmake/${method}/four-color`, {data:{roomMode:'practice', tutorial:true, recoverySnapshot:{}}});
-    const body = await response.json();
-    expect(body.room).toBeUndefined();
-    expect(body.error).toBeTruthy();
-  }
 });

@@ -27,7 +27,14 @@
     "install:ci": "npm ci && npm ci --prefix server && npm ci --prefix client",
     "test:server": "npm --prefix server test",
     "check:docs": "node scripts/check-doc-links.mjs",
-    "check:generated": "node scripts/check-generated-sources.mjs"
+    "check:generated": "node scripts/check-generated-sources.mjs",
+    "ci:coverage": "node scripts/ci/coverage.mjs",
+    "ci:unit": "node scripts/ci/server-suite.mjs core && node scripts/ci/server-suite.mjs protocol && playwright test --config playwright.logic.config.ts",
+    "ci:services": "node scripts/ci/server-suite.mjs services && playwright test --config playwright.integration.config.ts",
+    "ci:browser": "playwright test --config playwright.ci.config.ts",
+    "ci:record": "node scripts/ci/record.mjs",
+    "ci:consumer": "node scripts/ci/consumer-smoke.mjs",
+    "ci:self-test": "node --test tests/ci/*.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

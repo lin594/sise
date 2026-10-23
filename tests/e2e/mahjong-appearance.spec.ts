@@ -28,17 +28,20 @@ async function start(page: Page, tableLayout = 'mahjong', mode = 'long', reduceM
   await page.goto('/?new=1&e2eDebug=1');
   await startLobbyAction(page);
   await expect(page.getByTestId('game-board')).toBeVisible();
-  // Static crowd geometry must not race the real opening's delayed animation.
-  // Opening animation geometry has separate frame-level regression coverage.
+  // Keep real opening coverage, then establish the deterministic geometry fixture.
+  // Random bot play may keep producing valid animations; global idle is not a
+  // precondition for replacing that live game with the already-supported scenario.
   await finishDeclarationIfNeeded(page);
   await expect(page.locator('.deal-overlay')).toBeHidden();
   await expect(page.getByTestId('dealer-ceremony')).toBeHidden();
-  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('readable_exposed_groups'));
-  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ ok: true });
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario: 'readable_exposed_groups', ok: true });
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getRoomState()?.lastAction))
     .toMatch(/^DEBUG: readable_exposed_groups#/);
   await expect(page.locator('.hand-card[data-card-id^="readable-hand-"]')).toHaveCount(1);
+  // This finite scene cancels old callbacks/timeline. Still require actual DOM
+  // quiescence with the original timeout before measuring or injecting flights.
+  await expect(page.getByTestId('game-board')).toHaveAttribute('data-geometry-busy', 'false');
 }
 
 async function crowd(page: Page) {

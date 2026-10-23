@@ -1,0 +1,18 @@
+[
+  {
+    "file": "mahjong-appearance.spec.ts",
+    "line": "test.skip(browserName !== 'chromium', 'Native CDP touch injection; every group is also checked in WebKit.');"
+  },
+  {
+    "file": "mobile-table-appearance.spec.ts",
+    "line": "test.skip(browserName !== 'chromium', 'CDP touch injection; shared overflow and paging are also tested in WebKit');"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "line": "test.skip(browserName === \"webkit\", \"Playwright WebKit blocks Service Worker requests after context.setOffline(true); Safari device reopening stays in #74.\");"
+  },
+  {
+    "file": "offline-practice.spec.ts",
+    "line": "test.skip(browserName !== \"webkit\", \"WebKit-specific Service Worker and local-engine coverage.\");"
+  }
+]

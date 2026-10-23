@@ -1,3 +1,4 @@
+import { isPublishedDecision } from "../helpers/decisionWindow";
 import { openGameAs, startLobbyAction } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
@@ -54,6 +55,9 @@ test("a shared three-second public clock preserves the ten-second manual respons
       return {
         now: Date.now(),
         responseEndsAt: roomState?.responseEndsAt,
+        responseCardId: String(roomState?.responseCard?.id ?? ""),
+        presentationUntil: roomState?.presentationUntil,
+        stateRevision: roomState?.stateRevision,
         currentTurnPlayerId: roomState?.currentTurnPlayerId,
         activeResponderId: roomState?.activeResponderId,
         responsePhase: roomState?.responsePhase,
@@ -101,11 +105,23 @@ test("a shared three-second public clock preserves the ten-second manual respons
     await expect(host.getByTestId("rules-decision-reminder")).toHaveCount(0);
     await host.getByTestId("close-rules").click();
 
-    await expect.poll(
-      async () => (await readClock(host)).responsePhase,
-      { timeout: 6_000 },
-    ).toBe("local_upper");
-    const localClock = await readClock(host);
+    // The 700ms pass presentation already has local_upper, but intentionally
+    // keeps the old decision key with deadline zero. Schema/private messages
+    // can also arrive separately. Wait for the new matching publication, not
+    // for the duration value which is asserted independently below.
+    let localOwner = "";
+    let localClock!: Awaited<ReturnType<typeof readClock>>;
+    await expect.poll(async () => {
+      localClock = await readClock(host);
+      if (!localOwner && localClock.responsePhase === "local_upper") {
+        localOwner = String(localClock.currentTurnPlayerId ?? "");
+      }
+      return isPublishedDecision(localClock, {
+        phase: "local_upper", ownerId: localOwner,
+        cardId: hostClock.responseCardId,
+        previousKey: hostClock.decisionTimer.decisionKey,
+      });
+    }, { timeout: 6_000 }).toBe(true);
     expect(localClock.activeResponderId).toBe("");
     expect(localClock.decisionTimer.totalMs).toBe(30_000);
     await expect(host.getByTestId("decision-status")).toHaveCount(0);

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "tests/e2e/passive-collective.spec.ts",
+      "reason": "Wait for a new matching decision publication after the 700ms flow presentation; retain the original 30000ms assertion. First failure: run39898642054/job120235685753."
+    },
+    {
+      "path": "tests/e2e/mahjong-appearance.spec.ts",
+      "reason": "Establish the acknowledged deterministic geometry scenario before the unchanged idle assertion; random bot play has no global-idle guarantee. Preserve all real flight/layout assertions. First failure: run39901560805/job120244215279."
+    }
+  ]
+}

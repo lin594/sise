@@ -1,0 +1,8 @@
+{
+  "node": "22.23.3",
+  "npm": "10.9.9",
+  "playwright": "1.62.1",
+  "browserImage": "mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e",
+  "runner": "ubuntu-24.04",
+  "baseline": "caee1e38104330b055b0797df8e6078849400382"
+}

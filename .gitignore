@@ -13,3 +13,10 @@ output/playwright/
 client/src/**/*.js
 client/src/**/*.d.ts
 !client/src/env.d.ts
+
+/output/ci-migration/
+/ci-bundle.tar.gz
+/ci-bundle.json
+
+/tests/ci-legacy/
+/playwright.legacy-ci.config.ts
