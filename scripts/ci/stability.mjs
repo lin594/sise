@@ -1,10 +1,11 @@
+import { gitArguments } from './git.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import toolchain from '../../ci/toolchain.json' with { type: 'json' };
 const project = process.argv[2];
 if (!['chromium', 'webkit-responsive'].includes(project)) throw new Error('Specify chromium or webkit-responsive');
-const git = (...args) => spawnSync('git', args, { encoding: 'utf8' });
+const git = (...args) => spawnSync('git', gitArguments(process.cwd(), args), { encoding: 'utf8' });
 const files = git('ls-tree', '-r', '--name-only', toolchain.baseline, 'tests/e2e');
 if (files.status !== 0) throw new Error(files.stderr);
 if (existsSync('tests/ci-legacy') || existsSync('playwright.legacy-ci.config.ts')) throw new Error('Use a clean checkout; retained legacy evidence must not be overwritten');

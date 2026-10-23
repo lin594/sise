@@ -376,7 +376,7 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch' && inputs.migration_comparison && github.ref != 'refs/heads/main'
         with:
           name: evidence-comparison-${{ github.run_attempt }}
-          path: output/ci-migration/identity/
+          path: output/ci-migration/
           retention-days: 7
       - name: Require full coverage and distinguish intentional comparison omission
         env:

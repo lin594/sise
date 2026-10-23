@@ -1,4 +1,5 @@
 import test from "node:test";
+import { gitArguments } from "../../scripts/ci/git.mjs";
 import assert from "node:assert/strict";
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
@@ -20,7 +21,7 @@ async function fixture(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "scripts/ci"), { recursive: true });
   await mkdir(path.join(root, "ci"));
-  for (const file of ["artifact.mjs", "record.mjs"]) {
+  for (const file of ["artifact.mjs", "record.mjs", "git.mjs"]) {
     await copyFile(path.join(repository, "scripts/ci", file), path.join(root, "scripts/ci", file));
   }
   await copyFile(path.join(repository, "ci/toolchain.json"), path.join(root, "ci/toolchain.json"));
@@ -160,4 +161,16 @@ test("recorder forwards SIGTERM and never records cancellation as success", { ti
   assert.equal(evidence.exitCode, 143);
   assert.equal(evidence.signal, "SIGTERM");
   assert.equal(evidence.status, "cancelled");
+});
+
+test("runner-owned checkout rejection is reproduced and confined to one exact Git invocation", async t => {
+  const f = await fixture(t);
+  const args = ["rev-parse", "HEAD"];
+  const expectedSHA = f.git(args);
+  const env = { ...environment, GIT_TEST_ASSUME_DIFFERENT_OWNER: "1", GITHUB_ACTIONS: "true", GITHUB_WORKSPACE: f.root };
+  f.rejects(f.run("git", args, env), /dubious ownership/);
+  const result = f.ok(f.run("git", gitArguments(f.root, args, env), env));
+  assert.equal(result.stdout.trim(), expectedSHA);
+  // Subsequent unscoped reads still reject it: no persistent trust was written.
+  f.rejects(f.run("git", args, env), /dubious ownership/);
 });

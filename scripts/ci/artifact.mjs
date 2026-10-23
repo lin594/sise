@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { gitArguments } from "./git.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, link, lstat, readFile, readdir, readlink, rm, writeFile } from "node:fs/promises";
@@ -17,7 +18,7 @@ const stable = value => JSON.stringify(value);
 const isCI = process.env.GITHUB_ACTIONS === "true" || Boolean(process.env.CI && process.env.CI !== "false");
 
 function run(command, arguments_, options = {}) {
-  const result = spawnSync(command, arguments_, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...options });
+  const result = spawnSync(command, command === "git" ? gitArguments(root, arguments_) : arguments_, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed (${result.signal ?? result.status}): ${result.stderr ?? ""}`);
   return (result.stdout ?? "").trim();

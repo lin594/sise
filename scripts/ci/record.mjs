@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { gitArguments } from "./git.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir, open, rename, writeFile } from "node:fs/promises";
@@ -13,7 +14,7 @@ async function main() {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(label ?? "") || separator !== "--" || !command) {
     throw new Error("Usage: node scripts/ci/record.mjs <safe-layer-label> -- <command> [arguments...]");
   }
-  const source = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+  const source = spawnSync("git", gitArguments(root, ["rev-parse", "HEAD"]), { cwd: root, encoding: "utf8" });
   const sourceSHA = source.stdout?.trim();
   if (source.error || source.status !== 0 || !/^[a-f0-9]{40}$/.test(sourceSHA ?? "")) throw new Error("Evidence requires a full current Git HEAD");
   const directory = path.join(root, "output/ci-migration", label);
