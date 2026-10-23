@@ -28,11 +28,11 @@
 | 3 · Browser | 页面契约与真实时间下的交互体验两个子层 | 启动真实 Chromium / WebKit，使用同次已验证构建；保留现有有状态测试的隔离要求 | 全部 DOM、几何、可读性、触摸、焦点、存储、重连、动画与真实 paint / deadline 断言 |
 | 4 · Release contracts | 生产 Dockerfile 可构建；真实容器优雅停止、恢复和恢复后的决策可推进 | Buildx、独立测试网络与 Redis；成本最高，放在全部前置验证之后 | 服务端和网页生产镜像构建；原 `container-recovery-smoke.mjs` 的 SIGTERM、同房同座及私有手牌保持断言 |
 
-第一层的客户端入口迁到 `tests/logic/`：`action-history`、`backend-config`、`card-text`、`declaration-model`、`game-flow-presentation`、`imac-gateway-config`、`private-hand-readiness`、`viewport-fallback`，共 27 个原身份。它们虽然使用 Playwright 的测试与断言 API，但不需要浏览器 fixture；迁移不能据此删除真实页面上的对应覆盖。
+第一层的客户端入口迁到 `tests/logic/`：`action-history`、`backend-config`、`card-text`、`declaration-model`、`game-flow-presentation`、`imac-gateway-config`、`private-hand-readiness`、`viewport-fallback`，共 27 个原身份；另以 `decision-window` 增加 3 个事件就绪回归，证明展示中间态和不同消息时序不能被当成新决策，且错误的短窗口仍能进入原断言并失败。它们虽然使用 Playwright 的测试与断言 API，但不需要浏览器 fixture；迁移不能据此删除真实页面上的对应覆盖。
 
 第二层的 HTTP 入口迁到 `tests/integration/`：`practice-isolation`、`product-analytics`、`tutorial`。其中 4 个逻辑用例在原项目矩阵中有 7 个身份，迁移对账必须说明原 Chromium / WebKit 身份各自落点，不能以文件数代替用例身份数。
 
-第三层保留其余 387 个原浏览器身份，当前分区为 contracts 363、real-time experience 24。页面契约覆盖 DOM 和页面行为；真实体验子层覆盖帧、动作展示窗口、动画交接、可见性切换和用户可感知的等待。分片可调整，测试阈值、断言与浏览器覆盖不因分层而减少。实时测试不得通过缩短展示时长、增加固定 sleep 或改成纯函数断言来消除竞态。
+第三层保留其余 387 个原浏览器身份，当前分区为 contracts 362、real-time experience 25。页面契约覆盖 DOM 和页面行为；真实体验子层覆盖帧、动作展示窗口、动画交接、可见性切换和用户可感知的等待。分片可调整，测试阈值、断言与浏览器覆盖不因分层而减少。实时测试不得通过缩短展示时长、增加固定 sleep 或改成纯函数断言来消除竞态。
 
 服务端入口由 [server-suites.json](../ci/server-suites.json) 显式分区：`core` 为 7 个入口，`protocol` 为 28 个入口，均归第一层；`services` 为 1 个入口，归第二层。[server-suite.mjs](../scripts/ci/server-suite.mjs) 在执行任一子集前校验全量归属，新增、重复或失去归属的测试必须失败；`services` 缺少真实 Redis 地址必须失败。文件入口数与测试、断言数分别记录。
 
@@ -76,7 +76,7 @@
 
 [ci-legacy.yml](../.github/workflows/ci-legacy.yml) 作为迁移参考只提供 `workflow_call`，使用不同名称；不增加自动 PR / push 触发，不继承发布凭据，也不复制会取消调用方的 concurrency group。canonical 门禁保留唯一的顶层身份。
 
-一次手动非 `main` 对照运行，应同时执行新版与冻结 `caee` 测试 harness 的旧命令。旧侧恢复原测试入口、Playwright 配置与测试代码，但构建和测试的应用源码必须仍是本次实际 checkout SHA。冻结 harness 的来源 SHA、清单哈希及其允许覆盖的路径必须明确，禁止覆盖应用代码；旧应用基线绿灯不算同提交对照。
+一次手动非 `main` 对照运行，应同时执行新版与冻结 `caee` 测试 harness 的旧命令。旧侧恢复原测试入口、Playwright 配置与测试代码，但构建和测试的应用源码必须仍是本次实际 checkout SHA。`ci/legacy-overrides.json` 显式列出已证明的采样竞态修正；当前只有 `passive-collective`，新旧组织都使用同一份当前提交的同步修正及原 30000ms 断言，并在证据中记录 override 来源 SHA、内容摘要和原因。不能把这称为逐字未改的旧 harness。冻结 harness 的来源 SHA、清单哈希及其允许覆盖的路径必须明确，禁止覆盖应用代码；旧应用基线绿灯不算同提交对照。
 
 恢复旧 harness 会使临时 checkout 与新树出现预期差异。这些初始差异必须有显式范围及可核对基准，构建前后仍须证明没有新增输入改写；不能直接删除原源码污染检查。旧侧保留原命令、真实 Redis、浏览器矩阵和容器恢复断言。
 
@@ -102,14 +102,14 @@
 | `server-tests` | unit / state 的 `core`、`protocol`；isolated services 的 `services` | 全量原测试入口、自定义规则及完整牌局、真实 Redis | 分区无遗漏重叠；299 基线与原自定义检查完成对账 |
 | browser 中 8 个无浏览器文件 | `tests/logic/`，27 个原身份 | 所有原纯逻辑、配置与源码断言 | 测试不启动浏览器，身份与断言对应完整 |
 | browser 中 3 个 API 入口 | `tests/integration/`，7 个原项目身份 | 4 个逻辑用例的 HTTP 行为，说明原跨项目重复身份 | 使用真实服务，保留所有原响应和隔离断言 |
-| `browser-tests` 剩余 DOM 用例 | browser 的 contracts 363 / real-time experience 24，共 387 个原身份 | Chromium 与 WebKit 原覆盖、可读性与真实时长阈值 | 分片并集精确匹配，无重复遗漏或新 skip |
+| `browser-tests` 剩余 DOM 用例 | browser 的 contracts 362 / real-time experience 25，共 387 个原身份 | Chromium 与 WebKit 原覆盖、可读性与真实时长阈值 | 分片并集精确匹配，无重复遗漏或新 skip |
 | `container-build` | release contracts | 原 server / web Dockerfile 构建、SIGTERM 与合成恢复 | 全部前置层通过后执行，恢复后仍能推进决策 |
 | `ci-gate` | canonical 顶层 `ci-gate` / `CI gate` | 全部必需检查汇总，失败 / 取消 / 意外跳过拒绝 | 分支保护与发布方仍消费同一门禁 |
 | `release.yml` | 既有可信 main 发布链路 | 精确 SHA 授权、不可覆盖 tag、生产参数、镜像 manifest | 文件与权限契约保持；不执行生产部署 |
 
 ## 8. 接线、验收与回退
 
-本初稿以 `caee` 为迁移前基线；新版 DAG、测试目录、服务端分区、工具链与旧侧参考工作流已在工作分支接线。当前清单分区为 421 → logic 27 + HTTP 7 + contracts 363 + experience 24；这不是 Actions 运行成功的声明。本地身份/门禁 fixture、unit、真实临时 Redis 与 HTTP 检查已有验证；固定镜像内的共享依赖消费、有界 sentinel 重复、同提交对照和完整门禁仍需分别提供实测证据。在 PR 中补上最终 head 的清单、对照 run、全部门禁和独立复审记录后，再更新本段为验收状态。
+本初稿以 `caee` 为迁移前基线；新版 DAG、测试目录、服务端分区、工具链与旧侧参考工作流已在工作分支接线。当前清单分区为 421 → 既有 logic 27 + HTTP 7 + contracts 362 + experience 25；另新增 decision-publication 纯逻辑回归 3 个，总计 424；这不是 Actions 运行成功的声明。本地身份/门禁 fixture、unit、真实临时 Redis 与 HTTP 检查已有验证；固定镜像内的共享依赖消费、有界 sentinel 重复、同提交对照和完整门禁仍需分别提供实测证据。在 PR 中补上最终 head 的清单、对照 run、全部门禁和独立复审记录后，再更新本段为验收状态。
 
 切换条件为：映射完整、低成本失败可阻止昂贵下游、失败与取消不会假绿、产物身份校验有效、旧新同提交对照完成、最终 head 全部门禁通过且独立复审无阻塞。未满足时继续修正 CI，不放宽阈值、保护规则或发布授权条件。
 
@@ -119,4 +119,10 @@
 
 `npm run ci:self-test` 验证门禁及产物 runner 的失败边界；构建后用 `ci:unit`、`ci:services`、`ci:browser` 执行各层，`ci:coverage` 对账全部新旧身份。浏览器子层由 `CI_BROWSER_LAYER=contracts|experience` 选择，完整工作流始终运行两者。每条命令通过 `node scripts/ci/record.mjs <label> -- <argv...>` 保存统一 `schemaVersion/layer/command/sourceSHA/start/end/durationMs/runId/attempt/exitCode/signal/status` JSON、stdout 和 stderr；Playwright 另外保留 JSON 结果与首失败 trace。记录器禁止覆盖已有 label，不自动重试。
 
-显式迁移比较增加同 head 的 frozen legacy 全套及两轮有界 A/B、B/A 样本：动作生命周期、短手牌范围、旋转分页、17视口发布体验；Chromium 与 WebKit 分开执行。两轮中任何首失败都会保留并使最终门禁失败，后续成功不能抵消失败。后台模拟时钟用例只证明生命周期逻辑，实际帧/几何/可读窗口仍以真实浏览器时钟检查。
+显式迁移比较增加同 head 的 frozen legacy 全套及两轮有界 A/B、B/A 样本：动作生命周期、短手牌范围、旋转分页、17视口发布体验；Chromium 另外覆盖新决策发布屏障。Chromium 与 WebKit 分开执行，后一新增样本沿用原来的 Chromium 覆盖范围。两轮中任何首失败都会保留并使最终门禁失败，后续成功不能抵消失败。后台模拟时钟用例只证明生命周期逻辑，实际帧/几何/可读窗口仍以真实浏览器时钟检查。
+
+## 10. 实际迁移中发现的时序问题
+
+`f475383` 的完整 PR 检查通过后，同提交对照 run [39898642054](https://github.com/lin594/sise/actions/runs/39898642054) 在 `passive-collective` 捕获 3000/30000ms 差异。服务端先发布 700ms 过牌展示：公共 phase 已是 `local_upper`，旧 `play:N` 沿用 totalMs=3000，但 deadline=0；展示结束后才发布 `play:N+1`、正 deadline 和 30000ms 窗口。公共 schema 和私有 timer 还可能分别到达。阶段变化本身并非“新决策已就绪”。
+
+修正只等待同一卡、同一 owner 的新 decisionKey 和相等的正公共/私有 deadline，继续使用成功采样的同一份值断言 30000ms。readiness 不检查 totalMs；新窗口真的缩为 3000ms 时仍立即失败。原 3/10/30 秒检查、6 秒等待上限和全部 UI 断言保留，没有增加 sleep。原始失败与修正后的稳定性样本分别保留，不以之后成功抹去首次失败。

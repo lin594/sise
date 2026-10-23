@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "tests/e2e/passive-collective.spec.ts",
+      "reason": "Wait for a new matching decision publication after the 700ms flow presentation; retain the original 30000ms assertion. First failure: run39898642054/job120235685753."
+    }
+  ]
+}

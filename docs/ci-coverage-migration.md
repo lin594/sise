@@ -41,7 +41,7 @@ Frozen baseline: caee1e38104330b055b0797df8e6078849400382. Counts are expanded e
 | offline-action-presentation.spec.ts | 5 | 5 | browser-experience |
 | offline-practice.spec.ts | 3 | 3 | browser-contracts |
 | onboarding.spec.ts | 2 | 2 | browser-contracts |
-| passive-collective.spec.ts | 1 | 0 | browser-contracts |
+| passive-collective.spec.ts | 1 | 0 | browser-experience |
 | practice-isolation.spec.ts | 3 | 0 | http, browser-contracts |
 | practice-untimed.spec.ts | 1 | 0 | browser-contracts |
 | private-hand-readiness.spec.ts | 1 | 0 | logic |
@@ -66,5 +66,7 @@ Frozen baseline: caee1e38104330b055b0797df8e6078849400382. Counts are expanded e
 | tutorial.spec.ts | 6 | 6 | browser-contracts, http |
 | unseated-private-sync.spec.ts | 1 | 0 | browser-contracts |
 | viewport-fallback.spec.ts | 2 | 0 | logic |
+
+Additional current checks: 3 in decision-window.spec.ts. Current expanded total: 424. All 421 baseline identities remain mapped above.
 
 Server coverage: all 35 `*.test.ts` files plus `run.ts` are explicitly assigned in `ci/server-suites.json`; the runner rejects missing or duplicate owners. The original 85-check runner and the 1+20+100 full-game checks remain intact. Configuration, audit, source checks, Docker builds, and real SIGTERM/recovery remain mandatory (see CI architecture).

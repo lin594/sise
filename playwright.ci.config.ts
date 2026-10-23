@@ -5,7 +5,7 @@ import base from "./playwright.config";
 // stay in real browsers; no model or fake-clock test replaces their assertions.
 const experience = new Set([
   "offline-action-presentation.spec.ts", "central-draw.spec.ts",
-  "flow-stability.spec.ts", "reduced-motion.spec.ts", "responsive-release.spec.ts",
+  "passive-collective.spec.ts", "flow-stability.spec.ts", "reduced-motion.spec.ts", "responsive-release.spec.ts",
 ]);
 const layer = process.env.CI_BROWSER_LAYER || "contracts";
 if (!["contracts", "experience"].includes(layer)) throw new Error(`Unknown browser layer: ${layer}`);
