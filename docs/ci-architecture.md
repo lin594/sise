@@ -76,7 +76,7 @@
 
 [ci-legacy.yml](../.github/workflows/ci-legacy.yml) 作为迁移参考只提供 `workflow_call`，使用不同名称；不增加自动 PR / push 触发，不继承发布凭据，也不复制会取消调用方的 concurrency group。canonical 门禁保留唯一的顶层身份。
 
-一次手动非 `main` 对照运行，应同时执行新版与冻结 `caee` 测试 harness 的旧命令。旧侧恢复原测试入口、Playwright 配置与测试代码，但构建和测试的应用源码必须仍是本次实际 checkout SHA。`ci/legacy-overrides.json` 显式列出已证明的采样竞态修正；当前只有 `passive-collective`，新旧组织都使用同一份当前提交的同步修正及原 30000ms 断言，并在证据中记录 override 来源 SHA、内容摘要和原因。不能把这称为逐字未改的旧 harness。冻结 harness 的来源 SHA、清单哈希及其允许覆盖的路径必须明确，禁止覆盖应用代码；旧应用基线绿灯不算同提交对照。
+一次手动非 `main` 对照运行，应同时执行新版与冻结 `caee` 测试 harness 的旧命令。旧侧恢复原测试入口、Playwright 配置与测试代码，但构建和测试的应用源码必须仍是本次实际 checkout SHA。`ci/legacy-overrides.json` 显式列出已证明的采样竞态修正；当前为 `passive-collective` 与 `mahjong-appearance` 的就绪屏障修正，新旧组织都使用同一份当前提交的同步修正及原 30000ms 断言，并在证据中记录 override 来源 SHA、内容摘要和原因。不能把这称为逐字未改的旧 harness。冻结 harness 的来源 SHA、清单哈希及其允许覆盖的路径必须明确，禁止覆盖应用代码；旧应用基线绿灯不算同提交对照。
 
 恢复旧 harness 会使临时 checkout 与新树出现预期差异。这些初始差异必须有显式范围及可核对基准，构建前后仍须证明没有新增输入改写；不能直接删除原源码污染检查。旧侧保留原命令、真实 Redis、浏览器矩阵和容器恢复断言。
 
@@ -119,10 +119,12 @@
 
 `npm run ci:self-test` 验证门禁及产物 runner 的失败边界；构建后用 `ci:unit`、`ci:services`、`ci:browser` 执行各层，`ci:coverage` 对账全部新旧身份。浏览器子层由 `CI_BROWSER_LAYER=contracts|experience` 选择，完整工作流始终运行两者。每条命令通过 `node scripts/ci/record.mjs <label> -- <argv...>` 保存统一 `schemaVersion/layer/command/sourceSHA/start/end/durationMs/runId/attempt/exitCode/signal/status` JSON、stdout 和 stderr；Playwright 另外保留 JSON 结果与首失败 trace。记录器禁止覆盖已有 label，不自动重试。
 
-显式迁移比较增加同 head 的 frozen legacy 全套及两轮有界 A/B、B/A 样本：动作生命周期、短手牌范围、旋转分页、17视口发布体验；Chromium 另外覆盖新决策发布屏障。Chromium 与 WebKit 分开执行，后一新增样本沿用原来的 Chromium 覆盖范围。两轮中任何首失败都会保留并使最终门禁失败，后续成功不能抵消失败。后台模拟时钟用例只证明生命周期逻辑，实际帧/几何/可读窗口仍以真实浏览器时钟检查。
+显式迁移比较增加同 head 的 frozen legacy 全套及两轮有界 A/B、B/A 样本：动作生命周期、真实飞牌与布局交接、短手牌范围、旋转分页、17视口发布体验；Chromium 另外覆盖新决策发布屏障。Chromium 与 WebKit 分开执行，后一新增样本沿用原来的 Chromium 覆盖范围。两轮中任何首失败都会保留并使最终门禁失败，后续成功不能抵消失败。后台模拟时钟用例只证明生命周期逻辑，实际帧/几何/可读窗口仍以真实浏览器时钟检查。
 
 ## 10. 实际迁移中发现的时序问题
 
 `f475383` 的完整 PR 检查通过后，同提交对照 run [39898642054](https://github.com/lin594/sise/actions/runs/39898642054) 在 `passive-collective` 捕获 3000/30000ms 差异。服务端先发布 700ms 过牌展示：公共 phase 已是 `local_upper`，旧 `play:N` 沿用 totalMs=3000，但 deadline=0；展示结束后才发布 `play:N+1`、正 deadline 和 30000ms 窗口。公共 schema 和私有 timer 还可能分别到达。阶段变化本身并非“新决策已就绪”。
 
 修正只等待同一卡、同一 owner 的新 decisionKey 和相等的正公共/私有 deadline，继续使用成功采样的同一份值断言 30000ms。readiness 不检查 totalMs；新窗口真的缩为 3000ms 时仍立即失败。原 3/10/30 秒检查、6 秒等待上限和全部 UI 断言保留，没有增加 sleep。原始失败与修正后的稳定性样本分别保留，不以之后成功抹去首次失败。
+
+同提交对照 run [39901560805](https://github.com/lin594/sise/actions/runs/39901560805) 又捕获旧组织 WebKit 在 `mahjong-appearance` 准备阶段等待随机开局全局 idle 的竞态。trace 在断言前后记录 busy 从 true 到 false、响应阶段及牌 ID 继续变化，不能据轮询采样断言动画持续卡死；随机机器人链也没有 10 秒内能采到全桌 idle 的契约。现在保留真实发牌与庄家展示结束检查，先建立既有 `readable_exposed_groups`，确认明确场景回执、lastAction 和唯一手牌，再执行原来的 10 秒 DOM idle 断言。夹具会取消旧 callback 和展示时间线，不继续推进机器人；后续 3 秒真实飞牌、≤1px 落点、动画期间延后布局及结束切换布局全部保留。额外有界计划覆盖该失败的普通／辅助牌面河道飞行，两引擎两轮新旧各执行，总样本由 84 增至 100，不以重试覆盖第一次失败。

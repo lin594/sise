@@ -25,6 +25,7 @@ writeFileSync('playwright.legacy-ci.config.ts', config.stdout.replace('"./tests/
 const groups = [
   { name: 'decision-publication', file: 'passive-collective.spec.ts', layer: 'experience', projects: ['chromium'] },
   { name: 'action-lifecycle', file: 'offline-action-presentation.spec.ts', layer: 'experience' },
+  { name: 'flight-layout-handoff', file: 'mahjong-appearance.spec.ts', layer: 'contracts', grep: 'rotated river flights land on the exact face' },
   { name: 'short-hand-range', file: 'mahjong-appearance.spec.ts', layer: 'contracts', grep: 'keeps shorter hands and declaration marks' },
   { name: 'rotation-paging', file: 'mobile-table-appearance.spec.ts', layer: 'contracts', grep: 'SE single mode fits all cards' },
   { name: 'release-viewports', file: 'responsive-release.spec.ts', layer: 'experience' },
