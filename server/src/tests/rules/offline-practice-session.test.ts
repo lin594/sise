@@ -346,7 +346,9 @@ test("offline view publishes current and discard hints with its decision revisio
   const before = view.listeningHints;
   assert.equal(session.view().listeningHints, before, "unchanged state reuses hint calculation");
   session.gameSession.state.playerHands.set("seat_1", [c("hidden", "pao")]);
-  assert.deepEqual(session.view().listeningHints, before, "bot private cards never affect visible waits");
+  session.state.stateRevision += 1;
+  const afterHiddenChange = session.view().listeningHints;
+  assert.deepEqual(afterHiddenChange.discards, before.discards, "bot private cards never affect visible waits");
   assert.equal(session.discard("c"), true);
   view = session.view();
   assert.equal(view.listeningHints.stateRevision, view.stateRevision);

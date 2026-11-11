@@ -243,11 +243,11 @@ test("offline play shows discard listening marks and wait details", async ({ bro
     await expect.poll(async () => {
       await page.clock.fastForward(2000);
       await page.clock.runFor(64);
-      if (await page.getByTestId("listening-mark").count()) return true;
+      if (await page.locator('[data-testid="listening-mark"][data-listening-context="discard"]').count()) return true;
       await page.evaluate(() => (window as any).__siseLocalTest?.advanceOfflinePracticeAsBot());
       return false;
     }, { timeout: 90_000, intervals: [10] }).toBe(true);
-    const mark = page.getByTestId("listening-mark").first();
+    const mark = page.locator('[data-testid="listening-mark"][data-listening-context="discard"]').first();
     await expect(mark).toBeVisible();
     await mark.locator("..").click();
     await expect(page.getByTestId("listening-details")).toBeVisible();
