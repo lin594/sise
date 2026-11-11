@@ -1,3 +1,4 @@
+import { buildVisibleRemainingByFace, findCurrentListeningWaits, findListeningDiscards, type ListeningHints } from "../rooms/flow/listening-hints.js";
 import { countHiddenKans } from "../rules/declared-kans.js";
 import type { ActionType, Card } from "../rules/types.js";
 import { GameState, PlayerState, CardSchema } from "../schema/game-state.schema.js";
@@ -95,6 +96,7 @@ export interface OfflinePracticeView {
     endsAt: 0;
     decisionKey: string;
   };
+  listeningHints: ListeningHints;
   roundResult: OfflineRoundResult | null;
 }
 
@@ -346,6 +348,46 @@ export class OfflinePracticeSession {
     return this.getHumanAvailableActions().length > 0;
   }
 
+  private listeningCache: ListeningHints | null = null;
+
+  private buildListeningHints(): ListeningHints {
+    if (this.listeningCache?.stateRevision === this.state.stateRevision) return this.listeningCache;
+    const hand = this.playerHands.get(HUMAN_ID) ?? [];
+    const kongs = this.state.players.get(HUMAN_ID)?.declaredKongs ?? 0;
+    // Only the human's hand and public cards count, never bot hands or the deck.
+    const known = [...hand, ...this.buildBotVisibleCards()];
+    for (const player of this.state.players.values()) {
+      player.wildcardPool.forEach(card => known.push(this.ops.toPlainCard(card)));
+    }
+    if (this.gameSession.state.dealerCard) known.push(this.gameSession.state.dealerCard);
+    if (this.pendingResponse) known.push(this.pendingResponse.card);
+    for (const card of [this.state.targetCard, this.state.responseCard]) {
+      if (card.id) known.push(this.ops.toPlainCard(card));
+    }
+    const remaining = buildVisibleRemainingByFace(known);
+    const playing = this.state.phase === "playing";
+    const discarding = playing && this.awaitingDiscardOwnerId === HUMAN_ID;
+    const hints: ListeningHints = {
+      stateRevision: this.state.stateRevision,
+      decisionKey: `offline:${this.state.stateRevision}`,
+      currentWaits: playing && !discarding ? findCurrentListeningWaits(hand, kongs, remaining) : [],
+      discards: discarding ? findListeningDiscards(hand, kongs, remaining) : [],
+      chi: [],
+    };
+    const candidates = this.getHumanAvailableActions().find(item => item.action === "chi")?.candidates ?? [];
+    if (playing && this.pendingResponse && candidates.length) {
+      const base = this.ops.getHandWithoutPending(HUMAN_ID, this.pendingResponse.card);
+      for (const { candidate, plan } of buildChiCandidates(base, this.pendingResponse.card, this.ops.getWildcardPoolCards(HUMAN_ID))) {
+        if (!candidates.some(item => item.id === candidate.id)) continue;
+        const consumed = new Set(plan.handCards.map(card => card.id));
+        hints.chi.push({ candidateId: candidate.id,
+          discards: findListeningDiscards(base.filter(card => !consumed.has(card.id)), kongs, remaining) });
+      }
+    }
+    this.listeningCache = hints;
+    return hints;
+  }
+
   view(): OfflinePracticeView {
     this.updatePublicHandCounts();
     const legalDiscardCardIds = this.awaitingDiscardOwnerId === HUMAN_ID
@@ -426,6 +468,7 @@ export class OfflinePracticeSession {
         endsAt: 0,
         decisionKey: `offline:${this.state.stateRevision}`,
       },
+      listeningHints: this.buildListeningHints(),
       roundResult: this.lastRoundResult,
     };
   }

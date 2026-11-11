@@ -1,0 +1,105 @@
+{
+  "ok": true,
+  "project": "sise-recovery-test-5d8825936926",
+  "candidate": "sise-offline-recovery:20261111",
+  "baseline": "sha256:5fa142e6bc3cda6e1e3373ceb9bf45b34e15bed5bfa4b0e140932eb9cdc7483e",
+  "cases": [
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "declaring",
+      "images": [
+        "sise-offline-recovery:20261111",
+        "sise-offline-recovery:20261111"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 20,
+      "privateHandHash": "bd49a4a22ad438918c2da8590f08dab4804c82e5e9f96c7aa69e63964e14f4c6",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "declaring",
+      "images": [
+        "sha256:5fa142e6bc3cda6e1e3373ceb9bf45b34e15bed5bfa4b0e140932eb9cdc7483e",
+        "sise-offline-recovery:20261111",
+        "sha256:5fa142e6bc3cda6e1e3373ceb9bf45b34e15bed5bfa4b0e140932eb9cdc7483e"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 20,
+      "privateHandHash": "1c8fae3caf7d01b7a174ea7cc1f384404617404aba150bd7a28bfbb75ed3a6c6",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "playing",
+      "images": [
+        "sise-offline-recovery:20261111",
+        "sise-offline-recovery:20261111"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 18,
+      "privateHandHash": "f0d6bbc0769b74235c9902cfdf0feeff157057603df3383ba2dcaf3210ccfaff",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "playing",
+      "images": [
+        "sha256:5fa142e6bc3cda6e1e3373ceb9bf45b34e15bed5bfa4b0e140932eb9cdc7483e",
+        "sise-offline-recovery:20261111",
+        "sha256:5fa142e6bc3cda6e1e3373ceb9bf45b34e15bed5bfa4b0e140932eb9cdc7483e"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 19,
+      "privateHandHash": "1f287504fd0677e5a820131ef9598837b47f39a2efcf902ad3e0e10355277869",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    }
+  ],
+  "candidateImageID": "sha256:45b55e75444e382094b5bdeb09a64661e0d711a88f5a77bbaa1b936a47114a9b",
+  "candidateSourceSHA": "2bf2644837cb257218e9b7867158d1bb777c1f05",
+  "serverSourceTree": "8f1d12beb423218149c198691cb765539d48fa3d"
+}

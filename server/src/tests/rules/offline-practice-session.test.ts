@@ -331,3 +331,56 @@ test("an explicit Hu still presents one winning movement before settling once", 
   assert.equal(session.advanceAutomation(), false);
   assert.equal(session.view().completedRounds, 1, "explicit Hu settles only once");
 });
+
+test("offline view publishes current and discard hints with its decision revision", () => {
+  const session = new OfflinePracticeSession("听牌测试");
+  const c = (id: string, type: Card["type"], color: Card["color"] = "red"): Card => ({ id, type, color });
+  session.state.phase = "playing";
+  session.gameSession.state.awaitingDiscardOwnerId = "seat_0";
+  session.gameSession.state.playerHands.set("seat_0", [c("a", "ju"), c("b", "ma"), c("c", "zu", "white")]);
+  let view = session.view();
+  assert.equal(view.listeningHints.stateRevision, view.stateRevision);
+  assert.equal(view.listeningHints.decisionKey, view.decisionTimer.decisionKey);
+  assert.ok(view.listeningHints.discards.find(route => route.discardCardId === "c")?.waits.some(wait => wait.card.type === "pao"));
+  assert.deepEqual(view.listeningHints.currentWaits, []);
+  const before = view.listeningHints;
+  assert.equal(session.view().listeningHints, before, "unchanged state reuses hint calculation");
+  session.gameSession.state.playerHands.set("seat_1", [c("hidden", "pao")]);
+  session.state.stateRevision += 1;
+  const afterHiddenChange = session.view().listeningHints;
+  assert.deepEqual(afterHiddenChange.discards, before.discards, "bot private cards never affect visible waits");
+  assert.equal(session.discard("c"), true);
+  view = session.view();
+  assert.equal(view.listeningHints.stateRevision, view.stateRevision);
+  assert.notEqual(view.listeningHints.decisionKey, before.decisionKey);
+  assert.deepEqual(view.listeningHints.discards, []);
+  assert.ok(view.listeningHints.currentWaits.some(wait => wait.card.type === "pao" && wait.visibleRemaining === 4));
+  session.state.phase = "ended";
+  session.startRound();
+  view = session.view();
+  assert.deepEqual(view.listeningHints.discards, []);
+  assert.deepEqual(view.listeningHints.currentWaits, []);
+});
+
+test("offline Chi previews retain the remaining-hand listening routes", () => {
+  const session = new OfflinePracticeSession("听牌测试");
+  const core = session.gameSession.state;
+  core.playerHands.set("seat_0", [
+    { id: "ju", type: "ju", color: "red" }, { id: "pao", type: "pao", color: "red" },
+    { id: "g-ju", type: "ju", color: "green" }, { id: "g-ma", type: "ma", color: "green" },
+    { id: "spare", type: "zu", color: "white" },
+  ]);
+  const target: Card = { id: "ma", type: "ma", color: "red", source: "draw" };
+  core.pendingResponse = createPendingResponse("seat_3", target, "draw");
+  session.state.phase = "playing";
+  session.state.responsePhase = "collective";
+  session.state.pollOriginPlayerId = "seat_3";
+  session.state.responseCard = Object.assign(new CardSchema(), target);
+  const view = session.view();
+  const chi = view.availableActions.find(action => action.action === "chi")!;
+  assert.ok(chi.candidates?.length);
+  assert.ok(view.listeningHints.chi.some(preview =>
+    chi.candidates!.some(candidate => candidate.id === preview.candidateId) &&
+    preview.discards.some(route => route.discardCardId === "spare" &&
+      route.waits.some(wait => wait.card.type === "pao" && wait.card.color === "green"))));
+});

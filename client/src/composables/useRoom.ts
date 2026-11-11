@@ -660,10 +660,12 @@ export function useRoom(playerName = "Player") {
   function applyOfflinePracticeView(): void {
     if (!offlinePractice) return;
     const view = offlinePractice.view();
+    const stateRevision = ++offlineViewRevision;
     applySnapshot(offlineOpeningPresentation
       ? {
           ...view,
-          stateRevision: ++offlineViewRevision,
+          stateRevision,
+          listeningHints: null,
           phase: "declaring",
           lastAction: offlineOpeningPresentation.lastAction,
           responseEndsAt: offlineOpeningPresentation.responseEndsAt,
@@ -674,7 +676,7 @@ export function useRoom(playerName = "Player") {
             decisionKey: "",
           },
         }
-      : { ...view, stateRevision: ++offlineViewRevision }, "explicit");
+      : { ...view, stateRevision, listeningHints: { ...view.listeningHints, stateRevision } }, "explicit");
   }
 
   function scheduleOfflineOpeningStage(delayMs: number, run: () => void): void {
