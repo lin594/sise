@@ -226,3 +226,31 @@ test("WebKit runs the Service Worker-controlled local game without backend traff
 
   await context.close();
 });
+
+test("offline play shows discard listening marks and wait details", async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  await prepareContext(context);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${baseURL ?? "http://127.0.0.1:4173"}/?e2eDebug=1`);
+    await page.evaluate(() => {
+      let seed = 1;
+      Math.random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 0x100000000);
+    });
+    await page.getByTestId("mode-practice_bots").click();
+    await finishDeclarationIfNeeded(page);
+    await page.clock.install();
+    await expect.poll(async () => {
+      await page.clock.fastForward(2000);
+      await page.clock.runFor(64);
+      if (await page.getByTestId("listening-mark").count()) return true;
+      await page.evaluate(() => (window as any).__siseLocalTest?.advanceOfflinePracticeAsBot());
+      return false;
+    }, { timeout: 90_000, intervals: [10] }).toBe(true);
+    const mark = page.getByTestId("listening-mark").first();
+    await expect(mark).toBeVisible();
+    await mark.locator("..").click();
+    await expect(page.getByTestId("listening-details")).toBeVisible();
+    await expect(page.getByTestId("listening-wait").first()).toBeVisible();
+  } finally { await context.close(); }
+});
