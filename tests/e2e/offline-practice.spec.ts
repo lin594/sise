@@ -244,7 +244,13 @@ test("offline play shows discard listening marks and wait details", async ({ bro
       await page.clock.fastForward(2000);
       await page.clock.runFor(64);
       if (await page.locator('[data-testid="listening-mark"][data-listening-context="discard"]').count()) return true;
-      await page.evaluate(() => (window as any).__siseLocalTest?.advanceOfflinePracticeAsBot());
+      const phase = await page.evaluate(() => (window as any).__siseLocalTest?.getRoomState()?.phase);
+      if (phase === "ended") {
+        await page.getByTestId("next-round-trigger").click();
+        await page.clock.fastForward(20_000);
+      } else {
+        await page.evaluate(() => (window as any).__siseLocalTest?.advanceOfflinePracticeAsBot());
+      }
       return false;
     }, { timeout: 90_000, intervals: [10] }).toBe(true);
     const mark = page.locator('[data-testid="listening-mark"][data-listening-context="discard"]').first();
