@@ -176,7 +176,7 @@ html[data-skin="puxian-house"] .board :is(.player-card.active, .self-info-card.a
   text-decoration: none;
 }
 
-html[data-skin="puxian-house"] .card:is(.color-red, .color-yellow, .color-green, .color-white, .color-gold) {
+html[data-skin="puxian-house"] .card:is(.color-red, .color-yellow, .color-green, .color-white) {
   background: var(--paper-speckle), linear-gradient(108deg, #fff5cf55 0%, transparent 55%, #3f29151c 100%), var(--paper-face, #f6e7c6);
   border-color: var(--paper-edge, #b39565);
   color: var(--paper-ink, #30261a);
@@ -199,12 +199,6 @@ html[data-skin="puxian-house"] .card.color-green {
   --paper-face: #83ab75;
   --paper-edge: #597347;
   --paper-ink: #1b2918;
-}
-
-html[data-skin="puxian-house"] .card.color-gold {
-  --paper-face: #dbad68;
-  --paper-edge: #856339;
-  --paper-ink: #332014;
 }
 
 html[data-skin="puxian-house"] .card .text {

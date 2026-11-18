@@ -18,7 +18,7 @@
         <div class="example-cards"><CardComp v-for="card in example.cards" :key="card.id" :card="card" mode="large" size="md" /></div>
         <div><strong :class="{ invalid: !example.valid }">{{ example.valid ? '✓' : '✕' }} {{ example.title }}</strong><p>{{ example.note }}</p></div>
       </div>
-      <p>鱼也可以是 4 或 5 张金条。已有坎接到第 4 张同牌叫“开”；普通的三张同牌明示组叫“碰”。</p>
+      <p>公、侯、伯、子、男五张金条都是红色。鱼也可以是 4 或 5 张金条。已有坎接到第 4 张同牌叫“开”；普通的三张同牌明示组叫“碰”。</p>
     </details>
     <details :open="phase === 'playing'">
       <summary>怎样胡牌</summary>

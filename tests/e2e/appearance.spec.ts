@@ -45,6 +45,44 @@ async function startTable(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('hand-card-d1')).toBeVisible();
 }
 
+test('all five noble cards use red paper and the red color seal in every skin', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({
+    ownCards: 'long', showCardColorAssist: true, reduceMotion: true,
+  })));
+  await startTable(page);
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    const hand = [
+      ...['gong', 'hou', 'bo', 'zi', 'nan'].map(type => ({ id: type, type, color: 'gold' })),
+      { id: 'red-shi', type: 'shi', color: 'red' }, { id: 'yellow-shi', type: 'shi', color: 'yellow' },
+    ];
+    bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100, privateHand: hand,
+      players: state.players.map((p: any) => p.isBot ? p : { ...p, handCount: hand.length }) }, 'explicit');
+  });
+  const face = (id: string) => page.locator(`.hand [data-face-id="${id}"]`);
+  const paper = (id: string) => face(id).evaluate(el => {
+    const css = getComputedStyle(el);
+    return [css.backgroundColor, css.backgroundImage, css.color, css.borderTopColor];
+  });
+  for (const skin of ['puxian-house', 'licheng-water', 'meizhou-sea', 'cyber-minimal']) {
+    await page.getByTestId('game-settings').click();
+    await revealSetting(page, `skin-${skin}`);
+    await page.getByTestId(`skin-${skin}`).click();
+    await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+    const red = await paper('red-shi');
+    expect(red).not.toEqual(await paper('yellow-shi'));
+    for (const [id, name] of Object.entries({ gong: '公', hou: '侯', bo: '伯', zi: '子', nan: '男' })) {
+      await expect(face(id)).toHaveAttribute('aria-label', `金条${name}`);
+      await expect(face(id).locator('.text-top')).toHaveText(name);
+      await expect(face(id).locator('.color-seal')).toBeVisible();
+      await expect(face(id).locator('.color-seal')).toHaveText('红');
+      expect(await paper(id)).toEqual(red);
+    }
+  }
+});
+
 test('adaptive is the default while explicit classic still offers a small-screen recommendation', async ({ page }) => {
   await page.setViewportSize({width:568,height:320});
   await page.goto('/?new=1');

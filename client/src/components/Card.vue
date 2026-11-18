@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Card, RenderedCardMode } from "@/types/game";
-import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceColor, getCardFaceColorText, getCardFaceText } from "@/utils/cardText";
 
 const props = defineProps<{
   card: Card;
@@ -29,15 +29,9 @@ const props = defineProps<{
 }>();
 
 const label = computed(() => getCardFaceText(props.card));
-const colorSeal = computed(() => ({
-  yellow: "黄",
-  red: "红",
-  green: "绿",
-  white: "白",
-  gold: "金",
-}[props.card.color] ?? ""));
+const colorSeal = computed(() => getCardFaceColorText(props.card));
 const accessibleLabel = computed(() => getCardAccessibleText(props.card));
-const colorClass = computed(() => `color-${props.card.color}`);
+const colorClass = computed(() => `color-${getCardFaceColor(props.card)}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
 const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
@@ -281,9 +275,5 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   background: #ffffff;
 }
 
-.color-gold {
-  background: #c41e1e;
-  color: #fff7ed;
-}
 .card.mode-long { border-radius: 50% / 18%; }
 </style>

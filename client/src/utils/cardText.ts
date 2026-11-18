@@ -5,7 +5,6 @@ const COLOR_LABEL_MAP: Record<string, string> = {
   yellow: "黄",
   green: "绿",
   white: "白",
-  gold: "金",
 };
 
 const DEFAULT_FACE_MAP: Record<string, string> = {
@@ -63,17 +62,19 @@ export function getCardFaceText(card: Pick<Card, "color" | "type">): string {
   return faceMap[card.type] ?? DEFAULT_FACE_MAP[card.type] ?? card.type;
 }
 
-export function getCardColorText(card: Pick<Card, "color">): string {
-  if (card.color === "gold") {
-    return "";
-  }
-  return COLOR_LABEL_MAP[card.color] ?? card.color;
+export function getCardFaceColor(card: Pick<Card, "color">): string {
+  return card.color === "gold" ? "red" : card.color;
+}
+
+export function getCardFaceColorText(card: Pick<Card, "color">): string {
+  const color = getCardFaceColor(card);
+  return COLOR_LABEL_MAP[color] ?? color;
 }
 
 export function getCardLabelText(card: Pick<Card, "color" | "type">): string {
   const faceMap = faceMapForColor(card.color);
   const labelFace = faceMap[card.type] ?? DEFAULT_LABEL_MAP[card.type] ?? card.type;
-  const color = getCardColorText(card);
+  const color = card.color === "gold" ? "" : getCardFaceColorText(card);
   return `${color}${labelFace}`;
 }
 

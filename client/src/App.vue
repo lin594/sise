@@ -355,9 +355,9 @@
             <div v-if="finalMeld" class="winning-slip" data-testid="winning-slip" role="group" aria-label="最后成组的牌">
               <span class="winning-slip-caption">收进{{ getCardLabelText(finalMeld[0]) }}成组</span>
               <span v-for="(card, index) in finalMeld" :key="card.id" class="slip-face" role="img"
-                :data-color="card.color" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
+                :data-color="getCardFaceColor(card)" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
                 :aria-label="getCardAccessibleText(card) + (index === 0 ? '，最后收进的牌' : '')">
-                {{ card.color === 'gold' ? '金' : getCardColorText(card) }}<b>{{ getCardFaceText(card) }}</b>
+                {{ getCardFaceColorText(card) }}<b>{{ getCardFaceText(card) }}</b>
               </span>
             </div>
           </div>
@@ -765,7 +765,7 @@ import type {
   RenderedCardMode,
   RoomStateSnapshot,
 } from "@/types/game";
-import { getCardAccessibleText, getCardColorText, getCardFaceText, getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceColor, getCardFaceColorText, getCardFaceText, getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
@@ -2938,7 +2938,7 @@ html[data-skin="puxian-house"] .layout .hu-panel :is(.score-total, .round-overvi
 }
 .slip-face b { font-size: 1rem; }
 .slip-face[data-color="red"] { background: #e8957f; }
-.slip-face[data-color="yellow"], .slip-face[data-color="gold"] { background: #efce75; }
+.slip-face[data-color="yellow"] { background: #efce75; }
 .slip-face[data-color="green"] { background: #a1cda5; }
 .slip-face[data-incoming] { margin-right: .18rem; border-bottom: 2px solid #803b20; }
 .layout:not(.compact-viewport) .winning-slip {
