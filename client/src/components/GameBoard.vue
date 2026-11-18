@@ -39,11 +39,11 @@
         :data-flow-side="flowSide(flowTopLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">
-          <span class="flow-route">{{ flowTitle(flowTopLeftPlayer.clientId) }}</span>
-          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowTopLeftPlayer.clientId) }}流水</span>
-          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowTopLeftPlayer.clientId) }}张</span>
-        </p>
+        <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowTopLeftPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowTopLeftPlayer.clientId) }}张</span>
+        </div>
         <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopLeftPlayer.clientId)}，共${flowCardCount(flowTopLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
@@ -152,11 +152,11 @@
         :data-flow-side="flowSide(flowTopRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
-        <p aria-hidden="true">
-          <span class="flow-route">{{ flowTitle(flowTopRightPlayer.clientId) }}</span>
-          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowTopRightPlayer.clientId) }}流水</span>
-          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowTopRightPlayer.clientId) }}张</span>
-        </p>
+        <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowTopRightPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowTopRightPlayer.clientId) }}张</span>
+        </div>
         <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopRightPlayer.clientId)}，共${flowCardCount(flowTopRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
@@ -421,11 +421,11 @@
         :data-flow-side="flowSide(flowBottomLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">
-          <span class="flow-route">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</span>
-          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowBottomLeftPlayer.clientId) }}流水</span>
-          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowBottomLeftPlayer.clientId) }}张</span>
-        </p>
+        <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowBottomLeftPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowBottomLeftPlayer.clientId) }}张</span>
+        </div>
         <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomLeftPlayer.clientId)}，共${flowCardCount(flowBottomLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
@@ -495,11 +495,11 @@
         :data-flow-side="flowSide(flowBottomRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
-        <p aria-hidden="true">
-          <span class="flow-route">{{ flowTitle(flowBottomRightPlayer.clientId) }}</span>
-          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowBottomRightPlayer.clientId) }}流水</span>
-          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowBottomRightPlayer.clientId) }}张</span>
-        </p>
+        <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowBottomRightPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowBottomRightPlayer.clientId) }}张</span>
+        </div>
         <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomRightPlayer.clientId)}，共${flowCardCount(flowBottomRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
@@ -1558,7 +1558,17 @@ function tableLocationCardElement(location: TableLocation, cardId: string): HTML
 }
 
 function tableLocationExactRect(location: TableLocation, cardId: string): CardRect | null {
-  return rectFromElement(tableLocationCardElement(location, cardId));
+  const card = tableLocationCardElement(location, cardId);
+  const slot = location.zone === "flow" && card?.closest<HTMLElement>('.discard-strip[data-one-card]');
+  if (card && slot) {
+    // A reader may be viewing an earlier discard. Never animate towards the
+    // hidden layout position of a card several pages outside its river.
+    const face = card.getBoundingClientRect();
+    const view = slot.getBoundingClientRect();
+    if (face.top < view.top - 1 || face.bottom > view.bottom + 1 ||
+        face.left < view.left - 1 || face.right > view.right + 1) return null;
+  }
+  return rectFromElement(card);
 }
 
 function tableLocationAnchorElement(location: TableLocation): HTMLElement | null {
@@ -2564,7 +2574,7 @@ function updateTableScrollHints(): void {
 }
 
 function updateFlowLayout(): void {
-  if (flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length)) return;
+  const motionActive = flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length);
   boardRef.value?.querySelectorAll<HTMLElement>('.flow-card').forEach(zone => {
     const strip = zone.querySelector<HTMLElement>('.discard-strip');
     if (!strip || !strip.clientWidth || !strip.clientHeight) return;
@@ -2572,6 +2582,17 @@ function updateFlowLayout(): void {
     const count = cards.length;
     const latestId = cards[count - 1]?.dataset.faceId ?? '';
     const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && (appliedTableLayout.value === 'mahjong' || strip.dataset.scrollAfter !== 'true'));
+    const singleCard = props.paperTable && getComputedStyle(strip).scrollSnapType.startsWith('y');
+    if (singleCard) {
+      // Reveal a new landing before the animation measures it. Entering the
+      // narrow layout also starts at the newest card after a desktop resize.
+      if (!strip.dataset.oneCard || followLatest) strip.scrollTop = strip.scrollHeight;
+      strip.dataset.oneCard = 'true';
+      strip.dataset.latestId = latestId;
+      return;
+    }
+    delete strip.dataset.oneCard;
+    if (motionActive) return;
     const long = appliedTableCardMode.value === 'long';
     const sideways = appliedTableLayout.value === 'mahjong' && ['left', 'right'].includes(zone.dataset.flowSide ?? '');
     const width = long ? sideways ? 32 : 24 : 30, height = long ? sideways ? 24 : 32 : 30;
@@ -3347,7 +3368,7 @@ watch(handViewportRef, observeHandViewport, { immediate: true });
 watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value],
   () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
-  flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
+  flights.value.length, activeTableEvents.value.length], () => updateFlowLayout(), { flush: 'post' });
 
 watch(
   () => chiSelectionContextKey.value,

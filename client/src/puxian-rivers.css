@@ -4,7 +4,7 @@ html[data-skin="puxian-house"] .board[data-table-layout] .flow-card {
   background: transparent;
   box-shadow: none;
 }
-html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > p {
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .paper-flow-caption {
   display: flex;
   flex: none;
   align-items: baseline;
@@ -14,10 +14,10 @@ html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > p {
   font: 600 12px/1.25 var(--skin-font, serif);
   white-space: nowrap;
 }
-html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .flow-route,
-html[data-skin="puxian-house"] .board[data-table-layout] .flow-empty > p { display: none; }
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > p,
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-empty > .paper-flow-caption { display: none; }
 html[data-skin="puxian-house"] .paper-flow-count { color: #c8c6aa; font-weight: normal; }
-html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-top-right, .flow-bottom-right) > p { justify-content: flex-end; }
+html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-top-right, .flow-bottom-right) > .paper-flow-caption { justify-content: flex-end; }
 html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) {
   justify-content: flex-end;
 }
@@ -54,7 +54,7 @@ html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bot
     box-sizing: border-box;
   }
   html[data-skin="puxian-house"] .board[data-table-layout] :is(.flow-top-right, .flow-bottom-right) { justify-content: flex-end; }
-  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > p { gap: 3px; }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .paper-flow-caption { gap: 3px; }
   html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-strip {
     box-sizing: border-box;
     display: grid;
@@ -79,9 +79,10 @@ html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bot
     scroll-snap-align: center;
     margin: 0;
     width: 22px;
-    height: 24px;
+    height: min(24px, 100%);
+    min-height: 0;
   }
-  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-token.mode-long { width: 20px; height: 28px; }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-token.mode-long { width: 20px; height: min(28px, 100%); }
   html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .discard-strip:focus-visible {
     outline: 2px solid #f5d58c;
     outline-offset: -2px;
