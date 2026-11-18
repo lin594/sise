@@ -1053,6 +1053,7 @@ const selfHandRef = ref<HTMLElement | null>(null);
 const handViewportRef = ref<HTMLElement | null>(null);
 const handScale = ref(1);
 const handScaleReady = ref(!shouldConcealOpeningHand());
+let handScaleCardCount = 0;
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
@@ -2368,7 +2369,11 @@ function updateHandLayoutState(): void {
   const panel = viewport?.parentElement;
   const panelStyle = panel ? getComputedStyle(panel) : null;
   const available = panel ? panel.clientWidth - (parseFloat(panelStyle!.paddingLeft) || 0) - (parseFloat(panelStyle!.paddingRight) || 0) : viewport?.clientWidth ?? 0;
-  const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
+  const count = handLayoutCards.value.length;
+  // Keep landing rectangles stable during motion unless the hand outgrows
+  // the count that the single-row scale was measured for.
+  const keepGeometry = handScaleReady.value && (props.handLayout === "paged" || count <= handScaleCardCount)
+    && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
   let needsOverflow = keepGeometry ? handHasOverflow.value : false;
   if (props.handLayout !== 'paged' && !keepGeometry) {
     const style = getComputedStyle(hand);
@@ -2377,7 +2382,6 @@ function updateHandLayoutState(): void {
     if (card && face && viewport?.clientWidth) {
       // Natural CSS dimensions are independent of the previously applied scale.
       const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
-      const count = handLayoutCards.value.length;
       const gap = parseFloat(style.columnGap) || 0;
       const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
       // Single mode fits every authoritative card, including concealed opening cards.
@@ -2391,6 +2395,7 @@ function updateHandLayoutState(): void {
         handScale.value = nextScale;
         void nextTick(scheduleHandLayoutUpdate);
       }
+      handScaleCardCount = count;
       handScaleReady.value = true;
     }
   } else if (!keepGeometry) {
