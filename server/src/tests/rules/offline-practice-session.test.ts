@@ -384,3 +384,117 @@ test("offline Chi previews retain the remaining-hand listening routes", () => {
     preview.discards.some(route => route.discardCardId === "spare" &&
       route.waits.some(wait => wait.card.type === "pao" && wait.card.color === "green"))));
 });
+
+test("a downstream Chi preview does not pause an upstream bot before its own local eat", () => {
+  const session = new OfflinePracticeSession("本地预选");
+  const core = session.gameSession.state;
+  const humanHand: Card[] = [
+    { id: "preview-human-ju", color: "red", type: "ju" },
+    { id: "preview-human-pao", color: "red", type: "pao" },
+    { id: "preview-human-spare", color: "green", type: "shi" },
+  ];
+  core.playerHands.set("seat_0", humanHand);
+  core.playerHands.set("seat_3", humanHand.map(card => ({ ...card, id: `bot-${card.id}` })));
+  const target: Card = { id: "preview-upstream-draw", color: "red", type: "ma", source: "draw" };
+  core.pendingResponse = createPendingResponse("seat_3", target, "draw");
+  for (const id of ["seat_1", "seat_2", "seat_3"]) core.pendingResponse.collectives.set(id, { action: "pass" });
+  session.state.phase = "playing";
+  session.state.responsePhase = "collective";
+  session.state.currentPlayerId = "seat_3";
+  session.state.currentTurnPlayerId = "seat_3";
+  session.state.pollOriginPlayerId = "seat_3";
+  session.state.responseCard = Object.assign(new CardSchema(), target);
+  assert.ok(session.view().availableActions.some(entry => entry.action === "chi" && entry.deferred));
+  assert.equal(core.pendingResponse.collectives.has("seat_0"), false, "no click or synthetic human Pass");
+  assert.equal(session.isHumanDecisionPending(), false, "a preview is not a mandatory decision");
+  assert.equal(session.advanceAutomation(), true);
+  assert.equal(session.view().responsePhase, "local_draw");
+  assert.equal(session.view().currentPlayerId, "seat_3");
+  session.gameSession.chooseBotAction = ({ actions }) => ({
+    action: "chi", candidateId: actions.find(entry => entry.action === "chi")?.candidates?.[0]?.id,
+  });
+  assert.equal(session.advanceAutomation(), true);
+  assert.equal(core.awaitingDiscardOwnerId, "seat_3");
+  assert.deepEqual(core.playerHands.get("seat_0"), humanHand);
+});
+
+test("automatic collective choices are polled before a lower-priority human decision can block them", () => {
+  const session = new OfflinePracticeSession("优先级");
+  const internal = session as any;
+  session.state.phase = "playing";
+  session.state.responsePhase = "collective";
+  session.gameSession.state.pendingResponse = createPendingResponse("seat_3", {
+    id: "priority-draw", color: "red", type: "ma",
+  }, "draw");
+  internal.getAvailableActions = (seatId: string) => [
+    { action: seatId === "seat_0" ? "peng" : seatId === "seat_1" ? "hu" : "pass", enabled: true, candidates: [] },
+  ];
+  session.gameSession.chooseBotAction = ({ actions }) => ({ action: actions[0]!.action });
+  let winner: { seatId: string; action: string } | null = null;
+  internal.executeResponseWinner = (seatId: string, choice: { action: string }) => { winner = { seatId, action: choice.action }; };
+  assert.equal(session.isHumanDecisionPending(), false, "automatic responses must be examined first");
+  assert.equal(session.advanceAutomation(), true);
+  assert.deepEqual(winner, { seatId: "seat_1", action: "hu" });
+});
+
+
+test("offline decision identity changes between declaration steps, not publications", () => {
+  const session = new OfflinePracticeSession("声明身份");
+  session.startRound();
+  session.state.phase = "declaring";
+  session.state.players.get("seat_0")!.declarationStep = "fish";
+  session.state.players.get("seat_0")!.declaredReady = false;
+  session.gameSession.state.playerHands.set("seat_0", [
+    ...Array.from({ length: 4 }, (_, index): Card => ({ id: `declare-kan-${index}`, color: "red", type: "ju" })),
+    { id: "declare-spare", color: "white", type: "shi" },
+  ]);
+  const fishKey = session.view().decisionTimer.decisionKey;
+  assert.equal(session.declareFish([]), true);
+  assert.equal(session.state.players.get("seat_0")?.declarationStep, "kong");
+  const kongKey = session.view().decisionTimer.decisionKey;
+  assert.notEqual(kongKey, fishKey);
+  assert.equal(session.view().decisionTimer.decisionKey, kongKey);
+});
+
+for (const item of [
+  { owner: "seat_3", human: "hu", bot: "peng", waits: true },
+  { owner: "seat_3", human: "hu", bot: "hu", waits: true },
+  { owner: "seat_1", human: "hu", bot: "hu", waits: false },
+  { owner: "seat_1", human: "peng", bot: "peng", waits: false },
+] as const) {
+  test(`offline collective preserves priority ${JSON.stringify(item)}`, () => {
+    const session = new OfflinePracticeSession("优先级回归");
+    const internal = session as any;
+    session.state.phase = "playing";
+    session.state.responsePhase = "collective";
+    session.gameSession.state.pendingResponse = createPendingResponse(item.owner, {
+      id: "priority-regression", color: "red", type: "ma",
+    }, "draw");
+    internal.getAvailableActions = (id: string) => [
+      { action: id === "seat_0" ? item.human : id === "seat_1" ? item.bot : "pass", enabled: true, candidates: [] },
+      { action: "pass", enabled: true, candidates: [] },
+    ];
+    let samples = 0;
+    session.gameSession.chooseBotAction = ({ actions }) => { samples++; return { action: actions[0]!.action }; };
+    let winner = "";
+    internal.executeResponseWinner = (id: string) => { winner = id; };
+    const before = session.view();
+    assert.equal(session.isHumanDecisionPending(), false);
+    assert.equal(samples, 0, "queries cannot sample or mutate bot choices");
+    assert.equal(session.advanceAutomation(), true);
+    assert.equal(samples, 3);
+    if (item.waits) {
+      assert.equal(winner, "");
+      assert.equal(session.isHumanDecisionPending(), true);
+      assert.equal(session.view().decisionTimer.decisionKey, before.decisionTimer.decisionKey);
+      assert.ok(session.view().stateRevision > before.stateRevision);
+      assert.equal(session.advanceAutomation(), false);
+      assert.equal(samples, 3, "the same decision must never re-sample bot choices");
+      assert.equal(session.submitAction({ action: "pass" }), true);
+      assert.equal(session.advanceAutomation(), true);
+      assert.equal(samples, 3);
+    }
+    assert.notEqual(winner, "");
+    assert.notEqual(winner, "seat_0");
+  });
+}
