@@ -96,3 +96,34 @@ html[data-skin] .layout.senior-mode.ultra-compact-viewport .board[data-table-lay
 html[data-skin] .layout.senior-mode.ultra-compact-viewport .board[data-table-layout="compact"] .cards.hand {
   padding-block: 10px 4px;
 }
+
+/* An unfolded display has room for two ordered rows with full-size touch targets. */
+html[data-skin] .layout.senior-mode .board.two-row-hand[data-table-layout]:not(.dealer-ceremony-active) {
+  --spread-card-height: clamp(54px, calc(8 * var(--effective-vh)), 72px);
+  grid-template-rows: minmax(0, 1fr) minmax(50px, auto) calc(2 * var(--spread-card-height) + 38px);
+}
+html[data-skin] .layout.senior-mode .board.two-row-hand[data-table-layout] .cards.hand {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 76px));
+  grid-auto-rows: var(--spread-card-height);
+  justify-content: center;
+  align-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 12px 5px 6px;
+  gap: 7px 3px;
+}
+html[data-skin] .layout.senior-mode .board.two-row-hand[data-table-layout] .cards.hand .hand-card {
+  width: 100%;
+  height: var(--spread-card-height);
+  min-width: 0;
+  margin: 0;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout="mahjong"] .player-top .seat-head {
+  max-width: 48%;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .player-card .seat-identity > strong {
+  flex-shrink: 1;
+  min-width: min(100%, 2.8em);
+}

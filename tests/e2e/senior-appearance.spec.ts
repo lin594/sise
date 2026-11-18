@@ -54,7 +54,14 @@ test("长辈版放大实际牌桌，二十张手牌在手机上可翻到末张�
         const r = el.getBoundingClientRect();
         return { w: r.width, h: r.height, font: parseFloat(getComputedStyle(el).fontSize), insideFelt: r.top >= table.top - 1 && r.bottom <= table.bottom + 1, inside: r.top >= box.top - 1 && r.bottom <= box.bottom + 1 };
       };
+      const handCards = [...board.querySelectorAll(".hand-card")];
+      const handRegions = [".hand", ".hand-viewport", ".self-hand-card"].map(s => board.querySelector(s)!.getBoundingClientRect());
+      const allHandHeightsFit = handCards.every(card => {
+        const r = card.getBoundingClientRect();
+        return handRegions.every(view => r.top >= view.top - 1 && r.bottom <= view.bottom + 1);
+      });
       return {
+        allHandHeightsFit,
         hand: read(".hand-card"), handInk: read(".hand-card .text-top"), target: read(".response-card-face"),
         targetInk: read(".response-card-face .text-top"), name: read(".player-left .seat-name"),
         count: read(".player-left .hand-count-badge"), chi: read("[data-testid=action-chi]"),
@@ -65,6 +72,7 @@ test("长辈版放大实际牌桌，二十张手牌在手机上可翻到末张�
       expect(m.hand.w).toBeGreaterThanOrEqual(48);
       expect(m.hand.h).toBeGreaterThanOrEqual(48);
       expect(m.hand.inside).toBe(true);
+      expect(m.allHandHeightsFit).toBe(true);
       expect(m.handInk.font).toBeGreaterThanOrEqual(30);
       expect(m.target.w).toBeGreaterThanOrEqual(44);
       expect(m.target.insideFelt).toBe(true);
@@ -79,10 +87,13 @@ test("长辈版放大实际牌桌，二十张手牌在手机上可翻到末张�
       await expect(next).toBeVisible();
       for (let n = 0; n < 8 && await next.isEnabled(); n++) await next.click();
       await expect(next).toBeDisabled();
+      await expect.poll(() => hand.last().evaluate(el => {
+        const r = el.getBoundingClientRect(), viewport = el.closest(".hand-viewport")!.getBoundingClientRect();
+        return r.left >= viewport.left - 1 && r.right <= viewport.right + 1;
+      })).toBe(true);
       for (let n = 0; n < 8 && await prev.isEnabled(); n++) await prev.click();
       await expect(prev).toBeDisabled();
     }
-    console.log(width, await page.evaluate(() => Object.fromEntries([".board", ".table", ".player-top", ".center", ".response-card-face", ".player-left", ".self-groups-card", ".self-command-row", ".self-hand-panel", ".hand", ".hand-card", ".hand-visible-range"].map(sel => {const el = document.querySelector(sel);const r = el?.getBoundingClientRect();return [sel,r && [r.x,r.y,r.width,r.height].map(Math.round).join(",")];}))));
     await page.screenshot({ path: testInfo.outputPath(`senior-${width}x${height}.png`) });
   }
   await entry.click();

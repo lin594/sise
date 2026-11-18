@@ -10,6 +10,8 @@
       'compact-landscape': isCompactViewport && showGameTools,
       'effective-short-landscape': effectiveWidth > effectiveHeight && effectiveHeight <= 600,
       'rotated-phone-portrait': isRotatedPhonePortrait,
+      'roomy-touch-viewport': isRoomyTouchViewport,
+      'hinge-safe-viewport': hasViewportHinge,
       'game-tools-active': showGameTools,
       'senior-mode': displayPreferences.seniorMode,
       'reduce-motion': displayPreferences.reduceMotion,
@@ -252,8 +254,9 @@
         :players="players"
         :private-hand="privateHand"
         :senior-mode="displayPreferences.seniorMode"
+        :room-for-two-hand-rows="isRoomyTouchViewport"
         :table-layout="resolvedTableLayout"
-        :hand-layout="displayPreferences.seniorMode ? 'paged' : displayPreferences.handLayout"
+        :hand-layout="resolvedHandLayout"
         :listening-hints="boardListeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
@@ -279,7 +282,7 @@
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
         :show-card-color-assist="displayPreferences.showCardColorAssist"
-        :viewport-transformed="isRotatedPhonePortrait"
+        :viewport-transformed="isRotatedPhonePortrait || hasViewportHinge"
         :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${viewportLeft},${viewportTop}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
@@ -1146,8 +1149,10 @@ const viewportGeometryBusy = ref(false);
 const {
   effectiveHeight,
   effectiveWidth,
+  hasViewportHinge,
   isCompactViewport,
   isLegacyCompactViewport,
+  isRoomyTouchViewport,
   isRotatedPhonePortrait,
   isUltraCompactViewport,
   viewportHeight,
@@ -1177,6 +1182,13 @@ function acceptCompactLayout() {
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
+const resolvedHandLayout = computed<"single" | "paged">(() => {
+  if (displayPreferences.value.seniorMode) return "paged";
+  const layout = displayPreferences.value.handLayout;
+  if (layout !== "adaptive") return layout;
+  const narrow = effectiveWidth.value < 600 || (effectiveWidth.value < 760 && effectiveHeight.value <= 500);
+  return narrow ? "paged" : "single";
+});
 function resolveCardDisplayMode(mode: CardDisplayMode, atTable = false): RenderedCardMode {
   if (displayPreferences.value.seniorMode) return "large";
   if (mode !== "adaptive") return mode;

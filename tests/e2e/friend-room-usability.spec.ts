@@ -5,6 +5,12 @@ async function login(page: Page) {
   await page.goto('/?e2eDebug=1');
 
 }
+async function preferSingleRow(page: Page) {
+  await page.addInitScript(() => {
+    const key = 'sise_game_display_preferences_v2';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ handLayout: 'single' }));
+  });
+}
 async function useStagedDeclaration(page: Page) {
   await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('staged_declaration'));
@@ -127,6 +133,7 @@ test('listening marks stay in the hand and only discard selection opens a previe
 });
 
 test('opening deal keeps one authoritative scale and a stable hand viewport', async ({ page }) => {
+  await preferSingleRow(page);
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
   await page.evaluate(() => {
@@ -183,6 +190,7 @@ test('opening deal keeps one authoritative scale and a stable hand viewport', as
   }
 });
 test('single-row hand stays stable at key counts from 21 to 5 cards', async ({ page }) => {
+  await preferSingleRow(page);
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 667, height: 375 });
   await login(page);
@@ -269,6 +277,7 @@ test('single-row hand stays stable at key counts from 21 to 5 cards', async ({ p
   }
 });
 test('21-card single row adapts to both card styles and layout preference survives refresh', async ({ page }) => {
+  await preferSingleRow(page);
   await page.setViewportSize({ width: 568, height: 320 });
   await login(page);
   await startLobbyAction(page);

@@ -6,6 +6,7 @@
       'has-guidance': Boolean(props.guidanceActive),
       'crowded-action-dock': crowdedActionDock,
       'hand-overflow': handHasOverflow,
+      'two-row-hand': twoRowHand,
       'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
       'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
@@ -919,6 +920,7 @@ const props = defineProps<{
   tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
   seniorMode?: boolean;
+  roomForTwoHandRows?: boolean;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
   acceptedStateRevision?: number;
@@ -1791,6 +1793,9 @@ const handLayoutCards = computed<Card[]>(() =>
     ? props.privateHand
     : displayPrivateHand.value,
 );
+// Eleven columns keep a full 21-card hand in reading order on a spacious display.
+const twoRowHand = computed(() => props.seniorMode && props.roomForTwoHandRows
+  && props.privateHand.length > 11 && props.privateHand.length <= 22);
 function isDealConcealedCard(cardId: string): boolean {
   if (handPresentationBusy.value && props.handLayout !== "paged" && !handScaleReady.value) {
     return true;
@@ -2376,7 +2381,11 @@ function updateHandLayoutState(): void {
   const keepGeometry = handScaleReady.value && (props.handLayout === "paged" || count <= handScaleCardCount)
     && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
   let needsOverflow = keepGeometry ? handHasOverflow.value : false;
-  if (props.handLayout !== 'paged' && !keepGeometry) {
+  if (twoRowHand.value) {
+    needsOverflow = false;
+    handScale.value = 1;
+    hand.scrollLeft = 0;
+  } else if (props.handLayout !== 'paged' && !keepGeometry) {
     const style = getComputedStyle(hand);
     const card = hand.querySelector<HTMLElement>('.hand-card');
     const face = card?.querySelector<HTMLElement>('.card');
