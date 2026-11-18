@@ -35,6 +35,31 @@ html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bot
       "left . center . right"
       "flowbl selfgroups selfgroups selfgroups flowbr";
   }
+  /* A seat with many exposed groups needs the full edge. Keep each river
+     between its two seats while freeing the long top and bottom rows. */
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"]:where(:has(.group-block:nth-child(6))) .table {
+    grid-template-areas:
+      "top top top top top"
+      "left flowtl center flowtr right"
+      "left flowtl center flowtr right"
+      "left flowbl center flowbr right"
+      "left selfgroups selfgroups selfgroups right";
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"].wide-self-groups .table {
+    grid-template-areas:
+      "top top top top top"
+      "left flowtl center flowtr right"
+      "left flowtl center flowtr right"
+      "left flowbl center flowbr right"
+      "selfgroups selfgroups selfgroups selfgroups selfgroups";
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"]:has(.group-block:nth-child(6)) .paper-flow-caption {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    font-size: 11px;
+    line-height: 12px;
+  }
   html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-top-left { grid-area: flowtl; }
   html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-top-right { grid-area: flowtr; }
   html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-bottom-left { grid-area: flowbl; }
