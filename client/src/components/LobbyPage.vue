@@ -1948,11 +1948,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .mode-tiles i { display: grid; place-items: center; width: 30px; height: 45px; border: 1px solid #8b633f; border-radius: 9px; background: #f1d27a; color: #352115; box-shadow: inset 1px 1px #fff9, 1px 2px 2px #28170b55; font: bold 22px var(--skin-font, serif); font-style: normal; }
 .mode-tiles i:nth-child(2) { background: #d87f63; }
 .mode-tiles i:nth-child(3) { background: #85b98e; }
-:global(html[data-skin="puxian-house"] .lobby.mode-selection) { background: radial-gradient(ellipse at center, #315e55, #1f4b44) !important; border: 5px solid #764734 !important; box-shadow: inset 0 0 0 1px #c99a70; }
+:global(html[data-skin="puxian-house"] .lobby.mode-selection) { background: radial-gradient(ellipse at center, #315e55, #1f4b44) #1f4b44 !important; border: 5px solid #764734 !important; box-shadow: inset 0 0 0 1px #c99a70; }
 :global(html[data-skin="puxian-house"] .mode-selection .lobby-head h2) { color: #fff2d7; }
 :global(html[data-skin="puxian-house"] .mode-selection .lobby-kicker),
 :global(html[data-skin="puxian-house"] .mode-selection .lobby-rule-tip) { color: #e6d3b4; }
-:global(html[data-skin="puxian-house"] .mode-selection .mode-card) { background: linear-gradient(145deg, #f6e7ce, #ead5b6); border: 1px solid #ac8059; box-shadow: inset 0 1px #fff9, 0 3px 0 #53352477; }
+:global(html[data-skin="puxian-house"] .mode-selection .mode-card) { background: linear-gradient(145deg, #f6e7ce, #ead5b6) #ead5b6; border: 1px solid #ac8059; box-shadow: inset 0 1px #fff9, 0 3px 0 #53352477; }
+:global(html[data-skin="puxian-house"] .mode-selection .mode-share-card) { background-color: #f6e7ce; }
 :global(html[data-skin="puxian-house"] .mode-selection .guest-profile-summary) { background: #f6e7ce; }
 :global(html[data-skin="puxian-house"] .mode-selection .repository-link) { color: #f6dfb8; }
 :global(html[data-skin="puxian-house"] .layout:has(.lobby.mode-selection)) { background: #e1c9a9; }
