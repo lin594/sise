@@ -804,6 +804,7 @@ const {
   players,
   privateHand,
   acceptedStateRevision,
+  publicSnapshotReady,
   listeningHints,
   quickPhrase,
   quickPhraseMuted,
@@ -1541,7 +1542,7 @@ const screenWakeLockSupported = isScreenWakeLockSupported();
 const spokenTurnGuidance = computed(() => !sessionAudioMuted.value && displayPreferences.value.spokenTurnGuidance);
 usePaperSounds({
   state,
-  connected,
+  connected: computed(() => connected.value && publicSnapshotReady.value),
   enabled: computed(() => displayPreferences.value.paperSounds && !sessionAudioMuted.value),
   narrating: computed(() => spokenTurnGuidanceSupported && spokenTurnGuidance.value && settingsDecisionActive.value),
 });

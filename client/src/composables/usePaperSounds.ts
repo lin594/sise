@@ -91,7 +91,10 @@ export function usePaperSounds(options: {
       timers.add(timer);
     }
   }, { immediate: true });
-  watch(options.enabled, enabled => { if (!enabled) clearPending(); });
+  watch(options.enabled, enabled => {
+    if (enabled) unlock();
+    else clearPending();
+  }, { flush: "sync" });
   const onVisibility = () => { if (document.hidden) clearPending(); };
   onMounted(() => {
     document.addEventListener("click", unlock);
