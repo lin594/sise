@@ -120,11 +120,12 @@ for (const mode of ['large','long']) test(`draw backs and faces retain ${mode} c
   await page.getByTestId(`card-mode-table-${mode}`).click();
   await page.getByRole('button',{name:'关闭设置',exact:true}).click();
   await expect(page.getByTestId('pending-card').locator('.card')).toHaveAttribute('data-card-mode',mode);
+  const deckBack = await page.locator(".deck-layer").first().evaluate(element => getComputedStyle(element).backgroundImage);
   await page.evaluate(()=> (window as any).__siseLocalTest.setupScenario('draw_choice'));
   const flight=page.locator('[data-transition-kind="draw"]');
   await expect(flight.locator('.card-back')).toHaveAttribute('data-card-mode',mode);
   await expect(flight.locator('.card-back')).toHaveCSS('border-radius',mode==='long'?'50% / 18%':'6px');
-  await expect(flight.locator('.card-back')).toHaveCSS('background-image',/rgb\(182, 36, 44\)/);
+  await expect(flight.locator('.card-back')).toHaveCSS('background-image',deckBack);
   await expect(page.getByTestId('pending-card').locator('.card')).toHaveAttribute('data-card-mode',mode);
 });
 

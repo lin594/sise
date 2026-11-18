@@ -4236,10 +4236,25 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   padding: 1px 4px;
   background: var(--response-label-bg, var(--ui-panel));
   color: var(--response-label-ink, var(--ui-text));
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 14px;
+  line-height: 16px;
   white-space: nowrap;
+}
+
+.board[data-table-layout="mahjong"] .response-source {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
+@media (max-height: 380px), (max-width: 380px) {
+  .board[data-table-layout] .response-source {
+    top: 50%;
+    bottom: auto;
+    left: calc(100% + 4px);
+    max-width: 6em;
+    transform: translateY(-50%);
+  }
 }
 
 .pending-inline.draw-pending-hidden > * {
