@@ -78,7 +78,7 @@ test('all skins and layouts keep actual cards and actions inside representative 
         await expect(page.getByTestId('hand-card-d1')).toBeInViewport({ratio:1});
         await expect(page.getByTestId('action-chi')).toBeInViewport({ratio:1});
         await expect(page.getByTestId('hand-card-d1')).toHaveAttribute('aria-pressed','true');
-        await expect(page.locator('.response-caption')).toHaveCount(0);
+        await expect(page.getByTestId('response-source')).toBeInViewport({ratio:1});
         const delta=await page.locator('.deck-stack').evaluate(el => {
           const r=el.getBoundingClientRect();
           const layers=[...el.querySelectorAll('.deck-layer')].map(l=>l.getBoundingClientRect());
@@ -90,6 +90,28 @@ test('all skins and layouts keep actual cards and actions inside representative 
       }
     }
   }
+});
+
+test("response source follows authoritative discard and draw data", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("chi_unique_jmp"));
+  const pending = page.getByTestId("pending-card");
+  await expect(pending.locator("[data-face-id=unique-yellow-pao]")).toBeVisible();
+  const origin = await page.evaluate(() => {
+    const state = (window as any).__siseLocalTest.getRoomState();
+    return state.players.find((player: { clientId: string }) => player.clientId === state.pollOriginPlayerId)?.name;
+  });
+  expect(origin).toBeTruthy();
+  await expect(page.getByTestId("response-source")).toHaveText(`${origin} 打出`);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("hu_ready_local_draw"));
+  await expect(page.getByTestId("response-source")).toHaveText("牌堆摸出");
+
+  const face = await pending.locator(".response-card-face").boundingBox();
+  const label = await page.getByTestId("response-source").boundingBox();
+  expect(face).not.toBeNull();
+  expect(label).not.toBeNull();
+  expect(label!.y + label!.height).toBeLessThan(face!.y);
 });
 
 for (const mode of ['large','long']) test(`draw backs and faces retain ${mode} card geometry`, async ({ page }) => {

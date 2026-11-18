@@ -73,7 +73,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ topPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ topPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(topPlayer)" />
             <span
@@ -179,7 +179,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ leftPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ leftPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(leftPlayer)" />
             <span
@@ -283,13 +283,21 @@
                   :class="{ 'draw-pending-hidden': isResponseCardDrawHidden || isMovingCard(responseCard.id) }"
                   data-testid="pending-card"
                 >
-                  <CardComp
-                    :key="`resp-${appliedTableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
-                    :card="responseCard"
-                    :mode="appliedTableCardMode"
-                    size="lg"
-                    class="response-card-face"
-                  />
+                  <div class="response-card-anchor">
+                    <CardComp
+                      :key="`resp-${appliedTableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
+                      :card="responseCard"
+                      :mode="appliedTableCardMode"
+                      size="lg"
+                      class="response-card-face"
+                    />
+                    <span
+                      v-if="responseSourceLabel"
+                      class="response-source"
+                      data-testid="response-source"
+                      :title="responseSourceLabel"
+                    >{{ responseSourceLabel }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -332,7 +340,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ rightPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ rightPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(rightPlayer)" />
             <span
@@ -579,7 +587,7 @@
         <header class="self-head">
           <div ref="selfIdentityRef" class="seat-identity">
             <h3 ref="selfNameRef" :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
-              {{ useSelfNameFallback ? "你" : selfPlayer.name }}
+              <span class="seat-name">{{ useSelfNameFallback ? "你" : selfPlayer.name }}</span>
             </h3>
             <span ref="selfNameMeasureRef" class="self-name-measure" aria-hidden="true">{{ selfPlayer.name }}</span>
             <span ref="selfIdentityMetaRef" class="seat-identity-meta">
@@ -1304,6 +1312,14 @@ const activeFlowSourcePlayerId = computed(() => {
     return "";
   }
   return String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || "");
+});
+
+const responseSourceLabel = computed(() => {
+  if (responseCard.value?.source === "draw") return "牌堆摸出";
+  if (responseCard.value?.source !== "upper") return "";
+  const source = props.players.find(player => player.clientId === activeFlowSourcePlayerId.value);
+  if (!source) return "流水牌";
+  return source.clientId === props.mySeatId ? "你打出" : `${source.name} 打出`;
 });
 
 const activeFlowTargetPlayerId = computed(() => {
@@ -4202,20 +4218,27 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   filter: drop-shadow(0 9px 16px rgba(var(--ui-page-rgb, 2, 6, 23), 0.32));
 }
 
-.response-caption {
+.response-card-anchor {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.response-source {
   position: absolute;
+  top: calc(100% + 3px);
   left: 50%;
-  bottom: -0.2rem;
-  z-index: 2;
-  transform: translate(-50%, 55%);
-  border-radius: 999px;
-  border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.42);
-  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.88);
-  color: var(--ui-accent-text, #e0f2fe);
-  padding: 0.05rem 0.38rem;
-  font-size: max(0.8125rem, 13px);
-  font-weight: 800;
-  line-height: 1.15;
+  max-width: min(10em, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: var(--response-label-bg, var(--ui-panel));
+  color: var(--response-label-ink, var(--ui-text));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
   white-space: nowrap;
 }
 
