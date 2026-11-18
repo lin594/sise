@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function enterModeLobby(page: Page): Promise<void> {
   await page.goto("/?e2eDebug=1");
 
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 async function browserBack(page: Page): Promise<void> {
@@ -62,7 +62,7 @@ test("browser back closes a game layer before offering a safe room exit", async 
   await browserBack(page);
   await expect(page.getByRole("heading", { name: "退出当前牌局？" })).toBeVisible();
   await page.getByTestId("confirm-exit").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expectCleanRoomNavigationState(page);
 });
 
@@ -75,7 +75,7 @@ test("the visible waiting-room exit also releases browser history protection", a
   await page.getByTestId("leave-waiting-room").click();
   await expect(page.getByRole("heading", { name: "离开当前好友房？" })).toBeVisible();
   await page.getByTestId("confirm-waiting-leave").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expectCleanRoomNavigationState(page);
 });
 
@@ -101,7 +101,7 @@ test("browser back asks before abandoning a recoverable saved-room connection", 
 
   await browserBack(page);
   await page.getByTestId("confirm-resume-abandon").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expectCleanRoomNavigationState(page);
 });
 
@@ -117,7 +117,7 @@ test("browser back directly leaves a terminal saved-room recovery", async ({ pag
   await expect.poll(() => page.evaluate(() => Boolean(window.history.state?.__siseRoomGuard))).toBe(true);
 
   await browserBack(page);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(page.getByTestId("resume-abandon-mask")).toHaveCount(0);
   await expectCleanRoomNavigationState(page);
 });

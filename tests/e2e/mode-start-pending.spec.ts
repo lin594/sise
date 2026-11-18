@@ -5,7 +5,7 @@ test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true
 
 async function enterModeLobby(page: import("@playwright/test").Page): Promise<void> {
   await openGameAs(page, "/", "慢网牌友");
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 for (const scenario of [
@@ -42,7 +42,9 @@ for (const scenario of [
     await expect(page.locator(".lobby")).toHaveAttribute("aria-busy", "true");
     await expect(start).toBeDisabled();
     await expect(start).toContainText("正在进入…");
-    await expect(page.locator(".mode-card:disabled")).toHaveCount(3);
+    await expect(page.locator("button.mode-card:disabled")).toHaveCount(2);
+    await expect(page.getByTestId("tutorial-entry")).toBeDisabled();
+    await expect(page.getByTestId("mode-practice_bots")).toBeDisabled();
     expect(roomRequests).toBe(1);
 
     releaseRequest();
@@ -90,9 +92,9 @@ test("quick match uses joining language and can return to mode selection", async
   await expect(progress.getByTestId("cancel-session-resume")).toHaveText("取消，返回玩法选择");
 
   await progress.getByTestId("cancel-session-resume").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(page.getByTestId("mode-quick_match")).toBeEnabled();
   await expect(page.getByTestId("mode-quick_match")).toContainText("开始配桌");
   await page.waitForTimeout(900);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 });

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 }, { width: 375, height: 667 }]) {
-  test(`authoritative tutorial completes and resumes at ${viewport.width}`, async ({ page }) => {
+  test(`authoritative tutorial completes and resumes at ${viewport.width}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
     await page.getByTestId('tutorial-entry').click();
@@ -12,8 +12,11 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 
     expect(box && box.y >= 0 && box.y + box.height <= viewport.height).toBeTruthy();
     await page.getByRole('button', { name: '开始演练', exact: true }).press('Enter');
     await expect(guide).toHaveAttribute('data-step', 'grab');
+    await expect(page.locator('.response-slot.tutorial-anchor')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`tutorial-grab-${viewport.width}.png`) });
     await page.getByTestId('action-pass').click();
     await expect(page.getByTestId('action-chi')).toBeEnabled({ timeout: 20000 });
+    await expect(page.locator('.hand-viewport.tutorial-anchor')).toBeVisible();
     await page.getByTestId('action-chi').click();
     await expect(guide).toHaveAttribute('data-step', 'discard_chi');
     await page.reload();

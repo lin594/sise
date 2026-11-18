@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("a fresh player chooses a table layout once and keyboard focus returns to the lobby", async ({ page }) => {
+test("a fresh player chooses a table layout once and keyboard focus returns to the lobby", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 568, height: 320 });
   await page.addInitScript(() => {
     localStorage.removeItem("sise_layout_onboarding_v1");
@@ -8,37 +8,23 @@ test("a fresh player chooses a table layout once and keyboard focus returns to t
     localStorage.removeItem("sise_entry_name");
   });
   await page.goto("/");
-
-  const dialog = page.getByTestId("layout-onboarding-dialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "选一个顺手的牌桌" })).toBeVisible();
-  await expect(dialog).toContainText("之后仍可在设置里更改");
-
-  const adaptive = page.getByTestId("layout-adaptive");
-  const confirm = page.getByTestId("confirm-layout-onboarding");
-  await expect(dialog.getByRole("radio", { name: /自适应布局/ })).toBeVisible();
-  await expect(adaptive).toHaveAttribute("aria-checked", "true");
-  await expect(adaptive).toBeFocused();
-  const dialogBox = await dialog.boundingBox();
-  expect(dialogBox && dialogBox.y >= 0 && dialogBox.y + dialogBox.height <= 320).toBeTruthy();
-  await page.keyboard.press("Shift+Tab");
-  await expect(confirm).toBeFocused();
+  await expect(page.getByTestId("layout-onboarding-dialog")).toHaveCount(0);
+  const tutorial = page.getByTestId("tutorial-entry");
+  const practice = page.getByTestId("mode-practice_bots");
+  await expect(tutorial).toBeVisible();
+  await expect(practice).toBeVisible();
+  await expect(practice).toContainText("直接练一局");
+  await page.screenshot({ path: testInfo.outputPath("first-visit-568x320.png") });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("first-visit-1440x900.png") });
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").tableLayout)).toBe("adaptive");
+  await tutorial.focus();
+  await expect(tutorial).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(adaptive).toBeFocused();
-
-  await page.getByTestId("layout-compact").click();
-  await expect(page.getByTestId("layout-compact")).toHaveAttribute("aria-checked", "true");
-  await confirm.click();
-  await expect(dialog).toHaveCount(0);
-  await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
-  await expect.poll(() => page.evaluate(() => ({
-    onboarding: localStorage.getItem("sise_layout_onboarding_v1"),
-    layout: JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").tableLayout,
-  }))).toEqual({ onboarding: "done", layout: "compact" });
-
+  await expect(practice).toBeFocused();
   await page.reload();
   await expect(page.getByTestId("layout-onboarding-dialog")).toHaveCount(0);
-  await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
 });
 
 test("an existing player is not mistaken for a first-time visitor after the feature ships", async ({ page }) => {
@@ -50,4 +36,5 @@ test("an existing player is not mistaken for a first-time visitor after the feat
   await page.goto("/");
   await expect(page.getByTestId("layout-onboarding-dialog")).toHaveCount(0);
   await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").tableLayout)).toBe("mahjong");
 });

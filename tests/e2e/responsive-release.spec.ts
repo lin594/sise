@@ -183,7 +183,7 @@ test.describe("mobile responsive release gate", () => {
     await page.getByTestId("change-entry-name").click();
     await page.getByTestId("nickname-input").fill("这是一段非常长的四色牌昵称");
     await page.getByTestId("login-submit").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expectPageContained(page, ["main.layout", ".lobby"]);
 
     await startLobbyAction(page);

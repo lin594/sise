@@ -276,7 +276,7 @@
                   </span>
                 </div>
               </div>
-              <div class="response-slot" ref="responseLandingRef">
+              <div class="response-slot" :class="{ 'tutorial-anchor': ['grab', 'eat', 'peng', 'hu'].includes(props.tutorialStep || '') }" ref="responseLandingRef">
                 <div
                   v-if="centerCardVisible && responseCard"
                   class="pending-inline response-focus"
@@ -711,7 +711,7 @@
         <div
           ref="handViewportRef"
           class="hand-viewport"
-          :class="{ 'single-line': handLayout !== 'paged' }"
+          :class="{ 'single-line': handLayout !== 'paged', 'tutorial-anchor': ['eat', 'discard_chi', 'discard_peng', 'hu'].includes(props.tutorialStep || '') }"
         >
           <div
             class="cards hand"
@@ -900,6 +900,7 @@ type DealerReveal = {
 const props = defineProps<{
   connected: boolean;
   guidanceActive?: boolean;
+  tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
@@ -3525,6 +3526,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   font-weight: 800;
 }
 
+.tutorial-anchor { outline: 2px solid #e9b960; outline-offset: 2px; border-radius: 6px; }
 .response-card-simple {
   min-width: clamp(2.2rem, 5vh, 2.9rem);
   min-height: clamp(3rem, 7vh, 4rem);

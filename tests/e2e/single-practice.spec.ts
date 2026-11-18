@@ -57,7 +57,7 @@ async function assertOpeningDealDoesNotRevealFullHand(page: Page): Promise<void>
 test("each practice round presents one bounded deal sequence", async ({ page }) => {
   test.setTimeout(120_000);
   await openGameAs(page, "/?e2eDebug=1", "只看一次发牌");
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 
   await page.evaluate(() => {
     const trackingWindow = window as Window & {
@@ -160,7 +160,7 @@ test("practice settlement stays readable and reachable on legacy phones", async 
 
 
 
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await startLobbyAction(page);
 
   await expect(page.getByTestId("game-board")).toBeVisible();
@@ -373,7 +373,7 @@ test("practice settlement stays readable and reachable on legacy phones", async 
   await page.screenshot({ path: testInfo.outputPath("desktop-settlement.png") });
 
   await page.getByTestId("practice-return-to-modes").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
   await expect(page.getByTestId("mode-quick_match")).toBeVisible();
   await expect(page.getByTestId("mode-friends")).toBeVisible();

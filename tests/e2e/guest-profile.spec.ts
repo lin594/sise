@@ -115,7 +115,7 @@ test("a passwordless local profile stays private and updates after settlement", 
 
   await page.getByTestId("game-exit").click();
   await page.getByTestId("confirm-exit").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(summary).toContainText("已玩 1 局");
   await expect(summary).toContainText("胡 1 局");
   await summary.click();

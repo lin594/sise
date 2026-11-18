@@ -8,7 +8,7 @@ type StartGameHold = {
 
 async function enterModeLobby(page: Page, nickname: string, path = "/"): Promise<void> {
   await openGameAs(page, path, nickname);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 async function holdStartGameMessages(page: Page): Promise<void> {

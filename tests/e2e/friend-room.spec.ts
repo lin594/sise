@@ -183,7 +183,7 @@ test("host invites a friend, configures bots, and starts a shared game", async (
 
   try {
     await openGameAs(host, "/", "同名牌友");
-    await expect(host.getByText("游戏模式选择")).toBeVisible();
+    await expect(host.getByText("选一种玩法")).toBeVisible();
     await host.getByTestId("mode-friends").click();
 
     await expect(host.getByTestId("seat-grid")).toBeVisible();
@@ -553,13 +553,13 @@ test("a host refresh keeps ownership while a confirmed exit transfers it immedia
 
     await host.getByTestId("leave-waiting-room").click();
     await host.getByTestId("confirm-waiting-leave").click();
-    await expect(host.getByText("游戏模式选择")).toBeVisible();
+    await expect(host.getByText("选一种玩法")).toBeVisible();
     await expect(guest.getByTestId("seat-1")).toContainText("房主 · 你");
     await expect(guest.getByTestId("fill-bots")).toHaveText("补齐 3 位电脑");
 
     await guest.getByTestId("leave-waiting-room").click();
     await guest.getByTestId("confirm-waiting-leave").click();
-    await expect(guest.getByText("游戏模式选择")).toBeVisible();
+    await expect(guest.getByText("选一种玩法")).toBeVisible();
   } finally {
     await guestContext.close();
     await hostContext.close();
@@ -743,7 +743,7 @@ test("legacy small waiting room keeps seats clear and allows a safe personal exi
   expect(departingRoomId).toBeTruthy();
   await leaveButton.click();
   await confirm.click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await page.waitForTimeout(1_200);
   await expect(seatGrid).toHaveCount(0);
   const leaveState = await page.evaluate((roomId) => ({

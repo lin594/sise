@@ -31,7 +31,7 @@ async function readVisibleHandRange(locator: Locator): Promise<{ start: number; 
 async function enterLobby(page: Page, path = "/"): Promise<void> {
   await page.goto(path);
 
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 async function finishOpeningIfNeeded(page: Page): Promise<void> {
@@ -453,7 +453,7 @@ test.describe("phone portrait landscape canvas", () => {
     await page.getByRole("button", { name: "关闭", exact: true }).click();
 
 
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
 
     const overflow = await page.evaluate(() => ({
       bodyWidth: document.body.scrollWidth,
@@ -1463,9 +1463,9 @@ test.describe("compact landscape gameplay", () => {
     await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await page.waitForTimeout(1_200);
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.getByTestId("game-board")).toHaveCount(0);
     const leaveState = await page.evaluate((roomId) => ({
       roomId: localStorage.getItem("four_room_id"),
@@ -1477,7 +1477,7 @@ test.describe("compact landscape gameplay", () => {
 
   test("keeps the self dealer card visible and reveals it before the static dealer mark appears", async ({ page }, testInfo) => {
     await openGameAs(page, "/?e2eDebug=1", "风棋童与老牌友");
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await startLobbyAction(page);
 
     await finishOpeningIfNeeded(page);

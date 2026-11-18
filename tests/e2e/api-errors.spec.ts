@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 async function enterModeLobby(page: import("@playwright/test").Page): Promise<void> {
   await openGameAs(page, "/", "测试牌友");
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await page.getByTestId("mode-friends").click();
 }
 

@@ -353,9 +353,9 @@ const confirmationText = computed(() => {
   return props.step === "fish" ? "确认鱼" : "确认坎数";
 });
 const declarationDescription = computed(() => props.step === "fish"
-  ? "选择要亮出的鱼；默认已选推荐鱼，确认后其他玩家先看到红色牌背。"
+  ? "选择要亮出的鱼；推荐鱼已选好，没有鱼也可直接确认。其他玩家先看到红色牌背。"
   : props.step === "kong"
-    ? "选择声明坎数，再点击确认坎数；手牌中的坎候选均已标出。"
+    ? "手牌中的坎候选已标出；选择坎数，没有坎选 0，再点确认。"
     : "声明已经完成，正在等待其他玩家声明。",
 );
 const declarationStatusText = computed(() => {
