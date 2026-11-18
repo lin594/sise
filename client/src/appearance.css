@@ -886,7 +886,16 @@ html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .self-groups-
     justify-content: flex-start;
   }
 
-  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .player-right:has(.opponent-rack) .seat-identity {
-    justify-content: flex-end;
+}
+
+@media (min-width: 761px) and (min-height: 381px), (min-height: 761px) and (min-width: 381px) {
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    .player-right:has(.opponent-rack) .seat-identity {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
   }
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .center-pointer.pointer-down {
+  bottom: 2px;
 }
