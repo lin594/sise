@@ -109,18 +109,20 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
         handsVisible: [...board.querySelectorAll<HTMLElement>('.hand-card')].every(el => within(el.getBoundingClientRect(), board.querySelector('.hand')!.getBoundingClientRect())),
         sides: flows.map(el => el.dataset.flowSide).sort(),
         angles: Object.fromEntries(flows.map(el => [el.dataset.flowSide, getComputedStyle(el.querySelector('.discard-token')!).rotate])),
-        textUpright: [...board.querySelectorAll<HTMLElement>('.card .text, .card .color-seal')].every(text => {
+        textOrientation: [...board.querySelectorAll<HTMLElement>('.card .text, .card .color-seal')].every(text => {
+          if (!text.getClientRects().length) return true;
           const card = text.closest('.card')!;
           const cardAngle = parseFloat(getComputedStyle(card).rotate) || 0;
           const textStyle = getComputedStyle(text);
           const matrix = new DOMMatrix(textStyle.transform);
           const total = cardAngle + (parseFloat(textStyle.rotate) || 0) + Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
-          return Math.abs(total % 360) < 0.01;
+          const expected = text.classList.contains('text-bottom') ? 180 : 0;
+          return Math.abs(Math.sin((total - expected) * Math.PI / 360)) < 0.001;
         }),
         flowCount: flows.map(el => el.querySelectorAll('.discard-token').length),
       };
     }), { message: `${width}x${height}` }).toMatchObject({ viewport: [width, height], appliedViewport: [width, height], withinViewport: true, contained: true, noOverlap: true, tableFits: true, handsVisible: true,
-      textUpright: true, sides: ['bottom', 'left', 'right', 'top'], angles: { bottom: '0deg', left: '90deg', right: '-90deg', top: '180deg' }, flowCount: [15, 15, 15, 15] });
+      textOrientation: true, sides: ['bottom', 'left', 'right', 'top'], angles: { bottom: '0deg', left: '90deg', right: '-90deg', top: '180deg' }, flowCount: [15, 15, 15, 15] });
     // Every river can expose its final card without scrolling the whole table.
     for (const flow of await page.locator('.flow-card').all()) {
       await flow.locator('.discard-strip').evaluate(el => { el.scrollTop = el.scrollHeight; });
@@ -131,6 +133,46 @@ for (const mode of ['long', 'large']) test(`mahjong ${mode} keeps crowded rivers
       }), { message: `last river card visible after scroll at ${width}x${height}` }).toBe(true);
     }
     await page.screenshot({ path: info.outputPath(`mahjong-${mode}-${width}x${height}.png`) });
+  }
+});
+
+test('long faces print opposing names at equal distances from the centre without overlap', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await start(page);
+  await crowd(page);
+  for (const [width, height] of [[844, 390], [568, 320], [1440, 900], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    const board = page.getByTestId('game-board');
+    await expect(board.locator('.hand-card .text-bottom').first()).toBeVisible();
+    await expect.poll(() => board.locator('.card.mode-long').evaluateAll(cards => {
+      const failures: string[] = [];
+      const ink = (text: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        return range.getBoundingClientRect();
+      };
+      for (const card of cards) {
+        const top = card.querySelector('.text-top')!;
+        const bottom = card.querySelector('.text-bottom')!;
+        const face = card.getBoundingClientRect();
+        if (!face.width || !face.height) continue;
+        if (!bottom.getClientRects().length) {
+          if (!card.matches('.mini-card, .discard-token') || !top.getClientRects().length)
+            failures.push(`missing name: ${card.className}`);
+          continue;
+        }
+        const a = ink(top), b = ink(bottom);
+        const across = Math.max(a.left - b.right, b.left - a.right);
+        const down = Math.max(a.top - b.bottom, b.top - a.bottom);
+        const mirrorX = (a.left + a.right + b.left + b.right) / 2 - (face.left + face.right);
+        const mirrorY = (a.top + a.bottom + b.top + b.bottom) / 2 - (face.top + face.bottom);
+        const rotation = new DOMMatrix(getComputedStyle(bottom).transform);
+        if (top.textContent !== bottom.textContent || rotation.a > -.999 || rotation.d > -.999 ||
+            Math.max(across, down) < 0.5 || Math.max(Math.abs(mirrorX), Math.abs(mirrorY)) > 1.5)
+          failures.push(`${card.className} gap=${Math.max(across, down)} offset=${mirrorX},${mirrorY}`);
+      }
+      return failures.slice(0, 4);
+    }), { message: `two-ended ink at ${width}x${height}` }).toEqual([]);
   }
 });
 
@@ -193,21 +235,27 @@ for (const assist of [false, true]) for (const zone of ['flow', 'meld'] as const
       const face = document.querySelector<HTMLElement>(`[data-transition-card-id="${id}"] .card`)!;
       const landing = document.querySelector<HTMLElement>(`${destination} [data-face-id="${id}"]`)!;
       const a = face.getBoundingClientRect(), b = landing.getBoundingClientRect();
+      const inkAngle = (card: Element, mark: Element) => {
+        let angle = 0;
+        for (const part of [card, mark.parentElement!, mark]) {
+          const style = getComputedStyle(part);
+          const matrix = new DOMMatrix(style.transform);
+          angle += (parseFloat(style.rotate) || 0) + Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+        }
+        return angle;
+      };
       return { delta: Math.max(Math.abs(a.left - b.left), Math.abs(a.top - b.top), Math.abs(a.width - b.width), Math.abs(a.height - b.height)),
         sealDelta: Math.max(...['left', 'top', 'width', 'height'].map(key => Math.abs((face.querySelector('.color-seal')!.getBoundingClientRect() as any)[key] - (landing.querySelector('.color-seal')!.getBoundingClientRect() as any)[key]))),
         transform: getComputedStyle(face).transform,
-        textUpright: [...face.querySelectorAll('.text, .color-seal')].every(text => {
-          if (!text.getClientRects().length) return true;
-          const inkMatrix = new DOMMatrix(getComputedStyle(text.parentElement!).transform);
-          const matrix = new DOMMatrix(getComputedStyle(face).transform);
-          const textStyle = getComputedStyle(text);
-          const textMatrix = new DOMMatrix(textStyle.transform);
-          const total = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI + (parseFloat(textStyle.rotate) || 0)
-            + Math.atan2(textMatrix.b, textMatrix.a) * 180 / Math.PI + Math.atan2(inkMatrix.b, inkMatrix.a) * 180 / Math.PI;
-          return Math.abs(total % 360) < 0.01;
+        textOrientation: ['.text-top', '.text-bottom', '.color-seal'].every(selector => {
+          const first = face.querySelector(selector), last = landing.querySelector(selector);
+          if (!first?.getClientRects().length || !last?.getClientRects().length)
+            return !first?.getClientRects().length && !last?.getClientRects().length;
+          const difference = inkAngle(face, first) - inkAngle(landing, last);
+          return Math.abs(Math.sin(difference * Math.PI / 360)) < 0.001;
         }) };
     }, { id: card.id, destination });
-    expect(match.textUpright).toBe(true);
+    expect(match.textOrientation).toBe(true);
     expect(match.delta).toBeLessThanOrEqual(1);
     if (assist) expect(match.sealDelta).toBeLessThanOrEqual(1);
     expect(match.transform).not.toBe('none');

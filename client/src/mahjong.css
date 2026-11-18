@@ -1,7 +1,6 @@
 /* Names use a narrow rail; the remaining space belongs to complete melds. */
 .board[data-table-layout="mahjong"] {
   --mahjong-card-angle: 0deg;
-  --card-bottom-text-angle: 0deg;
   --card-text-width: max-content;
   --mahjong-top-height: 25px;
   --mahjong-self-height: 25px;
