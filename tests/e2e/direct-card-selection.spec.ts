@@ -120,6 +120,17 @@ test("duplicate physical cards still count as one visible chi composition", asyn
   await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect.poll(() => page.locator('[data-testid^="hand-card-unique-yellow-ju-"][aria-pressed="true"]').count())
     .toBe(1);
+  const first = page.getByTestId("hand-card-unique-yellow-ju-1");
+  const second = page.getByTestId("hand-card-unique-yellow-ju-2");
+  await first.click();
+  await second.click();
+  await page.getByTestId("chi-choices").getByRole("button").click();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("action-chi").click();
+  await expect(page.getByTestId("discard-confirm")).toBeVisible();
+  await expect(second).toHaveCount(0);
+  await expect(first).toBeVisible();
 });
 
 test("a complete local chi draft survives an authoritative refresh for the same card", async ({ page }) => {
@@ -173,7 +184,8 @@ test("a confirmed local chi is applied exactly once after the collective window 
   await expect.poll(exposedCounts).toEqual([1, 1, 1, 1]);
 });
 
-test("a player can freely choose a three-color or four-color zu chi from the hand", async ({ page }) => {
+test("a player can freely choose a three-color or four-color zu chi from the hand", async ({ page }, info) => {
+  await page.setViewportSize({ width: 844, height: 390 });
   await enterPractice(page);
   await setupChiScenario(page, "chi_four_zu");
 
@@ -194,6 +206,10 @@ test("a player can freely choose a three-color or four-color zu chi from the han
   const four = choices.locator('[data-kind="zu4"]');
   await expect(four.locator('[data-face-id]')).toHaveCount(4);
   await four.click();
+  await expect(four).toHaveAttribute("aria-pressed", "true");
+  await expect(four).toBeInViewport();
+  await expect(chi).toBeInViewport();
+  await page.screenshot({ path: info.outputPath("four-color-chi.png") });
   await expect(white).toHaveAttribute("aria-pressed", "true");
   await white.click();
   await expect(selectedThree).toHaveCount(1);

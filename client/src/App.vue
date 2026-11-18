@@ -273,6 +273,7 @@
         :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
+        @cancel-preselection="cancelLocalPreselection"
       >
         <template #guidance>
           <ContextHint v-if="currentHint && !tutorial" :concept="currentHint" :text="contextHintText" @dismiss="dismissContextHintAndRestoreFocus" @disable="disableContextHintsAndRestoreFocus" />
@@ -1714,6 +1715,11 @@ function actionFromRequest(request: ActionRequest): string {
 
 function candidateIdFromRequest(request: ActionRequest): string {
   return typeof request === "string" ? "" : String(request.candidateId ?? "").trim();
+}
+
+function cancelLocalPreselection(): void {
+  pendingDeferredChiIntent.value = null;
+  pendingDeferredGrab.value = null;
 }
 
 function onPanelSubmit(request: ActionRequest) {

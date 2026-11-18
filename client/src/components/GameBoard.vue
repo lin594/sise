@@ -639,7 +639,11 @@
         data-testid="decision-status"
         role="status"
         aria-live="polite"
-      >{{ flowStatusText }}</div>
+      >
+        {{ flowStatusText }}
+        <button v-if="props.deferredChiPending || props.deferredGrabPending" type="button"
+          class="cancel-preselection" data-testid="cancel-preselection" @click="cancelPreselection">撤销预选</button>
+      </div>
     </Transition>
 
     <section v-if="listeningDetailsOpen && listeningDetailWaits.length" id="listening-details" ref="listeningDetailsRef"
@@ -923,6 +927,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   geometryBusy: [busy: boolean];
+  cancelPreselection: [];
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
 }>();
@@ -2002,8 +2007,8 @@ const chiReceipt = computed(() => {
 });
 const flowStatusText = computed(() => {
   if (chiReceipt.value) return chiReceipt.value;
-  if (props.deferredChiPending) return "已预选吃；轮到你时尝试执行，胡、开、碰仍可响应";
-  if (props.deferredGrabPending) return "已预选抓；轮到你时尝试执行，胡、开、碰仍可响应";
+  if (props.deferredChiPending) return "已预选吃，等待本牌轮到你";
+  if (props.deferredGrabPending) return "已预选抓，等待本牌轮到你";
   if (props.state?.phase === "declaring") {
     return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
       ? "等待其他玩家声明"
@@ -2269,7 +2274,15 @@ function ensureHandCardSelected(cardId: string): void {
   }
 }
 
+function cancelPreselection(): void {
+  confirmedChi.value = null;
+  emit("cancelPreselection");
+}
 function clearChiSelection(event?: KeyboardEvent): void {
+  if (props.deferredChiPending || props.deferredGrabPending) {
+    event?.preventDefault();
+    cancelPreselection();
+  }
   if (selectedChiCardIds.value.length === 0) {
     return;
   }
@@ -2593,7 +2606,9 @@ function onSubmitAction(request: ActionRequest): void {
       };
     }
   }
-  if (typeof request === "object" ? request.action !== "chi" : request !== "pass" || props.responsePhase !== "collective") {
+  const isPriorityPass = request === "pass" && props.responsePhase === "collective";
+  const isChi = typeof request === "object" && request.action === "chi";
+  if (!isChi && !isPriorityPass) {
     confirmedChi.value = null;
   }
   chiValidationMessage.value = "";
@@ -6350,9 +6365,29 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
 }
 
+.cancel-preselection {
+  pointer-events: auto;
+  min-height: 32px;
+  margin-inline-start: 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
 .board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
 </style>
 
 <style scoped src="../mahjong.css">
+.cancel-preselection {
+  pointer-events: auto;
+  min-height: 32px;
+  margin-inline-start: 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
 .board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
 </style>

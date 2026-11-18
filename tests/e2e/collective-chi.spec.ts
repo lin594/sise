@@ -6,7 +6,7 @@ async function inject(page: Page, scenario: string) {
   await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario, ok: true });
 }
 
-for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect'] as const) {
+for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect', 'cancel'] as const) {
   test(`confirmed collective chi respects ${outcome} and consumes each card once`, async ({ browser }) => {
     const hostContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
     const guestContext = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
@@ -25,7 +25,7 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect']
       await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
       await expect(host.getByTestId('action-chi')).toBeEnabled();
       await expect(host.getByTestId('action-guidance')).toContainText('可以提前吃');
-      await expect(host.getByTestId('action-guidance')).toContainText('若无人胡、开、碰抢牌，稍后自动生效');
+      await expect(host.getByTestId('action-guidance')).toContainText('轮到你且来牌仍可吃时自动执行');
       await expect(host.getByTestId('action-chi')).toHaveAttribute('aria-label', /提前吃/);
       if (outcome === 'only-chi') {
         await expect(host.getByTestId('action-peng')).toHaveCount(0);
@@ -41,10 +41,16 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect']
       await expect(host.getByTestId('hand-card-confirm-ma')).toHaveAttribute('aria-pressed', 'true');
       await host.getByTestId('action-chi').click();
       if (outcome !== 'only-chi') {
-        await expect(host.getByTestId('decision-status')).toContainText('已预选吃；轮到你时尝试执行，胡、开、碰仍可响应');
+        await expect(host.getByTestId('decision-status')).toContainText('已预选吃，等待本牌轮到你');
         await expect(host.getByTestId('action-peng')).toBeEnabled();
         await host.getByTestId('action-pass').click();
         await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
+        if (outcome === 'cancel') {
+          await host.getByTestId('cancel-preselection').click();
+          await expect(host.getByTestId('cancel-preselection')).toHaveCount(0);
+          await expect.poll(() => host.evaluate(() => (window as any).__siseLocalTest.getDeferredChiDebug().intent)).toBeNull();
+          await expect(host.getByTestId('action-peng')).toHaveCount(0);
+        }
         if (outcome === 'disconnect') {
           await hostContext.setOffline(true);
           await expect(host.locator('main.layout')).toHaveAttribute('data-connection-state', 'offline');
@@ -53,8 +59,8 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect']
           await expect(host.locator('main.layout')).toHaveAttribute('data-connection-state', /^(connected|restored)$/);
         }
         if (outcome === 'delayed-hand') await host.evaluate(() => (window as any).__siseLocalTest.setPrivateHandReadyOverride(false));
-        await guest.getByTestId(`action-${outcome === 'delayed-hand' || outcome === 'disconnect' ? 'pass' : outcome}`).click();
-        if (outcome === 'disconnect') {
+        await guest.getByTestId(`action-${['delayed-hand', 'disconnect', 'cancel'].includes(outcome) ? 'pass' : outcome}`).click();
+        if (outcome === 'disconnect' || outcome === 'cancel') {
           await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'local_upper', { timeout: 15_000 });
           await expect(host.getByTestId('action-chi')).toBeEnabled();
           await expect(host.getByTestId('hand-card-confirm-ma')).toBeVisible();
@@ -78,7 +84,7 @@ for (const outcome of ['pass', 'peng', 'only-chi', 'delayed-hand', 'disconnect']
       });
       await expect(host.getByTestId('decision-status')).toContainText(outcome === 'peng' ? '全局响应碰了' : '已吃进', { timeout: 15_000 });
       await expect.poll(consumed, { timeout: 15_000 }).toEqual(outcome === 'peng' ? [1, 0, 0] : [1, 1, 1]);
-      await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃；轮到你时尝试执行，胡、开、碰仍可响应' })).toHaveCount(0);
+      await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃，等待本牌轮到你' })).toHaveCount(0);
       await host.waitForTimeout(350);
       expect(await consumed()).toEqual(outcome === 'peng' ? [1, 0, 0] : [1, 1, 1]);
     } catch (error) {
@@ -118,7 +124,7 @@ test('drawn red horse offers downstream Chi/Peng/Pass together and applies Chi a
     await expect(host.getByTestId('action-pass')).toBeEnabled();
     await expect(host.getByTestId('action-guidance')).toContainText('可以提前吃');
     await expect(host.getByTestId('action-guidance')).toContainText('当前可选择碰、吃或过');
-    await expect(host.getByTestId('action-chi')).toHaveAttribute('aria-label', /若无人胡、开、碰抢牌，稍后自动生效/);
+    await expect(host.getByTestId('action-chi')).toHaveAttribute('aria-label', /轮到你且来牌仍可吃时自动执行/);
 
     await host.getByTestId('hand-card-draw-red-ju').click();
     await host.getByTestId('hand-card-draw-red-pao').click();
@@ -127,7 +133,7 @@ test('drawn red horse offers downstream Chi/Peng/Pass together and applies Chi a
 
     const clickedAt = Date.now();
     await host.getByTestId('action-chi').click();
-    await expect(host.getByTestId('decision-status')).toContainText('已预选吃；轮到你时尝试执行，胡、开、碰仍可响应');
+    await expect(host.getByTestId('decision-status')).toContainText('已预选吃，等待本牌轮到你');
     await expect(host.getByTestId('action-peng')).toBeEnabled();
     await host.getByTestId('action-pass').click();
 
@@ -139,7 +145,7 @@ test('drawn red horse offers downstream Chi/Peng/Pass together and applies Chi a
     });
     await expect.poll(consumed, { timeout: 5_000 }).toEqual([1, 1, 1]);
     expect(Date.now() - clickedAt).toBeLessThan(5_000);
-    await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃；轮到你时尝试执行，胡、开、碰仍可响应' })).toHaveCount(0);
+    await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃，等待本牌轮到你' })).toHaveCount(0);
   } finally {
     await guestContext.close();
     await hostContext.close();
@@ -181,7 +187,7 @@ test('a drawn general accepts one deferred Chi and resolves after the shared pri
       Number((window as any).__siseLocalTest.getDecisionTimer().endsAt ?? 0),
     );
     await host.getByTestId('action-chi').click();
-    await expect(host.getByTestId('decision-status')).toContainText('已预选吃；轮到你时尝试执行，胡、开、碰仍可响应');
+    await expect(host.getByTestId('decision-status')).toContainText('已预选吃，等待本牌轮到你');
     await expect(host.getByTestId('game-board')).toHaveAttribute('data-response-phase', 'collective');
 
     const consumed = () => host.evaluate(() => {
@@ -225,13 +231,13 @@ for (const interceptor of ['kai', 'hu'] as const) {
       await host.getByTestId('hand-card-confirm-ma').click();
       await host.getByTestId('hand-card-confirm-pao').click();
       await host.getByTestId('action-chi').click();
-      await expect(host.getByTestId('decision-status')).toContainText('已预选吃；轮到你时尝试执行，胡、开、碰仍可响应');
+      await expect(host.getByTestId('decision-status')).toContainText('已预选吃，等待本牌轮到你');
 
       await expect(guest.getByTestId(`action-${interceptor}`)).toBeEnabled();
       await guest.getByTestId(`action-${interceptor}`).click();
       await expect(host.getByTestId('decision-status')).toContainText(`抢牌-${interceptor}${interceptor === 'hu' ? '胡' : '开'}了`);
       await expect.poll(() => host.evaluate(() => (window as any).__siseLocalTest.getDeferredChiDebug().intent)).toBeNull();
-      await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃；轮到你时尝试执行，胡、开、碰仍可响应' })).toHaveCount(0);
+      await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃，等待本牌轮到你' })).toHaveCount(0);
       await host.waitForTimeout(350);
       const deferredCardsConsumed = await host.evaluate(() => {
         const state = (window as any).__siseLocalTest.getRoomState();
@@ -267,13 +273,13 @@ test('the drawer taking a drawn card by Chi clears the downstream deferred Chi',
     await host.getByTestId('hand-card-draw-red-ju').click();
     await host.getByTestId('hand-card-draw-red-pao').click();
     await host.getByTestId('action-chi').click();
-    await expect(host.getByTestId('decision-status')).toContainText('已预选吃；轮到你时尝试执行，胡、开、碰仍可响应');
+    await expect(host.getByTestId('decision-status')).toContainText('已预选吃，等待本牌轮到你');
 
     await expect(owner.getByTestId('action-chi')).toBeEnabled();
     await owner.getByTestId('action-chi').click();
     await expect(host.getByTestId('decision-status')).toContainText('抓牌者吃了');
     await expect.poll(() => host.evaluate(() => (window as any).__siseLocalTest.getDeferredChiDebug().intent), { timeout: 10_000 }).toBeNull();
-    await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃；轮到你时尝试执行，胡、开、碰仍可响应' })).toHaveCount(0);
+    await expect(host.getByTestId('decision-status').filter({ hasText: '已预选吃，等待本牌轮到你' })).toHaveCount(0);
     await host.waitForTimeout(350);
     const downstreamCardsConsumed = await host.evaluate(() => {
       const state = (window as any).__siseLocalTest.getRoomState();

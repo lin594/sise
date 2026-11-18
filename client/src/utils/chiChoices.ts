@@ -29,7 +29,7 @@ export function chiChoices(
     if (previous && (previous.overlap > overlap ||
         (previous.overlap === overlap && previous.choice.candidate.id <= candidate.id))) continue;
     groups.set(key, { overlap, choice: {
-      key, candidate, cards, name: names[candidate.kind ?? ""] ?? candidate.title,
+      key, candidate, cards, name: candidate.kind === "pair" && cards.length === 2 ? "三张同牌" : names[candidate.kind ?? ""] ?? candidate.title,
       selected: selected.size === cards.length && overlap === cards.length,
     } });
   }

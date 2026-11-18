@@ -198,7 +198,7 @@ const panelAnnouncement = computed(() => {
   if (hasDeferredChi.value) {
     const choices = joinActionChoices(normalized.value);
     const turnPrompt = isEarlyCollectiveChoice.value ? "" : "该你操作了。";
-    return `${turnPrompt}可以提前吃；若无人胡、开、碰抢牌，稍后自动生效。当前可选择${choices}。`;
+    return `${turnPrompt}可以提前吃，轮到你且来牌仍可吃时自动执行。当前可选择${choices}。`;
   }
   if (isEarlyCollectiveChoice.value) {
     const choices = joinActionChoices(normalized.value);
@@ -235,7 +235,7 @@ function actionText(item: PanelAction): string {
 
 function actionAccessibleLabel(item: PanelAction): string {
   if (item.action === "chi" && item.deferred) {
-    return "提前吃；若无人胡、开、碰抢牌，稍后自动生效";
+    return "提前吃，轮到你且来牌仍可吃时自动执行";
   }
   return actionText(item);
 }
