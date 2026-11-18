@@ -34,4 +34,3 @@ test("a narrow touch phone rotates while a near-square touch viewport stays nati
   await expect(board).toHaveAttribute("data-table-layout", "compact");
   await expect(page.getByTestId("action-chi")).toBeInViewport({ ratio: 1 });
 });
-

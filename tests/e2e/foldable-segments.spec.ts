@@ -46,6 +46,18 @@ test("a masked browser viewport uses its larger pane for both the card and the a
     await expect(layout).not.toHaveClass(/\bhinge-safe-viewport\b/);
     await expect(layout).toHaveAttribute("data-effective-viewport", "716x800");
     await expect(layout).toHaveAttribute("data-rotated-phone-portrait", "false");
+
+    await cdp.send("Emulation.setDeviceMetricsOverride", { ...metrics,
+      displayFeature: { orientation: "horizontal", offset: 370, maskLength: 24 },
+    });
+    await expect(layout).toHaveAttribute("data-effective-viewport", "716x406");
+    for (const target of [page.getByTestId("pending-card"), page.getByTestId("action-chi")]) {
+      const box = await target.boundingBox();
+      expect(box!.y).toBeGreaterThanOrEqual(393);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(801);
+    }
+    await page.getByTestId("action-chi").tap();
+    await expect(page.getByTestId("discard-confirm")).toBeVisible();
   } finally {
     await cdp.send("Emulation.clearDeviceMetricsOverride");
     await cdp.detach();
