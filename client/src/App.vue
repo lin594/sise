@@ -355,6 +355,14 @@
               <b :class="scoreToneClass(mySettlementPlayer.cumulativeScore)">{{ signedScore(mySettlementPlayer.cumulativeScore) }}分</b>
             </span>
             <small class="settlement-overview-help">你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
+            <div v-if="finalMeld" class="winning-slip" data-testid="winning-slip" role="group" aria-label="最后成组的牌">
+              <span class="winning-slip-caption">收牌成组</span>
+              <span v-for="(card, index) in finalMeld" :key="card.id" class="slip-face" role="img"
+                :data-color="card.color" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
+                :aria-label="getCardAccessibleText(card) + (index === 0 ? '，最后收进的牌' : '')">
+                {{ card.color === 'gold' ? '金' : getCardColorText(card) }}<b>{{ getCardFaceText(card) }}</b>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -743,6 +751,7 @@ import { useDisplayPreferences } from "@/composables/useDisplayPreferences";
 import { useInstallGuide } from "@/composables/useInstallGuide";
 import { useOfflineReadiness } from "@/composables/useOfflineReadiness";
 import { sessionAudioMuted } from "@/composables/sessionAudio";
+import { usePaperSounds } from "@/composables/usePaperSounds";
 import { useResponsiveViewport } from "@/composables/useResponsiveViewport";
 import { useRoom } from "@/composables/useRoom";
 import { useEntryProfile, ENTRY_NAME_KEY } from "@/composables/useEntryProfile";
@@ -760,7 +769,7 @@ import type {
   RenderedCardMode,
   RoomStateSnapshot,
 } from "@/types/game";
-import { getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardColorText, getCardFaceText, getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
@@ -1241,6 +1250,7 @@ const {
   isSettlementWinner,
   settlementHandCardMode,
   winnerSettlementPlayer,
+  finalMeld,
   huCalculationLines,
   winnerPerOpponentScore,
   settlementScoreLines,
@@ -1529,6 +1539,12 @@ const spokenTurnGuidanceSupported =
   typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
 const screenWakeLockSupported = isScreenWakeLockSupported();
 const spokenTurnGuidance = computed(() => !sessionAudioMuted.value && displayPreferences.value.spokenTurnGuidance);
+usePaperSounds({
+  state,
+  connected,
+  enabled: computed(() => displayPreferences.value.paperSounds && !sessionAudioMuted.value),
+  narrating: computed(() => spokenTurnGuidanceSupported && spokenTurnGuidance.value && settingsDecisionActive.value),
+});
 const spokenDecisionMessage = computed(() => {
   if (!settingsDecisionActive.value) {
     return "";
@@ -2872,6 +2888,63 @@ watch(
   outline: 3px solid var(--ui-accent, #38bdf8);
   outline-offset: -3px;
 }
+
+/* Paper score sheet laid over the felt. The compact view keeps its fixed header. */
+html[data-skin="puxian-house"] .layout .hu-panel {
+  background: linear-gradient(105deg, #fbf5e7, #f3ead6 80%, #efe3c9);
+  color: #382e23;
+  border: 1px solid #ad9270;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 #fdf8ee, 0 3px 0 #b7a489, 0 5px 0 #e5d8bd, 0 12px 30px #11211a52;
+}
+html[data-skin="puxian-house"] .layout .round-overview {
+  background: transparent;
+  border: solid #9f7960;
+  border-width: 1px 0 3px;
+  border-bottom-style: double;
+  border-radius: 0;
+}
+html[data-skin="puxian-house"] .settlement-fixed-head h2 {
+  color: #693521;
+  font-family: var(--skin-font);
+}
+html[data-skin="puxian-house"] .layout .settlement-item {
+  border: 0;
+  border-bottom: 1px solid #c5b597;
+  border-radius: 0;
+  background: transparent;
+}
+.winning-slip {
+  display: flex;
+  align-items: center;
+  gap: .2rem;
+  color: var(--ui-text);
+}
+.winning-slip-caption { font-size: .82rem; margin-right: .25rem; }
+.slip-face {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .1rem;
+  padding: .18rem .28rem;
+  border: 1px solid #79694e;
+  border-radius: 3px;
+  box-shadow: 0 1px 0 #715d44;
+  font-size: .72rem;
+  color: #211e19;
+  background: #f6edda;
+}
+.slip-face b { font-size: 1rem; }
+.slip-face[data-color="red"] { background: #e8957f; }
+.slip-face[data-color="yellow"], .slip-face[data-color="gold"] { background: #efce75; }
+.slip-face[data-color="green"] { background: #a1cda5; }
+.slip-face[data-incoming] { margin-right: .18rem; border-bottom: 2px solid #803b20; }
+.layout:not(.compact-viewport) .winning-slip {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  justify-self: end;
+}
+.layout.compact-viewport .winning-slip { gap: .12rem; }
+.layout.compact-viewport .slip-face { padding: .05rem .16rem; }
 
 .settlement-fixed-head {
   flex: 0 0 auto;

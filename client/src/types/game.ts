@@ -43,6 +43,7 @@ export interface GameDisplayPreferences {
   tableCards: CardDisplayMode;
   seatDirection: SeatDirection;
   turnAlert: TurnAlertMode;
+  paperSounds: boolean;
   spokenTurnGuidance: boolean;
   showCardColorAssist: boolean;
   reduceMotion: boolean;

@@ -398,6 +398,21 @@ export function useSettlement({ state, huResult, roundResult, players, mySeatId,
     return settlementPlayers.value.find((player) => player.clientId === winnerId) ?? null;
   });
 
+  const finalMeld = computed(() => {
+    const winner = winnerSettlementPlayer.value;
+    if (!winner) return null;
+    const incoming = winner.winningGroups.find(group => group.cards.length)?.cards;
+    if (incoming) return incoming;
+
+    // A no-discard win can finish with a group that is already on the table.
+    const last = state.value?.tableTransitions?.at(-1);
+    if (last?.kind !== "meld" || last.round !== settlementRoundNumber.value) return null;
+    const taken = last.moves.find(move => move.from.zone !== "hand" && move.to.playerId === winner.clientId);
+    if (!taken) return null;
+    const group = settlementGroupBlocks(winner).find(block => block.cards.some(card => card.id === taken.card.id));
+    return group ? [taken.card, ...group.cards.filter(card => card.id !== taken.card.id)] : null;
+  });
+
   const huCalculationLines = computed(() =>
     (winnerSettlementPlayer.value?.scoreBreakdown ?? [])
       .filter((line) => /^Hu(Base|Win|BigMultiplier)/.test(String(line.key ?? "")))
@@ -702,6 +717,7 @@ export function useSettlement({ state, huResult, roundResult, players, mySeatId,
     isSettlementWinner,
     settlementHandCardMode,
     winnerSettlementPlayer,
+    finalMeld,
     huCalculationLines,
     winnerPerOpponentScore,
     settlementScoreLines,

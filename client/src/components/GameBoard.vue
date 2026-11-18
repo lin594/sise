@@ -824,6 +824,7 @@ import { visibleDecisionEndsAt } from "@/utils/decisionClock";
 import { getCardAccessibleText, getCardLabelText } from "@/utils/cardText";
 import {
   getDisplayedTurnPlayerId,
+  TABLE_CARD_TRAVEL_MS,
   getRoundKey,
   projectResponseCardPlacement,
 } from "@/utils/gameFlowPresentation";
@@ -1591,7 +1592,7 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
   const draw = event.kind === "draw";
   // Travel in 200ms, then hold the exact rectangle for the rest of the shared
   // presentation window so players can recognize the actor and result.
-  const progress = Math.min(1, elapsed / 200);
+  const progress = Math.min(1, elapsed / TABLE_CARD_TRAVEL_MS);
   const eased = 1 - Math.pow(1 - progress, 3);
   const flipping = draw && elapsed >= 700;
   const back = draw && elapsed < 950;
@@ -1621,7 +1622,7 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
   }
   return [{ key, card: move.card, kind: event.kind,
     back, rotation: draw ? (back ? flip : flip - 180) : 0,
-    stage: draw ? (elapsed < 200 ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
+    stage: draw ? (elapsed < TABLE_CARD_TRAVEL_MS ? "flying" : flipping ? "flipping" : "waiting") : progress < 1 ? "flying" : "landed",
     destinationZone: move.to.zone,
     cardSize: destinationVisual.size,
     cardClass: destinationVisual.className,

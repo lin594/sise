@@ -415,7 +415,8 @@ function normalizeRoundResultPayload(payload: RoundResultPayload): RoundResultPa
       huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
       winningGroups: (p.winningGroups ?? []).map((group) => ({
         key: String(group?.key ?? ""),
-        cards: sortHandCards(group?.cards ?? []),
+        // The settlement places the incoming card first in this group.
+        cards: asCardArray(group?.cards),
       })),
       resolvedHandGroups: (p.resolvedHandGroups ?? []).map((group) => ({
         key: String(group?.key ?? ""),
