@@ -123,11 +123,12 @@ test("a drawn general can be eaten locally and continues to the discard step", a
           __siseLocalTest?: {
             advanceOfflinePracticeAsBot: () => boolean;
             getDeferredChiDebug: () => {
-              actions?: Array<{ action: string; deferred?: boolean }>;
+              actions?: Array<{ action: string; enabled?: boolean }>;
             };
             getRoomState: () => {
               phase?: string;
               currentPlayerId?: string;
+              responsePhase?: string;
               responseCard?: { id?: string; color?: string; type?: string } | null;
             } | null;
           };
@@ -137,9 +138,10 @@ test("a drawn general can be eaten locally and continues to the discard step", a
         if (
           room?.phase === "playing" &&
           room.currentPlayerId === "seat_0" &&
+          room.responsePhase === "local_draw" &&
           room.responseCard?.color === "white" &&
           room.responseCard.type === "jiang" &&
-          actions.some((action) => action.action === "chi" && action.deferred)
+          actions.some((action) => action.action === "chi" && action.enabled)
         ) {
           return room.responseCard.id ?? "";
         }

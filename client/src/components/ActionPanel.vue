@@ -193,11 +193,11 @@ const panelAnnouncement = computed(() => {
   if (hasDeferredChi.value) {
     const choices = joinActionChoices(normalized.value);
     const turnPrompt = isEarlyCollectiveChoice.value ? "" : "该你操作了。";
-    return `${turnPrompt}可以提前吃；若无人胡、开、碰抢牌，稍后自动生效。当前可选择${choices}。`;
+    return `${turnPrompt}可以提前吃，确认即放弃本轮胡、开、碰，轮到你且来牌仍可吃时自动执行。当前可选择${choices}。`;
   }
   if (isEarlyCollectiveChoice.value) {
     const choices = joinActionChoices(normalized.value);
-    return `可以选择${choices}；多人要牌时，按胡、开、碰的顺序，同种操作按座次先后。`;
+    return `可以选择${choices}；多人要牌时，胡优先，开和碰按座次先后。`;
   }
   const timing = props.untimed
     ? "练习不限时。"
@@ -206,7 +206,7 @@ const panelAnnouncement = computed(() => {
       : `还剩 ${secondsLeft.value} 秒。`;
   if (props.canDiscard) return `该你操作了。${timing}先选一张手牌，再点“出牌”。`;
   if (normalized.value.some((item) => item.action === "chi")) {
-    return `该你操作了。${timing}可以直接选择手牌组成吃法，再按吃。`;
+    return `该你操作了。${timing}可以点一种吃法，或直接选择手牌，再按吃。`;
   }
   return needsDecision.value ? `该你操作了。${timing}` : "";
 });
@@ -230,7 +230,7 @@ function actionText(item: PanelAction): string {
 
 function actionAccessibleLabel(item: PanelAction): string {
   if (item.action === "chi" && item.deferred) {
-    return "提前吃；若无人胡、开、碰抢牌，稍后自动生效";
+    return "提前吃，确认即放弃本轮胡、开、碰，轮到你且来牌仍可吃时自动执行";
   }
   return actionText(item);
 }

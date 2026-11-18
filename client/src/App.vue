@@ -235,6 +235,7 @@
 
     <template v-else>
       <GameBoard
+        :connected="connected"
         :guidance-active="Boolean(tutorial || currentHint)"
         :tutorial-step="tutorial?.step"
         :class="{ 'small-table-viewport': effectiveWidth <= 740 && effectiveHeight <= 400 }"
@@ -255,6 +256,7 @@
         :response-phase="state?.responsePhase || ''"
         :interaction-paused-message="interactionPausedMessage"
         :deferred-chi-pending="Boolean(pendingDeferredChiIntent)"
+        :deferred-grab-pending="Boolean(pendingDeferredGrab)"
         :decision-untimed="decisionTimer.untimed"
         :decision-timer-total-ms="decisionTimer.totalMs"
         :decision-timer-ends-at="decisionTimer.endsAt"
@@ -1074,7 +1076,6 @@ function disableContextHintsAndRestoreFocus(): void {
 
 const interactionPausedMessage = computed(() => {
   if (connected.value) {
-    if (pendingDeferredChiIntent.value) return "已选择吃，等待其他玩家响应";
     if (mePlayer.value?.isAutoPlay && (isDeclaring.value || isPlaying.value)) {
       return "机器人正在替你操作，可在顶部取消托管";
     }
@@ -1113,7 +1114,7 @@ type DeferredChiIntent = {
   collectiveDecisionKey: string;
 };
 const pendingDeferredChiIntent = ref<DeferredChiIntent | null>(null);
-const pendingDeferredGrab = ref(false);
+const pendingDeferredGrab = ref<Omit<DeferredChiIntent, "candidateId"> | null>(null);
 const candidateTargetCard = computed<Card | null>(() => {
   return (state.value?.responseCard ?? state.value?.targetCard ?? state.value?.publicDiscardPile?.[0] ?? null) as Card | null;
 });
@@ -1693,32 +1694,38 @@ function candidateIdFromRequest(request: ActionRequest): string {
 function onPanelSubmit(request: ActionRequest) {
   const action = actionFromRequest(request);
   const isDeferred = typeof request !== "string" && Boolean(request.deferred);
-  if (state.value?.responsePhase === "collective" && action === "pass" && isDeferred) {
-    pendingDeferredGrab.value = true;
-    sendAction("pass");
-    return;
-  }
-  if (state.value?.responsePhase === "collective" && action === "chi" && isDeferred) {
-    if (pendingDeferredChiIntent.value) return;
-    const candidateId = candidateIdFromRequest(request);
+  if (state.value?.responsePhase === "collective" && isDeferred && (action === "chi" || action === "pass")) {
+    if (pendingDeferredChiIntent.value || pendingDeferredGrab.value) return;
     const responseCard = state.value?.responseCard;
     const targetCardId = String(responseCard?.id ?? "");
     const targetSource = responseCard?.source;
-    const responseOwnerId = String(state.value?.pollOriginPlayerId ?? state.value?.currentPlayerId ?? "");
-    if (!candidateId || !targetCardId || (targetSource !== "upper" && targetSource !== "draw")) return;
-    pendingDeferredChiIntent.value = {
+    if (!targetCardId || (targetSource !== "upper" && targetSource !== "draw")) return;
+    const target = {
       roundKey: getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase),
       targetCardId,
       targetSource,
-      responseOwnerId,
-      candidateId,
+      responseOwnerId: String(state.value?.pollOriginPlayerId ?? state.value?.currentPlayerId ?? ""),
       collectiveDecisionKey: decisionTimer.value.decisionKey,
     };
-    if (sendAction(request) !== "sent") pendingDeferredChiIntent.value = null;
+    if (action === "chi") {
+      const candidateId = candidateIdFromRequest(request);
+      if (!candidateId) return;
+      pendingDeferredChiIntent.value = { ...target, candidateId };
+      pendingDeferredGrab.value = null;
+    } else {
+      pendingDeferredGrab.value = target;
+      pendingDeferredChiIntent.value = null;
+    }
+    // Choosing cards only edits the draft. Confirming consumes this seat's
+    // collective response once; the server validates the hand again to meld.
+    if (sendAction(action === "chi" ? request : "pass") !== "sent") {
+      pendingDeferredChiIntent.value = null;
+      pendingDeferredGrab.value = null;
+    }
     return;
   }
   pendingDeferredChiIntent.value = null;
-  pendingDeferredGrab.value = false;
+  pendingDeferredGrab.value = null;
   sendAction(request);
 }
 
@@ -1771,7 +1778,7 @@ function submitDeferredChiIfReady() {
     pendingDeferredChiIntent.value = null;
     return;
   }
-  if (!connected.value || !privateHandSynchronized.value || !targetCardId) return;
+  if (!connected.value || !privateHandSynchronized.value || tablePresentationActive.value || openingDealActive.value || !targetCardId) return;
   if (!decisionKey || decisionKey === intent.collectiveDecisionKey) return;
   const chiEntry = availableActions.value.find((item) => item.action === "chi");
   if (!chiEntry?.enabled) {
@@ -1796,24 +1803,31 @@ function submitDeferredChiIfReady() {
 }
 
 function submitDeferredGrabIfReady() {
-  if (!pendingDeferredGrab.value) {
+  const intent = pendingDeferredGrab.value;
+  if (!intent) return;
+  const phase = String(state.value?.responsePhase ?? "");
+  const card = state.value?.responseCard;
+  const decisionKey = decisionTimer.value.decisionKey;
+  if (getRoundKey(state.value?.roomId, state.value?.completedRounds, state.value?.phase) !== intent.roundKey ||
+      card?.id !== intent.targetCardId ||
+      /(?:^|\s)(?:HU|KAI|PENG|CHI)(?:\s|$)/.test(String(state.value?.lastAction ?? "")) ||
+      phase === "collective" && (card?.source !== intent.targetSource ||
+        Boolean(decisionKey) && decisionKey !== intent.collectiveDecisionKey)) {
+    pendingDeferredGrab.value = null;
     return;
   }
-  const isLocalUpper =
-    String(state.value?.responsePhase ?? "") === "local_upper" && String(state.value?.currentPlayerId ?? "") === mySeatId.value;
-  if (String(state.value?.responsePhase ?? "") === "collective") {
+  if (phase === "collective") return;
+  const owner = String(state.value?.currentPlayerId ?? "");
+  if (intent.targetSource === "draw" && phase === "local_draw" && owner === intent.responseOwnerId && owner !== mySeatId.value) return;
+  if (phase !== "local_upper" || owner !== mySeatId.value) {
+    pendingDeferredGrab.value = null;
     return;
   }
-  if (!isLocalUpper) {
-    pendingDeferredGrab.value = false;
-    return;
-  }
-  const passEntry = availableActions.value.find((item) => item.action === "pass" && item.enabled);
-  if (!passEntry) {
-    return;
-  }
-  pendingDeferredGrab.value = false;
-  sendAction("pass");
+  if (!connected.value || !privateHandSynchronized.value || tablePresentationActive.value || openingDealActive.value ||
+      !decisionKey || decisionKey === intent.collectiveDecisionKey) return;
+  if (!availableActions.value.some(item => item.action === "pass" && item.enabled)) return;
+  const result = sendAction("pass");
+  if (result === "sent" || result === "invalid") pendingDeferredGrab.value = null;
 }
 
 function submitFishDeclaration(fishCardIds: string[]) {
@@ -1851,8 +1865,9 @@ watch(
 );
 
 watch(
-  () => [decisionTimer.value.decisionKey, privateHandSynchronized.value, acceptedStateRevision.value] as const,
-  () => submitDeferredChiIfReady(),
+  () => [decisionTimer.value.decisionKey, privateHandSynchronized.value, acceptedStateRevision.value,
+    tablePresentationActive.value, openingDealActive.value] as const,
+  () => { submitDeferredGrabIfReady(); submitDeferredChiIfReady(); },
 );
 
 watch(
@@ -1863,7 +1878,7 @@ watch(
 watch(
   () => Boolean(mePlayer.value?.isBot || mePlayer.value?.isAutoPlay),
   (automatic) => {
-    if (automatic) pendingDeferredChiIntent.value = null;
+    if (automatic) { pendingDeferredChiIntent.value = null; pendingDeferredGrab.value = null; }
   },
 );
 
@@ -1920,7 +1935,7 @@ watch(() => connected.value && privateHandSynchronized.value && (canAct.value ||
 watch(connected, (isConnected) => {
   if (!isConnected) {
     pendingDeferredChiIntent.value = null;
-    pendingDeferredGrab.value = false;
+    pendingDeferredGrab.value = null;
     if (roundStartPending.value) {
       clearRoundStartPending();
     }

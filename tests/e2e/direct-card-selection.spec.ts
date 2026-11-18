@@ -1,3 +1,4 @@
+import { resolveTableLayout } from "../../client/src/utils/appearance";
 import { startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -44,6 +45,15 @@ test("a player composes chi directly from the real hand without a candidate dial
   const shi = page.getByTestId("hand-card-d1");
   const xiang = page.getByTestId("hand-card-d2");
   await expect(page.getByTestId("candidate-panel")).toHaveCount(0);
+  const choices = page.getByTestId("chi-choices");
+  const family = choices.locator('[data-kind="jsx"]');
+  const single = choices.locator('[data-kind="single"]');
+  await expect(family).toHaveAttribute("aria-pressed", "true");
+  await expect(single).toHaveAccessibleName(/单吃，来牌红帥/);
+  await single.click();
+  await expect(shi).toHaveAttribute("aria-pressed", "false");
+  await expect(single).toHaveAttribute("aria-pressed", "true");
+  await family.click();
   await expect(chi).toHaveText("吃");
   await expect(chi).toBeEnabled(); // red jiang may be eaten as a single card
 
@@ -106,10 +116,22 @@ test("duplicate physical cards still count as one visible chi composition", asyn
   await enterPractice(page);
   await setupChiScenario(page, "chi_unique_duplicate_jmp");
 
+  await expect(page.getByTestId("chi-choices").locator("[data-kind]")).toHaveCount(1);
   await expect(page.getByTestId("hand-card-unique-yellow-ma")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect.poll(() => page.locator('[data-testid^="hand-card-unique-yellow-ju-"][aria-pressed="true"]').count())
     .toBe(1);
+  const first = page.getByTestId("hand-card-unique-yellow-ju-1");
+  const second = page.getByTestId("hand-card-unique-yellow-ju-2");
+  await first.click();
+  await second.click();
+  await page.getByTestId("chi-choices").locator("[data-kind]").click();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("action-chi").click();
+  await expect(page.getByTestId("discard-confirm")).toBeVisible();
+  await expect(second).toHaveCount(0);
+  await expect(first).toBeVisible();
 });
 
 test("a complete local chi draft survives an authoritative refresh for the same card", async ({ page }) => {
@@ -163,7 +185,8 @@ test("a confirmed local chi is applied exactly once after the collective window 
   await expect.poll(exposedCounts).toEqual([1, 1, 1, 1]);
 });
 
-test("a player can freely choose a three-color or four-color zu chi from the hand", async ({ page }) => {
+test("a player can freely choose a three-color or four-color zu chi from the hand", async ({ page }, info) => {
+  await page.setViewportSize({ width: 844, height: 390 });
   await enterPractice(page);
   await setupChiScenario(page, "chi_four_zu");
 
@@ -177,7 +200,20 @@ test("a player can freely choose a three-color or four-color zu chi from the han
 
   await red.click();
   await green.click();
-  await expect(chi).toBeEnabled();
+  const choices = page.getByTestId("chi-choices");
+  const selectedThree = choices.locator('[data-kind="zu3"][aria-pressed="true"]');
+  await expect(choices.locator('[data-kind="zu3"]')).toHaveCount(3);
+  await expect(selectedThree).toHaveCount(1);
+  const four = choices.locator('[data-kind="zu4"]');
+  await expect(four.locator('[data-preview-card-id]')).toHaveCount(4);
+  await four.click();
+  await expect(four).toHaveAttribute("aria-pressed", "true");
+  await expect(four).toBeInViewport();
+  await expect(chi).toBeInViewport();
+  await page.screenshot({ path: info.outputPath("four-color-chi.png") });
+  await expect(white).toHaveAttribute("aria-pressed", "true");
+  await white.click();
+  await expect(selectedThree).toHaveCount(1);
   await white.click();
   await expect(chi).toBeEnabled();
   await chi.click();
@@ -197,4 +233,64 @@ test("the operation dock has no visible waiting narration", async ({ page }) => 
   await enterPractice(page);
   await expect(page.getByTestId("action-waiting")).toHaveCount(0);
   await expect(page.locator(".action-dock")).not.toContainText(/正在操作|轮到你时会提醒/);
+});
+
+test("the scrollable chi choices leave all response buttons on one 44px touch row", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("sise_context_hints_v1", '{"enabled":false}'));
+  await enterPractice(page);
+  for (const [width, height] of [[568, 320], [844, 390], [390, 844]] as const) {
+    await page.setViewportSize({ width, height });
+    const rotated = height > width;
+    const [effectiveWidth, effectiveHeight] = rotated ? [height, width] : [width, height];
+    const layout = page.locator("main.layout");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", String(rotated));
+    await expect(layout).toHaveAttribute("data-effective-viewport", `${effectiveWidth}x${effectiveHeight}`);
+    const board = page.getByTestId("game-board");
+    await expect(board).toHaveAttribute("data-table-layout", resolveTableLayout("adaptive", effectiveWidth, effectiveHeight));
+    for (const scenario of ["chi_local_upper_zu4", "chi_collective_confirm"]) {
+      await setupChiScenario(page, scenario);
+      const track = page.getByTestId("dynamic-action-track");
+      const choices = track.getByTestId("chi-choices");
+      await expect(choices.locator("[data-kind]").first()).toBeVisible();
+      await expect(track.getByTestId("action-row").getByRole("button")).toHaveCount(scenario === "chi_local_upper_zu4" ? 2 : 3);
+      await expect(board).toHaveAttribute("data-geometry-busy", "false");
+      const geometry = () => track.evaluate((element, rotated) => {
+        const box = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
+        const rail = element.getBoundingClientRect();
+        const strip = box(".chi-choices");
+        const buttons = [...element.querySelectorAll(".action-row button")].map(button => button.getBoundingClientRect());
+        const inside = (rect: DOMRect) => rect.left >= rail.left - 1 && rect.right <= rail.right + 1 &&
+          rect.top >= rail.top - 1 && rect.bottom <= rail.bottom + 1;
+        const cross = (rect: DOMRect) => rotated ? rect.x : rect.y;
+        const intersects = (a: DOMRect, b: DOMRect) => a.left < b.right - 1 && b.left < a.right - 1 &&
+          a.top < b.bottom - 1 && b.top < a.bottom - 1;
+        const otherZones = [".table", ".self-hand-card"].map(selector => element.closest(".board")!.querySelector(selector)!.getBoundingClientRect());
+        return {
+          sameRow: buttons.every(button => Math.abs(cross(button) - cross(buttons[0]!)) < 1),
+          touchSize: buttons.every(button => button.width >= 43.99 && button.height >= 43.99),
+          insideRail: buttons.every(inside),
+          separate: buttons.every(button => ![strip, ...otherZones].some(zone => intersects(button, zone))),
+          choicesVisible: (rotated ? strip.height : strip.width) >= 44,
+        };
+      }, rotated);
+      const expectedBounds = { sameRow: true, touchSize: true, insideRail: true, separate: true, choicesVisible: true };
+      await expect.poll(geometry, { message: `${width}×${height} ${scenario}` }).toMatchObject(expectedBounds);
+      // Check only the scroller's effect on already settled layout. Taking both
+      // readings in the same frame also excludes timer renders and browser IPC.
+      const scrollResult = await track.evaluate(element => {
+        const strip = element.querySelector<HTMLElement>(".chi-choices")!;
+        const positions = () => [...element.querySelectorAll(".action-row button")].map(button => {
+          const { x, y } = button.getBoundingClientRect();
+          return [x, y];
+        });
+        const before = positions();
+        strip.scrollLeft = strip.scrollWidth;
+        return { before, after: positions(), overflow: strip.scrollWidth > strip.clientWidth + 1, scrollLeft: strip.scrollLeft };
+      });
+      expect(scrollResult.after).toEqual(scrollResult.before);
+      if (scrollResult.overflow) expect(scrollResult.scrollLeft).toBeGreaterThan(0);
+      await choices.locator("[data-kind]").last().tap();
+      await expect.poll(geometry).toMatchObject(expectedBounds);
+    }
+  }
 });

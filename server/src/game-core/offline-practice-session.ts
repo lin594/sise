@@ -23,6 +23,7 @@ import {
   applyPlayingStartAfterDeclaring,
   applyTurnTransitionState,
   createPendingResponse,
+  getCollectiveOrder,
   getNextPlayerId,
   getPreviousPlayerId,
   shouldEndDrawAfterUpperPass,
@@ -345,7 +346,30 @@ export class OfflinePracticeSession {
     }
     if (this.state.phase !== "playing") return false;
     if (this.awaitingDiscardOwnerId === HUMAN_ID) return true;
+    if (this.state.responsePhase === "collective" && this.pendingResponse) {
+      // Bot responses are sampled once by the automatic unit, never by a view
+      // query. A local preview must not stop that unit before it can run.
+      const pending = this.pendingResponse;
+      const order = getCollectiveOrder(this.playerOrder, pending);
+      if (order.some(id => this.botIds.has(id) && !pending.collectives.has(id))) return false;
+      if (pending.collectives.has(HUMAN_ID)) return false;
+      const winner = this.gameSession.rules.pickCollectiveWinner(order, pending.collectives);
+      const winnerRank = winner ? this.gameSession.rules.collectivePriority(winner.choice.action) : 0;
+      return this.getHumanAvailableActions().some(entry => {
+        const rank = entry.enabled ? this.gameSession.rules.collectivePriority(entry.action) : 0;
+        return rank > winnerRank || rank > 0 && rank === winnerRank &&
+          order.indexOf(HUMAN_ID) < order.indexOf(winner!.id);
+      });
+    }
     return this.getHumanAvailableActions().length > 0;
+  }
+
+  private decisionKey(): string {
+    // Private bot choices can publish revisions inside the same decision window.
+    return ["offline", this.state.completedRounds, this.state.phase,
+      this.pendingResponse?.card.id ?? "", this.pendingResponse?.card.source ?? "",
+      this.state.responsePhase, this.pendingResponse?.ownerId ?? "", this.awaitingDiscardOwnerId ?? "",
+      this.state.players.get(HUMAN_ID)?.declarationStep ?? ""].join(":");
   }
 
   private listeningCache: ListeningHints | null = null;
@@ -369,7 +393,7 @@ export class OfflinePracticeSession {
     const discarding = playing && this.awaitingDiscardOwnerId === HUMAN_ID;
     const hints: ListeningHints = {
       stateRevision: this.state.stateRevision,
-      decisionKey: `offline:${this.state.stateRevision}`,
+      decisionKey: this.decisionKey(),
       currentWaits: playing && !discarding ? findCurrentListeningWaits(hand, kongs, remaining) : [],
       discards: discarding ? findListeningDiscards(hand, kongs, remaining) : [],
       chi: [],
@@ -466,7 +490,7 @@ export class OfflinePracticeSession {
         untimed: true,
         totalMs: 0,
         endsAt: 0,
-        decisionKey: `offline:${this.state.stateRevision}`,
+        decisionKey: this.decisionKey(),
       },
       listeningHints: this.buildListeningHints(),
       roundResult: this.lastRoundResult,
@@ -579,11 +603,8 @@ export class OfflinePracticeSession {
   private resolveCollectiveIfReady(): void {
     const pending = this.pendingResponse;
     if (!pending || this.state.responsePhase !== "collective") return;
-    const humanActions = this.getHumanAvailableActions();
-    if (humanActions.length > 0 && !pending.collectives.has(HUMAN_ID)) return;
-    if (!pending.collectives.has(HUMAN_ID)) pending.collectives.set(HUMAN_ID, { action: "pass" });
-    for (const seatId of this.playerOrder) {
-      if (pending.collectives.has(seatId)) continue;
+    for (const seatId of getCollectiveOrder(this.playerOrder, pending)) {
+      if (!this.botIds.has(seatId) || pending.collectives.has(seatId)) continue;
       const actions = this.getAvailableActions(seatId, true).filter((item) => item.enabled);
       const choice = this.gameSession.chooseBotAction({
         hand: this.playerHands.get(seatId) ?? [],
@@ -595,6 +616,10 @@ export class OfflinePracticeSession {
       });
       pending.collectives.set(seatId, choice);
     }
+    // Preserve real Hu/Kai/Peng priority, while a Chi/Grab preview is purely
+    // local preparation and can never create another mandatory response.
+    if (this.isHumanDecisionPending()) return;
+    if (!pending.collectives.has(HUMAN_ID)) pending.collectives.set(HUMAN_ID, { action: "pass" });
     this.gameSession.resolveCollective({
       pending,
       playerOrder: this.playerOrder,
