@@ -6361,19 +6361,25 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
 }
 
-.board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
+/* Only the combinations scroll. Every response keeps its own touch target,
+   including when the app rotates the whole board for a portrait phone. */
+.board .dynamic-action-track:has(.chi-choices) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+.board .dynamic-action-track:has(.chi-choices) .action-dock :deep(.action-row) {
+  width: max-content;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+.board .dynamic-action-track:has(.chi-choices) .action-dock :deep(.btn) {
+  flex: none;
+  width: clamp(44px, calc(var(--effective-vw, 1vw) * 6), 60px);
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding-inline: 2px;
+}
 </style>
 
-<style scoped src="../mahjong.css">
-.cancel-preselection {
-  pointer-events: auto;
-  min-height: 32px;
-  margin-inline-start: 4px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-}
-.board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
-</style>
+<style scoped src="../mahjong.css"></style>

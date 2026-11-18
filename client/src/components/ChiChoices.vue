@@ -5,9 +5,9 @@
       :data-kind="choice.candidate.kind" @click="emit('choose', choice.candidate)">
       <strong>{{ choice.name }}</strong>
       <span class="chi-faces" aria-hidden="true">
-        <CardFace :card="target" class="chi-target" size="xs" :mode="mode" />
+        <CardFace preview :card="target" class="chi-target" size="xs" :mode="mode" />
         <span v-if="choice.cards.length">+</span>
-        <CardFace v-for="card in choice.cards" :key="card.id" :card="card" size="xs" :mode="mode" />
+        <CardFace v-for="card in choice.cards" preview :key="card.id" :card="card" size="xs" :mode="mode" />
       </span>
     </button>
     <button v-if="canClear" type="button" class="clear-choice" data-testid="clear-chi-draft"
@@ -39,8 +39,9 @@ function choiceLabel(choice: ChiChoice): string {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   align-items: center;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
+.chi-choices::-webkit-scrollbar { display: none; }
 .chi-choice {
   flex: none;
   display: grid;
