@@ -118,7 +118,10 @@ async function assertDensity(page: Page, classic = true, paged = false) {
       contained: areas.every(el => contained(el.getBoundingClientRect())),
       hitSizes: cards.every(c => c.offsetWidth >= 28 && c.offsetHeight >= 44),
       fonts: cards.every(c => parseFloat(getComputedStyle(c.querySelector('.text')!).fontSize) >= 13.95),
-      flowFonts: [...board.querySelectorAll('.discard-token .text')].every(c => parseFloat(getComputedStyle(c).fontSize) >= 9.95),
+      flowFonts: [...board.querySelectorAll('.discard-token')].every(card => {
+        const names = [...card.querySelectorAll('.text')].filter(name => name.getClientRects().length > 0);
+        return names.length > 0 && names.every(name => parseFloat(getComputedStyle(name).fontSize) >= 9.95);
+      }),
       topWidth: topLeft.clientWidth / table.clientWidth, groupWidth: group.clientWidth / (table.clientWidth - parseFloat(getComputedStyle(table).paddingLeft) - parseFloat(getComputedStyle(table).paddingRight)),
       topLeftInset: topLeft.offsetLeft, topRightInset: table.clientWidth-topRight.offsetLeft-topRight.offsetWidth,
       railBackground: getComputedStyle(board.querySelector('.self-command-row')!).backgroundColor,
@@ -374,4 +377,39 @@ test('header tools retain icons and collapse labels only on very small screens',
   await page.keyboard.press('Escape');
   await page.getByTestId('game-interaction').click();
   await expect(page.getByTestId('quick-phrase-panel')).toBeVisible();
+});
+
+test('Puxian river summaries keep the latest full card on each edge and keyboard access to all earlier cards', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await start(page, 'puxian-house', 'long', 'adaptive');
+  await crowdedTable(page);
+  for (const lane of await page.locator('.flow-card').all()) {
+    await expect(lane.locator('.paper-flow-origin')).toBeVisible();
+    await expect(lane.locator('.paper-flow-count')).toHaveText('15张');
+  }
+
+  for (const [width, height] of [[844, 390], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    await settle(page);
+    for (const lane of await page.locator('.flow-card').all()) {
+      const strip = lane.locator('.discard-strip');
+      await expect(strip.locator('.discard-token')).toHaveCount(15);
+      const visibleIndexes = () => strip.evaluate(node => {
+        const view = node.getBoundingClientRect();
+        return [...node.querySelectorAll('.discard-token')].flatMap((card, index) => {
+          const box = card.getBoundingClientRect();
+          if (box.bottom <= view.top + 1 || box.top >= view.bottom - 1) return [];
+          const whole = box.left >= view.left - 1 && box.right <= view.right + 1
+            && box.top >= view.top - 1 && box.bottom <= view.bottom + 1;
+          return [whole ? index : 'clipped'];
+        });
+      });
+      await expect.poll(visibleIndexes).toEqual([14]);
+      await strip.focus();
+      await page.keyboard.press('Home');
+      await expect.poll(visibleIndexes).toEqual([0]);
+      await page.keyboard.press('End');
+      await expect.poll(visibleIndexes).toEqual([14]);
+    }
+  }
 });

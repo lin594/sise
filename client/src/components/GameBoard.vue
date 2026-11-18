@@ -19,7 +19,7 @@
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
     @keydown.esc="handleBoardEscape"
-    @scroll.capture.passive="updateFlowScrollHints"
+    @scroll.capture.passive="updateTableScrollHints"
     @pointerdown.capture="startRotatedScroll"
     @pointermove.capture="moveRotatedScroll"
     @pointerup.capture="endRotatedScroll"
@@ -40,7 +40,11 @@
         :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowTopLeftPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowTopLeftPlayer.clientId) }}张</span>
+        </div>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopLeftPlayer.clientId)}，共${flowCardCount(flowTopLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
@@ -101,38 +105,41 @@
             </span>
           </div>
         </header>
-        <div v-if="topGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in topGroupBlocks"
-            :key="`top-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`top-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`top-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="topGroupBlocks.length || (showOpponentRacks && playerHandCount(topPlayer) > 0)" class="opponent-lane">
+          <div v-if="topGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in topGroupBlocks"
+              :key="`top-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span
+                    v-for="slot in group.faceDownCount"
+                    :key="`top-group-back-${group.id}-${slot}`"
+                    class="mini-card pending-fish-back"
+                    data-card-back="red-four-color"
+                    aria-hidden="true"
+                  ><i v-for="mark in 4" :key="mark"></i></span>
+                </template>
+                <template v-else>
+                  <CardComp
+                    v-for="card in group.cards"
+                    :key="`top-group-card-${card.id}`"
+                    :card="card"
+                    :style="movingCardStyle(card.id)"
+                    :mode="appliedTableCardMode"
+                    size="xs"
+                    class="mini-card"
+                    :title="cardLabel(card)"
+                  />
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(topPlayer)" />
         </div>
       </section>
 
@@ -146,7 +153,11 @@
         :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowTopRightPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowTopRightPlayer.clientId) }}张</span>
+        </div>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopRightPlayer.clientId)}，共${flowCardCount(flowTopRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
@@ -207,38 +218,37 @@
             </span>
           </div>
         </header>
-        <div v-if="leftGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in leftGroupBlocks"
-            :key="`left-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`left-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`left-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="leftGroupBlocks.length || (showOpponentRacks && playerHandCount(leftPlayer) > 0)" class="opponent-lane">
+          <div v-if="leftGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in leftGroupBlocks"
+              :key="`left-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span v-for="slot in group.faceDownCount" :key="`left-group-back-${group.id}-${slot}`" class="side-card-slot">
+                    <span class="mini-card pending-fish-back" data-card-back="red-four-color" aria-hidden="true"><i v-for="mark in 4" :key="mark"></i></span>
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="card in group.cards" :key="`left-group-card-${card.id}`" class="side-card-slot">
+                    <CardComp
+                      :card="card"
+                      :style="movingCardStyle(card.id)"
+                      :mode="appliedTableCardMode"
+                      size="xs"
+                      class="mini-card"
+                      :title="cardLabel(card)"
+                    />
+                  </span>
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(leftPlayer)" />
         </div>
       </section>
 
@@ -368,38 +378,37 @@
             </span>
           </div>
         </header>
-        <div v-if="rightGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in rightGroupBlocks"
-            :key="`right-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`right-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`right-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="rightGroupBlocks.length || (showOpponentRacks && playerHandCount(rightPlayer) > 0)" class="opponent-lane">
+          <div v-if="rightGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in rightGroupBlocks"
+              :key="`right-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span v-for="slot in group.faceDownCount" :key="`right-group-back-${group.id}-${slot}`" class="side-card-slot">
+                    <span class="mini-card pending-fish-back" data-card-back="red-four-color" aria-hidden="true"><i v-for="mark in 4" :key="mark"></i></span>
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="card in group.cards" :key="`right-group-card-${card.id}`" class="side-card-slot">
+                    <CardComp
+                      :card="card"
+                      :style="movingCardStyle(card.id)"
+                      :mode="appliedTableCardMode"
+                      size="xs"
+                      class="mini-card"
+                      :title="cardLabel(card)"
+                    />
+                  </span>
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(rightPlayer)" />
         </div>
       </section>
 
@@ -413,7 +422,11 @@
         :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowBottomLeftPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowBottomLeftPlayer.clientId) }}张</span>
+        </div>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomLeftPlayer.clientId)}，共${flowCardCount(flowBottomLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
@@ -437,7 +450,7 @@
         aria-label="自己的明示牌组，可滚动查看"
       >
         <template v-if="selfGroupBlocks.length">
-          <div class="group-block-list">
+          <div class="group-block-list" :data-caption="paperTable ? '我的牌组' : undefined">
             <div
               v-for="group in selfGroupBlocks"
               :key="`self-exp-${group.id}`"
@@ -483,7 +496,11 @@
         :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
         <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <div v-if="paperTable" class="paper-flow-caption" aria-hidden="true">
+          <span class="paper-flow-origin">{{ flowSourceLabel(flowBottomRightPlayer.clientId) }}流水</span>
+          <span class="paper-flow-count">{{ flowCardCount(flowBottomRightPlayer.clientId) }}张</span>
+        </div>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomRightPlayer.clientId)}，共${flowCardCount(flowBottomRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
@@ -829,6 +846,7 @@ import { chiChoices } from "@/utils/chiChoices";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
+import OpponentRack from "./OpponentRack.vue";
 import type {
   ActionFeedback,
   ActionCandidate,
@@ -901,6 +919,7 @@ type DealerReveal = {
 const props = defineProps<{
   connected: boolean;
   guidanceActive?: boolean;
+  paperTable?: boolean;
   tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
@@ -1034,6 +1053,7 @@ const selfHandRef = ref<HTMLElement | null>(null);
 const handViewportRef = ref<HTMLElement | null>(null);
 const handScale = ref(1);
 const handScaleReady = ref(!shouldConcealOpeningHand());
+let handScaleCardCount = 0;
 const handHasOverflow = ref(false);
 const handCanScrollBackward = ref(false);
 const handCanScrollForward = ref(false);
@@ -1303,9 +1323,8 @@ function flowSide(receiverId: string) {
   return playerSide(flowOwner(receiverId)?.clientId ?? "");
 }
 
-function tableLocationRotation(location: TableLocation): number {
-  if (appliedTableLayout.value !== "mahjong" || location.zone !== "flow") return 0;
-  return { bottom: 0, left: 90, top: 180, right: -90 }[playerSide(location.playerId ?? "")];
+function flowSourceLabel(receiverId: string): string {
+  return { bottom: "我的", left: "左家", top: "对家", right: "右家" }[flowSide(receiverId)];
 }
 
 function flowTitle(playerId: string): string {
@@ -1540,7 +1559,17 @@ function tableLocationCardElement(location: TableLocation, cardId: string): HTML
 }
 
 function tableLocationExactRect(location: TableLocation, cardId: string): CardRect | null {
-  return rectFromElement(tableLocationCardElement(location, cardId));
+  const card = tableLocationCardElement(location, cardId);
+  const slot = location.zone === "flow" && card?.closest<HTMLElement>('.discard-strip[data-one-card]');
+  if (card && slot) {
+    // A reader may be viewing an earlier discard. Never animate towards the
+    // hidden layout position of a card several pages outside its river.
+    const face = card.getBoundingClientRect();
+    const view = slot.getBoundingClientRect();
+    if (face.top < view.top - 1 || face.bottom > view.bottom + 1 ||
+        face.left < view.left - 1 || face.right > view.right + 1) return null;
+  }
+  return rectFromElement(card);
 }
 
 function tableLocationAnchorElement(location: TableLocation): HTMLElement | null {
@@ -1642,14 +1671,13 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
     const style = getComputedStyle(destinationElement);
     const top = destinationElement.querySelector('.text-top');
     const bottom = destinationElement.querySelector('.text-bottom');
-    const angle = tableLocationRotation(move.to);
+    const angle = Number.parseFloat(style.rotate) || 0;
     const sideways = Math.abs(angle) === 90;
     cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
       '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
       '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
       '--card-ink-width': style.getPropertyValue('--card-ink-width') || '100cqw',
       '--card-ink-height': style.getPropertyValue('--card-ink-height') || '100cqh',
-      '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
       '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
       '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
     tableFlightFaceStyles.set(key, cardStyle);
@@ -1726,6 +1754,8 @@ const isMyTurn = computed(
 
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const handPresentationBusy = computed(() => openingDealIntroActive.value || showDealAnimation.value);
+const showOpponentRacks = computed(() => props.paperTable && !handPresentationBusy.value
+  && (props.state?.phase === "playing" || props.state?.phase === "declaring"));
 const canAct = computed(() => Boolean(props.canAct) && !handPresentationBusy.value);
 const canDiscard = computed(() => Boolean(props.canDiscard) && !handPresentationBusy.value);
 const effectiveInteractionPausedMessage = computed(() => {
@@ -2339,7 +2369,11 @@ function updateHandLayoutState(): void {
   const panel = viewport?.parentElement;
   const panelStyle = panel ? getComputedStyle(panel) : null;
   const available = panel ? panel.clientWidth - (parseFloat(panelStyle!.paddingLeft) || 0) - (parseFloat(panelStyle!.paddingRight) || 0) : viewport?.clientWidth ?? 0;
-  const keepGeometry = handScaleReady.value && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
+  const count = handLayoutCards.value.length;
+  // Keep landing rectangles stable during motion unless the hand outgrows
+  // the count that the single-row scale was measured for.
+  const keepGeometry = handScaleReady.value && (props.handLayout === "paged" || count <= handScaleCardCount)
+    && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
   let needsOverflow = keepGeometry ? handHasOverflow.value : false;
   if (props.handLayout !== 'paged' && !keepGeometry) {
     const style = getComputedStyle(hand);
@@ -2348,7 +2382,6 @@ function updateHandLayoutState(): void {
     if (card && face && viewport?.clientWidth) {
       // Natural CSS dimensions are independent of the previously applied scale.
       const naturalWidth = parseFloat(style.getPropertyValue('--hand-width'));
-      const count = handLayoutCards.value.length;
       const gap = parseFloat(style.columnGap) || 0;
       const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
       // Single mode fits every authoritative card, including concealed opening cards.
@@ -2362,6 +2395,7 @@ function updateHandLayoutState(): void {
         handScale.value = nextScale;
         void nextTick(scheduleHandLayoutUpdate);
       }
+      handScaleCardCount = count;
       handScaleReady.value = true;
     }
   } else if (!keepGeometry) {
@@ -2410,6 +2444,11 @@ function updateMahjongMeldLayout(): void {
     const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
     const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
     const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
+    if (getComputedStyle(list).getPropertyValue('--seat-card-angle').trim()) {
+      meldLayoutKeys.delete(list);
+      cards.forEach(card => ['width', 'height', 'font-size', 'margin'].forEach(property => card.style.removeProperty(property)));
+      return;
+    }
     // Assistance is contained inside the face and never changes group geometry.
     const height = 24;
     const applyScale = (scale: number) => {
@@ -2527,15 +2566,20 @@ function suppressScrollClick(event: MouseEvent): void {
   scrollDragged = false;
 }
 
-function updateFlowScrollHints(): void {
+function updateTableScrollHints(): void {
   boardRef.value?.querySelectorAll<HTMLElement>('.discard-strip').forEach(strip => {
     strip.dataset.scrollBefore = String(strip.scrollTop > 2);
     strip.dataset.scrollAfter = String(strip.scrollHeight - strip.clientHeight - strip.scrollTop > 2);
   });
+  if (!props.paperTable || appliedTableLayout.value !== "compact") return;
+  boardRef.value?.querySelectorAll<HTMLElement>('.opponent-lane .group-block-list').forEach(list => {
+    list.dataset.scrollBefore = String(list.scrollLeft > 2);
+    list.dataset.scrollAfter = String(list.scrollWidth - list.clientWidth - list.scrollLeft > 2);
+  });
 }
 
 function updateFlowLayout(): void {
-  if (flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length)) return;
+  const motionActive = flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length);
   boardRef.value?.querySelectorAll<HTMLElement>('.flow-card').forEach(zone => {
     const strip = zone.querySelector<HTMLElement>('.discard-strip');
     if (!strip || !strip.clientWidth || !strip.clientHeight) return;
@@ -2543,6 +2587,17 @@ function updateFlowLayout(): void {
     const count = cards.length;
     const latestId = cards[count - 1]?.dataset.faceId ?? '';
     const followLatest = !strip.dataset.latestId || (latestId !== strip.dataset.latestId && (appliedTableLayout.value === 'mahjong' || strip.dataset.scrollAfter !== 'true'));
+    const singleCard = props.paperTable && getComputedStyle(strip).scrollSnapType.startsWith('y');
+    if (singleCard) {
+      // Reveal a new landing before the animation measures it. Entering the
+      // narrow layout also starts at the newest card after a desktop resize.
+      if (!strip.dataset.oneCard || followLatest) strip.scrollTop = strip.scrollHeight;
+      strip.dataset.oneCard = 'true';
+      strip.dataset.latestId = latestId;
+      return;
+    }
+    delete strip.dataset.oneCard;
+    if (motionActive) return;
     const long = appliedTableCardMode.value === 'long';
     const sideways = appliedTableLayout.value === 'mahjong' && ['left', 'right'].includes(zone.dataset.flowSide ?? '');
     const width = long ? sideways ? 32 : 24 : 30, height = long ? sideways ? 24 : 32 : 30;
@@ -2559,7 +2614,7 @@ function updateFlowLayout(): void {
     if (followLatest) strip.scrollTop = strip.scrollHeight;
     strip.dataset.latestId = latestId;
   });
-  updateFlowScrollHints();
+  updateTableScrollHints();
 }
 
 function confirmDiscard(): void {
@@ -3318,7 +3373,7 @@ watch(handViewportRef, observeHandViewport, { immediate: true });
 watch(() => [selfGroupBlocks.value, topGroupBlocks.value, leftGroupBlocks.value, rightGroupBlocks.value],
   () => void nextTick(scheduleHandLayoutUpdate));
 watch(() => [props.players.map(player => player.discardPile.length).join(','), appliedTableCardMode.value,
-  flights.value.length, activeTableEvents.value.length], () => void nextTick(scheduleHandLayoutUpdate));
+  flights.value.length, activeTableEvents.value.length], () => updateFlowLayout(), { flush: 'post' });
 
 watch(
   () => chiSelectionContextKey.value,
@@ -3999,16 +4054,16 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   padding-right: 0.22rem;
 }
 
-.mini-card-strip.mode-long .mini-card + .mini-card {
+.mini-card-strip.mode-long :is(.mini-card + .mini-card, .side-card-slot + .side-card-slot > .mini-card) {
   margin-left: -0.32rem;
 }
 
-.mini-card-strip.stacked:not(.mode-long) .mini-card + .mini-card {
+.mini-card-strip.stacked:not(.mode-long) :is(.mini-card + .mini-card, .side-card-slot + .side-card-slot > .mini-card) {
   margin-left: -0.28rem;
 }
 
 /* Assisted names and corner labels must remain visible between adjacent cards. */
-:global(html.show-card-color-assist .board .mini-card-strip .card.mini-card + .card.mini-card) {
+:global(html.show-card-color-assist .board .mini-card-strip :is(.card.mini-card + .card.mini-card, .side-card-slot + .side-card-slot > .card.mini-card)) {
   margin-left: 0;
 }
 
@@ -6195,14 +6250,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] .dynamic-action-track { border: 0; }
 .board[data-table-layout="classic"] .self-hand-card { box-shadow: inset 0 2px #0002; }
 .board[data-table-layout="classic"] .self-turn-outline { border: 0; box-shadow: none; }
-.opponent-card-stack { display: flex; position: relative; width: 3.2rem; height: 2.8rem; margin: 0 auto .25rem; }
-.opponent-card-stack :deep(.card-back) { position: absolute; left: calc(var(--stack-index) * 7px); width: 1.4rem; height: 2.1rem; transform: rotate(calc((var(--stack-index) - 1.5) * 3deg)); box-shadow: 0 2px 3px #0004; }
-.opponent-card-stack.mode-long :deep(.card-back) { width: .85rem; height: 2.6rem; }
 @media (max-width: 960px), (max-height: 500px) {
   .board[data-table-layout="classic"] { padding: 4px; }
-  .board[data-table-layout="classic"] .opponent-card-stack { height: 1.65rem; width: 2.7rem; margin-bottom: 1px; }
-  .board[data-table-layout="classic"] .opponent-card-stack :deep(.card-back) { height: 1.5rem; width: 1rem; }
-  .board[data-table-layout="classic"] .opponent-card-stack.mode-long :deep(.card-back) { height: 1.65rem; width: .65rem; }
   .board[data-table-layout="classic"] .seat-identity-meta :is(.kan-count-badge, .group-score-badge) { font-size: 11px; }
 }
 
@@ -6424,3 +6473,4 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 </style>
 
 <style scoped src="../mahjong.css"></style>
+<style src="../puxian-rivers.css"></style>

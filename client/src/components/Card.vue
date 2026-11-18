@@ -19,7 +19,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Card, RenderedCardMode } from "@/types/game";
-import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceColor, getCardFaceColorText, getCardFaceText } from "@/utils/cardText";
 
 const props = defineProps<{
   card: Card;
@@ -29,15 +29,9 @@ const props = defineProps<{
 }>();
 
 const label = computed(() => getCardFaceText(props.card));
-const colorSeal = computed(() => ({
-  yellow: "黄",
-  red: "红",
-  green: "绿",
-  white: "白",
-  gold: "金",
-}[props.card.color] ?? ""));
+const colorSeal = computed(() => getCardFaceColorText(props.card));
 const accessibleLabel = computed(() => getCardAccessibleText(props.card));
-const colorClass = computed(() => `color-${props.card.color}`);
+const colorClass = computed(() => `color-${getCardFaceColor(props.card)}`);
 const isResponseCard = computed(() => Boolean(props.card.isResponseCard));
 const sizeClass = computed(() => props.size ?? "md");
 const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
@@ -146,10 +140,6 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
     align-self: end;
   }
 }
-.mode-long { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-.mode-long .text-top { grid-row: 1; }
-.mode-long .text-bottom { grid-row: 2; }
-
 .size-xs.mode-long {
   width: 1.3rem;
   height: 2.25rem;
@@ -231,15 +221,34 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   letter-spacing: 0.03em;
 }
 
-.text-top {
-  align-self: start;
-  padding-top: 3px;
+/* Matching cells keep both imprints the same distance from the centre.
+   The lower imprint is the same piece of type turned through a half turn. */
+.mode-long {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  row-gap: 16%;
 }
+:where(html:not(.show-card-color-assist)) .mode-long .text {
+  align-self: center;
+  justify-self: center;
+  width: 1em;
+  height: 1em;
+  padding: 0;
+  line-height: 1;
+  letter-spacing: 0;
+  font-size: min(1em, 38cqh, 86cqw);
+}
+.mode-long .text-top { grid-row: 1; }
+.mode-long .text-bottom { grid-row: 2; transform: rotate(180deg); }
 
-.text-bottom {
-  align-self: end;
-  transform: rotate(var(--card-bottom-text-angle, 180deg));
-  padding-bottom: 3px;
+/* At overview size the public token has room for one readable name. */
+@container (max-height: 29px) {
+  :where(html:not(.show-card-color-assist)) :is(.mini-card, .discard-token).mode-long .text-top {
+    grid-row: 1 / -1;
+    font-size: min(1.1em, 76cqh, 86cqw);
+  }
+  :where(html:not(.show-card-color-assist)) :is(.mini-card, .discard-token).mode-long .text-bottom {
+    display: none;
+  }
 }
 
 .response-card {
@@ -266,11 +275,5 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   background: #ffffff;
 }
 
-.color-gold {
-  background: #c41e1e;
-  color: #fff7ed;
-}
 .card.mode-long { border-radius: 50% / 18%; }
-.mode-long .text-top { padding-top: 12%; }
-.mode-long .text-bottom { padding-bottom: 12%; }
 </style>

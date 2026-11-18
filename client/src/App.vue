@@ -264,6 +264,7 @@
         :legal-discard-card-ids="decisionTimer.legalDiscardCardIds"
         :action-feedback="actionFeedback"
         :ultra-compact="isUltraCompactViewport"
+        :paper-table="displayPreferences.skin === 'puxian-house'"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
@@ -354,9 +355,9 @@
             <div v-if="finalMeld" class="winning-slip" data-testid="winning-slip" role="group" aria-label="最后成组的牌">
               <span class="winning-slip-caption">收进{{ getCardLabelText(finalMeld[0]) }}成组</span>
               <span v-for="(card, index) in finalMeld" :key="card.id" class="slip-face" role="img"
-                :data-color="card.color" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
+                :data-color="getCardFaceColor(card)" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
                 :aria-label="getCardAccessibleText(card) + (index === 0 ? '，最后收进的牌' : '')">
-                {{ card.color === 'gold' ? '金' : getCardColorText(card) }}<b>{{ getCardFaceText(card) }}</b>
+                {{ getCardFaceColorText(card) }}<b>{{ getCardFaceText(card) }}</b>
               </span>
             </div>
           </div>
@@ -422,7 +423,7 @@
                             :key="`settle-e-${p.clientId}-${group.id}-${card.id}`"
                             :card="card"
                             size="sm"
-                            :mode="resolvedTableCardMode"
+                            :mode="settlementTableCardMode"
                           />
                         </div>
                       </div>
@@ -497,7 +498,7 @@
                 :key="`remain-${card.id}`"
                 :card="card"
                 size="sm"
-                :mode="resolvedTableCardMode"
+                :mode="settlementTableCardMode"
               />
             </div>
           </section>
@@ -764,7 +765,7 @@ import type {
   RenderedCardMode,
   RoomStateSnapshot,
 } from "@/types/game";
-import { getCardAccessibleText, getCardColorText, getCardFaceText, getCardLabelText } from "@/utils/cardText";
+import { getCardAccessibleText, getCardFaceColor, getCardFaceColorText, getCardFaceText, getCardLabelText } from "@/utils/cardText";
 import { getDisplayedTurnPlayerId, getRoundKey } from "@/utils/gameFlowPresentation";
 
 const FriendInviteQrDialog = defineAsyncComponent(
@@ -1167,18 +1168,15 @@ function acceptCompactLayout() {
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
-function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
-  if (mode !== "adaptive") {
-    return mode;
-  }
+function resolveCardDisplayMode(mode: CardDisplayMode, atTable = false): RenderedCardMode {
+  if (mode !== "adaptive") return mode;
+  if (atTable && displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
   return isCompactViewport.value ? "large" : "long";
 }
-const resolvedOwnCardMode = computed<RenderedCardMode>(() =>
-  resolveCardDisplayMode(displayPreferences.value.ownCards),
-);
-const resolvedTableCardMode = computed<RenderedCardMode>(() =>
-  resolveCardDisplayMode(displayPreferences.value.tableCards),
-);
+const resolvedOwnCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.ownCards, true));
+const resolvedTableCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.tableCards, true));
+const settlementOwnCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.ownCards));
+const settlementTableCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.tableCards));
 const globalError = ref("");
 const globalNotice = ref("");
 const gameToolsRef = ref<{
@@ -1245,7 +1243,7 @@ const {
   cancelReturnLobby,
   confirmReturnLobby,
   trapReturnLobbyFocus
-} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode, resolvedTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom: () => handleLeaveRoom(), generateRandomNickname, cardLabel });
+} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode: settlementOwnCardMode, resolvedTableCardMode: settlementTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom: () => handleLeaveRoom(), generateRandomNickname, cardLabel });
 const {
   confirmingResumeAbandon,
   syncExitButtonRef,
@@ -2940,7 +2938,7 @@ html[data-skin="puxian-house"] .layout .hu-panel :is(.score-total, .round-overvi
 }
 .slip-face b { font-size: 1rem; }
 .slip-face[data-color="red"] { background: #e8957f; }
-.slip-face[data-color="yellow"], .slip-face[data-color="gold"] { background: #efce75; }
+.slip-face[data-color="yellow"] { background: #efce75; }
 .slip-face[data-color="green"] { background: #a1cda5; }
 .slip-face[data-incoming] { margin-right: .18rem; border-bottom: 2px solid #803b20; }
 .layout:not(.compact-viewport) .winning-slip {

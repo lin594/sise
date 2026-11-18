@@ -1,4 +1,4 @@
-import { startLobbyAction, stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded, startLobbyAction, stageDeclarationForTest } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 
@@ -45,6 +45,44 @@ async function startTable(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('hand-card-d1')).toBeVisible();
 }
 
+test('all five noble cards use red paper and the red color seal in every skin', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({
+    ownCards: 'long', showCardColorAssist: true, reduceMotion: true,
+  })));
+  await startTable(page);
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    const hand = [
+      ...['gong', 'hou', 'bo', 'zi', 'nan'].map(type => ({ id: type, type, color: 'gold' })),
+      { id: 'red-shi', type: 'shi', color: 'red' }, { id: 'yellow-shi', type: 'shi', color: 'yellow' },
+    ];
+    bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100, privateHand: hand,
+      players: state.players.map((p: any) => p.isBot ? p : { ...p, handCount: hand.length }) }, 'explicit');
+  });
+  const face = (id: string) => page.locator(`.hand [data-face-id="${id}"]`);
+  const paper = (id: string) => face(id).evaluate(el => {
+    const css = getComputedStyle(el);
+    return [css.backgroundColor, css.backgroundImage, css.color, css.borderTopColor];
+  });
+  for (const skin of ['puxian-house', 'licheng-water', 'meizhou-sea', 'cyber-minimal']) {
+    await page.getByTestId('game-settings').click();
+    await revealSetting(page, `skin-${skin}`);
+    await page.getByTestId(`skin-${skin}`).click();
+    await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+    const red = await paper('red-shi');
+    expect(red).not.toEqual(await paper('yellow-shi'));
+    for (const [id, name] of Object.entries({ gong: '公', hou: '侯', bo: '伯', zi: '子', nan: '男' })) {
+      await expect(face(id)).toHaveAttribute('aria-label', `金条${name}`);
+      await expect(face(id).locator('.text-top')).toHaveText(name);
+      await expect(face(id).locator('.color-seal')).toBeVisible();
+      await expect(face(id).locator('.color-seal')).toHaveText('红');
+      expect(await paper(id)).toEqual(red);
+    }
+  }
+});
+
 test('adaptive is the default while explicit classic still offers a small-screen recommendation', async ({ page }) => {
   await page.setViewportSize({width:568,height:320});
   await page.goto('/?new=1');
@@ -90,6 +128,102 @@ test('all skins and layouts keep actual cards and actions inside representative 
       }
     }
   }
+});
+
+test("Puxian seats share public melds and authoritative concealed counts across viewports", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("sise_context_hints_v1", '{"enabled":false}');
+    localStorage.setItem("sise_game_display_preferences_v2", '{"reduceMotion":true}');
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?new=1&e2eDebug=1");
+  await startLobbyAction(page);
+  await finishDeclarationIfNeeded(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("chi_local_upper"));
+  await expect(page.getByTestId("hand-card-d1")).toBeVisible();
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    const opponents = state.players.filter((player: { isBot: boolean }) => player.isBot);
+    const players = state.players.map((player: { clientId: string; isBot: boolean }) => {
+      if (!player.isBot) return player;
+      const index = opponents.findIndex((opponent: { clientId: string }) => opponent.clientId === player.clientId);
+      const groupCount = index === 0 ? 3 : 1;
+      const exposedArea = Array.from({ length: groupCount * 3 }, (_, position) => ({
+        id: `public-meld-${index}-${position}`,
+        color: ["red", "green", "white"][index],
+        type: ["ju", "ma", "pao"][position % 3],
+      }));
+      return {
+        ...player,
+        handCount: [20, 13, 0][index],
+        exposedArea,
+        exposedGroupSizes: Array(groupCount).fill(3),
+        exposedGroupKinds: Array(groupCount).fill("chi"),
+        fishArea: [],
+      };
+    });
+    bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100, players }, "explicit");
+  });
+  const board = page.getByTestId("game-board");
+  for (const [width, height, layout] of [
+    [1440, 900, "classic"], [844, 390, "mahjong"], [568, 320, "compact"], [390, 844, "mahjong"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(board).toHaveAttribute("data-table-layout", layout);
+    for (const side of ["top", "left", "right"]) {
+      const seat = page.getByTestId(`player-${side}`);
+      const count = Number.parseInt(await seat.getByTestId("opponent-hand-count").innerText(), 10);
+      const lane = seat.locator(".opponent-lane");
+      await expect(lane.locator(".group-block").first()).toBeInViewport({ ratio: 0.85 });
+      await expect(lane.locator(".opponent-rack-card")).toHaveCount(count);
+      if (count > 0) {
+        const rack = lane.locator(".opponent-rack");
+        await expect(rack).toHaveAttribute("aria-hidden", "true");
+        await expect(rack).toBeInViewport();
+        await expect(rack.locator("[data-face-id]")).toHaveCount(0);
+        if (side !== "top" && Math.min(width, height) >= 381) {
+          await expect(lane.locator(".mini-card").first()).toHaveCSS("rotate", side === "left" ? "90deg" : "-90deg");
+          const railAlignment = await lane.evaluate(element => {
+            const first = element.querySelector(".mini-card")!.getBoundingClientRect();
+            const concealed = element.querySelector(".opponent-rack")!.getBoundingClientRect();
+            const rotated = element.closest("main")?.classList.contains("rotated-phone-portrait");
+            return rotated
+              ? Math.abs(first.top + first.height / 2 - concealed.top - concealed.height / 2)
+              : Math.abs(first.left + first.width / 2 - concealed.left - concealed.width / 2);
+          });
+          expect(railAlignment).toBeLessThanOrEqual(2);
+          const gaps = await lane.locator(".mini-card-strip").first().locator(".mini-card").evaluateAll(cards => {
+            const faces = cards.map(card => card.getBoundingClientRect());
+            return faces.slice(1).map((face, index) => {
+              const previous = faces[index]!;
+              return Math.max(face.top - previous.bottom, previous.top - face.bottom,
+                face.left - previous.right, previous.left - face.right);
+            });
+          });
+          expect(gaps).toHaveLength(2);
+          expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1);
+        }
+      }
+    }
+    for (const [color, base] of [["red", "rgb(202, 104, 89)"], ["green", "rgb(131, 171, 117)"]]) {
+      const face = board.locator(`.card.color-${color}`).first();
+      await expect(face).toHaveCSS("background-color", base);
+      await expect(face).toHaveCSS("background-image", /repeating-linear-gradient/);
+    }
+    const ownCard = board.locator(".hand-card .card").first();
+    if (height >= 381) {
+      await expect(ownCard).toHaveAttribute("data-card-mode", "long");
+      await expect(ownCard.locator(".text-top")).toBeVisible();
+      await expect(ownCard.locator(".text-bottom")).toBeVisible();
+    }
+    await expect(page.getByTestId("action-chi")).toBeInViewport({ ratio: 1 });
+  }
+  await page.getByTestId("game-settings").click();
+  await revealSetting(page, "skin-cyber-minimal");
+  await page.getByTestId("skin-cyber-minimal").click();
+  await expect(board.locator(".opponent-rack")).toHaveCount(0);
+  await expect(board.locator(".opponent-lane .group-block").first()).toBeVisible();
 });
 
 test("response source follows authoritative discard and draw data", async ({ page }) => {

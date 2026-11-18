@@ -129,8 +129,8 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   expect(Math.abs(centerGeometry.deckCenterY - centerGeometry.stageCenterY)).toBeLessThanOrEqual(2);
   expect(centerGeometry.layerHeight / centerGeometry.layerWidth).toBeGreaterThanOrEqual(3.5);
   expect(centerGeometry.layerRadius).toBe("50% / 18%");
-  const deckRed = centerGeometry.skin === "puxian-house" ? "151, 56, 46" : "182, 36, 44";
-  expect(centerGeometry.layerBackground).toContain(deckRed);
+  const deckMaterial = centerGeometry.skin === "puxian-house" ? "/skins/puxian-plum-back.webp" : "182, 36, 44";
+  expect(centerGeometry.layerBackground).toContain(deckMaterial);
   if (centerGeometry.pendingCenterX !== null && centerGeometry.pendingCenterY !== null) {
     expect(centerGeometry.pendingCenterX).toBeGreaterThan(centerGeometry.stageCenterX);
     expect(Math.abs(centerGeometry.pendingCenterY - centerGeometry.deckCenterY)).toBeLessThanOrEqual(2);

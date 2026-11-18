@@ -7,6 +7,10 @@ for (const viewport of [{width:568,height:320},{width:375,height:667},{width:102
   await page.getByTestId('culture-entry').click();
   await expect(page).toHaveURL(/\/culture.html$/);
   await expect(page.getByRole('heading',{name:'把 117 张牌认清楚'})).toBeVisible();
+  const redInk = await page.locator('.suit.red .card').first().evaluate(el => getComputedStyle(el).color);
+  const nobles = page.locator('.gold .card');
+  await expect(nobles).toHaveText(['公', '侯', '伯', '子', '男']);
+  for (const noble of await nobles.all()) await expect(noble).toHaveCSS('color', redInk);
   await expect(page.locator('body')).not.toContainText(/待确认|尚未最终确认|维护者确认|交叉核对|服务端/);
   await expect(page.getByRole('heading', { name: '这一桌怎么玩' })).toBeVisible();
   await expect(page.locator('body')).toContainText('小胡赢家坐庄');

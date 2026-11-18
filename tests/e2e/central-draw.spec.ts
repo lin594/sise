@@ -283,6 +283,9 @@ for (const action of ["hu", "chi"] as const) {
     await expect(page.getByTestId(`action-${action}`)).toBeEnabled();
     await page.getByTestId(`action-${action}`).click();
     await expect(page.getByTestId("settlement-panel")).toBeVisible();
+    const gong = page.getByTestId("winning-slip").getByRole("img", { name: /金条公/ });
+    await expect(gong).toHaveAttribute("data-color", "red");
+    await expect(gong).toHaveText("红公");
     const result = await page.evaluate(() => (window as any).__siseLocalTest.getRoundResult());
     const winner = result.players.find((p: any) => p.clientId === result.winnerId);
     expect(winner.totalScore).toBe(36);

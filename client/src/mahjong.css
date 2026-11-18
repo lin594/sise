@@ -1,7 +1,6 @@
 /* Names use a narrow rail; the remaining space belongs to complete melds. */
 .board[data-table-layout="mahjong"] {
   --mahjong-card-angle: 0deg;
-  --card-bottom-text-angle: 0deg;
   --card-text-width: max-content;
   --mahjong-top-height: 25px;
   --mahjong-self-height: 25px;
@@ -90,7 +89,7 @@
   --mahjong-card-angle: 0deg;
   rotate: 0deg;
 }
-.board[data-table-layout="mahjong"] .mini-card-strip .mini-card + .mini-card { margin: 0; }
+.board[data-table-layout="mahjong"] .mini-card-strip :is(.mini-card + .mini-card, .side-card-slot + .side-card-slot > .mini-card) { margin: 0; }
 .board[data-table-layout="mahjong"] .mini-card :deep(.text) { padding: 0; }
 .board[data-table-layout="mahjong"] .group-badge { min-width: 12px; width: 12px; height: 14px; font-size: 10px; }
 .board[data-table-layout="mahjong"] .self-groups-card { padding: 0; overflow: hidden; }

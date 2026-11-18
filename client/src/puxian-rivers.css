@@ -1,0 +1,115 @@
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-card {
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .paper-flow-caption {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: .45em;
+  margin: 0;
+  color: #e8d9b5;
+  font: 600 12px/1.25 var(--skin-font, serif);
+  white-space: nowrap;
+}
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > p,
+html[data-skin="puxian-house"] .board[data-table-layout] .flow-empty > .paper-flow-caption { display: none; }
+html[data-skin="puxian-house"] .paper-flow-count { color: #c8c6aa; font-weight: normal; }
+html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-top-right, .flow-bottom-right) > .paper-flow-caption { justify-content: flex-end; }
+html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) {
+  justify-content: flex-end;
+}
+html[data-skin="puxian-house"] .board[data-table-layout="classic"] :is(.flow-bottom-left, .flow-bottom-right) .discard-strip {
+  flex: 0 1 auto;
+}
+
+/* In a phone's four corners the cards form one scrollable stack, newest last. */
+@media (max-height: 500px), (max-width: 500px) {
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .table {
+    grid-template-areas:
+      "flowtl top top top flowtr"
+      "left . center . right"
+      "left . center . right"
+      "left . center . right"
+      "flowbl selfgroups selfgroups selfgroups flowbr";
+  }
+  /* A seat with many exposed groups needs the full edge. Keep each river
+     between its two seats while freeing the long top and bottom rows. */
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"]:where(:has(.group-block:nth-child(6))) .table {
+    grid-template-areas:
+      "top top top top top"
+      "left flowtl center flowtr right"
+      "left flowtl center flowtr right"
+      "left flowbl center flowbr right"
+      "left selfgroups selfgroups selfgroups right";
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"].wide-self-groups .table {
+    grid-template-areas:
+      "top top top top top"
+      "left flowtl center flowtr right"
+      "left flowtl center flowtr right"
+      "left flowbl center flowbr right"
+      "selfgroups selfgroups selfgroups selfgroups selfgroups";
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"]:has(.group-block:nth-child(6)) .paper-flow-caption {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    font-size: 11px;
+    line-height: 12px;
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-top-left { grid-area: flowtl; }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-top-right { grid-area: flowtr; }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-bottom-left { grid-area: flowbl; }
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .flow-bottom-right { grid-area: flowbr; }
+
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card {
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    align-self: center;
+    width: 100%;
+    height: min(100%, 44px);
+    min-height: 0;
+    gap: 4px;
+    padding: 0 3px;
+    box-sizing: border-box;
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout] :is(.flow-top-right, .flow-bottom-right) { justify-content: flex-end; }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .paper-flow-caption { gap: 3px; }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-strip {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: 100%;
+    align-content: start;
+    align-items: center;
+    justify-items: center;
+    flex: 0 1 40px;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    overflow: hidden auto;
+    scroll-snap-type: y mandatory;
+    overscroll-behavior: contain;
+    mask-image: none;
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-token {
+    box-sizing: border-box;
+    scroll-snap-align: center;
+    margin: 0;
+    width: 22px;
+    height: min(24px, 100%);
+    min-height: 0;
+  }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card .discard-token.mode-long { width: 20px; height: min(28px, 100%); }
+  html[data-skin="puxian-house"] .board[data-table-layout] .flow-card > .discard-strip:focus-visible {
+    outline: 2px solid #f5d58c;
+    outline-offset: -2px;
+  }
+}
