@@ -115,7 +115,7 @@ test("duplicate physical cards still count as one visible chi composition", asyn
   await enterPractice(page);
   await setupChiScenario(page, "chi_unique_duplicate_jmp");
 
-  await expect(page.getByTestId("chi-choices").getByRole("button")).toHaveCount(1);
+  await expect(page.getByTestId("chi-choices").locator("[data-kind]")).toHaveCount(1);
   await expect(page.getByTestId("hand-card-unique-yellow-ma")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect.poll(() => page.locator('[data-testid^="hand-card-unique-yellow-ju-"][aria-pressed="true"]').count())
@@ -124,7 +124,7 @@ test("duplicate physical cards still count as one visible chi composition", asyn
   const second = page.getByTestId("hand-card-unique-yellow-ju-2");
   await first.click();
   await second.click();
-  await page.getByTestId("chi-choices").getByRole("button").click();
+  await page.getByTestId("chi-choices").locator("[data-kind]").click();
   await expect(second).toHaveAttribute("aria-pressed", "true");
   await expect(first).toHaveAttribute("aria-pressed", "false");
   await page.getByTestId("action-chi").click();

@@ -606,6 +606,8 @@
           :choices="visibleChiChoices"
           :target="responseCard"
           :mode="appliedTableCardMode"
+          :can-clear="Boolean(selectedChiCandidate || selectedChiCardIds.length)"
+          @clear="clearChiSelection()"
           @choose="selectChiChoice"
         />
         <ActionPanel
@@ -641,8 +643,7 @@
         aria-live="polite"
       >
         {{ flowStatusText }}
-        <button v-if="props.deferredChiPending || props.deferredGrabPending" type="button"
-          class="cancel-preselection" data-testid="cancel-preselection" @click="cancelPreselection">撤销预选</button>
+
       </div>
     </Transition>
 
@@ -927,7 +928,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   geometryBusy: [busy: boolean];
-  cancelPreselection: [];
   discardCard: [cardId: string];
   submitAction: [request: ActionRequest];
 }>();
@@ -1000,6 +1000,7 @@ const quickPhraseSpeakerName = computed(() => {
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
 const selectedChiCardIds = ref<string[]>([]);
+const chiDraftCleared = ref(false);
 const chiAutoSelectionBlockedKey = ref("");
 const confirmedChi = ref<{ round: string; targetId: string; afterEvent: number } | null>(null);
 const chiValidationMessage = ref("");
@@ -1779,6 +1780,7 @@ const chiSelectionDraftActive = computed(
   () => chiSelectionAvailable.value || Boolean(chiSelectionContextKey.value && selectedChiCardIds.value.length > 0),
 );
 const selectedChiCandidate = computed<ActionCandidate | null>(() => {
+  if (chiDraftCleared.value) return null;
   const selected = [...selectedChiCardIds.value].sort();
   return activeChiCandidates.value.find((candidate) => {
     const candidateIds = [...candidate.cardIds].sort();
@@ -1802,7 +1804,7 @@ const extendableChiCandidates = computed(() => {
 });
 
 const visibleChiChoices = computed(() =>
-  chiChoices(activeChiCandidates.value, props.privateHand, selectedChiCardIds.value),
+  chiChoices(activeChiCandidates.value, props.privateHand, selectedChiCardIds.value, chiDraftCleared.value),
 );
 
 function uniqueVisibleChiCandidate(candidates = activeChiCandidates.value): ActionCandidate | null {
@@ -1812,6 +1814,7 @@ function uniqueVisibleChiCandidate(candidates = activeChiCandidates.value): Acti
 
 function selectChiChoice(candidate: ActionCandidate): void {
   blockChiAutoSelectionForCurrentTarget();
+  chiDraftCleared.value = false;
   selectedChiCardIds.value = [...candidate.cardIds];
   chiValidationMessage.value = "";
 }
@@ -2007,8 +2010,8 @@ const chiReceipt = computed(() => {
 });
 const flowStatusText = computed(() => {
   if (chiReceipt.value) return chiReceipt.value;
-  if (props.deferredChiPending) return "已预选吃，等待本牌轮到你";
-  if (props.deferredGrabPending) return "已预选抓，等待本牌轮到你";
+  if (props.deferredChiPending) return "已确认吃，等待本牌轮到你";
+  if (props.deferredGrabPending) return "已确认抓，等待本牌轮到你";
   if (props.state?.phase === "declaring") {
     return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
       ? "等待其他玩家声明"
@@ -2253,6 +2256,7 @@ function selectHandCard(cardId: string): void {
     return;
   }
   blockChiAutoSelectionForCurrentTarget();
+  chiDraftCleared.value = false;
   if (selectedChiCardIds.value.includes(cardId)) {
     selectedChiCardIds.value = selectedChiCardIds.value.filter((id) => id !== cardId);
     return;
@@ -2274,18 +2278,9 @@ function ensureHandCardSelected(cardId: string): void {
   }
 }
 
-function cancelPreselection(): void {
-  confirmedChi.value = null;
-  emit("cancelPreselection");
-}
 function clearChiSelection(event?: KeyboardEvent): void {
-  if (props.deferredChiPending || props.deferredGrabPending) {
-    event?.preventDefault();
-    cancelPreselection();
-  }
-  if (selectedChiCardIds.value.length === 0) {
-    return;
-  }
+  if (!chiSelectionAvailable.value || props.deferredChiPending || (!selectedChiCandidate.value && !selectedChiCardIds.value.length)) return;
+  chiDraftCleared.value = true;
   event?.preventDefault();
   blockChiAutoSelectionForCurrentTarget();
   selectedChiCardIds.value = [];
@@ -3314,6 +3309,7 @@ watch(
       return;
     }
     activeChiSelectionContextKey = contextKey;
+    chiDraftCleared.value = false;
     chiAutoSelectionBlockedKey.value = "";
     selectedChiCardIds.value = [];
     chiValidationMessage.value = "";
@@ -6365,16 +6361,6 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
 }
 
-.cancel-preselection {
-  pointer-events: auto;
-  min-height: 32px;
-  margin-inline-start: 4px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-}
 .board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
 </style>
 

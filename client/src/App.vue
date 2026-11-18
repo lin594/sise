@@ -273,7 +273,6 @@
         :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
         @submit-action="onPanelSubmit"
-        @cancel-preselection="cancelLocalPreselection"
       >
         <template #guidance>
           <ContextHint v-if="currentHint && !tutorial" :concept="currentHint" :text="contextHintText" @dismiss="dismissContextHintAndRestoreFocus" @disable="disableContextHintsAndRestoreFocus" />
@@ -1717,15 +1716,11 @@ function candidateIdFromRequest(request: ActionRequest): string {
   return typeof request === "string" ? "" : String(request.candidateId ?? "").trim();
 }
 
-function cancelLocalPreselection(): void {
-  pendingDeferredChiIntent.value = null;
-  pendingDeferredGrab.value = null;
-}
-
 function onPanelSubmit(request: ActionRequest) {
   const action = actionFromRequest(request);
   const isDeferred = typeof request !== "string" && Boolean(request.deferred);
   if (state.value?.responsePhase === "collective" && isDeferred && (action === "chi" || action === "pass")) {
+    if (pendingDeferredChiIntent.value || pendingDeferredGrab.value) return;
     const responseCard = state.value?.responseCard;
     const targetCardId = String(responseCard?.id ?? "");
     const targetSource = responseCard?.source;
@@ -1746,14 +1741,16 @@ function onPanelSubmit(request: ActionRequest) {
       pendingDeferredGrab.value = target;
       pendingDeferredChiIntent.value = null;
     }
-    // Preparation belongs to this browser. It neither votes Pass nor creates
-    // a response window; existing Hu/Kai/Peng decisions remain independent.
+    // Choosing cards only edits the draft. Confirming consumes this seat's
+    // collective response once; the server validates the hand again to meld.
+    if (sendAction(action === "chi" ? request : "pass") !== "sent") {
+      pendingDeferredChiIntent.value = null;
+      pendingDeferredGrab.value = null;
+    }
     return;
   }
-  if (action !== "pass" || state.value?.responsePhase !== "collective") {
-    pendingDeferredChiIntent.value = null;
-    pendingDeferredGrab.value = null;
-  }
+  pendingDeferredChiIntent.value = null;
+  pendingDeferredGrab.value = null;
   sendAction(request);
 }
 

@@ -10,6 +10,8 @@
         <CardFace v-for="card in choice.cards" :key="card.id" :card="card" size="xs" :mode="mode" />
       </span>
     </button>
+    <button v-if="canClear" type="button" class="clear-choice" data-testid="clear-chi-draft"
+      @click="emit('clear')">清除选择</button>
   </div>
 </template>
 
@@ -19,8 +21,8 @@ import type { Card, RenderedCardMode, ActionCandidate } from "@/types/game";
 import { getCardAccessibleText } from "@/utils/cardText";
 import type { ChiChoice } from "@/utils/chiChoices";
 
-const props = defineProps<{ choices: ChiChoice[]; target: Card; mode: RenderedCardMode }>();
-const emit = defineEmits<{ choose: [candidate: ActionCandidate] }>();
+const props = defineProps<{ choices: ChiChoice[]; target: Card; mode: RenderedCardMode; canClear: boolean }>();
+const emit = defineEmits<{ choose: [candidate: ActionCandidate]; clear: [] }>();
 
 function choiceLabel(choice: ChiChoice): string {
   const hand = choice.cards.map(card => getCardAccessibleText(card)).join("、");
@@ -51,6 +53,18 @@ function choiceLabel(choice: ChiChoice): string {
   border-radius: 5px;
   color: var(--ui-text, #fff);
   background: var(--ui-panel, #182c2a);
+  cursor: pointer;
+}
+.clear-choice {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 2px 5px;
+  border: 1px solid var(--ui-border, #667572);
+  border-radius: 4px;
+  color: var(--ui-text, #fff);
+  background: var(--ui-panel, #182c2a);
+  font-size: 12px;
   cursor: pointer;
 }
 .chi-choice[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--ui-gold-text, #d19d41); }

@@ -130,11 +130,6 @@ const normalized = computed<PanelAction[]>(() => {
     })
     .filter((item) => item.enabled || item.deferred)
     .filter((item) => !(item.action === "pass" && isPendingForMe));
-  if (isPendingForMe && ordered.some(item => ["hu", "kai", "peng"].includes(item.action) && item.enabled)) {
-    // Declining a real priority action and preparing a later Grab are separate
-    // decisions. A preselection must not silently submit this Pass.
-    ordered.push({ key: "pass", action: "pass", enabled: true, deferred: false, candidates: [] });
-  }
   if (isPendingForMe) {
     ordered.push({
       key: "deferred-pass",
@@ -198,7 +193,7 @@ const panelAnnouncement = computed(() => {
   if (hasDeferredChi.value) {
     const choices = joinActionChoices(normalized.value);
     const turnPrompt = isEarlyCollectiveChoice.value ? "" : "该你操作了。";
-    return `${turnPrompt}可以提前吃，轮到你且来牌仍可吃时自动执行。当前可选择${choices}。`;
+    return `${turnPrompt}可以提前吃，确认即放弃本轮胡、开、碰，轮到你且来牌仍可吃时自动执行。当前可选择${choices}。`;
   }
   if (isEarlyCollectiveChoice.value) {
     const choices = joinActionChoices(normalized.value);
@@ -235,7 +230,7 @@ function actionText(item: PanelAction): string {
 
 function actionAccessibleLabel(item: PanelAction): string {
   if (item.action === "chi" && item.deferred) {
-    return "提前吃，轮到你且来牌仍可吃时自动执行";
+    return "提前吃，确认即放弃本轮胡、开、碰，轮到你且来牌仍可吃时自动执行";
   }
   return actionText(item);
 }

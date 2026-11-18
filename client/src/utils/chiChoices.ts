@@ -14,7 +14,7 @@ const names: Record<string, string> = {
 
 /** A face-level option can represent several legal sets of physical copies. */
 export function chiChoices(
-  candidates: ActionCandidate[], hand: Card[], selectedIds: string[],
+  candidates: ActionCandidate[], hand: Card[], selectedIds: string[], cleared = false,
 ): ChiChoice[] {
   const byId = new Map(hand.map(card => [card.id, card]));
   const selected = new Set(selectedIds);
@@ -30,7 +30,7 @@ export function chiChoices(
         (previous.overlap === overlap && previous.choice.candidate.id <= candidate.id))) continue;
     groups.set(key, { overlap, choice: {
       key, candidate, cards, name: candidate.kind === "pair" && cards.length === 2 ? "三张同牌" : names[candidate.kind ?? ""] ?? candidate.title,
-      selected: selected.size === cards.length && overlap === cards.length,
+      selected: !cleared && selected.size === cards.length && overlap === cards.length,
     } });
   }
   return Array.from(groups.values(), group => group.choice);
