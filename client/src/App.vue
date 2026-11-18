@@ -254,7 +254,7 @@
         :players="players"
         :private-hand="privateHand"
         :senior-mode="displayPreferences.seniorMode"
-        :room-for-two-hand-rows="isRoomyTouchViewport"
+        :room-for-two-hand-rows="roomForTwoHandRows"
         :table-layout="resolvedTableLayout"
         :hand-layout="resolvedHandLayout"
         :listening-hints="boardListeningHints"
@@ -1153,6 +1153,7 @@ const {
   isCompactViewport,
   isLegacyCompactViewport,
   isRoomyTouchViewport,
+  roomForTwoHandRows,
   isRotatedPhonePortrait,
   isUltraCompactViewport,
   viewportHeight,

@@ -712,7 +712,11 @@ test('a spacious unfolded senior table shows both rows in reading order and keep
     const pane = cards[0].closest('.hand-viewport')!.getBoundingClientRect();
     return rects.every((r, i) => {
       const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return r.width >= 48 && r.height >= 48 && r.left >= pane.left - 1 && r.right <= pane.right + 1
+      const ink = document.createRange();
+      ink.selectNodeContents(cards[i].querySelector('.text-top')!);
+      const glyph = ink.getBoundingClientRect();
+      return glyph.width >= 30 && glyph.left >= r.left + 2 && glyph.right <= r.right - 2
+        && r.width >= 48 && r.height >= 48 && r.left >= pane.left - 1 && r.right <= pane.right + 1
         && r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1 && hit && cards[i].contains(hit)
         && (i === 0 || (i === 11 ? r.top >= rects[0].bottom : r.left >= rects[i-1].right));
     });
@@ -720,6 +724,17 @@ test('a spacious unfolded senior table shows both rows in reading order and keep
   await page.setViewportSize({ width: 568, height: 320 });
   await expect(board).not.toHaveClass(/two-row-hand/);
   await expect(page.getByTestId('hand-scroll-next')).toBeEnabled();
+  await page.setViewportSize({ width: 690, height: 820 });
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper'));
+  await expect(page.getByTestId('hand-card-d1')).toBeVisible();
+  await expect(board).not.toHaveClass(/two-row-hand/);
+  await expect.poll(() => page.locator('.hand-card').evaluateAll(cards => {
+    const pane = cards[0].closest('.hand-viewport')!.getBoundingClientRect();
+    return cards.every(card => {
+      const r = card.getBoundingClientRect();
+      return r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1;
+    });
+  })).toBe(true);
 });
 
 test('automatic hand layout retains readable touch targets on small phones and an overview on larger phones', async ({ page }) => {

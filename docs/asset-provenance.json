@@ -961,6 +961,56 @@
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "随项目分发",
       "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/phone-readability/chi-568x320-senior.webp",
+      "sha256": "ab1112b7a7c2c5056892a7ec2c71e0163513b2b3afd9de8001c1973bb5241ce3",
+      "source": "本项目手机牌桌的浏览器实装截图",
+      "author": "项目验证记录贡献者",
+      "originality": "568 × 320 小屏长辈版，同一轮真实渲染的二十张测试手牌",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/phone-readability/README.md"
+    },
+    {
+      "path": "docs/validation/phone-readability/chi-844x390-standard.webp",
+      "sha256": "23ed0116db635ca37fac74af1b7dca503dcb36b63361f2da4b642c7d5646b4b3",
+      "source": "本项目手机牌桌的浏览器实装截图",
+      "author": "项目验证记录贡献者",
+      "originality": "844 × 390 普通模式，同一轮真实渲染的二十张测试手牌",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/phone-readability/README.md"
+    },
+    {
+      "path": "docs/validation/phone-readability/chi-844x390-senior.webp",
+      "sha256": "f6b3ccd6a4e2a025aca8a65cc7a4cbb07dafad3e81c729f09f2f8d1e02626c67",
+      "source": "本项目手机牌桌的浏览器实装截图",
+      "author": "项目验证记录贡献者",
+      "originality": "844 × 390 长辈版，同一轮真实渲染的二十张测试手牌",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/phone-readability/README.md"
+    },
+    {
+      "path": "docs/validation/phone-readability/chi-690x820-senior.webp",
+      "sha256": "16e70a186c8b5c5725843c9ab1b450010d869cbe1fee29350a9d858224839858",
+      "source": "本项目手机牌桌的浏览器实装截图",
+      "author": "项目验证记录贡献者",
+      "originality": "690 × 820 展开内屏长辈版，同一轮真实渲染的二十张测试手牌",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/phone-readability/README.md"
+    },
+    {
+      "path": "docs/validation/phone-readability/discard-568x320-senior.webp",
+      "sha256": "e43857d10d7016b08ad876702d00a3fa801e3292a948630abf276dcd805eaf7d",
+      "source": "本项目手机牌桌的浏览器实装截图",
+      "author": "项目验证记录贡献者",
+      "originality": "568 × 320 本地测试牌局吃牌后选中黄仕，出牌确认按钮显示对应牌名",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/phone-readability/README.md"
     }
   ],
   "confirmedAt": "2026-09-10",

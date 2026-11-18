@@ -95,10 +95,11 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
   };
 
   const isPhoneLike = computed(
-    () => coarsePointer.value && Math.min(viewportWidth.value, viewportHeight.value) <= PHONE_SHORT_EDGE_MAX,
+    () => (coarsePointer.value || hasViewportHinge.value)
+      && Math.min(viewportWidth.value, viewportHeight.value) <= PHONE_SHORT_EDGE_MAX,
   );
   const isRotatedPhonePortrait = computed(
-    () => !hasViewportHinge.value && isPhoneLike.value
+    () => isPhoneLike.value
       && viewportHeight.value >= viewportWidth.value * PORTRAIT_PHONE_MIN_ASPECT,
   );
   const effectiveWidth = computed(() =>
@@ -107,11 +108,12 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
   const effectiveHeight = computed(() =>
     isRotatedPhonePortrait.value ? viewportWidth.value : viewportHeight.value,
   );
-  const isRoomyTouchViewport = computed(() => {
+  const roomForTwoHandRows = computed(() => {
     const short = Math.min(effectiveWidth.value, effectiveHeight.value);
     const long = Math.max(effectiveWidth.value, effectiveHeight.value);
-    return coarsePointer.value && short >= ROOMY_TOUCH_MIN_EDGE && long <= short * ROOMY_TOUCH_MAX_ASPECT;
+    return short >= ROOMY_TOUCH_MIN_EDGE && long <= short * ROOMY_TOUCH_MAX_ASPECT;
   });
+  const isRoomyTouchViewport = computed(() => coarsePointer.value && roomForTwoHandRows.value);
   const isCompactViewport = computed(
     () => effectiveWidth.value <= COMPACT_WIDTH_MAX || effectiveHeight.value <= COMPACT_HEIGHT_MAX,
   );
@@ -126,7 +128,27 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
       effectiveHeight.value <= LEGACY_COMPACT_HEIGHT_MAX,
   );
 
+  let segmentObserver: ResizeObserver | undefined;
+  const segmentProbes: HTMLElement[] = [];
+  function observeSegmentGeometry() {
+    if (!("viewport" in window) || typeof ResizeObserver === "undefined") return;
+    // The hinge can move or close while the viewport size and segment count stay the same.
+    segmentObserver = new ResizeObserver(updateViewport);
+    for (const [width, height] of [
+      ["viewport-segment-right 0 0", "viewport-segment-bottom 0 0"],
+      ["viewport-segment-left 1 0", "viewport-segment-top 0 1"],
+    ]) {
+      const probe = document.createElement("span");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.cssText = `position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;contain:strict;width:env(${width},0px);height:env(${height},0px)`;
+      document.body.append(probe);
+      segmentProbes.push(probe);
+      segmentObserver.observe(probe);
+    }
+  }
+
   onMounted(() => {
+    observeSegmentGeometry();
     coarsePointerQuery = window.matchMedia("(pointer: coarse)");
     segmentQueries = [
       window.matchMedia("(horizontal-viewport-segments >= 2)"),
@@ -146,6 +168,8 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
   });
 
   onUnmounted(() => {
+    segmentObserver?.disconnect();
+    segmentProbes.forEach(probe => probe.remove());
     window.removeEventListener("resize", updateViewport);
     window.removeEventListener("pageshow", updateViewport);
     document.removeEventListener("visibilitychange", updateViewport);
@@ -168,6 +192,7 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
     isLegacyCompactViewport,
     isPhoneLike,
     isRoomyTouchViewport,
+    roomForTwoHandRows,
     isRotatedPhonePortrait,
     isUltraCompactViewport,
     viewportLeft,

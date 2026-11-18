@@ -40,6 +40,7 @@ async function assertHandFits(page: Page) {
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 568, height: 320 }, { width: 667, height: 375 }, { width: 375, height: 667 }]) {
   test(`single row and embedded declaration ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
+    await preferSingleRow(page);
     await page.setViewportSize(viewport);
     await login(page);
     await startLobbyAction(page);

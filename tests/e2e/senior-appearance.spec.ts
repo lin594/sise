@@ -100,3 +100,33 @@ test("长辈版放大实际牌桌，二十张手牌在手机上可翻到末张�
   await expect(hand.first().locator(".card")).toHaveAttribute("data-card-mode", "long");
   await expect(page.locator(".hand-viewport.single-line")).toBeVisible();
 });
+
+for (const [width, height] of [[568, 320], [320, 568]]) {
+  test(`窄屏大厅的长辈版与安装入口可以分别点中 ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
+    await page.evaluate(() => {
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      Object.assign(event, {
+        prompt: async () => { sessionStorage.setItem("senior-install-prompted", "true"); },
+        userChoice: Promise.resolve({ outcome: "accepted", platform: "web" }),
+      });
+      window.dispatchEvent(event);
+    });
+    const entry = page.getByTestId("senior-mode-entry"), install = page.getByTestId("pwa-install-entry");
+    await expect(install).toBeVisible();
+    for (const control of [entry, install]) {
+      await expect.poll(() => control.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      })).toBe(true);
+    }
+    await entry.click();
+    await expect(entry).toHaveAttribute("aria-pressed", "true");
+    await install.click();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("senior-install-prompted"))).toBe("true");
+    await entry.click();
+    await expect(entry).toHaveAttribute("aria-pressed", "false");
+  });
+}

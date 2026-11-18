@@ -61,7 +61,7 @@ html[data-skin] .layout.senior-mode .board[data-table-layout] :is(.action-dock .
   font-size: 20px;
   line-height: 1.15;
 }
-html[data-skin] .layout.senior-mode.effective-short-landscape .board[data-table-layout]:not(.dealer-ceremony-active) {
+html[data-skin] .layout.senior-mode .board[data-table-layout]:not(.dealer-ceremony-active) {
   grid-template-rows: minmax(0, 1fr) auto calc(var(--senior-hand-height) + 32px);
 }
 html[data-skin] .layout.senior-mode.effective-short-landscape .board[data-table-layout] .self-command-row { min-height: 50px; }
@@ -126,4 +126,24 @@ html[data-skin] .layout.senior-mode .board[data-table-layout="mahjong"] .player-
 html[data-skin] .layout.senior-mode .board[data-table-layout] .player-card .seat-identity > strong {
   flex-shrink: 1;
   min-width: min(100%, 2.8em);
+}
+
+/* Installation, settings and accessibility are independent actions in the lobby. */
+@media (max-width: 760px), (max-height: 420px) {
+  html[data-skin] .layout .top:not(.game-control-header) {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px 8px;
+  }
+  html[data-skin] .layout .top:not(.game-control-header) .top-brand {
+    flex: 1 0 170px;
+    min-width: 170px;
+  }
+  html[data-skin] .layout .top:not(.game-control-header) .front-lobby-meta {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+}
+html[data-skin] .layout.senior-mode .board.two-row-hand[data-table-layout] .cards.hand .card {
+  --senior-hand-font: clamp(28px, calc(4.4 * var(--effective-vw)), 36px);
 }
