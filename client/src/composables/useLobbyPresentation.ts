@@ -93,7 +93,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
   );
   const lobbyTitle = computed(() => {
     if (!isWaiting.value) {
-      return "游戏模式选择";
+      return "选一种玩法";
     }
     if (state.value?.roomMode === "match") {
       return "正在快速配桌";
@@ -122,7 +122,7 @@ export function useLobbyPresentation({ state, players, connected, mySeatId, matc
   });
   const lobbySubtitle = computed(() => {
     if (!isWaiting.value) {
-      return "选择一种玩法。第一次玩，建议选单人练习。";
+      return "";
     }
     if (state.value?.roomMode === "match") {
       const humanCount = players.value.filter((player) => !player.isConfiguredBot).length;

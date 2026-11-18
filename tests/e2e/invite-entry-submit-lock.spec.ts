@@ -64,7 +64,7 @@ test("an expired invite leaves the retry loop for mode selection", async ({ page
   const returnButton = page.getByRole("button", { name: "返回玩法选择" });
   await expect(returnButton).toBeFocused();
   await returnButton.click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(page.getByTestId("change-entry-name")).toContainText("重试牌友");
   expect(new URL(page.url()).searchParams.get("roomId")).toBeNull();
   expect(await page.evaluate((roomId) => localStorage.getItem(`four_player_token:${roomId}`), missingRoomId)).toBeNull();
@@ -113,7 +113,7 @@ test("cancelling an in-flight invite clears its temporary room credential", asyn
   await expect(page.getByTestId("resume-session-screen")).toBeVisible();
   await page.getByTestId("cancel-session-resume").click();
 
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
   expect(new URL(page.url()).searchParams.get("roomId")).toBeNull();
   await expect.poll(() => page.evaluate((roomId) => ({
@@ -122,5 +122,5 @@ test("cancelling an in-flight invite clears its temporary room credential", asyn
   }), created.roomId!)).toEqual({ currentRoomId: null, pendingToken: null });
 
   await page.waitForTimeout(900);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 });

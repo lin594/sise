@@ -1,0 +1,102 @@
+{
+  "ok": true,
+  "project": "sise-recovery-test-3be6b29140b6",
+  "candidate": "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7",
+  "baseline": "sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa",
+  "cases": [
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "declaring",
+      "images": [
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7",
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 21,
+      "privateHandHash": "a4c283f7386dbf61fa63f08cb9bb5199288176893a111850db0e8fdec3ee2c69",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "declaring",
+      "images": [
+        "sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa",
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7",
+        "sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 20,
+      "privateHandHash": "ab204cf82db82f5720cd5b17856707534c149cfaf67274fd2492c7d0522d7170",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "candidate SIGTERM and restart",
+      "phase": "playing",
+      "images": [
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7",
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 19,
+      "privateHandHash": "c977aba4078ffe2d6fd6664f19a07d807e74bdf43422f1b5ba56ec204a7109bf",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    },
+    {
+      "label": "baseline upgrade and rollback",
+      "phase": "playing",
+      "images": [
+        "sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa",
+        "sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7",
+        "sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa"
+      ],
+      "roomPreserved": true,
+      "seatPreserved": true,
+      "credentialPreserved": true,
+      "privateHandCount": 18,
+      "privateHandHash": "338360369b325d032128dddad60420fc582763f1a020b7c6756c169f8cc4c64b",
+      "recoveredDecisionAdvanced": true,
+      "snapshotSchema": 2,
+      "stops": [
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        },
+        {
+          "exitCode": 0,
+          "gracefulSnapshotFlushed": true
+        }
+      ]
+    }
+  ]
+}

@@ -64,8 +64,18 @@
 
     <div class="lobby-scroll" data-testid="lobby-scroll">
       <div v-if="modes.length" class="mode-grid">
+        <article class="mode-card practice-card">
+          <div class="mode-head"><strong>自己练习</strong><span>从容入门</span></div>
+          <div class="mode-tiles" aria-hidden="true"><i>車</i><i>馬</i><i>包</i></div>
+          <p>跟着教学认识牌，或直接和电脑练一局</p>
+          <small class="offline-readiness" :data-state="offlineReadinessState" data-testid="offline-readiness" role="status" aria-live="polite">{{ offlineReadinessLabel }}</small>
+          <div class="practice-actions">
+            <button type="button" data-testid="tutorial-entry" :disabled="startPending" @click="$emit('start-tutorial')">跟着教学玩</button>
+            <button type="button" data-testid="mode-practice_bots" :disabled="startPending" @click="$emit('select-mode', 'practice_bots')">直接练一局</button>
+          </div>
+        </article>
         <button
-          v-for="mode in modes"
+          v-for="mode in modes.filter(item => item.id !== 'practice_bots')"
           :key="mode.id"
           :data-testid="`mode-${mode.id}`"
           class="mode-card"
@@ -78,16 +88,9 @@
             <strong>{{ mode.name }}</strong>
             <span>{{ startPending && selectedMode === mode.id ? "正在进入…" : mode.badge }}</span>
           </div>
+          <div class="mode-tiles" aria-hidden="true"><i>{{ mode.id === 'quick_match' ? '卒' : '仕' }}</i><i>{{ mode.id === 'quick_match' ? '卒' : '相' }}</i><i>{{ mode.id === 'quick_match' ? '卒' : '將' }}</i></div>
           <p>{{ mode.description }}</p>
-          <small
-            v-if="mode.id === 'practice_bots'"
-            class="offline-readiness"
-            :data-state="offlineReadinessState"
-            data-testid="offline-readiness"
-            role="status"
-            aria-live="polite"
-          >{{ offlineReadinessLabel }}</small>
-          <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "开始练习" }} <span aria-hidden="true">↗</span></span>
+          <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "直接练一局" }} <span aria-hidden="true">↗</span></span>
         </button>
       </div>
 
@@ -542,6 +545,7 @@ const emit = defineEmits<{
   "open-rules": [trigger: HTMLElement];
   start: [];
   "select-mode": [modeId: string];
+  "start-tutorial": [];
   "copy-invite": [];
   "share-invite": [];
   "show-invite-qr": [];
@@ -1158,6 +1162,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   text-align: left;
   cursor: pointer;
 }
+
+.mode-selection .mode-card {
+  border-color: rgba(157, 105, 60, .55);
+  box-shadow: inset 0 1px rgba(255, 246, 218, .22), 0 3px 0 rgba(76, 42, 24, .2);
+}
+.mode-selection .mode-card:focus-visible { outline: 3px solid var(--ui-accent-text, #d99b4b); outline-offset: 2px; }
 
 .mode-card.active,
 .seat-card.mine {
@@ -1928,4 +1938,36 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .friend-table-settings > summary::before, .bot-settings > summary::before { content: "▸"; }
 .friend-table-settings[open] > summary::before, .bot-settings[open] > summary::before { content: "▾"; }
 .friend-table-settings { margin-top: 8px; }
+
+.mode-selection .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.practice-card { cursor: default; }
+.practice-actions { display: flex; gap: .4rem; align-self: end; }
+.practice-actions button { flex: 1; min-width: 0; min-height: 42px; padding: .4rem; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-panel); color: var(--ui-text); font-weight: 700; cursor: pointer; }
+.practice-actions button:last-child { background: var(--ui-accent); color: #fffaf0; }
+.mode-tiles { display: flex; gap: 4px; margin: .35rem 0; }
+.mode-tiles i { display: grid; place-items: center; width: 30px; height: 45px; border: 1px solid #8b633f; border-radius: 9px; background: #f1d27a; color: #352115; box-shadow: inset 1px 1px #fff9, 1px 2px 2px #28170b55; font: bold 22px var(--skin-font, serif); font-style: normal; }
+.mode-tiles i:nth-child(2) { background: #d87f63; }
+.mode-tiles i:nth-child(3) { background: #85b98e; }
+:global(html[data-skin="puxian-house"] .lobby.mode-selection) { background: radial-gradient(ellipse at center, #315e55, #1f4b44) #1f4b44 !important; border: 5px solid #764734 !important; box-shadow: inset 0 0 0 1px #c99a70; }
+:global(html[data-skin="puxian-house"] .mode-selection .lobby-head h2) { color: #fff2d7; }
+:global(html[data-skin="puxian-house"] .mode-selection .lobby-kicker),
+:global(html[data-skin="puxian-house"] .mode-selection .lobby-rule-tip) { color: #e6d3b4; }
+:global(html[data-skin="puxian-house"] .mode-selection .mode-card) { background: linear-gradient(145deg, #f6e7ce, #ead5b6) #ead5b6; border: 1px solid #ac8059; box-shadow: inset 0 1px #fff9, 0 3px 0 #53352477; }
+:global(html[data-skin="puxian-house"] .mode-selection .mode-share-card) { background-color: #f6e7ce; }
+:global(html[data-skin="puxian-house"] .mode-selection .guest-profile-summary) { background: #f6e7ce; }
+:global(html[data-skin="puxian-house"] .mode-selection .repository-link) { color: #f6dfb8; }
+:global(html[data-skin="puxian-house"] .layout:has(.lobby.mode-selection)) { background: #e1c9a9; }
+:global(html[data-skin="puxian-house"] .lobby.mode-selection) { width: min(100%, 1120px); margin-inline: auto; }
+.mode-selection .lobby-kicker, .mode-selection .lobby-rule-tip { display: none; }
+@media (min-width: 721px) and (min-height: 451px) {
+  :global(html[data-skin="puxian-house"] .mode-selection .lobby-head) { min-height: 190px; padding: 1.25rem 1.5rem; border-radius: 8px; background: #123b33 url('/skins/first-table-hero.webp') center / cover no-repeat; }
+}
+@media (max-width: 720px), (max-height: 380px) {
+  .mode-selection .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
+  .mode-selection .mode-card { min-height: 0; gap: .15rem; }
+  .mode-selection .mode-tiles { margin: 0; gap: 2px; }
+  .mode-selection .mode-tiles i { width: 20px; height: 29px; font-size: 15px; border-radius: 6px; }
+  .mode-selection .practice-actions { gap: .2rem; }
+  .mode-selection .practice-actions button { min-height: 36px; padding: .2rem; font-size: .72rem; }
+}
 </style>

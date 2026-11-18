@@ -30,8 +30,8 @@ test("a host can dissolve a waiting friend table for everyone", async ({ browser
 
     await dissolve.click();
     await host.getByTestId("confirm-dissolve-room").click();
-    await expect(host.getByText("游戏模式选择")).toBeVisible();
-    await expect(guest.getByText("游戏模式选择")).toBeVisible();
+    await expect(host.getByText("选一种玩法")).toBeVisible();
+    await expect(guest.getByText("选一种玩法")).toBeVisible();
     await expect(guest.getByText("房主已解散本桌，大家已返回模式选择。")).toBeVisible();
 
     for (const page of [host, guest]) {
@@ -75,5 +75,5 @@ test("the host can dissolve after the whole table returns from settlement", asyn
   await expect(page.getByTestId("dissolve-room")).toBeVisible();
   await page.getByTestId("dissolve-room").click();
   await page.getByTestId("confirm-dissolve-room").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 });

@@ -73,7 +73,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ topPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ topPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(topPlayer)" />
             <span
@@ -179,7 +179,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ leftPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ leftPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(leftPlayer)" />
             <span
@@ -276,20 +276,28 @@
                   </span>
                 </div>
               </div>
-              <div class="response-slot" ref="responseLandingRef">
+              <div class="response-slot" :class="{ 'tutorial-anchor': ['grab', 'eat', 'peng', 'hu'].includes(props.tutorialStep || '') }" ref="responseLandingRef">
                 <div
                   v-if="centerCardVisible && responseCard"
                   class="pending-inline response-focus"
                   :class="{ 'draw-pending-hidden': isResponseCardDrawHidden || isMovingCard(responseCard.id) }"
                   data-testid="pending-card"
                 >
-                  <CardComp
-                    :key="`resp-${appliedTableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
-                    :card="responseCard"
-                    :mode="appliedTableCardMode"
-                    size="lg"
-                    class="response-card-face"
-                  />
+                  <div class="response-card-anchor">
+                    <CardComp
+                      :key="`resp-${appliedTableCardMode}-${responseCard.id}-${responseCard.source || 'upper'}`"
+                      :card="responseCard"
+                      :mode="appliedTableCardMode"
+                      size="lg"
+                      class="response-card-face"
+                    />
+                    <span
+                      v-if="responseSourceLabel"
+                      class="response-source"
+                      data-testid="response-source"
+                      :title="responseSourceLabel"
+                    >{{ responseSourceLabel }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -332,7 +340,7 @@
       >
         <header class="seat-head">
           <div class="seat-identity">
-            <strong>{{ rightPlayer.name }}</strong>
+            <strong><span class="seat-name">{{ rightPlayer.name }}</span></strong>
             <span class="seat-identity-meta">
             <PlayerStatusIcon v-bind="statusIconProps(rightPlayer)" />
             <span
@@ -579,7 +587,7 @@
         <header class="self-head">
           <div ref="selfIdentityRef" class="seat-identity">
             <h3 ref="selfNameRef" :title="selfPlayer.name" :data-name-fallback="useSelfNameFallback ? 'true' : 'false'">
-              {{ useSelfNameFallback ? "你" : selfPlayer.name }}
+              <span class="seat-name">{{ useSelfNameFallback ? "你" : selfPlayer.name }}</span>
             </h3>
             <span ref="selfNameMeasureRef" class="self-name-measure" aria-hidden="true">{{ selfPlayer.name }}</span>
             <span ref="selfIdentityMetaRef" class="seat-identity-meta">
@@ -601,6 +609,15 @@
 
       <div class="dynamic-action-track" data-testid="dynamic-action-track">
         <slot name="declaration" />
+        <ChiChoices
+          v-if="visibleChiChoices.length && responseCard"
+          :choices="visibleChiChoices"
+          :target="responseCard"
+          :mode="appliedTableCardMode"
+          :can-clear="Boolean(selectedChiCandidate || selectedChiCardIds.length)"
+          @clear="clearChiSelection()"
+          @choose="selectChiChoice"
+        />
         <ActionPanel
           v-if="props.state?.phase === 'playing' && (canAct || canDiscard)"
           class="embedded-actions action-dock"
@@ -632,7 +649,10 @@
         data-testid="decision-status"
         role="status"
         aria-live="polite"
-      >{{ flowStatusText }}</div>
+      >
+        {{ flowStatusText }}
+
+      </div>
     </Transition>
 
     <section v-if="listeningDetailsOpen && listeningDetailWaits.length" id="listening-details" ref="listeningDetailsRef"
@@ -691,7 +711,7 @@
         <div
           ref="handViewportRef"
           class="hand-viewport"
-          :class="{ 'single-line': handLayout !== 'paged' }"
+          :class="{ 'single-line': handLayout !== 'paged', 'tutorial-anchor': ['eat', 'discard_chi', 'discard_peng', 'hu'].includes(props.tutorialStep || '') }"
         >
           <div
             class="cards hand"
@@ -804,6 +824,8 @@
 import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
+import ChiChoices from "./ChiChoices.vue";
+import { chiChoices } from "@/utils/chiChoices";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
@@ -877,7 +899,9 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  connected: boolean;
   guidanceActive?: boolean;
+  tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
@@ -893,6 +917,7 @@ const props = defineProps<{
   isCurrentTurn?: boolean;
   responsePhase?: string;
   deferredChiPending?: boolean;
+  deferredGrabPending?: boolean;
   interactionPausedMessage?: string;
   decisionUntimed?: boolean;
   decisionTimerTotalMs?: number;
@@ -985,7 +1010,9 @@ const quickPhraseSpeakerName = computed(() => {
 const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
 const selectedChiCardIds = ref<string[]>([]);
+const chiDraftCleared = ref(false);
 const chiAutoSelectionBlockedKey = ref("");
+const confirmedChi = ref<{ round: string; targetId: string; afterEvent: number } | null>(null);
 const chiValidationMessage = ref("");
 const retainedUpperResponseCardId = ref("");
 let activeChiSelectionContextKey = "";
@@ -1305,6 +1332,14 @@ const activeFlowSourcePlayerId = computed(() => {
     return "";
   }
   return String(props.state?.pollOriginPlayerId || props.state?.previousPlayerId || "");
+});
+
+const responseSourceLabel = computed(() => {
+  if (responseCard.value?.source === "draw") return "牌堆摸出";
+  if (responseCard.value?.source !== "upper") return "";
+  const source = props.players.find(player => player.clientId === activeFlowSourcePlayerId.value);
+  if (!source) return "流水牌";
+  return source.clientId === props.mySeatId ? "你打出" : `${source.name} 打出`;
 });
 
 const activeFlowTargetPlayerId = computed(() => {
@@ -1763,6 +1798,7 @@ const chiSelectionDraftActive = computed(
   () => chiSelectionAvailable.value || Boolean(chiSelectionContextKey.value && selectedChiCardIds.value.length > 0),
 );
 const selectedChiCandidate = computed<ActionCandidate | null>(() => {
+  if (chiDraftCleared.value) return null;
   const selected = [...selectedChiCardIds.value].sort();
   return activeChiCandidates.value.find((candidate) => {
     const candidateIds = [...candidate.cardIds].sort();
@@ -1785,28 +1821,20 @@ const extendableChiCandidates = computed(() => {
   );
 });
 
-function chiCandidateFaceSignature(candidate: ActionCandidate): string {
-  const cardsById = new Map(props.privateHand.map((card) => [card.id, card]));
-  const faces = candidate.cardIds.map((cardId) => {
-    const card = cardsById.get(cardId);
-    return card ? `${card.color}:${card.type}` : `missing:${cardId}`;
-  }).sort();
-  return `${faces.length}|${faces.join("|")}`;
-}
+const visibleChiChoices = computed(() =>
+  chiChoices(activeChiCandidates.value, props.privateHand, selectedChiCardIds.value, chiDraftCleared.value),
+);
 
 function uniqueVisibleChiCandidate(candidates = activeChiCandidates.value): ActionCandidate | null {
-  const byVisibleComposition = new Map<string, ActionCandidate[]>();
-  for (const candidate of candidates) {
-    const signature = chiCandidateFaceSignature(candidate);
-    const entries = byVisibleComposition.get(signature) ?? [];
-    entries.push(candidate);
-    byVisibleComposition.set(signature, entries);
-  }
-  if (byVisibleComposition.size !== 1) {
-    return null;
-  }
-  return [...(byVisibleComposition.values().next().value ?? [])]
-    .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
+  const choices = chiChoices(candidates, props.privateHand, []);
+  return choices.length === 1 ? choices[0]!.candidate : null;
+}
+
+function selectChiChoice(candidate: ActionCandidate): void {
+  blockChiAutoSelectionForCurrentTarget();
+  chiDraftCleared.value = false;
+  selectedChiCardIds.value = [...candidate.cardIds];
+  chiValidationMessage.value = "";
 }
 
 function defaultVisibleChiCandidate(): ActionCandidate | null {
@@ -1977,8 +2005,31 @@ watch(() => [props.state?.phase, props.state?.completedRounds, props.state?.last
   props.players.map(player => `${player.clientId}:${player.declaredReady}:${player.declarationStep}`).join("|")].join(";"),
 () => { lastTableActivityAt.value = Date.now(); }, { immediate: true });
 const passiveWaitVisible = computed(() => nowMs.value - lastTableActivityAt.value >= 3000);
+watch(() => [props.connected, props.mySeatId, currentDealRoundKey(), props.actionFeedback?.status] as const,
+  ([connected, seat, round, status], [, oldSeat, oldRound]) => {
+    if (!connected || seat !== oldSeat || round !== oldRound || status === "rejected") confirmedChi.value = null;
+  });
+const chiReceipt = computed(() => {
+  const confirmed = confirmedChi.value;
+  if (!confirmed || !props.connected || confirmed.round !== currentDealRoundKey()) return "";
+  const now = nowMs.value + Number(props.state?.presentationClockOffsetMs ?? 0);
+  const claim = rawTableEvents.value.find(event =>
+    event.id > confirmed.afterEvent && (event.kind === "meld" || event.kind === "hu") &&
+    event.startsAt <= now && now < event.endsAt + 2200 &&
+    event.moves.some(move => move.card.id === confirmed.targetId && move.from.zone !== "hand"),
+  );
+  if (!claim) return "";
+  const { actor, keyword } = parseActionDescriptor(claim.action ?? "");
+  const target = claim.moves.find(move => move.card.id === confirmed.targetId)?.card;
+  if (!target || !actor || !ACTION_LABELS[keyword]) return "";
+  if (actor === props.mySeatId) return keyword === "CHI" ? `已吃进${getCardLabelText(target)}` : "";
+  const player = props.players.find(player => player.clientId === actor);
+  return `${player?.name || "牌友"}${ACTION_LABELS[keyword]}了${getCardLabelText(target)}，你的吃牌已取消`;
+});
 const flowStatusText = computed(() => {
-  if (props.deferredChiPending) return "已选择吃，等待其他玩家响应";
+  if (chiReceipt.value) return chiReceipt.value;
+  if (props.deferredChiPending) return "已确认吃，等待本牌轮到你";
+  if (props.deferredGrabPending) return "已确认抓，等待本牌轮到你";
   if (props.state?.phase === "declaring") {
     return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
       ? "等待其他玩家声明"
@@ -2223,6 +2274,7 @@ function selectHandCard(cardId: string): void {
     return;
   }
   blockChiAutoSelectionForCurrentTarget();
+  chiDraftCleared.value = false;
   if (selectedChiCardIds.value.includes(cardId)) {
     selectedChiCardIds.value = selectedChiCardIds.value.filter((id) => id !== cardId);
     return;
@@ -2245,9 +2297,8 @@ function ensureHandCardSelected(cardId: string): void {
 }
 
 function clearChiSelection(event?: KeyboardEvent): void {
-  if (selectedChiCardIds.value.length === 0) {
-    return;
-  }
+  if (!chiSelectionAvailable.value || props.deferredChiPending || (!selectedChiCandidate.value && !selectedChiCardIds.value.length)) return;
+  chiDraftCleared.value = true;
   event?.preventDefault();
   blockChiAutoSelectionForCurrentTarget();
   selectedChiCardIds.value = [];
@@ -2561,11 +2612,19 @@ function onSubmitAction(request: ActionRequest): void {
       return;
     }
     request = { ...request, candidateId: selectedChiCandidate.value.id };
+    if (responseCard.value) {
+      confirmedChi.value = {
+        round: currentDealRoundKey(), targetId: responseCard.value.id,
+        afterEvent: Number(props.state?.tableEventSeq ?? 0),
+      };
+    }
+  }
+  const isPriorityPass = request === "pass" && props.responsePhase === "collective";
+  const isChi = typeof request === "object" && request.action === "chi";
+  if (!isChi && !isPriorityPass) {
+    confirmedChi.value = null;
   }
   chiValidationMessage.value = "";
-  if (typeof request !== "string" && request.action === "chi") {
-    selectedChiCardIds.value = [];
-  }
   emit("submitAction", request);
 }
 
@@ -3268,6 +3327,7 @@ watch(
       return;
     }
     activeChiSelectionContextKey = contextKey;
+    chiDraftCleared.value = false;
     chiAutoSelectionBlockedKey.value = "";
     selectedChiCardIds.value = [];
     chiValidationMessage.value = "";
@@ -3467,6 +3527,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   font-weight: 800;
 }
 
+.tutorial-anchor { outline: 2px solid #e9b960; outline-offset: 2px; border-radius: 6px; }
 .response-card-simple {
   min-width: clamp(2.2rem, 5vh, 2.9rem);
   min-height: clamp(3rem, 7vh, 4rem);
@@ -4203,21 +4264,43 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   filter: drop-shadow(0 9px 16px rgba(var(--ui-page-rgb, 2, 6, 23), 0.32));
 }
 
-.response-caption {
+.response-card-anchor {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.response-source {
   position: absolute;
+  top: calc(100% + 3px);
   left: 50%;
-  bottom: -0.2rem;
-  z-index: 2;
-  transform: translate(-50%, 55%);
-  border-radius: 999px;
-  border: 1px solid rgba(var(--ui-accent-rgb, 125, 211, 252), 0.42);
-  background: rgba(var(--ui-panel-rgb, 8, 47, 73), 0.88);
-  color: var(--ui-accent-text, #e0f2fe);
-  padding: 0.05rem 0.38rem;
-  font-size: max(0.8125rem, 13px);
-  font-weight: 800;
-  line-height: 1.15;
+  max-width: min(10em, 30vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: var(--response-label-bg, var(--ui-panel));
+  color: var(--response-label-ink, var(--ui-text));
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
   white-space: nowrap;
+}
+
+.board[data-table-layout="mahjong"] .response-source {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
+@media (max-height: 380px), (max-width: 380px) {
+  .board[data-table-layout] .response-source {
+    top: 50%;
+    bottom: auto;
+    left: calc(100% + 4px);
+    max-width: 6em;
+    transform: translateY(-50%);
+  }
 }
 
 .pending-inline.draw-pending-hidden > * {
@@ -6317,6 +6400,26 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board.has-guidance :is(.clock-slot, .self-info-card, .dynamic-action-track) { grid-row: 2; }
 @media (max-width: 960px), (max-height: 500px) {
   .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
+}
+
+/* Only the combinations scroll. Every response keeps its own touch target,
+   including when the app rotates the whole board for a portrait phone. */
+.board .dynamic-action-track:has(.chi-choices) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+.board .dynamic-action-track:has(.chi-choices) .action-dock :deep(.action-row) {
+  width: max-content;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+.board .dynamic-action-track:has(.chi-choices) .action-dock :deep(.btn) {
+  flex: none;
+  width: clamp(44px, calc(var(--effective-vw, 1vw) * 6), 60px);
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding-inline: 2px;
 }
 </style>
 

@@ -227,8 +227,9 @@ test("draw flies face down, pauses, flips, then accepts B's eat with real cards"
   const back = await flight.locator(".card-back").evaluate(el => ({
     background: getComputedStyle(el).backgroundImage,
     radius: getComputedStyle(el).borderRadius,
+    kind: el.getAttribute("data-card-back"),
   }));
-  expect(back.background).toContain("rgb(182, 36, 44)");
+  expect(back.kind).toBe("red-four-color");
   expect(back.radius).toBe("6px");
   await expect(page.locator(".deck-layer").first()).toHaveCSS("background-image", back.background);
   await expect(flight).toHaveAttribute("data-transition-stage", "waiting");

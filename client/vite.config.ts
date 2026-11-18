@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         manifest: false,
         workbox: {
-          globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
+          globPatterns: ["**/*.{js,css,html,ico,png,webp,svg,webmanifest,woff2}"],
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [
             /^\/invite(?:\/|$)/,

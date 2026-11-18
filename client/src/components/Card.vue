@@ -3,7 +3,8 @@
     class="card"
     :class="[colorClass, `size-${sizeClass}`, `mode-${modeClass}`, { 'response-card': isResponseCard }]"
     :data-card-mode="modeClass"
-    :data-face-id="card.id"
+    :data-face-id="preview ? undefined : card.id"
+    :data-preview-card-id="preview ? card.id : undefined"
     role="img"
     :aria-label="accessibleLabel"
   >
@@ -22,6 +23,7 @@ import { getCardAccessibleText, getCardFaceText } from "@/utils/cardText";
 
 const props = defineProps<{
   card: Card;
+  preview?: boolean;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   mode?: RenderedCardMode;
 }>();
