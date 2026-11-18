@@ -64,6 +64,11 @@
 
     <div class="lobby-scroll" data-testid="lobby-scroll">
       <div v-if="modes.length" class="mode-grid">
+        <button class="mode-card tutorial-card" type="button" data-testid="tutorial-entry" :disabled="startPending" @click="$emit('start-tutorial')">
+          <div class="mode-head"><strong>跟着教学玩</strong><span>第一次玩</span></div>
+          <p>认牌、抓吃碰胡，跟着提示走一遍</p>
+          <span class="mode-enter">开始教学 <span aria-hidden="true">↗</span></span>
+        </button>
         <button
           v-for="mode in modes"
           :key="mode.id"
@@ -87,7 +92,7 @@
             role="status"
             aria-live="polite"
           >{{ offlineReadinessLabel }}</small>
-          <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "开始练习" }} <span aria-hidden="true">↗</span></span>
+          <span class="mode-enter">{{ mode.id === "friends" ? "创建好友房" : mode.id === "quick_match" ? "开始配桌" : "直接练一局" }} <span aria-hidden="true">↗</span></span>
         </button>
       </div>
 
@@ -542,6 +547,7 @@ const emit = defineEmits<{
   "open-rules": [trigger: HTMLElement];
   start: [];
   "select-mode": [modeId: string];
+  "start-tutorial": [];
   "copy-invite": [];
   "share-invite": [];
   "show-invite-qr": [];
@@ -1158,6 +1164,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   text-align: left;
   cursor: pointer;
 }
+
+.mode-selection .mode-card {
+  border-color: rgba(157, 105, 60, .55);
+  box-shadow: inset 0 1px rgba(255, 246, 218, .22), 0 3px 0 rgba(76, 42, 24, .2);
+}
+.mode-selection .mode-card:focus-visible { outline: 3px solid var(--ui-accent-text, #d99b4b); outline-offset: 2px; }
 
 .mode-card.active,
 .seat-card.mine {

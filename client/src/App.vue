@@ -180,6 +180,7 @@
       :ready-pending="lobbyReadyPending"
       @start="startSelectedMode"
       @select-mode="startLobbyMode"
+      @start-tutorial="startPracticeLobby(true)"
       @copy-invite="copyInviteLink"
       @share-invite="shareInviteLink"
       @show-invite-qr="showInviteQr"
@@ -196,7 +197,6 @@
       @set-lobby-ready="requestLobbyReady"
     >
       <template #recommendation>
-        <button v-if="showModeLobby && !state" class="ghost tutorial-entry" data-testid="tutorial-entry" :disabled="enteringLobby" @click="startPracticeLobby(true)">第一次玩？跟着提示学一局</button>
         <aside v-if="showSmallScreenRecommendation" class="small-screen-recommendation" data-testid="small-screen-recommendation">
           <span>屏幕较小，紧凑布局能留出更多操作空间</span>
           <button type="button" data-testid="recommend-compact" @click="acceptCompactLayout">切换紧凑布局</button>
@@ -300,13 +300,6 @@
         </template>
       </GameBoard>
     </template>
-
-    <FirstLayoutDialog
-      v-if="showFirstLayoutDialog"
-      v-model="displayPreferences"
-      :resolved-layout="resolvedTableLayout"
-      @confirm="confirmInitialLayout"
-    />
 
     <InviteLinkFallbackDialog
       v-if="inviteCopyFallbackUrl"
@@ -717,7 +710,6 @@
 <script setup lang="ts">
 import LoginPage from "./components/LoginPage.vue";
 import ContextHint from "./components/ContextHint.vue";
-import FirstLayoutDialog from "./components/FirstLayoutDialog.vue";
 import { useInviteActions } from "./composables/useInviteActions";
 import { useContextHints, type HintConcept } from "./composables/useContextHints";
 import TutorialGuide from "./components/TutorialGuide.vue";
@@ -1141,16 +1133,7 @@ const {
   viewportLeft,
   viewportTop,
 } = useResponsiveViewport(viewportGeometryBusy);
-const LAYOUT_ONBOARDING_KEY = "sise_layout_onboarding_v1";
-const displayPreferencesExistedAtBoot = Boolean(readStoredValue("sise_game_display_preferences_v2"));
 const displayPreferences = useDisplayPreferences();
-const layoutOnboardingComplete = ref(
-  !browserStoragePersistent || readStoredValue(LAYOUT_ONBOARDING_KEY) === "done"
-    || displayPreferencesExistedAtBoot || Boolean(storedEntryNameAtBoot),
-);
-const showFirstLayoutDialog = computed(() =>
-  !layoutOnboardingComplete.value && showModeLobby.value && !state.value && !enteringLobby.value && !entryInviteRoomId.value,
-);
 const resolvedTableLayout = ref(resolveTableLayout(displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value));
 watch(() => [displayPreferences.value.tableLayout, effectiveWidth.value, effectiveHeight.value] as const, ([layout, width, height], _, onCleanup) => {
   const timer = setTimeout(() => { resolvedTableLayout.value = resolveTableLayout(layout, width, height); }, 180);
@@ -1169,15 +1152,6 @@ function dismissLayoutRecommendation() {
 function acceptCompactLayout() {
   displayPreferences.value.tableLayout = "compact";
   dismissLayoutRecommendation();
-}
-
-function confirmInitialLayout(): void {
-  layoutOnboardingComplete.value = true;
-  writeStoredValue(LAYOUT_ONBOARDING_KEY, "done");
-  dismissLayoutRecommendation();
-  void nextTick(() => {
-    document.querySelector<HTMLButtonElement>(`[data-testid='mode-${selectedLobbyMode.value}']`)?.focus({ preventScroll: true });
-  });
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
