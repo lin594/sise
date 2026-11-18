@@ -7,6 +7,7 @@ type SoundWindow = Window & {
   __siseLocalTest: {
     setupScenario: (scenario: string) => void;
     getRoomState: () => RoomStateSnapshot;
+    getDeferredChiDebug: () => { stateRevision: number };
     applyRoomSnapshot: (snapshot: Partial<RoomStateSnapshot>) => void;
   };
 };
@@ -100,20 +101,34 @@ test("the first authoritative reconnect snapshot establishes a silent sound base
     const state = bridge.getRoomState();
     const events = state.tableTransitions ?? [];
     const now = Date.now() + (state.presentationClockOffsetMs ?? 0);
+    // Identical public snapshots can advance the accepted revision without replacing the rendered state.
+    const stateRevision = bridge.getDeferredChiDebug().stateRevision + 1;
+    const eventId = (events.at(-1)?.id ?? 0) + 1;
     const card = { id: "paper-contact", color: "white", type: "zu" };
     bridge.applyRoomSnapshot({
-      stateRevision: state.stateRevision + 1,
+      stateRevision,
       serverNow: now,
       tableTransitions: [...events, {
-        id: (events.at(-1)?.id ?? 0) + 1, round: state.completedRounds + 1,
+        id: eventId, round: state.completedRounds + 1,
         kind: "discard", startsAt: now, endsAt: now + 700,
         moves: [{ card, from: { zone: "hand" }, to: { zone: "center" } }],
       }],
     });
+    const applied = bridge.getRoomState();
+    return {
+      stateRevision,
+      eventId,
+      appliedRevision: applied.stateRevision,
+      appliedEventId: applied.tableTransitions?.at(-1)?.id,
+    };
   });
-  await appendLanding(); // A retained public move arrives on the new connection.
+  const baseline = await appendLanding(); // A retained public move arrives on the new connection.
+  expect(baseline.appliedRevision).toBe(baseline.stateRevision);
+  expect(baseline.appliedEventId).toBe(baseline.eventId);
   await page.waitForTimeout(750);
   expect(await contactDurations(page)).toEqual([]);
-  await appendLanding(); // An actual subsequent move still sounds normally.
+  const next = await appendLanding(); // An actual subsequent move still sounds normally.
+  expect(next.appliedRevision).toBe(next.stateRevision);
+  expect(next.appliedEventId).toBe(baseline.eventId + 1);
   await expect.poll(() => contactDurations(page)).toEqual([85]);
 });
