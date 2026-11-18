@@ -34,7 +34,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     await page.screenshot({ path: testInfo.outputPath("storage-limited-nickname-568x320.png") });
     await nickname.fill("隐私浏览器牌友");
     await page.getByTestId("login-submit").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.locator(".mode-card")).toHaveCount(3);
     await expect(page.getByTestId("guest-profile-summary")).toHaveCount(0);
 
@@ -44,7 +44,7 @@ test("storage-restricted browsers can still enter a practice game", async ({ bro
     await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.getByTestId("guest-profile-summary")).toHaveCount(0);
     expect(pageErrors).toEqual([]);
   } finally {

@@ -82,6 +82,7 @@ test("reopens offline from the cached shell and completes a local round without 
   const page = await context.newPage();
   await page.goto(`${origin}/?e2eDebug=1`, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("offline-readiness")).toHaveAttribute("data-state", "ready");
+  expect(await page.evaluate(async () => (await fetch('/skins/first-table-hero.webp')).ok)).toBe(true);
   // Optional lobby profile/telemetry calls may already have been attempted
   // during application boot. The single-player offline fallback must add none of its own.
   await page.waitForTimeout(100);

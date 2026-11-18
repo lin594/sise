@@ -1955,6 +1955,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 :global(html[data-skin="puxian-house"] .mode-selection .mode-card) { background: linear-gradient(145deg, #f6e7ce, #ead5b6); border: 1px solid #ac8059; box-shadow: inset 0 1px #fff9, 0 3px 0 #53352477; }
 :global(html[data-skin="puxian-house"] .mode-selection .guest-profile-summary) { background: #f6e7ce; }
 :global(html[data-skin="puxian-house"] .mode-selection .repository-link) { color: #f6dfb8; }
+:global(html[data-skin="puxian-house"] .layout:has(.lobby.mode-selection)) { background: #e1c9a9; }
+:global(html[data-skin="puxian-house"] .lobby.mode-selection) { width: min(100%, 1120px); margin-inline: auto; }
+.mode-selection .lobby-kicker, .mode-selection .lobby-rule-tip { display: none; }
+@media (min-width: 721px) and (min-height: 451px) {
+  :global(html[data-skin="puxian-house"] .mode-selection .lobby-head) { min-height: 190px; padding: 1.25rem 1.5rem; border-radius: 8px; background: #123b33 url('/skins/first-table-hero.webp') center / cover no-repeat; }
+}
 @media (max-width: 720px), (max-height: 380px) {
   .mode-selection .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
   .mode-selection .mode-card { min-height: 0; gap: .15rem; }

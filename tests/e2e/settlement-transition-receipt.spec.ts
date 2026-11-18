@@ -104,7 +104,7 @@ test("practice settlement returns personally to the complete mode picker", async
   await holdSocketMessage(page, "return_lobby");
   await page.getByTestId("practice-return-to-modes").click();
   await expect.poll(() => heldMessageCount(page)).toBe(0);
-  await expect(page.getByText("游戏模式选择")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("选一种玩法")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("mode-practice_bots")).toBeVisible();
   await expect(page.getByTestId("mode-quick_match")).toBeVisible();
   await expect(page.getByTestId("mode-friends")).toBeVisible();

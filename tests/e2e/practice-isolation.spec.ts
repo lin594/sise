@@ -5,7 +5,7 @@ const BACKEND_URL = process.env.PLAYWRIGHT_BACKEND_URL || "http://127.0.0.1:2567
 
 async function preparePracticeEntry(page: Page, name: string): Promise<void> {
   await openGameAs(page, "/", name);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 

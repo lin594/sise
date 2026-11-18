@@ -59,7 +59,7 @@ test.describe("牌局断线恢复", () => {
     });
     await page.goto("/?e2eDebug=1");
 
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
 
     const privateStateRequest = page.waitForRequest((request) => request.url().includes("/private-state"));
     await startLobbyAction(page);
@@ -301,7 +301,7 @@ test.describe("牌局断线恢复", () => {
     expect(matchmakingRequests).toBe(requestCountAfterClosure);
     await page.screenshot({ path: testInfo.outputPath("iphone-se-resume-screen.png") });
     await page.getByTestId("cancel-session-resume").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
     expect(
       await page.evaluate(() => ({
@@ -331,7 +331,7 @@ test.describe("牌局断线恢复", () => {
     await page.screenshot({ path: testInfo.outputPath("expired-friend-invite-exit.png") });
     await returnButton.click();
 
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.getByTestId("mode-practice_bots")).toBeFocused();
     await expect(page.getByTestId("change-entry-name")).toContainText("过期邀请测试");
     expect(
@@ -424,11 +424,11 @@ test.describe("牌局断线恢复", () => {
     await revealTool(page, "game-exit");
     await page.getByTestId("game-exit").click();
     await page.getByTestId("confirm-exit").click();
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
 
     releaseResponse();
     await page.waitForTimeout(500);
-    await expect(page.getByText("游戏模式选择")).toBeVisible();
+    await expect(page.getByText("选一种玩法")).toBeVisible();
     await expect(page.getByTestId("resume-session-screen")).toHaveCount(0);
     await expect(page.getByTestId("game-board")).toHaveCount(0);
   });

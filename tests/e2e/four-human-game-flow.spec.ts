@@ -35,7 +35,7 @@ async function closeFourPages(table: FourPlayerTable): Promise<void> {
 
 async function enterModeLobby(page: Page, name: string): Promise<void> {
   await openGameAs(page, "/?e2eDebug=1", name);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 async function observeRoundPresentation(page: Page): Promise<void> {

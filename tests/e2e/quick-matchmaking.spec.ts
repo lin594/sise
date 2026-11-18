@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function enterModeLobby(page: Page, name: string, path = "/"): Promise<void> {
   await openGameAs(page, path, name);
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
 }
 
 async function applyDebugScenario(page: Page, scenario: string): Promise<void> {
@@ -150,7 +150,7 @@ test("leaving quick-match waiting clears its local room identity", async ({ page
   await page.getByTestId("leave-waiting-room").click();
   await expect(page.getByRole("dialog", { name: "离开快速配桌？" })).toContainText("不会把其他牌友一起带走");
   await page.getByTestId("confirm-waiting-leave").click();
-  await expect(page.getByText("游戏模式选择")).toBeVisible();
+  await expect(page.getByText("选一种玩法")).toBeVisible();
   const stored = await page.evaluate((departedRoomId) => ({
     roomId: localStorage.getItem("four_room_id"),
     token: localStorage.getItem(`four_player_token:${departedRoomId}`),
