@@ -1251,15 +1251,14 @@ test.describe("compact landscape gameplay", () => {
     const protectedCardState = await page.locator(".hand").evaluate((hand) => {
       const blocked = Array.from(hand.querySelectorAll<HTMLElement>(".hand-card.blocked"));
       return {
-        blockedCount: blocked.length,
-        badgeCount: hand.querySelectorAll(".discard-protected-badge").length,
+        hasProtectionText: Array.from(hand.querySelectorAll(".hand-card")).some(card => card.textContent?.includes("留")),
         labels: blocked.map((card) => card.getAttribute("aria-label") ?? ""),
         opacities: blocked.map((card) => Number.parseFloat(getComputedStyle(card).opacity)),
       };
     });
-    expect(protectedCardState.badgeCount).toBe(protectedCardState.blockedCount);
+    expect(protectedCardState.hasProtectionText).toBe(false);
     expect(protectedCardState.labels.every((label) => label.endsWith("规则保护，不能打出"))).toBe(true);
-    expect(protectedCardState.opacities.every((opacity) => opacity >= 0.7)).toBe(true);
+    expect(protectedCardState.opacities.every((opacity) => opacity >= 0.9)).toBe(true);
 
     const selectedCard = page.locator("[data-testid^='hand-card-']:enabled").first();
     const selectedCardTestId = await selectedCard.getAttribute("data-testid");

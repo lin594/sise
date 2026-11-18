@@ -754,7 +754,6 @@
                 'deal-concealed': isDealConcealedCard(card.id),
                 playable: !isDealConcealedCard(card.id) && canSelectHandCard(card),
                 blocked: canDiscard && isDiscardProtectedCard(card),
-                'gold-blocked': canDiscard && card.color === 'gold',
                 'discard-selected': !chiSelectionDraftActive && selectedDiscardCardId === card.id,
                 'candidate-active': isChiCardSelectable(card.id),
                 'candidate-selected': selectedChiCardIds.includes(card.id),
@@ -785,11 +784,6 @@
                 class="candidate-selection-badge"
                 aria-hidden="true"
               >✓</span>
-              <span
-                v-else-if="canDiscard && isDiscardProtectedCard(card)"
-                class="discard-protected-badge"
-                aria-hidden="true"
-              >留</span>
               <CardComp :card="card"
               :style="movingCardStyle(card.id)" :mode="appliedOwnCardMode" size="xl" />
             </button>
@@ -4784,12 +4778,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 }
 
 .hand-card.blocked {
-  opacity: 0.72;
+  opacity: 0.9;
   cursor: not-allowed;
-}
-
-.hand-card.gold-blocked {
-  opacity: 0.78;
 }
 
 .hand-card.candidate-active {
@@ -4833,26 +4823,6 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   background: #0369a1;
   color: #ffffff;
   font-size: 12px;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow: 0 1px 4px rgba(var(--ui-page-rgb, 2, 6, 23), 0.55);
-}
-
-.discard-protected-badge {
-  position: absolute;
-  right: 2px;
-  top: 2px;
-  z-index: 3;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 3px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--ui-gold-text, #fef3c7);
-  background: var(--ui-raised, #92400e);
-  color: var(--ui-text, #fffbeb);
-  font-size: 11px;
   font-weight: 900;
   line-height: 1;
   box-shadow: 0 1px 4px rgba(var(--ui-page-rgb, 2, 6, 23), 0.55);

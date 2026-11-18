@@ -13,7 +13,8 @@ for (const viewport of [{ width: 568, height: 320 }, { width: 375, height: 667 }
     await expect(protectedCards).toHaveCount(3);
     for (const card of await protectedCards.all()) {
       await expect(card).toBeDisabled();
-      await expect(card.locator('.discard-protected-badge')).toHaveText('留');
+      await expect(card).toHaveAccessibleName(/规则保护，不能打出$/);
+      await expect(card).not.toContainText('留');
     }
     await expect(legal).toBeEnabled();
     await legal.focus();
