@@ -136,6 +136,8 @@
           class="ghost reset-btn change-name"
           type="button"
           data-testid="change-entry-name"
+          :aria-label="`修改昵称，当前为${entryName}`"
+          title="修改昵称"
           :disabled="enteringLobby"
           @click="openNicknameDialog"
         ><strong>{{ entryName }}</strong><span> · 修改昵称</span></button>
