@@ -581,6 +581,56 @@
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "随项目分发",
       "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/chi-choices/four-color-chi.png",
+      "sha256": "2a73cd274051e7f618d88e587ade112c41eed61a69ad71b139534a8b61ec241d",
+      "source": "本项目浏览器实装验收",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/first-table-entry/first-visit-1440x900.png",
+      "sha256": "b859d1974893dde2262a06d36c2e063f1162e3f17828c4d3b8385a72df7d4c4a",
+      "source": "本项目浏览器实装验收",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/first-table-entry/first-visit-568x320.png",
+      "sha256": "1cd6ceb7d1cd6caa81eab210167f32ff7782b86a20f3b1c9a85c771048f1ab8c",
+      "source": "本项目浏览器实装验收",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/first-table-entry/tutorial-grab-375.png",
+      "sha256": "0f17911a6e940e10517a0ba90109c9f89b05fde1b1e8378df0f0a96d2bf56ee8",
+      "source": "本项目浏览器实装验收",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/first-table-entry/tutorial-grab-568.png",
+      "sha256": "b880f3a78219d7c08cda715dc6404dd807da5a1be790b354314feb6f9f771e2f",
+      "source": "本项目浏览器实装验收",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
     }
   ],
   "confirmedAt": "2026-09-10",
