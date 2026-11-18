@@ -450,7 +450,7 @@
         aria-label="自己的明示牌组，可滚动查看"
       >
         <template v-if="selfGroupBlocks.length">
-          <div class="group-block-list">
+          <div class="group-block-list" :data-caption="paperTable ? '我的牌组' : undefined">
             <div
               v-for="group in selfGroupBlocks"
               :key="`self-exp-${group.id}`"

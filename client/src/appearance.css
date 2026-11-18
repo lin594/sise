@@ -899,3 +899,12 @@ html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .self-groups-
 html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .center-pointer.pointer-down {
   bottom: 2px;
 }
+
+html[data-skin="puxian-house"] .self-groups-card .group-block-list[data-caption]:not(:has(.group-block:nth-child(3)))::before {
+  content: attr(data-caption);
+  align-self: center;
+  flex: none;
+  color: #e8d9b5;
+  font-size: 12px;
+  line-height: 1.25;
+}
