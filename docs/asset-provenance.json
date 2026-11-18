@@ -334,7 +334,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-1440x900.webp",
-      "sha256": "44c977e99dac4dad54980de1a3f66d1ca0b4c9dcbb4a190ef93d38ba70d0542c",
+      "sha256": "e605d0447629202d384b1710e1f84339fd6b7829f4377d3dd1f43959d4872139",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -344,7 +344,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-390x844.webp",
-      "sha256": "a044d48bbd63e4e5d96c9eff9f6646906fc63b46055fd64938ff5017f1bc9b9a",
+      "sha256": "9d45758ee13ec990e7103c8773e20c0ec60241c7857fa40e59d0ad669862a7a0",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -354,7 +354,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-568x320.webp",
-      "sha256": "a54cf42f57b69c860d93bba996747a13c776e223cebaa32bdd28d188a7637589",
+      "sha256": "e230f9a0fa931e400090c41c3a667d0f4797474c56d8806c28dca119ece708dc",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -364,7 +364,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-844x390.webp",
-      "sha256": "8af5c19c8daef42ce52dafbf714dd6e1f3fad00e803d78f51d1c1c75c2472257",
+      "sha256": "72b9c008b095e78e484be7fe2810760e257e2aa9f0395f2c1cb4750e4978c847",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -944,10 +944,20 @@
     },
     {
       "path": "docs/validation/table-fidelity/practice-midgame-844x390.webp",
-      "sha256": "f8fed7d6a75bd1e8382569bce2d7e042c88851ce1064cb5a0624b46229de447f",
+      "sha256": "6fe08f278f62715bf2a4ae77bc77ff2f90bb655fc307b8ab5a7f5549dd9b9eb8",
       "source": "本项目手机浏览器练习桌实装",
       "author": "项目验证记录贡献者",
       "originality": "本地练习随机发牌，通过游戏引擎的正常机器人决策推进后截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/five-red-nobles.webp",
+      "sha256": "6e0a73594bace0e686d757eb17db09585eed136d48ffe09a53505d17fd8ac857",
+      "source": "本项目手机浏览器练习桌实装",
+      "author": "项目验证记录贡献者",
+      "originality": "在 844 × 390 的浏览器测试牌桌给同一玩家配齐五张金条，原尺寸牌面区域以三倍像素密度截取",
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "随项目分发",
       "evidence": "docs/validation/table-fidelity/README.md"
