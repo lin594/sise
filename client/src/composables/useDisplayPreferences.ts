@@ -20,6 +20,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
+        seniorMode: parsed.seniorMode === true,
         skin: normalizeSkin(parsed.skin),
         tableLayout: normalizeTableLayout(parsed.tableLayout),
         handLayout: parsed.handLayout === "paged" ? "paged" : "single",
@@ -40,6 +41,7 @@ function readDisplayPreferences(): GameDisplayPreferences {
 
   const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
+    seniorMode: false,
     skin: normalizeSkin(null),
     tableLayout: normalizeTableLayout(null),
     handLayout: "single",

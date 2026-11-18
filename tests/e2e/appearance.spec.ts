@@ -666,3 +666,34 @@ test('superseded panel openings cannot swallow confirmation clicks', async ({ pa
     await expect(page.getByTestId('game-auto-play')).toBeFocused();
   }
 });
+
+test('senior players can read and change the selected discard before committing it', async ({ page }) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({
+    seniorMode: true, reduceMotion: true,
+  })));
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
+  await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('action-chi').click();
+  const confirm = page.getByTestId('discard-confirm');
+  await expect(confirm).toHaveText('出牌');
+  await expect(confirm).toBeDisabled();
+
+  const rook = page.getByTestId('hand-card-post-red-ju');
+  const horse = page.getByTestId('hand-card-post-red-ma');
+  await rook.tap();
+  await expect(confirm).toHaveText('出红俥');
+  await page.setViewportSize({ width: 690, height: 820 });
+  await expect(page.locator('main.layout')).not.toHaveClass(/rotated-phone-portrait/);
+  await expect(rook).toHaveAttribute('aria-pressed', 'true');
+  await expect(confirm).toHaveText('出红俥');
+  await horse.tap();
+  await expect(rook).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toHaveText('出红傌');
+  await expect(confirm).toHaveAccessibleName('出红傌');
+  await expect(horse).toHaveAttribute('aria-pressed', 'true');
+  await confirm.tap();
+  await expect(horse).toHaveCount(0);
+  await expect(rook).toHaveCount(1);
+});

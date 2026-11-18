@@ -1,5 +1,5 @@
 <template>
-  <div class="chi-choices" role="group" aria-label="可选吃法" data-testid="chi-choices">
+  <div class="chi-choices" :class="{ 'large-choices': seniorMode }" role="group" aria-label="可选吃法" data-testid="chi-choices">
     <button v-for="choice in choices" :key="choice.key" type="button" class="chi-choice"
       :aria-label="choiceLabel(choice)" :aria-pressed="choice.selected" :title="choiceLabel(choice)"
       :data-kind="choice.candidate.kind" @click="emit('choose', choice.candidate)">
@@ -21,7 +21,7 @@ import type { Card, RenderedCardMode, ActionCandidate } from "@/types/game";
 import { getCardAccessibleText } from "@/utils/cardText";
 import type { ChiChoice } from "@/utils/chiChoices";
 
-const props = defineProps<{ choices: ChiChoice[]; target: Card; mode: RenderedCardMode; canClear: boolean }>();
+const props = defineProps<{ choices: ChiChoice[]; target: Card; mode: RenderedCardMode; canClear: boolean; seniorMode?: boolean }>();
 const emit = defineEmits<{ choose: [candidate: ActionCandidate]; clear: [] }>();
 
 function choiceLabel(choice: ChiChoice): string {
@@ -73,4 +73,10 @@ function choiceLabel(choice: ChiChoice): string {
 .chi-faces { display: flex; align-items: center; gap: 2px; font-size: 11px; }
 .chi-faces .card { width: 17px; height: 22px; pointer-events: none; font-size: 10px; }
 .chi-target { outline: 1px solid var(--ui-gold-text, #d19d41); }
+.large-choices { gap: 5px; }
+.large-choices button { min-width: 48px; min-height: 48px; }
+.large-choices .chi-choice strong { font-size: 17px; line-height: 1.08; }
+.large-choices .chi-faces { gap: 2px; }
+.large-choices .chi-faces .card { width: 23px; height: 24px; font-size: 15px; }
+.large-choices .clear-choice { font-size: 16px; }
 </style>

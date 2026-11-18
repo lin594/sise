@@ -11,6 +11,7 @@
       'effective-short-landscape': effectiveWidth > effectiveHeight && effectiveHeight <= 600,
       'rotated-phone-portrait': isRotatedPhonePortrait,
       'game-tools-active': showGameTools,
+      'senior-mode': displayPreferences.seniorMode,
       'reduce-motion': displayPreferences.reduceMotion,
       'show-card-color-assist': displayPreferences.showCardColorAssist,
     }"
@@ -42,6 +43,13 @@
         <div class="brand-lockup">
           <span class="brand-suits" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <h1>四色牌</h1>
+          <button
+            type="button"
+            class="senior-entry"
+            data-testid="senior-mode-entry"
+            :aria-pressed="displayPreferences.seniorMode"
+            @click="displayPreferences.seniorMode = !displayPreferences.seniorMode"
+          >长辈版<span v-if="displayPreferences.seniorMode" aria-hidden="true"> ✓</span></button>
           <span v-if="showGameTools" class="compact-game-slogan">象棋魂 · 麻将韵 · 纸牌趣</span>
         </div>
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
@@ -243,8 +251,9 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
+        :senior-mode="displayPreferences.seniorMode"
         :table-layout="resolvedTableLayout"
-        :hand-layout="displayPreferences.handLayout"
+        :hand-layout="displayPreferences.seniorMode ? 'paged' : displayPreferences.handLayout"
         :listening-hints="boardListeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
@@ -1169,6 +1178,7 @@ function acceptCompactLayout() {
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
 function resolveCardDisplayMode(mode: CardDisplayMode, atTable = false): RenderedCardMode {
+  if (displayPreferences.value.seniorMode) return "large";
   if (mode !== "adaptive") return mode;
   if (atTable && displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
   return isCompactViewport.value ? "large" : "long";

@@ -1,5 +1,12 @@
 <template>
   <div class="appearance-settings">
+    <button v-if="section !== 'layout'" class="senior-setting" type="button" role="switch"
+      data-testid="senior-mode-setting" :aria-checked="modelValue.seniorMode" aria-label="长辈版"
+      aria-describedby="senior-setting-help"
+      @click="emit('update:modelValue', { ...modelValue, seniorMode: !modelValue.seniorMode })">
+      <strong>长辈版</strong><span>{{ modelValue.seniorMode ? "已开启" : "开启" }}</span>
+      <small id="senior-setting-help">放大牌字、姓名和操作按钮。手牌放不下时可以翻页，关闭后恢复原显示。</small>
+    </button>
     <fieldset v-if="section !== 'layout'"><legend>皮肤</legend><div class="appearance-options" role="radiogroup" aria-label="皮肤">
       <button v-for="skin in skins" :key="skin.id" type="button" role="radio" :aria-checked="modelValue.skin === skin.id" :aria-label="`${skin.name}：${skin.description}`" :data-testid="`skin-${skin.id}`" @click="emit('update:modelValue', { ...modelValue, skin: skin.id })">
         <span class="skin-preview" :data-skin="skin.id" aria-hidden="true"><i>将</i><i>相</i></span>
@@ -27,6 +34,10 @@ function layoutAccessibleLabel(layout: (typeof tableLayouts)[number]): string {
 }
 </script>
 <style scoped>
+.senior-setting { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; min-height: 48px; }
+.senior-setting strong { font-size: 18px; }
+.senior-setting small { grid-column: 1 / -1; }
+.senior-setting span { font-weight: 700; }
 fieldset { border: 0; padding: 0; margin: .8rem 0; min-width: 0; }
 legend { font-weight: 700; margin-bottom: .5rem; }
 .appearance-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }

@@ -9,7 +9,7 @@ export interface ChiChoice {
 }
 
 const names: Record<string, string> = {
-  jmp: "车马炮", jsx: "将士相", zu3: "三色卒", zu4: "四色卒", pair: "对子", single: "单吃",
+  jmp: "车马炮", jsx: "将士象", zu3: "三色卒", zu4: "四色卒", pair: "对子", single: "单吃",
 };
 
 /** A face-level option can represent several legal sets of physical copies. */

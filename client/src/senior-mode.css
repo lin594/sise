@@ -1,0 +1,98 @@
+.senior-entry {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 3px 9px;
+  border: 1px solid #b29669;
+  border-radius: 6px;
+  background: #ffefd0;
+  color: #392719;
+  font: 700 15px/1.2 system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.senior-entry[aria-pressed="true"] { background: #ffe3a1; border-color: #f9d588; }
+.senior-entry:focus-visible { outline: 3px solid #ffbe58; outline-offset: 2px; }
+
+html[data-skin] .layout.senior-mode {
+  --senior-hand-width: clamp(54px, calc(13 * var(--effective-vh)), 80px);
+  --senior-hand-height: clamp(56px, calc(15 * var(--effective-vh)), 94px);
+  --senior-hand-font: clamp(28px, calc(7.4 * var(--effective-vh)), 44px);
+  --senior-response-width: clamp(44px, calc(12 * var(--effective-vh)), 82px);
+  --senior-response-height: clamp(44px, calc(12 * var(--effective-vh)), 86px);
+}
+html[data-skin] .layout.senior-mode .senior-entry { min-height: 44px; font-size: 16px; }
+html[data-skin] .layout.senior-mode.game-tools-active { --game-header-height: max(48px, calc(5.8 * var(--effective-vh))); }
+html[data-skin] .layout.senior-mode .board[data-table-layout] .cards.hand:has(.hand-card) {
+  --hand-width: var(--senior-hand-width);
+  --hand-height: var(--senior-hand-height);
+  --hand-font: var(--senior-hand-font);
+  gap: 5px;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .cards.hand .hand-card {
+  width: var(--senior-hand-width);
+  height: var(--senior-hand-height);
+  min-height: 48px;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .hand .hand-card .card {
+  font-size: var(--senior-hand-font);
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .response-card-face {
+  width: var(--senior-response-width);
+  height: var(--senior-response-height);
+  font-size: clamp(25px, calc(7 * var(--effective-vh)), 45px);
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .response-slot {
+  min-width: var(--senior-response-width);
+  height: var(--senior-response-height);
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .seat-identity .seat-name {
+  font-size: clamp(17px, calc(2.6 * var(--effective-vh)), 25px);
+  line-height: 1.12;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .hand-count-badge {
+  font-size: clamp(16px, calc(2.4 * var(--effective-vh)), 22px);
+  line-height: 1.12;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .response-source { font-size: 15px; line-height: 1.15; }
+html[data-skin] .layout.senior-mode .board[data-table-layout] :is(.action-dock .btn, .confirm-declaration, .hand-scroll-tools button) {
+  min-width: 48px;
+  min-height: 48px;
+  height: auto;
+  font-size: 20px;
+  line-height: 1.15;
+}
+html[data-skin] .layout.senior-mode.effective-short-landscape .board[data-table-layout]:not(.dealer-ceremony-active) {
+  grid-template-rows: minmax(0, 1fr) auto calc(var(--senior-hand-height) + 32px);
+}
+html[data-skin] .layout.senior-mode.effective-short-landscape .board[data-table-layout] .self-command-row { min-height: 50px; }
+html[data-skin] .layout.senior-mode .board[data-table-layout] .hand-scroll-tools button {
+  width: 52px;
+  padding: 0;
+  font-size: 16px;
+}
+html[data-skin] .layout.senior-mode .board[data-table-layout] .hand-visible-range {
+  right: 0;
+  left: auto;
+  bottom: 0;
+  transform: none;
+  height: 16px;
+  min-height: 0;
+  padding: 0 3px;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+html[data-skin] .layout.senior-mode.effective-short-landscape .board[data-table-layout="mahjong"] .table {
+  grid-template-rows: minmax(20px, .65fr) minmax(14px, 1fr) minmax(18px, 1fr) minmax(14px, 1fr) minmax(20px, .65fr);
+}
+html[data-skin] .layout.senior-mode.ultra-compact-viewport .board[data-table-layout="compact"] .table {
+  grid-template-rows: minmax(22px, 1fr) minmax(44px, 1.55fr) minmax(22px, 1fr);
+  row-gap: 0;
+  padding-block: 0;
+}
+html[data-skin] .layout.senior-mode.ultra-compact-viewport .board[data-table-layout="compact"]:not(.dealer-ceremony-active) {
+  grid-template-rows: minmax(0, 1fr) auto calc(var(--senior-hand-height) + 24px);
+}
+html[data-skin] .layout.senior-mode.ultra-compact-viewport .board[data-table-layout="compact"] .cards.hand {
+  padding-block: 10px 4px;
+}
