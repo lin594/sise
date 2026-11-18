@@ -101,38 +101,41 @@
             </span>
           </div>
         </header>
-        <div v-if="topGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in topGroupBlocks"
-            :key="`top-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`top-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`top-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="topGroupBlocks.length || (showOpponentRacks && playerHandCount(topPlayer) > 0)" class="opponent-lane">
+          <div v-if="topGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in topGroupBlocks"
+              :key="`top-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span
+                    v-for="slot in group.faceDownCount"
+                    :key="`top-group-back-${group.id}-${slot}`"
+                    class="mini-card pending-fish-back"
+                    data-card-back="red-four-color"
+                    aria-hidden="true"
+                  ><i v-for="mark in 4" :key="mark"></i></span>
+                </template>
+                <template v-else>
+                  <CardComp
+                    v-for="card in group.cards"
+                    :key="`top-group-card-${card.id}`"
+                    :card="card"
+                    :style="movingCardStyle(card.id)"
+                    :mode="appliedTableCardMode"
+                    size="xs"
+                    class="mini-card"
+                    :title="cardLabel(card)"
+                  />
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(topPlayer)" />
         </div>
       </section>
 
@@ -207,38 +210,41 @@
             </span>
           </div>
         </header>
-        <div v-if="leftGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in leftGroupBlocks"
-            :key="`left-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`left-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`left-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="leftGroupBlocks.length || (showOpponentRacks && playerHandCount(leftPlayer) > 0)" class="opponent-lane">
+          <div v-if="leftGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in leftGroupBlocks"
+              :key="`left-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span
+                    v-for="slot in group.faceDownCount"
+                    :key="`left-group-back-${group.id}-${slot}`"
+                    class="mini-card pending-fish-back"
+                    data-card-back="red-four-color"
+                    aria-hidden="true"
+                  ><i v-for="mark in 4" :key="mark"></i></span>
+                </template>
+                <template v-else>
+                  <CardComp
+                    v-for="card in group.cards"
+                    :key="`left-group-card-${card.id}`"
+                    :card="card"
+                    :style="movingCardStyle(card.id)"
+                    :mode="appliedTableCardMode"
+                    size="xs"
+                    class="mini-card"
+                    :title="cardLabel(card)"
+                  />
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(leftPlayer)" />
         </div>
       </section>
 
@@ -368,38 +374,41 @@
             </span>
           </div>
         </header>
-        <div v-if="rightGroupBlocks.length" class="group-block-list compact" :tabindex="appliedTableLayout === 'mahjong' ? 0 : undefined" aria-label="明示牌组，可滚动查看">
-          <div
-            v-for="group in rightGroupBlocks"
-            :key="`right-group-${group.id}`"
-            class="group-block"
-            :class="group.tone"
-          >
-            <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
-            <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
-              <template v-if="group.faceDownCount">
-                <span
-                  v-for="slot in group.faceDownCount"
-                  :key="`right-group-back-${group.id}-${slot}`"
-                  class="mini-card pending-fish-back"
-                  data-card-back="red-four-color"
-                  aria-hidden="true"
-                ><i v-for="mark in 4" :key="mark"></i></span>
-              </template>
-              <template v-else>
-                <CardComp
-                  v-for="card in group.cards"
-                  :key="`right-group-card-${card.id}`"
-                  :card="card"
-                  :style="movingCardStyle(card.id)"
-                  :mode="appliedTableCardMode"
-                  size="xs"
-                  class="mini-card"
-                  :title="cardLabel(card)"
-                />
-              </template>
+        <div v-if="rightGroupBlocks.length || (showOpponentRacks && playerHandCount(rightPlayer) > 0)" class="opponent-lane">
+          <div v-if="rightGroupBlocks.length" class="group-block-list compact" :tabindex="(appliedTableLayout === 'mahjong' || paperTable) ? 0 : undefined" aria-label="明示牌组，可滚动查看">
+            <div
+              v-for="group in rightGroupBlocks"
+              :key="`right-group-${group.id}`"
+              class="group-block"
+              :class="group.tone"
+            >
+              <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
+              <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
+                <template v-if="group.faceDownCount">
+                  <span
+                    v-for="slot in group.faceDownCount"
+                    :key="`right-group-back-${group.id}-${slot}`"
+                    class="mini-card pending-fish-back"
+                    data-card-back="red-four-color"
+                    aria-hidden="true"
+                  ><i v-for="mark in 4" :key="mark"></i></span>
+                </template>
+                <template v-else>
+                  <CardComp
+                    v-for="card in group.cards"
+                    :key="`right-group-card-${card.id}`"
+                    :card="card"
+                    :style="movingCardStyle(card.id)"
+                    :mode="appliedTableCardMode"
+                    size="xs"
+                    class="mini-card"
+                    :title="cardLabel(card)"
+                  />
+                </template>
+              </div>
             </div>
           </div>
+          <OpponentRack v-if="showOpponentRacks" :count="playerHandCount(rightPlayer)" />
         </div>
       </section>
 
@@ -829,6 +838,7 @@ import { chiChoices } from "@/utils/chiChoices";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
+import OpponentRack from "./OpponentRack.vue";
 import type {
   ActionFeedback,
   ActionCandidate,
@@ -901,6 +911,7 @@ type DealerReveal = {
 const props = defineProps<{
   connected: boolean;
   guidanceActive?: boolean;
+  paperTable?: boolean;
   tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
@@ -1726,6 +1737,8 @@ const isMyTurn = computed(
 
 const openingDealIntroActive = computed(() => isOpeningDealIntroState());
 const handPresentationBusy = computed(() => openingDealIntroActive.value || showDealAnimation.value);
+const showOpponentRacks = computed(() => props.paperTable && !handPresentationBusy.value
+  && (props.state?.phase === "playing" || props.state?.phase === "declaring"));
 const canAct = computed(() => Boolean(props.canAct) && !handPresentationBusy.value);
 const canDiscard = computed(() => Boolean(props.canDiscard) && !handPresentationBusy.value);
 const effectiveInteractionPausedMessage = computed(() => {
@@ -6195,14 +6208,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board[data-table-layout="classic"] .dynamic-action-track { border: 0; }
 .board[data-table-layout="classic"] .self-hand-card { box-shadow: inset 0 2px #0002; }
 .board[data-table-layout="classic"] .self-turn-outline { border: 0; box-shadow: none; }
-.opponent-card-stack { display: flex; position: relative; width: 3.2rem; height: 2.8rem; margin: 0 auto .25rem; }
-.opponent-card-stack :deep(.card-back) { position: absolute; left: calc(var(--stack-index) * 7px); width: 1.4rem; height: 2.1rem; transform: rotate(calc((var(--stack-index) - 1.5) * 3deg)); box-shadow: 0 2px 3px #0004; }
-.opponent-card-stack.mode-long :deep(.card-back) { width: .85rem; height: 2.6rem; }
 @media (max-width: 960px), (max-height: 500px) {
   .board[data-table-layout="classic"] { padding: 4px; }
-  .board[data-table-layout="classic"] .opponent-card-stack { height: 1.65rem; width: 2.7rem; margin-bottom: 1px; }
-  .board[data-table-layout="classic"] .opponent-card-stack :deep(.card-back) { height: 1.5rem; width: 1rem; }
-  .board[data-table-layout="classic"] .opponent-card-stack.mode-long :deep(.card-back) { height: 1.65rem; width: .65rem; }
   .board[data-table-layout="classic"] .seat-identity-meta :is(.kan-count-badge, .group-score-badge) { font-size: 11px; }
 }
 

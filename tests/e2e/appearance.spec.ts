@@ -92,6 +92,76 @@ test('all skins and layouts keep actual cards and actions inside representative 
   }
 });
 
+test("Puxian seats share public melds and authoritative concealed counts across viewports", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("sise_context_hints_v1", '{"enabled":false}');
+    localStorage.setItem("sise_game_display_preferences_v2", '{"reduceMotion":true}');
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startTable(page);
+  await page.evaluate(() => {
+    const bridge = (window as any).__siseLocalTest;
+    const state = bridge.getRoomState();
+    const opponents = state.players.filter((player: { isBot: boolean }) => player.isBot);
+    const players = state.players.map((player: { clientId: string; isBot: boolean }) => {
+      if (!player.isBot) return player;
+      const index = opponents.findIndex((opponent: { clientId: string }) => opponent.clientId === player.clientId);
+      const groupCount = index === 0 ? 3 : 1;
+      const exposedArea = Array.from({ length: groupCount * 3 }, (_, position) => ({
+        id: `public-meld-${index}-${position}`,
+        color: ["red", "green", "white"][index],
+        type: ["ju", "ma", "pao"][position % 3],
+      }));
+      return {
+        ...player,
+        handCount: [20, 13, 0][index],
+        exposedArea,
+        exposedGroupSizes: Array(groupCount).fill(3),
+        exposedGroupKinds: Array(groupCount).fill("chi"),
+        fishArea: [],
+      };
+    });
+    bridge.applyRoomSnapshot({ stateRevision: state.stateRevision + 100, players }, "explicit");
+  });
+  const board = page.getByTestId("game-board");
+  for (const [width, height, layout] of [
+    [1440, 900, "classic"], [844, 390, "mahjong"], [568, 320, "compact"], [390, 844, "mahjong"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(board).toHaveAttribute("data-table-layout", layout);
+    for (const side of ["top", "left", "right"]) {
+      const seat = page.getByTestId(`player-${side}`);
+      const count = Number.parseInt(await seat.getByTestId("opponent-hand-count").innerText(), 10);
+      const lane = seat.locator(".opponent-lane");
+      await expect(lane.locator(".group-block").first()).toBeVisible();
+      await expect(lane.locator(".opponent-rack-card")).toHaveCount(count);
+      if (count > 0) {
+        const rack = lane.locator(".opponent-rack");
+        await expect(rack).toHaveAttribute("aria-hidden", "true");
+        await expect(rack).toBeInViewport();
+        await expect(rack.locator("[data-face-id]")).toHaveCount(0);
+      }
+    }
+    for (const [color, base] of [["red", "rgb(202, 104, 89)"], ["green", "rgb(131, 171, 117)"]]) {
+      const face = board.locator(`.card.color-${color}`).first();
+      await expect(face).toHaveCSS("background-color", base);
+      await expect(face).toHaveCSS("background-image", /repeating-linear-gradient/);
+    }
+    const ownCard = board.locator(".hand-card .card").first();
+    if (height >= 381) {
+      await expect(ownCard).toHaveAttribute("data-card-mode", "long");
+      await expect(ownCard.locator(".text-top")).toBeVisible();
+      await expect(ownCard.locator(".text-bottom")).toBeVisible();
+    }
+    await expect(page.getByTestId("action-chi")).toBeInViewport({ ratio: 1 });
+  }
+  await page.getByTestId("game-settings").click();
+  await revealSetting(page, "skin-cyber-minimal");
+  await page.getByTestId("skin-cyber-minimal").click();
+  await expect(board.locator(".opponent-rack")).toHaveCount(0);
+  await expect(board.locator(".opponent-lane .group-block").first()).toBeVisible();
+});
+
 test("response source follows authoritative discard and draw data", async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await startTable(page);

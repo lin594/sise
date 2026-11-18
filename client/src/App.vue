@@ -264,6 +264,7 @@
         :legal-discard-card-ids="decisionTimer.legalDiscardCardIds"
         :action-feedback="actionFeedback"
         :ultra-compact="isUltraCompactViewport"
+        :paper-table="displayPreferences.skin === 'puxian-house'"
         :own-card-mode="resolvedOwnCardMode"
         :table-card-mode="resolvedTableCardMode"
         :seat-direction="displayPreferences.seatDirection"
@@ -1171,6 +1172,7 @@ function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
   if (mode !== "adaptive") {
     return mode;
   }
+  if (displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
   return isCompactViewport.value ? "large" : "long";
 }
 const resolvedOwnCardMode = computed<RenderedCardMode>(() =>
