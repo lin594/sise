@@ -236,6 +236,7 @@
     <template v-else>
       <GameBoard
         :guidance-active="Boolean(tutorial || currentHint)"
+        :tutorial-step="tutorial?.step"
         :class="{ 'small-table-viewport': effectiveWidth <= 740 && effectiveHeight <= 400 }"
         @geometry-busy="viewportGeometryBusy = $event"
         :state="state"
