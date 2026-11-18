@@ -3,6 +3,16 @@
   "baseline": "34042e6367ff63b47fef2f8061eccd4c29db781b",
   "assets": [
     {
+      "path": "client/public/skins/first-table-hero.webp",
+      "sha256": "bbae834dba61f52dd809459f2fbd86641de71dfb46c7a0213c3fc5ad2689c81c",
+      "source": "项目首次入桌大厅横幅；原图由 ImageGen 生成并压缩为 WebP",
+      "author": "项目维护者使用 ImageGen 生成",
+      "originality": "为本项目原创生成的四色纸牌静物图，生成提示和转换参数见 docs/validation/first-table-entry/README.md",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "项目素材",
+      "evidence": "本次维护者提供生成图及原始提示；项目许可见 https://github.com/lin594/sise/issues/33#issuecomment-5613001439"
+    },
+    {
       "path": "client/public/favicon.ico",
       "sha256": "12293384f602427f8bfe70b824a47d11251f77e4ba88f9ee1ea3b6e5ce8c1767",
       "source": "项目图标/分享视觉资源",
