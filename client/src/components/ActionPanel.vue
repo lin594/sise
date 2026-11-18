@@ -130,6 +130,11 @@ const normalized = computed<PanelAction[]>(() => {
     })
     .filter((item) => item.enabled || item.deferred)
     .filter((item) => !(item.action === "pass" && isPendingForMe));
+  if (isPendingForMe && ordered.some(item => ["hu", "kai", "peng"].includes(item.action) && item.enabled)) {
+    // Declining a real priority action and preparing a later Grab are separate
+    // decisions. A preselection must not silently submit this Pass.
+    ordered.push({ key: "pass", action: "pass", enabled: true, deferred: false, candidates: [] });
+  }
   if (isPendingForMe) {
     ordered.push({
       key: "deferred-pass",
@@ -197,7 +202,7 @@ const panelAnnouncement = computed(() => {
   }
   if (isEarlyCollectiveChoice.value) {
     const choices = joinActionChoices(normalized.value);
-    return `可以选择${choices}；多人要牌时，按胡、开、碰的顺序，同种操作按座次先后。`;
+    return `可以选择${choices}；多人要牌时，胡优先，开和碰按座次先后。`;
   }
   const timing = props.untimed
     ? "练习不限时。"
@@ -206,7 +211,7 @@ const panelAnnouncement = computed(() => {
       : `还剩 ${secondsLeft.value} 秒。`;
   if (props.canDiscard) return `该你操作了。${timing}先选一张手牌，再点“出牌”。`;
   if (normalized.value.some((item) => item.action === "chi")) {
-    return `该你操作了。${timing}可以直接选择手牌组成吃法，再按吃。`;
+    return `该你操作了。${timing}可以点一种吃法，或直接选择手牌，再按吃。`;
   }
   return needsDecision.value ? `该你操作了。${timing}` : "";
 });

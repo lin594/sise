@@ -601,6 +601,13 @@
 
       <div class="dynamic-action-track" data-testid="dynamic-action-track">
         <slot name="declaration" />
+        <ChiChoices
+          v-if="visibleChiChoices.length && responseCard"
+          :choices="visibleChiChoices"
+          :target="responseCard"
+          :mode="appliedTableCardMode"
+          @choose="selectChiChoice"
+        />
         <ActionPanel
           v-if="props.state?.phase === 'playing' && (canAct || canDiscard)"
           class="embedded-actions action-dock"
@@ -804,6 +811,8 @@
 import type { ListeningHints } from "@/types/game";
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUpdate, onUpdated, ref, watch } from "vue";
 import ActionPanel from "./ActionPanel.vue";
+import ChiChoices from "./ChiChoices.vue";
+import { chiChoices } from "@/utils/chiChoices";
 import CardBack from "./CardBack.vue";
 import CardComp from "./Card.vue";
 import PlayerStatusIcon from "./PlayerStatusIcon.vue";
@@ -876,6 +885,7 @@ type DealerReveal = {
 };
 
 const props = defineProps<{
+  connected: boolean;
   guidanceActive?: boolean;
   tableLayout?: RenderedTableLayoutId;
   handLayout?: "single" | "paged";
@@ -892,6 +902,7 @@ const props = defineProps<{
   isCurrentTurn?: boolean;
   responsePhase?: string;
   deferredChiPending?: boolean;
+  deferredGrabPending?: boolean;
   interactionPausedMessage?: string;
   decisionUntimed?: boolean;
   decisionTimerTotalMs?: number;
@@ -985,6 +996,7 @@ const discardingCardId = ref<string | null>(null);
 const selectedDiscardCardId = ref<string | null>(null);
 const selectedChiCardIds = ref<string[]>([]);
 const chiAutoSelectionBlockedKey = ref("");
+const confirmedChi = ref<{ round: string; targetId: string; afterEvent: number } | null>(null);
 const chiValidationMessage = ref("");
 const retainedUpperResponseCardId = ref("");
 let activeChiSelectionContextKey = "";
@@ -1784,28 +1796,19 @@ const extendableChiCandidates = computed(() => {
   );
 });
 
-function chiCandidateFaceSignature(candidate: ActionCandidate): string {
-  const cardsById = new Map(props.privateHand.map((card) => [card.id, card]));
-  const faces = candidate.cardIds.map((cardId) => {
-    const card = cardsById.get(cardId);
-    return card ? `${card.color}:${card.type}` : `missing:${cardId}`;
-  }).sort();
-  return `${faces.length}|${faces.join("|")}`;
-}
+const visibleChiChoices = computed(() =>
+  chiChoices(activeChiCandidates.value, props.privateHand, selectedChiCardIds.value),
+);
 
 function uniqueVisibleChiCandidate(candidates = activeChiCandidates.value): ActionCandidate | null {
-  const byVisibleComposition = new Map<string, ActionCandidate[]>();
-  for (const candidate of candidates) {
-    const signature = chiCandidateFaceSignature(candidate);
-    const entries = byVisibleComposition.get(signature) ?? [];
-    entries.push(candidate);
-    byVisibleComposition.set(signature, entries);
-  }
-  if (byVisibleComposition.size !== 1) {
-    return null;
-  }
-  return [...(byVisibleComposition.values().next().value ?? [])]
-    .sort((left, right) => left.id.localeCompare(right.id))[0] ?? null;
+  const choices = chiChoices(candidates, props.privateHand, []);
+  return choices.length === 1 ? choices[0]!.candidate : null;
+}
+
+function selectChiChoice(candidate: ActionCandidate): void {
+  blockChiAutoSelectionForCurrentTarget();
+  selectedChiCardIds.value = [...candidate.cardIds];
+  chiValidationMessage.value = "";
 }
 
 function defaultVisibleChiCandidate(): ActionCandidate | null {
@@ -1976,8 +1979,31 @@ watch(() => [props.state?.phase, props.state?.completedRounds, props.state?.last
   props.players.map(player => `${player.clientId}:${player.declaredReady}:${player.declarationStep}`).join("|")].join(";"),
 () => { lastTableActivityAt.value = Date.now(); }, { immediate: true });
 const passiveWaitVisible = computed(() => nowMs.value - lastTableActivityAt.value >= 3000);
+watch(() => [props.connected, props.mySeatId, currentDealRoundKey(), props.actionFeedback?.status] as const,
+  ([connected, seat, round, status], [, oldSeat, oldRound]) => {
+    if (!connected || seat !== oldSeat || round !== oldRound || status === "rejected") confirmedChi.value = null;
+  });
+const chiReceipt = computed(() => {
+  const confirmed = confirmedChi.value;
+  if (!confirmed || !props.connected || confirmed.round !== currentDealRoundKey()) return "";
+  const now = nowMs.value + Number(props.state?.presentationClockOffsetMs ?? 0);
+  const claim = rawTableEvents.value.find(event =>
+    event.id > confirmed.afterEvent && (event.kind === "meld" || event.kind === "hu") &&
+    event.startsAt <= now && now < event.endsAt + 2200 &&
+    event.moves.some(move => move.card.id === confirmed.targetId && move.from.zone !== "hand"),
+  );
+  if (!claim) return "";
+  const { actor, keyword } = parseActionDescriptor(claim.action ?? "");
+  const target = claim.moves.find(move => move.card.id === confirmed.targetId)?.card;
+  if (!target || !actor || !ACTION_LABELS[keyword]) return "";
+  if (actor === props.mySeatId) return keyword === "CHI" ? `已吃进${getCardLabelText(target)}` : "";
+  const player = props.players.find(player => player.clientId === actor);
+  return `${player?.name || "牌友"}${ACTION_LABELS[keyword]}了${getCardLabelText(target)}，你的吃牌已取消`;
+});
 const flowStatusText = computed(() => {
-  if (props.deferredChiPending) return "已选择吃，等待其他玩家响应";
+  if (chiReceipt.value) return chiReceipt.value;
+  if (props.deferredChiPending) return "已预选吃；轮到你时尝试执行，胡、开、碰仍可响应";
+  if (props.deferredGrabPending) return "已预选抓；轮到你时尝试执行，胡、开、碰仍可响应";
   if (props.state?.phase === "declaring") {
     return passiveWaitVisible.value && (selfPlayer.value?.declaredReady || selfPlayer.value?.declarationStep === "done")
       ? "等待其他玩家声明"
@@ -2560,11 +2586,17 @@ function onSubmitAction(request: ActionRequest): void {
       return;
     }
     request = { ...request, candidateId: selectedChiCandidate.value.id };
+    if (responseCard.value) {
+      confirmedChi.value = {
+        round: currentDealRoundKey(), targetId: responseCard.value.id,
+        afterEvent: Number(props.state?.tableEventSeq ?? 0),
+      };
+    }
+  }
+  if (typeof request === "object" ? request.action !== "chi" : request !== "pass" || props.responsePhase !== "collective") {
+    confirmedChi.value = null;
   }
   chiValidationMessage.value = "";
-  if (typeof request !== "string" && request.action === "chi") {
-    selectedChiCardIds.value = [];
-  }
   emit("submitAction", request);
 }
 
@@ -6317,6 +6349,10 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 @media (max-width: 960px), (max-height: 500px) {
   .board.has-guidance:not(.dealer-ceremony-active) { grid-template-rows: minmax(0, 1fr) minmax(84px, auto) 76px; }
 }
+
+.board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
 </style>
 
-<style scoped src="../mahjong.css"></style>
+<style scoped src="../mahjong.css">
+.board .dynamic-action-track:has(.chi-choices) .action-dock { flex: 0 0 auto; }
+</style>

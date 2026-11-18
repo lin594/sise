@@ -44,6 +44,15 @@ test("a player composes chi directly from the real hand without a candidate dial
   const shi = page.getByTestId("hand-card-d1");
   const xiang = page.getByTestId("hand-card-d2");
   await expect(page.getByTestId("candidate-panel")).toHaveCount(0);
+  const choices = page.getByTestId("chi-choices");
+  const family = choices.locator('[data-kind="jsx"]');
+  const single = choices.locator('[data-kind="single"]');
+  await expect(family).toHaveAttribute("aria-pressed", "true");
+  await expect(single).toHaveAccessibleName(/单吃，来牌红帥/);
+  await single.click();
+  await expect(shi).toHaveAttribute("aria-pressed", "false");
+  await expect(single).toHaveAttribute("aria-pressed", "true");
+  await family.click();
   await expect(chi).toHaveText("吃");
   await expect(chi).toBeEnabled(); // red jiang may be eaten as a single card
 
@@ -106,6 +115,7 @@ test("duplicate physical cards still count as one visible chi composition", asyn
   await enterPractice(page);
   await setupChiScenario(page, "chi_unique_duplicate_jmp");
 
+  await expect(page.getByTestId("chi-choices").getByRole("button")).toHaveCount(1);
   await expect(page.getByTestId("hand-card-unique-yellow-ma")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("action-chi")).toBeEnabled();
   await expect.poll(() => page.locator('[data-testid^="hand-card-unique-yellow-ju-"][aria-pressed="true"]').count())
@@ -177,7 +187,16 @@ test("a player can freely choose a three-color or four-color zu chi from the han
 
   await red.click();
   await green.click();
-  await expect(chi).toBeEnabled();
+  const choices = page.getByTestId("chi-choices");
+  const selectedThree = choices.locator('[data-kind="zu3"][aria-pressed="true"]');
+  await expect(choices.locator('[data-kind="zu3"]')).toHaveCount(3);
+  await expect(selectedThree).toHaveCount(1);
+  const four = choices.locator('[data-kind="zu4"]');
+  await expect(four.locator('[data-face-id]')).toHaveCount(4);
+  await four.click();
+  await expect(white).toHaveAttribute("aria-pressed", "true");
+  await white.click();
+  await expect(selectedThree).toHaveCount(1);
   await white.click();
   await expect(chi).toBeEnabled();
   await chi.click();
