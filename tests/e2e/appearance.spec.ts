@@ -155,6 +155,16 @@ test("Puxian seats share public melds and authoritative concealed counts across 
               : Math.abs(first.left + first.width / 2 - concealed.left - concealed.width / 2);
           });
           expect(railAlignment).toBeLessThanOrEqual(2);
+          const gaps = await lane.locator(".mini-card-strip").first().locator(".mini-card").evaluateAll(cards => {
+            const faces = cards.map(card => card.getBoundingClientRect());
+            return faces.slice(1).map((face, index) => {
+              const previous = faces[index]!;
+              return Math.max(face.top - previous.bottom, previous.top - face.bottom,
+                face.left - previous.right, previous.left - face.right);
+            });
+          });
+          expect(gaps).toHaveLength(2);
+          expect(Math.min(...gaps)).toBeGreaterThanOrEqual(1);
         }
       }
     }

@@ -4049,16 +4049,16 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   padding-right: 0.22rem;
 }
 
-.mini-card-strip.mode-long .mini-card + .mini-card {
+.mini-card-strip.mode-long :is(.mini-card + .mini-card, .side-card-slot + .side-card-slot > .mini-card) {
   margin-left: -0.32rem;
 }
 
-.mini-card-strip.stacked:not(.mode-long) .mini-card + .mini-card {
+.mini-card-strip.stacked:not(.mode-long) :is(.mini-card + .mini-card, .side-card-slot + .side-card-slot > .mini-card) {
   margin-left: -0.28rem;
 }
 
 /* Assisted names and corner labels must remain visible between adjacent cards. */
-:global(html.show-card-color-assist .board .mini-card-strip .card.mini-card + .card.mini-card) {
+:global(html.show-card-color-assist .board .mini-card-strip :is(.card.mini-card + .card.mini-card, .side-card-slot + .side-card-slot > .card.mini-card)) {
   margin-left: 0;
 }
 
