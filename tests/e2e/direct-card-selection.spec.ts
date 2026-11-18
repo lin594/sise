@@ -1,3 +1,4 @@
+import { resolveTableLayout } from "../../client/src/utils/appearance";
 import { startLobbyAction } from "./helpers/game";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -240,13 +241,19 @@ test("the scrollable chi choices leave all response buttons on one 44px touch ro
   for (const [width, height] of [[568, 320], [844, 390], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
     const rotated = height > width;
-    await expect(page.locator("main.layout")).toHaveAttribute("data-rotated-phone-portrait", String(rotated));
+    const [effectiveWidth, effectiveHeight] = rotated ? [height, width] : [width, height];
+    const layout = page.locator("main.layout");
+    await expect(layout).toHaveAttribute("data-rotated-phone-portrait", String(rotated));
+    await expect(layout).toHaveAttribute("data-effective-viewport", `${effectiveWidth}x${effectiveHeight}`);
+    const board = page.getByTestId("game-board");
+    await expect(board).toHaveAttribute("data-table-layout", resolveTableLayout("adaptive", effectiveWidth, effectiveHeight));
     for (const scenario of ["chi_local_upper_zu4", "chi_collective_confirm"]) {
       await setupChiScenario(page, scenario);
       const track = page.getByTestId("dynamic-action-track");
       const choices = track.getByTestId("chi-choices");
       await expect(choices.locator("[data-kind]").first()).toBeVisible();
       await expect(track.getByTestId("action-row").getByRole("button")).toHaveCount(scenario === "chi_local_upper_zu4" ? 2 : 3);
+      await expect(board).toHaveAttribute("data-geometry-busy", "false");
       const geometry = () => track.evaluate((element, rotated) => {
         const box = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
         const rail = element.getBoundingClientRect();
@@ -264,14 +271,24 @@ test("the scrollable chi choices leave all response buttons on one 44px touch ro
           insideRail: buttons.every(inside),
           separate: buttons.every(button => ![strip, ...otherZones].some(zone => intersects(button, zone))),
           choicesVisible: (rotated ? strip.height : strip.width) >= 44,
-          fixedPosition: buttons.map(button => [button.x - rail.x, button.y - rail.y]),
         };
       }, rotated);
       const expectedBounds = { sameRow: true, touchSize: true, insideRail: true, separate: true, choicesVisible: true };
       await expect.poll(geometry, { message: `${width}×${height} ${scenario}` }).toMatchObject(expectedBounds);
-      const before = (await geometry()).fixedPosition;
-      await choices.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-      expect((await geometry()).fixedPosition).toEqual(before);
+      // Check only the scroller's effect on already settled layout. Taking both
+      // readings in the same frame also excludes timer renders and browser IPC.
+      const scrollResult = await track.evaluate(element => {
+        const strip = element.querySelector<HTMLElement>(".chi-choices")!;
+        const positions = () => [...element.querySelectorAll(".action-row button")].map(button => {
+          const { x, y } = button.getBoundingClientRect();
+          return [x, y];
+        });
+        const before = positions();
+        strip.scrollLeft = strip.scrollWidth;
+        return { before, after: positions(), overflow: strip.scrollWidth > strip.clientWidth + 1, scrollLeft: strip.scrollLeft };
+      });
+      expect(scrollResult.after).toEqual(scrollResult.before);
+      if (scrollResult.overflow) expect(scrollResult.scrollLeft).toBeGreaterThan(0);
       await choices.locator("[data-kind]").last().tap();
       await expect.poll(geometry).toMatchObject(expectedBounds);
     }
