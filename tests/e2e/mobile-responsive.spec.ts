@@ -2001,6 +2001,8 @@ test.describe("compact landscape gameplay", () => {
       const layoutClass = await page.locator("main.layout").getAttribute("class");
       return layoutClass?.split(/\s+/u).includes("playing") ? "playing" : "waiting";
     }, { timeout: 30_000 }).toBe("playing");
+    // The opening dealer is random. Deliver a real decision to this seat while rules are open.
+    await applyLocalDebugScenario(page, "chi_local_upper");
     await expect(gameSettings).toBeEnabled({ timeout: 30_000 });
     await expect(rulesDialog).toBeVisible();
     await expect(page.getByTestId("rules-decision-reminder")).toContainText("轮到你操作");
@@ -2012,7 +2014,6 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".hand-card.playable:focus, .action-dock .btn:not(:disabled):focus")).toHaveCount(1);
     await expect(page.locator(".hand [data-card-mode='long']").first()).toBeVisible();
 
-    await applyLocalDebugScenario(page, "chi_local_upper");
     await page.getByTestId("action-chi").click();
     await expect(page.getByTestId("discard-confirm")).toBeVisible();
     const selectedCard = page.locator(".hand-card.playable:not(:disabled)").first();
