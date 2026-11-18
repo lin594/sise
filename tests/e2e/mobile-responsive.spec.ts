@@ -120,6 +120,7 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
       layerHeight: layerRect.height,
       layerRadius: getComputedStyle(deckLayer).borderRadius,
       layerBackground: getComputedStyle(deckLayer).backgroundImage,
+      skin: document.documentElement.dataset.skin,
     };
   });
   expect(Math.abs(centerGeometry.pairCenterX - centerGeometry.stageCenterX)).toBeLessThanOrEqual(2);
@@ -128,7 +129,8 @@ async function expectSimplifiedTableCenter(page: Page): Promise<void> {
   expect(Math.abs(centerGeometry.deckCenterY - centerGeometry.stageCenterY)).toBeLessThanOrEqual(2);
   expect(centerGeometry.layerHeight / centerGeometry.layerWidth).toBeGreaterThanOrEqual(3.5);
   expect(centerGeometry.layerRadius).toBe("50% / 18%");
-  expect(centerGeometry.layerBackground).toContain("151, 56, 46");
+  const deckRed = centerGeometry.skin === "puxian-house" ? "151, 56, 46" : "182, 36, 44";
+  expect(centerGeometry.layerBackground).toContain(deckRed);
   if (centerGeometry.pendingCenterX !== null && centerGeometry.pendingCenterY !== null) {
     expect(centerGeometry.pendingCenterX).toBeGreaterThan(centerGeometry.stageCenterX);
     expect(Math.abs(centerGeometry.pendingCenterY - centerGeometry.deckCenterY)).toBeLessThanOrEqual(2);
