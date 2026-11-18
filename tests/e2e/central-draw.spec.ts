@@ -315,6 +315,12 @@ for (const reducedMotion of [false, true]) test(`ordinary winning response displ
   await page.screenshot({ path: info.outputPath("paper-score-sheet.png") });
   await page.locator(".settlement-item.winner summary").click();
   await expect(page.locator(".settlement-item.winner .settlement-group-badge")).toHaveText("碰");
+  if (!reducedMotion) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.locator("main.layout")).toHaveAttribute("data-effective-viewport", "1440x900");
+    await expect(slip).toBeInViewport();
+    await page.screenshot({ path: info.outputPath("paper-score-sheet-desktop.png") });
+  }
 });
 
 test("declining a draw lands it in the drawer's outgoing flow without a second poll", async ({ page }) => {

@@ -356,7 +356,7 @@
             </span>
             <small class="settlement-overview-help">你的结果排在最前面，点击玩家可查看牌和得分明细。</small>
             <div v-if="finalMeld" class="winning-slip" data-testid="winning-slip" role="group" aria-label="最后成组的牌">
-              <span class="winning-slip-caption">收牌成组</span>
+              <span class="winning-slip-caption">收进{{ getCardLabelText(finalMeld[0]) }}成组</span>
               <span v-for="(card, index) in finalMeld" :key="card.id" class="slip-face" role="img"
                 :data-color="card.color" :data-incoming="index === 0 || undefined" :data-card-id="card.id"
                 :aria-label="getCardAccessibleText(card) + (index === 0 ? '，最后收进的牌' : '')">
@@ -2905,14 +2905,27 @@ html[data-skin="puxian-house"] .layout .round-overview {
   border-radius: 0;
 }
 html[data-skin="puxian-house"] .settlement-fixed-head h2 {
-  color: #693521;
+  color: #8a3c2d;
   font-family: var(--skin-font);
+  letter-spacing: .05em;
+  border-left: 3px double #a55a45;
+  padding-left: .5rem;
 }
 html[data-skin="puxian-house"] .layout .settlement-item {
   border: 0;
   border-bottom: 1px solid #c5b597;
   border-radius: 0;
   background: transparent;
+}
+html[data-skin="puxian-house"] .layout .settlement-item.winner {
+  background: linear-gradient(90deg, #e4d9b860, transparent);
+  box-shadow: inset 3px 0 #92563b;
+}
+html[data-skin="puxian-house"] .layout .hu-panel :is(.score-total, .round-overview b).positive {
+  color: #245b43;
+}
+html[data-skin="puxian-house"] .layout .hu-panel :is(.score-total, .round-overview b).negative {
+  color: #8c3d2d;
 }
 .winning-slip {
   display: flex;
