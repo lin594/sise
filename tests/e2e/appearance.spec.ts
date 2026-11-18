@@ -144,6 +144,18 @@ test("Puxian seats share public melds and authoritative concealed counts across 
         await expect(rack).toHaveAttribute("aria-hidden", "true");
         await expect(rack).toBeInViewport();
         await expect(rack.locator("[data-face-id]")).toHaveCount(0);
+        if (side !== "top" && Math.min(width, height) >= 381) {
+          await expect(lane.locator(".mini-card").first()).toHaveCSS("rotate", side === "left" ? "90deg" : "-90deg");
+          const railAlignment = await lane.evaluate(element => {
+            const first = element.querySelector(".mini-card")!.getBoundingClientRect();
+            const concealed = element.querySelector(".opponent-rack")!.getBoundingClientRect();
+            const rotated = element.closest("main")?.classList.contains("rotated-phone-portrait");
+            return rotated
+              ? Math.abs(first.top + first.height / 2 - concealed.top - concealed.height / 2)
+              : Math.abs(first.left + first.width / 2 - concealed.left - concealed.width / 2);
+          });
+          expect(railAlignment).toBeLessThanOrEqual(2);
+        }
       }
     }
     for (const [color, base] of [["red", "rgb(202, 104, 89)"], ["green", "rgb(131, 171, 117)"]]) {

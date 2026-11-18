@@ -39,8 +39,12 @@
         :data-flow-side="flowSide(flowTopLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(flowTopLeftPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <p aria-hidden="true">
+          <span class="flow-route">{{ flowTitle(flowTopLeftPlayer.clientId) }}</span>
+          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowTopLeftPlayer.clientId) }}流水</span>
+          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowTopLeftPlayer.clientId) }}张</span>
+        </p>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopLeftPlayer.clientId)}，共${flowCardCount(flowTopLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopLeftPlayer.clientId)"
             :key="`flow-top-left-${card.id}`"
@@ -148,8 +152,12 @@
         :data-flow-side="flowSide(flowTopRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowTopRightPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(flowTopRightPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <p aria-hidden="true">
+          <span class="flow-route">{{ flowTitle(flowTopRightPlayer.clientId) }}</span>
+          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowTopRightPlayer.clientId) }}流水</span>
+          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowTopRightPlayer.clientId) }}张</span>
+        </p>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowTopRightPlayer.clientId)}，共${flowCardCount(flowTopRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowTopRightPlayer.clientId)"
             :key="`flow-top-right-${card.id}`"
@@ -221,25 +229,21 @@
               <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
               <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
                 <template v-if="group.faceDownCount">
-                  <span
-                    v-for="slot in group.faceDownCount"
-                    :key="`left-group-back-${group.id}-${slot}`"
-                    class="mini-card pending-fish-back"
-                    data-card-back="red-four-color"
-                    aria-hidden="true"
-                  ><i v-for="mark in 4" :key="mark"></i></span>
+                  <span v-for="slot in group.faceDownCount" :key="`left-group-back-${group.id}-${slot}`" class="side-card-slot">
+                    <span class="mini-card pending-fish-back" data-card-back="red-four-color" aria-hidden="true"><i v-for="mark in 4" :key="mark"></i></span>
+                  </span>
                 </template>
                 <template v-else>
-                  <CardComp
-                    v-for="card in group.cards"
-                    :key="`left-group-card-${card.id}`"
-                    :card="card"
-                    :style="movingCardStyle(card.id)"
-                    :mode="appliedTableCardMode"
-                    size="xs"
-                    class="mini-card"
-                    :title="cardLabel(card)"
-                  />
+                  <span v-for="card in group.cards" :key="`left-group-card-${card.id}`" class="side-card-slot">
+                    <CardComp
+                      :card="card"
+                      :style="movingCardStyle(card.id)"
+                      :mode="appliedTableCardMode"
+                      size="xs"
+                      class="mini-card"
+                      :title="cardLabel(card)"
+                    />
+                  </span>
                 </template>
               </div>
             </div>
@@ -385,25 +389,21 @@
               <span v-if="group.badge" class="group-badge">{{ group.badge }}</span>
               <div class="mini-card-strip stacked" :class="{ 'mode-long': appliedTableCardMode === 'long' }">
                 <template v-if="group.faceDownCount">
-                  <span
-                    v-for="slot in group.faceDownCount"
-                    :key="`right-group-back-${group.id}-${slot}`"
-                    class="mini-card pending-fish-back"
-                    data-card-back="red-four-color"
-                    aria-hidden="true"
-                  ><i v-for="mark in 4" :key="mark"></i></span>
+                  <span v-for="slot in group.faceDownCount" :key="`right-group-back-${group.id}-${slot}`" class="side-card-slot">
+                    <span class="mini-card pending-fish-back" data-card-back="red-four-color" aria-hidden="true"><i v-for="mark in 4" :key="mark"></i></span>
+                  </span>
                 </template>
                 <template v-else>
-                  <CardComp
-                    v-for="card in group.cards"
-                    :key="`right-group-card-${card.id}`"
-                    :card="card"
-                    :style="movingCardStyle(card.id)"
-                    :mode="appliedTableCardMode"
-                    size="xs"
-                    class="mini-card"
-                    :title="cardLabel(card)"
-                  />
+                  <span v-for="card in group.cards" :key="`right-group-card-${card.id}`" class="side-card-slot">
+                    <CardComp
+                      :card="card"
+                      :style="movingCardStyle(card.id)"
+                      :mode="appliedTableCardMode"
+                      size="xs"
+                      class="mini-card"
+                      :title="cardLabel(card)"
+                    />
+                  </span>
                 </template>
               </div>
             </div>
@@ -421,8 +421,12 @@
         :data-flow-side="flowSide(flowBottomLeftPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomLeftPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <p aria-hidden="true">
+          <span class="flow-route">{{ flowTitle(flowBottomLeftPlayer.clientId) }}</span>
+          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowBottomLeftPlayer.clientId) }}流水</span>
+          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowBottomLeftPlayer.clientId) }}张</span>
+        </p>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomLeftPlayer.clientId)}，共${flowCardCount(flowBottomLeftPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomLeftPlayer.clientId)"
             :key="`flow-bottom-left-${card.id}`"
@@ -491,8 +495,12 @@
         :data-flow-side="flowSide(flowBottomRightPlayer.clientId)"
         :aria-label="flowAccessibleTitle(flowBottomRightPlayer.clientId)"
       >
-        <p aria-hidden="true">{{ flowTitle(flowBottomRightPlayer.clientId) }}</p>
-        <div class="discard-strip" tabindex="0" aria-label="流水牌，可滚动查看">
+        <p aria-hidden="true">
+          <span class="flow-route">{{ flowTitle(flowBottomRightPlayer.clientId) }}</span>
+          <span v-if="paperTable" class="paper-flow-origin">{{ flowSourceLabel(flowBottomRightPlayer.clientId) }}流水</span>
+          <span v-if="paperTable" class="paper-flow-count">{{ flowCardCount(flowBottomRightPlayer.clientId) }}张</span>
+        </p>
+        <div class="discard-strip" tabindex="0" :aria-label="`${flowAccessibleTitle(flowBottomRightPlayer.clientId)}，共${flowCardCount(flowBottomRightPlayer.clientId)}张，可滚动查看`">
           <CardComp
             v-for="(card, index) in visibleFlowCards(flowBottomRightPlayer.clientId)"
             :key="`flow-bottom-right-${card.id}`"
@@ -1314,9 +1322,8 @@ function flowSide(receiverId: string) {
   return playerSide(flowOwner(receiverId)?.clientId ?? "");
 }
 
-function tableLocationRotation(location: TableLocation): number {
-  if (appliedTableLayout.value !== "mahjong" || location.zone !== "flow") return 0;
-  return { bottom: 0, left: 90, top: 180, right: -90 }[playerSide(location.playerId ?? "")];
+function flowSourceLabel(receiverId: string): string {
+  return { bottom: "我的", left: "左家", top: "对家", right: "右家" }[flowSide(receiverId)];
 }
 
 function flowTitle(playerId: string): string {
@@ -1653,14 +1660,13 @@ const tableFlights = computed(() => coordinateMotionSuppressed.value ? [] : acti
     const style = getComputedStyle(destinationElement);
     const top = destinationElement.querySelector('.text-top');
     const bottom = destinationElement.querySelector('.text-bottom');
-    const angle = tableLocationRotation(move.to);
+    const angle = Number.parseFloat(style.rotate) || 0;
     const sideways = Math.abs(angle) === 90;
     cardStyle = { width: sideways ? `${end.height}px` : '100%', height: sideways ? `${end.width}px` : '100%', position: 'absolute', left: '50%', top: '50%', transform: `translate(-50%, -50%) rotate(${angle}deg)`, margin: '0', boxSizing: 'border-box', fontSize: style.fontSize, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding,
       '--card-text-width': style.getPropertyValue('--card-text-width') || '100%',
       '--card-text-angle': style.getPropertyValue('--card-text-angle') || '0deg',
       '--card-ink-width': style.getPropertyValue('--card-ink-width') || '100cqw',
       '--card-ink-height': style.getPropertyValue('--card-ink-height') || '100cqh',
-      '--card-bottom-text-angle': style.getPropertyValue('--card-bottom-text-angle') || '180deg',
       '--flight-top-padding': top ? getComputedStyle(top).paddingTop : '0px',
       '--flight-bottom-padding': bottom ? getComputedStyle(bottom).paddingBottom : '0px' };
     tableFlightFaceStyles.set(key, cardStyle);
@@ -2423,6 +2429,11 @@ function updateMahjongMeldLayout(): void {
     const groups = [...list.querySelectorAll('.group-block')].map(group => `${group.querySelectorAll('.mini-card').length}:${group.querySelector('.group-badge')?.textContent ?? ''}`).join('|');
     const key = `${list.clientWidth}:${list.clientHeight}:${groups}:${appliedTableCardMode.value}`;
     const cards = [...list.querySelectorAll<HTMLElement>('.mini-card')];
+    if (getComputedStyle(list).getPropertyValue('--seat-card-angle').trim()) {
+      meldLayoutKeys.delete(list);
+      cards.forEach(card => ['width', 'height', 'font-size', 'margin'].forEach(property => card.style.removeProperty(property)));
+      return;
+    }
     // Assistance is contained inside the face and never changes group geometry.
     const height = 24;
     const applyScale = (scale: number) => {
@@ -6436,3 +6447,4 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 </style>
 
 <style scoped src="../mahjong.css"></style>
+<style src="../puxian-rivers.css"></style>

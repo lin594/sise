@@ -386,13 +386,15 @@ html[data-skin="puxian-house"] .card:not(.size-xs)::before {
 }
 
 html[data-skin="puxian-house"] .card.mode-long:not(.size-xs)::before {
-  --corner-ink: color-mix(in srgb, var(--paper-ink, #30261a) 46%, transparent);
+  --corner-ink: color-mix(in srgb, var(--paper-ink, #30261a) 32%, transparent);
+  --wide-corner: min(12px, 19cqw);
+  --small-corner: min(7px, 13cqw);
   --paper-corner: transparent 3px, var(--corner-ink) 3px 4px, transparent 4px 6px, var(--corner-ink) 6px 7px, transparent 7px 9px, var(--corner-ink) 9px 10px, transparent 10px;
   background:
-    radial-gradient(circle at top left, var(--paper-corner)) top left / 12px 12px,
-    radial-gradient(circle at top right, var(--paper-corner)) top right / 7px 7px,
-    radial-gradient(circle at bottom left, var(--paper-corner)) bottom left / 7px 7px,
-    radial-gradient(circle at bottom right, var(--paper-corner)) bottom right / 12px 12px;
+    radial-gradient(circle at top left, var(--paper-corner)) top left / var(--wide-corner) var(--wide-corner),
+    radial-gradient(circle at top right, var(--paper-corner)) top right / var(--small-corner) var(--small-corner),
+    radial-gradient(circle at bottom left, var(--paper-corner)) bottom left / var(--small-corner) var(--small-corner),
+    radial-gradient(circle at bottom right, var(--paper-corner)) bottom right / var(--wide-corner) var(--wide-corner);
   background-repeat: no-repeat;
 }
 
@@ -773,5 +775,118 @@ html[data-skin="puxian-house"] .layout.table-active .game-control-header :is(.to
     :is(.hand-count-badge, .kan-count-badge) {
     min-width: 0;
     padding-inline: 2px;
+  }
+}
+
+.side-card-slot { display: contents; }
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .player-top:has(.opponent-rack) {
+  justify-content: center;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .player-top:has(.opponent-rack) .seat-head {
+  flex: 0 0 auto;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .player-top .opponent-lane:has(.opponent-rack) {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .self-groups-card .group-block-list {
+  justify-content: center;
+}
+
+@media (min-width: 761px) and (min-height: 381px), (min-height: 761px) and (min-width: 381px) {
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) {
+    --seat-card-angle: var(--rack-angle);
+    --seat-card-depth: clamp(30px, calc(var(--effective-vw, 1vw) * 5.3), 67px);
+    --seat-card-step: clamp(16px, calc(var(--effective-vh, 1vh) * 2.8), 26px);
+    box-sizing: border-box;
+    gap: 9px;
+    justify-content: flex-start;
+    margin-inline: 0;
+    padding-inline: clamp(4px, calc(var(--effective-vw, 1vw) * 1.1), 16px);
+  }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    .player-left .opponent-lane:has(.opponent-rack) { align-items: flex-start; }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    .player-right .opponent-lane:has(.opponent-rack) { align-items: flex-end; }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) .opponent-rack {
+    --rack-card-width: var(--seat-card-depth);
+    --rack-card-height: var(--seat-card-step);
+    align-self: auto;
+  }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) .group-block-list {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+    width: var(--seat-card-depth);
+    min-height: min(100%, calc(var(--seat-card-step) * 3 + 4px));
+    height: auto;
+    padding: 0;
+    gap: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) :is(.group-block, .mini-card-strip) {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+  }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) .side-card-slot {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+    width: var(--seat-card-depth);
+    height: var(--seat-card-step);
+  }
+
+  html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) .side-card-slot > .mini-card {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    rotate: var(--seat-card-angle);
+    width: var(--seat-card-step);
+    height: var(--seat-card-depth);
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    font-size: clamp(10px, calc(var(--effective-vh, 1vh) * 1.48), 13px);
+  }
+
+  html[data-skin="puxian-house"].show-card-color-assist .board
+    :is(.player-left, .player-right) .opponent-lane:has(.opponent-rack) .side-card-slot > .mini-card {
+    --card-text-angle: calc(-1 * var(--seat-card-angle));
+    --card-ink-width: 100cqh;
+    --card-ink-height: 100cqw;
+  }
+}
+
+@media (min-width: 1100px) and (min-height: 700px) {
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .player-left:has(.opponent-rack) .seat-identity {
+    justify-content: flex-start;
+  }
+
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .player-right:has(.opponent-rack) .seat-identity {
+    justify-content: flex-end;
   }
 }

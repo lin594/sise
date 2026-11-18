@@ -453,6 +453,26 @@
       "evidence": "docs/validation/table-fidelity/README.md"
     },
     {
+      "path": "docs/validation/table-fidelity/observer-after-chi-844x390.webp",
+      "sha256": "2b143b85cd6ca1846644b463d5f99bb026e02a706a8e0556b79ee436ae6a7f99",
+      "source": "本项目双浏览器好友房验收",
+      "author": "项目验证记录贡献者",
+      "originality": "真实吃牌操作的观察端 Chrome 截图，测试服提供初始牌局夹具",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/observer-before-chi-844x390.webp",
+      "sha256": "550bac5859eaff26b3db9d43e221f3694293a14145c70a750e445205ad5fcb49",
+      "source": "本项目双浏览器好友房验收",
+      "author": "项目验证记录贡献者",
+      "originality": "真实吃牌操作的观察端 Chrome 截图，测试服提供初始牌局夹具",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
       "path": "docs/validation/color-assistance/adaptive-long-1440x900.png",
       "sha256": "01dce7dc6dbf5f0f086fe3fb0fea8418aa4c4f7d1cfb728b6f161d102ce7e002",
       "source": "仓库验证资料",
@@ -911,6 +931,16 @@
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "随项目分发",
       "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/paper-card-half-turn.webp",
+      "sha256": "ae1fac30bd92ef01e0e44b16ad98b48ef848754b12de83ff348a0ff435aa5286",
+      "source": "本项目手机横屏浏览器牌桌截图",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 练习桌实装白卒，原图与同一截图转动半圈后并排",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
     }
   ],
   "confirmedAt": "2026-09-10",
