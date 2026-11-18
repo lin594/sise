@@ -2882,7 +2882,8 @@ watch(
 
 /* Paper score sheet laid over the felt. The compact view keeps its fixed header. */
 html[data-skin="puxian-house"] .layout .hu-panel {
-  background: linear-gradient(105deg, #fbf5e7, #f3ead6 80%, #efe3c9);
+  background-color: #f3ead6;
+  background-image: linear-gradient(105deg, #fbf5e7, #f3ead6 80%, #efe3c9);
   color: #382e23;
   border: 1px solid #ad9270;
   border-radius: 5px;
