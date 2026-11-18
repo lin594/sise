@@ -531,6 +531,56 @@
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "维护者已确认项目许可",
       "evidence": "所在验证目录及 Git 历史；仅记录项目验证截图来源。 2026-09-10 维护者确认整体采用 AGPL-3.0：https://github.com/lin594/sise/issues/33#issuecomment-5613001439"
+    },
+    {
+      "path": "docs/validation/paper-settlement/score-1440x900.webp",
+      "sha256": "d7fcb3732ccefa54fa226caa15dd6b8fc7a07dccf93c8a01dddad033c4d1465e",
+      "source": "本项目本地测试房的浏览器实装截图",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/paper-settlement/score-667x375.webp",
+      "sha256": "e788b1419958e5453c71ed1e6607683d3373b99b7e399f4c6bab001daf7c7efc",
+      "source": "本项目本地测试房的浏览器实装截图",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/round-experience/choice-1440x900.webp",
+      "sha256": "7ffa1fa264562d5171d11d795698d6b5fc7af61409534e3973908e7ec99a12ad",
+      "source": "本项目本地测试房的浏览器实装截图",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/round-experience/choice-568x320.webp",
+      "sha256": "71d35b4f9e4afab75eaaf84ed1b998dc947fdc6b2343493fbd99a4d0bbb2352b",
+      "source": "本项目本地测试房的浏览器实装截图",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
+    },
+    {
+      "path": "docs/validation/round-experience/choice-844x390.webp",
+      "sha256": "ab5b6e7e7f1609bd8cc3d2df32d14320d2bdfe1f2efa66ffe54a999c60ec59d2",
+      "source": "本项目本地测试房的浏览器实装截图",
+      "author": "项目使用 Codex 与 Playwright 记录",
+      "originality": "项目游戏界面与测试牌局",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/round-experience/README.md"
     }
   ],
   "confirmedAt": "2026-09-10",
