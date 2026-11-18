@@ -423,7 +423,7 @@
                             :key="`settle-e-${p.clientId}-${group.id}-${card.id}`"
                             :card="card"
                             size="sm"
-                            :mode="resolvedTableCardMode"
+                            :mode="settlementTableCardMode"
                           />
                         </div>
                       </div>
@@ -498,7 +498,7 @@
                 :key="`remain-${card.id}`"
                 :card="card"
                 size="sm"
-                :mode="resolvedTableCardMode"
+                :mode="settlementTableCardMode"
               />
             </div>
           </section>
@@ -1168,19 +1168,15 @@ function acceptCompactLayout() {
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
-function resolveCardDisplayMode(mode: CardDisplayMode): RenderedCardMode {
-  if (mode !== "adaptive") {
-    return mode;
-  }
-  if (displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
+function resolveCardDisplayMode(mode: CardDisplayMode, atTable = false): RenderedCardMode {
+  if (mode !== "adaptive") return mode;
+  if (atTable && displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
   return isCompactViewport.value ? "large" : "long";
 }
-const resolvedOwnCardMode = computed<RenderedCardMode>(() =>
-  resolveCardDisplayMode(displayPreferences.value.ownCards),
-);
-const resolvedTableCardMode = computed<RenderedCardMode>(() =>
-  resolveCardDisplayMode(displayPreferences.value.tableCards),
-);
+const resolvedOwnCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.ownCards, true));
+const resolvedTableCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.tableCards, true));
+const settlementOwnCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.ownCards));
+const settlementTableCardMode = computed(() => resolveCardDisplayMode(displayPreferences.value.tableCards));
 const globalError = ref("");
 const globalNotice = ref("");
 const gameToolsRef = ref<{
@@ -1247,7 +1243,7 @@ const {
   cancelReturnLobby,
   confirmReturnLobby,
   trapReturnLobbyFocus
-} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode, resolvedTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom: () => handleLeaveRoom(), generateRandomNickname, cardLabel });
+} = useSettlement({ state, huResult, roundResult, players, mySeatId, activeRoomId, nextRound, returnLobby, connect, leaveRoom, joinError, isEnded, isHost, resolvedOwnCardMode: settlementOwnCardMode, resolvedTableCardMode: settlementTableCardMode, entryName, globalError, enteredFrontLobby, handleLeaveRoom: () => handleLeaveRoom(), generateRandomNickname, cardLabel });
 const {
   confirmingResumeAbandon,
   syncExitButtonRef,

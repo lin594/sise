@@ -19,7 +19,7 @@
     :data-response-phase="props.responsePhase ?? ''"
     :data-response-placement="responseCardPlacement"
     @keydown.esc="handleBoardEscape"
-    @scroll.capture.passive="updateFlowScrollHints"
+    @scroll.capture.passive="updateTableScrollHints"
     @pointerdown.capture="startRotatedScroll"
     @pointermove.capture="moveRotatedScroll"
     @pointerup.capture="endRotatedScroll"
@@ -2540,10 +2540,15 @@ function suppressScrollClick(event: MouseEvent): void {
   scrollDragged = false;
 }
 
-function updateFlowScrollHints(): void {
+function updateTableScrollHints(): void {
   boardRef.value?.querySelectorAll<HTMLElement>('.discard-strip').forEach(strip => {
     strip.dataset.scrollBefore = String(strip.scrollTop > 2);
     strip.dataset.scrollAfter = String(strip.scrollHeight - strip.clientHeight - strip.scrollTop > 2);
+  });
+  if (!props.paperTable || appliedTableLayout.value !== "compact") return;
+  boardRef.value?.querySelectorAll<HTMLElement>('.opponent-lane .group-block-list').forEach(list => {
+    list.dataset.scrollBefore = String(list.scrollLeft > 2);
+    list.dataset.scrollAfter = String(list.scrollWidth - list.clientWidth - list.scrollLeft > 2);
   });
 }
 
@@ -2572,7 +2577,7 @@ function updateFlowLayout(): void {
     if (followLatest) strip.scrollTop = strip.scrollHeight;
     strip.dataset.latestId = latestId;
   });
-  updateFlowScrollHints();
+  updateTableScrollHints();
 }
 
 function confirmDiscard(): void {

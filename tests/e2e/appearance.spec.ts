@@ -1,4 +1,4 @@
-import { startLobbyAction, stageDeclarationForTest } from "./helpers/game";
+import { finishDeclarationIfNeeded, startLobbyAction, stageDeclarationForTest } from "./helpers/game";
 import { revealSetting } from "./helpers/settings";
 import { expect, test } from "@playwright/test";
 
@@ -98,7 +98,11 @@ test("Puxian seats share public melds and authoritative concealed counts across 
     localStorage.setItem("sise_game_display_preferences_v2", '{"reduceMotion":true}');
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await startTable(page);
+  await page.goto("/?new=1&e2eDebug=1");
+  await startLobbyAction(page);
+  await finishDeclarationIfNeeded(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario("chi_local_upper"));
+  await expect(page.getByTestId("hand-card-d1")).toBeVisible();
   await page.evaluate(() => {
     const bridge = (window as any).__siseLocalTest;
     const state = bridge.getRoomState();
@@ -133,7 +137,7 @@ test("Puxian seats share public melds and authoritative concealed counts across 
       const seat = page.getByTestId(`player-${side}`);
       const count = Number.parseInt(await seat.getByTestId("opponent-hand-count").innerText(), 10);
       const lane = seat.locator(".opponent-lane");
-      await expect(lane.locator(".group-block").first()).toBeVisible();
+      await expect(lane.locator(".group-block").first()).toBeInViewport({ ratio: 0.85 });
       await expect(lane.locator(".opponent-rack-card")).toHaveCount(count);
       if (count > 0) {
         const rack = lane.locator(".opponent-rack");

@@ -293,6 +293,166 @@
       "evidence": "docs/validation/paper-table/README.md"
     },
     {
+      "path": "docs/validation/table-fidelity/after-mature-1440x900.webp",
+      "sha256": "d201b6b88b5196f571c368d1035d36546604f350b1b243d5bd553674543c3b8e",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-mature-390x844.webp",
+      "sha256": "87be2a5a1218eca591d302c7c8986b6d4b5a47cb775b53b59978febf5d5c9af4",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-mature-568x320.webp",
+      "sha256": "28372d831c23b1f95e28ec3f39ce00440109353f5fbc3ad4c4918f84a055611c",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-mature-844x390.webp",
+      "sha256": "802fb07f59f108567357a91b61febcdb7b56f4650d27916880fe450c2050fa06",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-opening-1440x900.webp",
+      "sha256": "e3bc03b9fcbbeb83b721e6d193a04437c4e0a3e5b9185da51bd3160b8e8ddde3",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-opening-390x844.webp",
+      "sha256": "c43392fd6b92c11e06e0188c3cb38165ab6a697a727e585e2c1ba299468004fa",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-opening-568x320.webp",
+      "sha256": "8cf8dc443670171e855dc8d4d5e0caae4406c56152a3628826a978c400d99d54",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/after-opening-844x390.webp",
+      "sha256": "4bf4136a4fda3b104ea9a5a4c429d1a51ca62caf36243d85e925cd247fdf80a3",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-mature-1440x900.webp",
+      "sha256": "68cf04d033dd02ac1f7339db7cdd4de25eb6089d3524ab2d33b111e444d55695",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-mature-390x844.webp",
+      "sha256": "117a47c080bcca696fc7d319a0198971c1b156e79978be653e667668a810e591",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-mature-568x320.webp",
+      "sha256": "dd6c2760e86c03ba2091af0e4e01c89168bdeb4ca24c9a8e0a7ec9bafacef6b7",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-mature-844x390.webp",
+      "sha256": "f63551a666e36286946dbf4147746a43621aae5d2027968fdab2863d5a230ebe",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-opening-1440x900.webp",
+      "sha256": "39c2fe2250b9fc51b0ffcc2f3927a392bb9c9b47b4ab1d2dc035b8daeb320b9d",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-opening-390x844.webp",
+      "sha256": "5901c6af473c24c888a5efe1e95d5935d705ff3be8e0dd64df4a581166b2554a",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-opening-568x320.webp",
+      "sha256": "3eb73da0a7949c7fce2ce9e1baf06e572435b229c9719361680d611859a2495c",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/before-opening-844x390.webp",
+      "sha256": "7df880506ab32a24acaf148298b98caeee18560f2ba14de1a9bebeace30fd254",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "Chrome 中实际开局或公开牌局夹具截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
       "path": "docs/validation/color-assistance/adaptive-long-1440x900.png",
       "sha256": "01dce7dc6dbf5f0f086fe3fb0fea8418aa4c4f7d1cfb728b6f161d102ce7e002",
       "source": "仓库验证资料",
