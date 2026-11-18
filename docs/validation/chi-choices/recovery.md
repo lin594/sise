@@ -1,0 +1,5 @@
+# Chi choices recovery check · 2026-11-18
+
+The running server image matched the local baseline image, `sha256:ec9a6d8052d2ad727f643e4305cec25a416f9565294ab46c4d5e4680d69397fa`, at revision `be5f20513aa37d9ec0162eb80154f6f13f34ac4b`. The candidate server source tree was `909eb350159e955fe6bcfa8cb7dd93b78a1e4060` at `35427d4c87806c7424871e6404d80ff95c399af1`. Building the repository server Dockerfile for linux/amd64 with node:22-bookworm-slim produced `sha256:7d39c46b59fe12479485eb119d421fd8cbd8c4dcb39399ef17d449041ab685f7`.
+
+The recovery harness created synthetic rooms in isolated Redis and ran candidate restart and baseline → candidate → baseline in both declaring and playing. All four cases recovered the room, seat, credential and exact hand, then successfully advanced the recovered decision. All six recorded stops exited zero and flushed a fresh snapshot. The snapshot schema was 2 and Redis namespace version 1. The recorded image IDs identify the tested local image pair. [Machine-readable results](current-baseline-recovery.json).

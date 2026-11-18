@@ -239,6 +239,35 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     context.state.pollOriginPlayerId = seatId;
     context.setResponseCard(context.getPendingResponse()!.card, "draw");
     context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
+  } else if (scenario === "chi_preview_bot") {
+    // Restricted server-only fixture: one human can preview, while the bot
+    // drawer's special card has a legal mandatory local eat. No client vote.
+    const index = context.playerOrder.indexOf(seatId);
+    const ownerId = context.playerOrder[(index - 1 + context.playerOrder.length) % context.playerOrder.length]!;
+    for (const id of context.playerOrder) {
+      const seat = context.state.players.get(id)!;
+      seat.declaredKongs = 0;
+      seat.exposedArea.clear(); seat.exposedGroupSizes.clear(); seat.exposedGroupKinds.clear();
+      seat.fishArea.clear(); seat.discardPile.clear();
+      context.playerHands.set(id, [{ id: `preview-spare-${id}`, color: "green", type: "ju" }]);
+    }
+    context.playerHands.set(ownerId, [
+      { id: "preview-owner-shi", color: "red", type: "shi" },
+      { id: "preview-owner-xiang", color: "red", type: "xiang" },
+      { id: "preview-owner-spare", color: "green", type: "ju" },
+    ]);
+    add("preview-human-shi", "red", "shi");
+    add("preview-human-xiang", "red", "xiang");
+    add("preview-human-spare", "green", "pao");
+    context.setPendingResponse(createPendingResponse(ownerId, { id: "preview-bot-draw", color: "red", type: "jiang" }, "draw"));
+    context.setCollectiveResponseWindowMs(10_000);
+    context.state.phase = "playing";
+    context.state.responsePhase = "collective";
+    context.state.currentPlayerId = ownerId;
+    context.state.currentTurnPlayerId = ownerId;
+    context.state.pollOriginPlayerId = ownerId;
+    context.setResponseCard(context.getPendingResponse()!.card, "draw");
+    context.state.lastAction = `DEBUG: ${scenario}#${seq}`;
   } else if (scenario === "chi_draw_downstream_confirm" || scenario === "chi_draw_upstream_confirm") {
     const selfIndex = context.playerOrder.indexOf(seatId);
     const ownerId = context.playerOrder[(selfIndex - 1 + context.playerOrder.length) % context.playerOrder.length]!;
@@ -729,6 +758,7 @@ export function applyDebugScenario(context: DebugScenarioContext, seatId: string
     scenario === "chi_draw_special_confirm" ||
     scenario === "chi_draw_downstream_confirm" ||
     scenario === "chi_draw_upstream_confirm" ||
+    scenario === "chi_preview_bot" ||
     scenario === "hu_fail_case"
   ) {
     alignCollectivePublicTurn();

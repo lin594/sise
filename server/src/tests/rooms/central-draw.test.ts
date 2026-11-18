@@ -149,3 +149,37 @@ test("C's local eat removes only B's target discard and flies from B's flow", ()
   assert.deepEqual(event.moves[0].from, { zone: "flow", playerId: "B" });
   assert.equal(room.state.players.get("C").exposedArea.length, 2);
 });
+
+
+test("a single human downstream preview never blocks the bot drawer's own Chi", () => {
+  const room = fixture();
+  room.collectiveResponseWindowMs = undefined;
+  room.state.roomMode = "practice";
+  room.state.players.get("C").connected = true;
+  for (const id of ["A", "B", "D"]) {
+    room.state.players.get(id).isConfiguredBot = true;
+    room.botIds.add(id);
+  }
+  const hand = [card("preview-ju", "red", "ju"), card("preview-pao", "red", "pao"), card("preview-spare", "green", "shi")];
+  room.playerHands.set("C", hand);
+  room.playerHands.set("B", hand.map(item => ({ ...item, id: `bot-${item.id}` })));
+  room.pendingResponse = createPendingResponse("B", card("preview-draw", "red", "ma"), "draw");
+  room.collectiveQueue = ["B", "C", "D", "A"];
+  room.collectiveCursor = 0;
+  for (const id of ["A", "B", "D"]) room.pendingResponse.collectives.set(id, { action: "pass" });
+  const choices = room.getAvailableActions("C", true);
+  assert.equal(choices.some((entry: any) => entry.action === "chi" && entry.deferred), true);
+  assert.equal(room.hasCollectiveActionBeyondPass("C"), false);
+  assert.equal(room.currentCollectiveResponseWindowMs(), 0);
+  assert.equal(room.pendingResponse.collectives.has("C"), false, "the human never clicks or votes");
+  room.collectiveResponseEndsAt = Date.now();
+  room.advanceCollectivePolling();
+  assert.equal(room.state.responsePhase, "local_draw");
+  assert.equal(room.pendingResponse.ownerId, "B");
+  const chi = room.getAvailableActions("B").find((entry: any) => entry.action === "chi");
+  assert.equal(chi.enabled, true);
+  assert.equal(room.executeEat("B", chi.candidates[0].id), true);
+  assert.equal(room.state.players.get("B").exposedArea.some((entry: any) => entry.id === "preview-draw"), true);
+  assert.deepEqual(room.playerHands.get("C"), hand);
+  room.clearCollectiveTimer();
+});
