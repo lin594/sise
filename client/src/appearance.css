@@ -523,6 +523,11 @@ html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .player-top .
 }
 
 @media (min-width: 761px) and (min-height: 381px), (min-height: 761px) and (min-width: 381px) {
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .player-top
+    .opponent-lane:not(:has(.group-block:nth-child(2))) .opponent-rack {
+    --rack-peek: clamp(2px, calc(12 * var(--effective-vw, 1vw) / var(--rack-count)), 7px);
+  }
+
   html[data-skin="puxian-house"] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"])
     :is(.player-left, .player-right) .opponent-lane {
     flex-direction: column;
