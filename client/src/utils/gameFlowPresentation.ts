@@ -1,4 +1,5 @@
 export type CardPlacement = "center" | "flow" | "meld" | "hidden";
+export const TABLE_CARD_TRAVEL_MS = 200;
 
 export interface ResponseCardPlacementInput {
   phase: string;

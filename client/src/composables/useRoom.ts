@@ -415,7 +415,8 @@ function normalizeRoundResultPayload(payload: RoundResultPayload): RoundResultPa
       huType: p.huType === "big" || p.huType === "small" ? p.huType : null,
       winningGroups: (p.winningGroups ?? []).map((group) => ({
         key: String(group?.key ?? ""),
-        cards: sortHandCards(group?.cards ?? []),
+        // The settlement places the incoming card first in this group.
+        cards: asCardArray(group?.cards),
       })),
       resolvedHandGroups: (p.resolvedHandGroups ?? []).map((group) => ({
         key: String(group?.key ?? ""),
@@ -493,6 +494,7 @@ export function useRoom(playerName = "Player") {
   const localPlayerName = ref(playerName);
   const privateHand = ref<Card[]>([]);
   const acceptedStateRevision = ref(-1);
+  const publicSnapshotReady = ref(false);
   const tutorial = ref<{ step: string } | null>(null);
   const applyTutorial = (value: unknown) => {
     const step = value && typeof value === "object" ? (value as { step?: unknown }).step : null;
@@ -1314,6 +1316,7 @@ export function useRoom(playerName = "Player") {
     clearActionFeedback();
     state.value = null;
     acceptedStateRevision.value = -1;
+    publicSnapshotReady.value = false;
     privateHand.value = [];
     tutorial.value = null;
     listeningHints.value = null;
@@ -1541,6 +1544,8 @@ export function useRoom(playerName = "Player") {
       return;
     }
 
+    // A successful transport handshake can still be displaying the previous connection's table.
+    publicSnapshotReady.value = true;
     acceptedStateRevision.value = incomingRevision;
     const hasPrivatePayload = Boolean(
       rawSnapshot &&
@@ -1791,6 +1796,7 @@ export function useRoom(playerName = "Player") {
     clearConnectionProbeTimers();
     clearRestoredNoticeTimer();
     connectionState.value = reconnecting ? "reconnecting" : "connecting";
+    publicSnapshotReady.value = false;
     const connectionSeq = ++activeConnectionSeq;
     const isActiveConnection = () => activeConnectionSeq === connectionSeq;
     try {
@@ -2577,6 +2583,7 @@ export function useRoom(playerName = "Player") {
     players,
     privateHand,
     acceptedStateRevision,
+    publicSnapshotReady,
     listeningHints,
     quickPhrase,
     quickPhraseMuted,

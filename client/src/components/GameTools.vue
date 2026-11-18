@@ -255,6 +255,12 @@
           </div>
         </div>
         <div v-if="settingsPage === 'sound'">
+          <button type="button" class="setting-switch" role="switch" data-testid="paper-sounds"
+            :aria-checked="props.modelValue.paperSounds"
+            @click="emit('update:modelValue', { ...props.modelValue, paperSounds: !props.modelValue.paperSounds })">
+            <span><strong>纸牌音效</strong><small>出牌轻落桌，收牌时听到叠牌声</small></span>
+            <span class="switch-state" :class="{ active: props.modelValue.paperSounds }">{{ props.modelValue.paperSounds ? '开启' : '关闭' }}</span>
+          </button>
           <button class="setting-switch" type="button" role="switch" :aria-checked="!quickPhraseMuted" data-testid="settings-phrase-sound" @click="emit('setQuickPhraseMuted', !props.quickPhraseMuted)"><span><strong>互动语音</strong><small>播放牌友发送的快捷语音</small></span><span>{{ quickPhraseMuted ? '关闭' : '开启' }}</span></button>
         <button
           v-if="props.spokenTurnGuidanceSupported"
