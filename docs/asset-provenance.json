@@ -193,6 +193,16 @@
       "evidence": "docs/validation/paper-table/README.md"
     },
     {
+      "path": "client/public/skins/puxian-plum-back.webp",
+      "sha256": "9ce64f33ea40fe6c10633a7d149af18dd247b5756b2c84a7342e3e7a5a8d6d01",
+      "source": "本项目牌桌概念图及本次 ImageGen 无字平面牌背生成",
+      "author": "项目使用 Codex 与 ImageGen 制作",
+      "originality": "朱砂底色、木刻梅枝与传统角花的原创牌背纹理",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
       "path": "docs/validation/paper-table/after-1440x900.webp",
       "sha256": "bc2c170c6934279692bab2285ab0c8020300e27b5b699e300ec7e1473e4a2938",
       "source": "本项目浏览器实装验收",
