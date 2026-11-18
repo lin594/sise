@@ -233,7 +233,7 @@ const modeClass = computed<RenderedCardMode>(() => props.mode ?? "long");
   grid-template-rows: repeat(2, minmax(0, 1fr));
   row-gap: 16%;
 }
-.mode-long .text {
+:where(html:not(.show-card-color-assist)) .mode-long .text {
   align-self: center;
   justify-self: center;
   width: 1em;

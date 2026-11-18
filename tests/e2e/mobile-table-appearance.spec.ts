@@ -118,7 +118,10 @@ async function assertDensity(page: Page, classic = true, paged = false) {
       contained: areas.every(el => contained(el.getBoundingClientRect())),
       hitSizes: cards.every(c => c.offsetWidth >= 28 && c.offsetHeight >= 44),
       fonts: cards.every(c => parseFloat(getComputedStyle(c.querySelector('.text')!).fontSize) >= 13.95),
-      flowFonts: [...board.querySelectorAll('.discard-token .text')].every(c => parseFloat(getComputedStyle(c).fontSize) >= 9.95),
+      flowFonts: [...board.querySelectorAll('.discard-token')].every(card => {
+        const names = [...card.querySelectorAll('.text')].filter(name => name.getClientRects().length > 0);
+        return names.length > 0 && names.every(name => parseFloat(getComputedStyle(name).fontSize) >= 9.95);
+      }),
       topWidth: topLeft.clientWidth / table.clientWidth, groupWidth: group.clientWidth / (table.clientWidth - parseFloat(getComputedStyle(table).paddingLeft) - parseFloat(getComputedStyle(table).paddingRight)),
       topLeftInset: topLeft.offsetLeft, topRightInset: table.clientWidth-topRight.offsetLeft-topRight.offsetWidth,
       railBackground: getComputedStyle(board.querySelector('.self-command-row')!).backgroundColor,

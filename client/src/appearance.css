@@ -901,7 +901,7 @@ html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .self-groups-
   }
 }
 
-html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .center-pointer.pointer-down {
+html[data-skin="puxian-house"] .board:is([data-table-layout="mahjong"], [data-table-layout="compact"]) .center-pointer.pointer-down {
   bottom: 2px;
 }
 

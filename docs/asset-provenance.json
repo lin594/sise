@@ -294,7 +294,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-mature-1440x900.webp",
-      "sha256": "d201b6b88b5196f571c368d1035d36546604f350b1b243d5bd553674543c3b8e",
+      "sha256": "dc753b14aed698098f556c38a93b567e07e2cce56bcb069161a0199edb7c9b8d",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -304,7 +304,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-mature-390x844.webp",
-      "sha256": "87be2a5a1218eca591d302c7c8986b6d4b5a47cb775b53b59978febf5d5c9af4",
+      "sha256": "1338fbbaff8ab1c17d929cee89523e81d8fbea8b173f0097448db591e580cc6a",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -314,7 +314,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-mature-568x320.webp",
-      "sha256": "28372d831c23b1f95e28ec3f39ce00440109353f5fbc3ad4c4918f84a055611c",
+      "sha256": "926e0d076b2c71ddf2a40f816082256dae8b3ce87775ce53e493cd04b10a5fb4",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -324,7 +324,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-mature-844x390.webp",
-      "sha256": "802fb07f59f108567357a91b61febcdb7b56f4650d27916880fe450c2050fa06",
+      "sha256": "60488c42c8ea2abeebff0bf11e35c38b5adb343b855315e9eac1094e21241a89",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -334,7 +334,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-1440x900.webp",
-      "sha256": "e3bc03b9fcbbeb83b721e6d193a04437c4e0a3e5b9185da51bd3160b8e8ddde3",
+      "sha256": "44c977e99dac4dad54980de1a3f66d1ca0b4c9dcbb4a190ef93d38ba70d0542c",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -344,7 +344,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-390x844.webp",
-      "sha256": "c43392fd6b92c11e06e0188c3cb38165ab6a697a727e585e2c1ba299468004fa",
+      "sha256": "a044d48bbd63e4e5d96c9eff9f6646906fc63b46055fd64938ff5017f1bc9b9a",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -354,7 +354,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-568x320.webp",
-      "sha256": "8cf8dc443670171e855dc8d4d5e0caae4406c56152a3628826a978c400d99d54",
+      "sha256": "a54cf42f57b69c860d93bba996747a13c776e223cebaa32bdd28d188a7637589",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -364,7 +364,7 @@
     },
     {
       "path": "docs/validation/table-fidelity/after-opening-844x390.webp",
-      "sha256": "4bf4136a4fda3b104ea9a5a4c429d1a51ca62caf36243d85e925cd247fdf80a3",
+      "sha256": "8af5c19c8daef42ce52dafbf714dd6e1f3fad00e803d78f51d1c1c75c2472257",
       "source": "本项目浏览器实装验收",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 中实际开局或公开牌局夹具截图",
@@ -938,6 +938,16 @@
       "source": "本项目手机横屏浏览器牌桌截图",
       "author": "项目验证记录贡献者",
       "originality": "Chrome 练习桌实装白卒，原图与同一截图转动半圈后并排",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/table-fidelity/README.md"
+    },
+    {
+      "path": "docs/validation/table-fidelity/practice-midgame-844x390.webp",
+      "sha256": "f8fed7d6a75bd1e8382569bce2d7e042c88851ce1064cb5a0624b46229de447f",
+      "source": "本项目手机浏览器练习桌实装",
+      "author": "项目验证记录贡献者",
+      "originality": "本地练习随机发牌，通过游戏引擎的正常机器人决策推进后截图",
       "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
       "status": "随项目分发",
       "evidence": "docs/validation/table-fidelity/README.md"
