@@ -874,7 +874,7 @@
     },
     {
       "path": "docs/validation/first-table-entry/first-visit-1440x900.png",
-      "sha256": "b859d1974893dde2262a06d36c2e063f1162e3f17828c4d3b8385a72df7d4c4a",
+      "sha256": "b6fbce375829e65ee3e83a99bec3d6e2a6520447a1d32fb51a6089d16435fed3",
       "source": "本项目浏览器实装验收",
       "author": "项目使用 Codex 与 Playwright 记录",
       "originality": "项目游戏界面与测试牌局",
@@ -884,7 +884,7 @@
     },
     {
       "path": "docs/validation/first-table-entry/first-visit-568x320.png",
-      "sha256": "1cd6ceb7d1cd6caa81eab210167f32ff7782b86a20f3b1c9a85c771048f1ab8c",
+      "sha256": "cba755e541fefa4d71907e10b56227f0153f65a5e4dabb0e01ec5f30f0cca252",
       "source": "本项目浏览器实装验收",
       "author": "项目使用 Codex 与 Playwright 记录",
       "originality": "项目游戏界面与测试牌局",

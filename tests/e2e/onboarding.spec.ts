@@ -14,6 +14,18 @@ test("a fresh player chooses a table layout once and keyboard focus returns to t
   await expect(tutorial).toBeVisible();
   await expect(practice).toBeVisible();
   await expect(practice).toContainText("直接练一局");
+  const examples = [
+    { section: page.locator(".practice-card"), names: ["红俥", "红傌", "红炮"], colors: 1 },
+    { section: page.getByTestId("mode-friends"), names: ["绿將", "绿士", "绿象"], colors: 1 },
+    { section: page.getByTestId("mode-quick_match"), names: ["红兵", "绿卒", "黄兵"], colors: 3 },
+  ];
+  for (const { section, names, colors } of examples) {
+    const cards = section.locator(".mode-tiles [data-preview-card-id]");
+    await expect(cards.locator(".text-top")).toHaveText(names.map(name => name.slice(1)));
+    await expect(cards.locator(".text-bottom")).toHaveText(names.map(name => name.slice(1)));
+    expect(await cards.evaluateAll(faces => faces.map(face => face.getAttribute("aria-label")))).toEqual(names);
+    expect(await cards.evaluateAll(faces => new Set(faces.map(face => getComputedStyle(face).background)).size)).toBe(colors);
+  }
   await page.screenshot({ path: testInfo.outputPath("first-visit-568x320.png") });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("first-visit-1440x900.png") });
