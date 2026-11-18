@@ -38,18 +38,17 @@
 </template>
 <script setup lang="ts">
 import CardComp from './Card.vue';
-import type { Card } from '@/types/game';
+import { exampleCards, meldExamples } from '@/utils/cardExamples';
 defineProps<{ phase?: string }>();
-function cards(color: string, types: string[]): Card[] { return types.map((type, i) => ({ id: `${color}-${type}-${i}`, color, type })); }
 const examples = [
-  { title: '同色车马炮', valid: true, cards: cards('red', ['ju', 'ma', 'pao']), note: '三种字各一张，必须同色。' },
-  { title: '同色将士象', valid: true, cards: cards('green', ['jiang', 'shi', 'xiang']), note: '三种字各一张，必须同色。' },
-  { title: '不同色的卒', valid: true, cards: ['red', 'green', 'yellow'].map((color) => ({ id: color, color, type: 'zu' })), note: '三种或四种不同颜色的卒可以成组。' },
-  { title: '对子、坎、鱼', valid: true, cards: cards('white', ['ma', 'ma', 'ma', 'ma']), note: '同色同字：2 张是对子，3 张可作为坎，4 张可声明鱼。图中是鱼。' },
+  { title: '同色车马炮', valid: true, cards: meldExamples.jmp, note: '三种字各一张，必须同色。' },
+  { title: '同色将士象', valid: true, cards: meldExamples.jsx, note: '三种字各一张，必须同色。' },
+  { title: '不同色的卒', valid: true, cards: meldExamples.zu3, note: '三种或四种不同颜色的卒可以成组。' },
+  { title: '对子、坎、鱼', valid: true, cards: exampleCards('white', ['ma', 'ma', 'ma', 'ma']), note: '同色同字：2 张是对子，3 张可作为坎，4 张可声明鱼。图中是鱼。' },
   { title: '单张将、单张金条', valid: true, cards: [{ id: 'general', color: 'yellow', type: 'jiang' }, { id: 'gold', color: 'gold', type: 'gong' }], note: '每张可单独成组；不能主动弃掉。' },
   { title: '混色车马炮不能成架', valid: false, cards: [{ id: 'r', color: 'red', type: 'ju' }, { id: 'g', color: 'green', type: 'ma' }, { id: 'w', color: 'white', type: 'pao' }], note: '字齐了，颜色不一致也不行。' },
 ];
-const waitExample = cards('red', ['ju', 'ma', 'pao']);
+const waitExample = meldExamples.jmp;
 </script>
 <style scoped>
 .guide { display: grid; gap: 10px; }
