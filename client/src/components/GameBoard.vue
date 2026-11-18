@@ -6,6 +6,7 @@
       'has-guidance': Boolean(props.guidanceActive),
       'crowded-action-dock': crowdedActionDock,
       'hand-overflow': handHasOverflow,
+      'two-row-hand': twoRowHand,
       'rotated-scroll': props.viewportTransformKey?.endsWith(':rotated'),
       'dealer-ceremony-active': Boolean(dealerReveal),
       'board-declaring': state?.phase === 'declaring',
@@ -629,6 +630,7 @@
         <ChiChoices
           v-if="visibleChiChoices.length && responseCard"
           :choices="visibleChiChoices"
+          :senior-mode="seniorMode"
           :target="responseCard"
           :mode="appliedTableCardMode"
           :can-clear="Boolean(selectedChiCandidate || selectedChiCardIds.length)"
@@ -642,6 +644,7 @@
           :actions="props.actions ?? []"
           :can-act="canAct"
           :can-discard="canDiscard"
+          :discard-label="seniorDiscardLabel"
           :has-discard-selection="Boolean(selectedDiscardCardId)"
           :discard-pending="Boolean(discardingCardId)"
           :is-current-turn="Boolean(props.isCurrentTurn)"
@@ -916,6 +919,8 @@ const props = defineProps<{
   paperTable?: boolean;
   tutorialStep?: string;
   tableLayout?: RenderedTableLayoutId;
+  seniorMode?: boolean;
+  roomForTwoHandRows?: boolean;
   handLayout?: "single" | "paged";
   listeningHints?: ListeningHints | null;
   acceptedStateRevision?: number;
@@ -1788,6 +1793,9 @@ const handLayoutCards = computed<Card[]>(() =>
     ? props.privateHand
     : displayPrivateHand.value,
 );
+// Eleven columns keep a full 21-card hand in reading order on a spacious display.
+const twoRowHand = computed(() => props.seniorMode && props.roomForTwoHandRows
+  && props.privateHand.length > 11 && props.privateHand.length <= 22);
 function isDealConcealedCard(cardId: string): boolean {
   if (handPresentationBusy.value && props.handLayout !== "paged" && !handScaleReady.value) {
     return true;
@@ -1947,6 +1955,10 @@ function handCardById(id: string): Card | undefined { return props.privateHand.f
 const selectedPreview = computed(() => canDiscard.value
   ? handCardById(selectedDiscardCardId.value ?? "")
   : undefined);
+const seniorDiscardLabel = computed(() => {
+  if (!props.seniorMode) return undefined;
+  return selectedPreview.value ? `出${getCardAccessibleText(selectedPreview.value)}` : "出牌";
+});
 const selectedDiscardListeningRoute = computed(() => selectedPreview.value
   ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
   : undefined);
@@ -2369,7 +2381,11 @@ function updateHandLayoutState(): void {
   const keepGeometry = handScaleReady.value && (props.handLayout === "paged" || count <= handScaleCardCount)
     && Boolean(flights.value.length || (!coordinateMotionSuppressed.value && activeTableEvents.value.length));
   let needsOverflow = keepGeometry ? handHasOverflow.value : false;
-  if (props.handLayout !== 'paged' && !keepGeometry) {
+  if (twoRowHand.value) {
+    needsOverflow = false;
+    handScale.value = 1;
+    hand.scrollLeft = 0;
+  } else if (props.handLayout !== 'paged' && !keepGeometry) {
     const style = getComputedStyle(hand);
     const card = hand.querySelector<HTMLElement>('.hand-card');
     const face = card?.querySelector<HTMLElement>('.card');
@@ -2521,7 +2537,7 @@ function startRotatedScroll(event: PointerEvent): void {
   scrollDragged = false;
   rotatedScroll = null;
   if (event.pointerType !== 'touch' || !props.viewportTransformKey?.endsWith(':rotated')) return;
-  const selector = '.hand, .discard-strip, .group-block-list, .self-groups-card, .player-card';
+  const selector = '.hand, .chi-choices, .discard-strip, .group-block-list, .self-groups-card, .player-card';
   let element = (event.target as Element).closest<HTMLElement>(selector);
   // A meld list may sit inside a scrolling seat or self group section. Skip
   // non-scrolling inner lists so they do not swallow the parent's touch drag.
@@ -6320,7 +6336,7 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
   .board :is(.discard-strip, .hand, .self-groups-card, .player-card) { scrollbar-width: none; }
   .board :is(.discard-strip, .hand, .self-groups-card, .player-card)::-webkit-scrollbar { display: none; }
 }
-.board.rotated-scroll :is(.hand, .discard-strip, .self-groups-card, .player-card) { touch-action: none; }
+.board.rotated-scroll :is(.hand, .chi-choices, .discard-strip, .self-groups-card, .player-card) { touch-action: none; }
 
 /* Tiny flow cards retain two distinct glyphs instead of overlapping text padding. */
 .board .discard-token { border-width: 1px; }

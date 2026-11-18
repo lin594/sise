@@ -674,6 +674,7 @@ test.describe("phone portrait landscape canvas", () => {
 
   test("keeps settings and history reachable inside the rotated effective viewport", async ({ page }, testInfo) => {
     test.setTimeout(90_000);
+    await page.addInitScript(() => localStorage.setItem("sise_game_display_preferences_v2", JSON.stringify({ handLayout: "single" })));
     await page.setViewportSize({ width: 320, height: 568 });
     await enterLobby(page, "/?e2eDebug=1");
     await startLobbyAction(page);

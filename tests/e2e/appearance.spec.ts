@@ -666,3 +666,95 @@ test('superseded panel openings cannot swallow confirmation clicks', async ({ pa
     await expect(page.getByTestId('game-auto-play')).toBeFocused();
   }
 });
+
+test('senior players can read and change the selected discard before committing it', async ({ page }) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.addInitScript(() => localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({
+    seniorMode: true, reduceMotion: true,
+  })));
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_unique_jsx'));
+  await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('action-chi').click();
+  const confirm = page.getByTestId('discard-confirm');
+  await expect(confirm).toHaveText('出牌');
+  await expect(confirm).toBeDisabled();
+
+  const rook = page.getByTestId('hand-card-post-red-ju');
+  const horse = page.getByTestId('hand-card-post-red-ma');
+  await rook.tap();
+  await expect(confirm).toHaveText('出红俥');
+  await page.setViewportSize({ width: 690, height: 820 });
+  await expect(page.locator('main.layout')).not.toHaveClass(/rotated-phone-portrait/);
+  await expect(rook).toHaveAttribute('aria-pressed', 'true');
+  await expect(confirm).toHaveText('出红俥');
+  await horse.tap();
+  await expect(rook).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toHaveText('出红傌');
+  await expect(confirm).toHaveAccessibleName('出红傌');
+  await expect(horse).toHaveAttribute('aria-pressed', 'true');
+  await confirm.tap();
+  await expect(horse).toHaveCount(0);
+  await expect(rook).toHaveCount(1);
+});
+
+test('a spacious unfolded senior table shows both rows in reading order and keeps the last card reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 690, height: 820 });
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper_full_hand'));
+  await expect(page.locator('.hand-card')).toHaveCount(20);
+  await page.getByTestId('senior-mode-entry').tap();
+  const board = page.getByTestId('game-board');
+  await expect(board).toHaveClass(/two-row-hand/);
+  await expect(page.getByTestId('hand-scroll-next')).toHaveCount(0);
+  await expect.poll(() => page.locator('.hand-card').evaluateAll(cards => {
+    const rects = cards.map(c => c.getBoundingClientRect());
+    const pane = cards[0].closest('.hand-viewport')!.getBoundingClientRect();
+    return rects.every((r, i) => {
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const ink = document.createRange();
+      ink.selectNodeContents(cards[i].querySelector('.text-top')!);
+      const glyph = ink.getBoundingClientRect();
+      return glyph.width >= 30 && glyph.left >= r.left + 2 && glyph.right <= r.right - 2
+        && r.width >= 48 && r.height >= 48 && r.left >= pane.left - 1 && r.right <= pane.right + 1
+        && r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1 && hit && cards[i].contains(hit)
+        && (i === 0 || (i === 11 ? r.top >= rects[0].bottom : r.left >= rects[i-1].right));
+    });
+  })).toBe(true);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect(board).not.toHaveClass(/two-row-hand/);
+  await expect(page.getByTestId('hand-scroll-next')).toBeEnabled();
+  await page.setViewportSize({ width: 690, height: 820 });
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper'));
+  await expect(page.getByTestId('hand-card-d1')).toBeVisible();
+  await expect(board).not.toHaveClass(/two-row-hand/);
+  await expect.poll(() => page.locator('.hand-card').evaluateAll(cards => {
+    const pane = cards[0].closest('.hand-viewport')!.getBoundingClientRect();
+    return cards.every(card => {
+      const r = card.getBoundingClientRect();
+      return r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1;
+    });
+  })).toBe(true);
+});
+
+test('automatic hand layout retains readable touch targets on small phones and an overview on larger phones', async ({ page }) => {
+  await page.setViewportSize({ width: 568, height: 320 });
+  await startTable(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper_full_hand'));
+  await expect(page.locator('.hand-card')).toHaveCount(20);
+  for (const width of [568, 667]) {
+    await page.setViewportSize({ width, height: width === 568 ? 320 : 375 });
+    const next = page.getByTestId('hand-scroll-next');
+    await expect(next).toBeEnabled();
+    await expect.poll(() => page.locator('.hand-card').first().evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return r.width >= 44 && r.height >= 44;
+    })).toBe(true);
+    await next.tap();
+    await expect(page.getByTestId('hand-scroll-prev')).toBeEnabled();
+    await page.getByTestId('hand-scroll-prev').tap();
+  }
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator('.hand-viewport.single-line')).toBeVisible();
+  await expect(page.getByTestId('hand-scroll-next')).toHaveCount(0);
+});

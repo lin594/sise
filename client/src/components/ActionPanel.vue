@@ -32,9 +32,9 @@
         data-testid="discard-confirm"
         :class="{ enabled: hasDiscardSelection && !discardPending && !submissionLocked }"
         :disabled="!hasDiscardSelection || discardPending || submissionLocked"
-        :aria-label="discardPending ? '正在出牌' : '出牌'"
+        :aria-label="discardPending ? '正在出牌' : (discardLabel ?? '出牌')"
         @click="emit('confirmDiscard')"
-      >出</button>
+      >{{ discardLabel ?? '出' }}</button>
 
       <button
         v-for="item in canDiscard ? [] : normalized"
@@ -75,6 +75,7 @@ const props = withDefaults(
     selectedChiCandidateId?: string | null;
     canDiscard?: boolean;
     hasDiscardSelection?: boolean;
+    discardLabel?: string;
     discardPending?: boolean;
     secondsLeft?: number | null;
     untimed?: boolean;

@@ -10,7 +10,10 @@
       'compact-landscape': isCompactViewport && showGameTools,
       'effective-short-landscape': effectiveWidth > effectiveHeight && effectiveHeight <= 600,
       'rotated-phone-portrait': isRotatedPhonePortrait,
+      'roomy-touch-viewport': isRoomyTouchViewport,
+      'hinge-safe-viewport': hasViewportHinge,
       'game-tools-active': showGameTools,
+      'senior-mode': displayPreferences.seniorMode,
       'reduce-motion': displayPreferences.reduceMotion,
       'show-card-color-assist': displayPreferences.showCardColorAssist,
     }"
@@ -42,6 +45,13 @@
         <div class="brand-lockup">
           <span class="brand-suits" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <h1>四色牌</h1>
+          <button
+            type="button"
+            class="senior-entry"
+            data-testid="senior-mode-entry"
+            :aria-pressed="displayPreferences.seniorMode"
+            @click="displayPreferences.seniorMode = !displayPreferences.seniorMode"
+          >长辈版<span v-if="displayPreferences.seniorMode" aria-hidden="true"> ✓</span></button>
           <span v-if="showGameTools" class="compact-game-slogan">象棋魂 · 麻将韵 · 纸牌趣</span>
         </div>
         <p v-if="!showGameTools" class="top-slogan">象棋魂·麻将韵·纸牌趣——四色牌，一局见真章！</p>
@@ -126,6 +136,8 @@
           class="ghost reset-btn change-name"
           type="button"
           data-testid="change-entry-name"
+          :aria-label="`修改昵称，当前为${entryName}`"
+          title="修改昵称"
           :disabled="enteringLobby"
           @click="openNicknameDialog"
         ><strong>{{ entryName }}</strong><span> · 修改昵称</span></button>
@@ -243,8 +255,10 @@
         :state="state"
         :players="players"
         :private-hand="privateHand"
+        :senior-mode="displayPreferences.seniorMode"
+        :room-for-two-hand-rows="roomForTwoHandRows"
         :table-layout="resolvedTableLayout"
-        :hand-layout="displayPreferences.handLayout"
+        :hand-layout="resolvedHandLayout"
         :listening-hints="boardListeningHints"
         :accepted-state-revision="acceptedStateRevision"
         :declaration-marks="declarationMarks"
@@ -270,7 +284,7 @@
         :seat-direction="displayPreferences.seatDirection"
         :reduce-motion="displayPreferences.reduceMotion"
         :show-card-color-assist="displayPreferences.showCardColorAssist"
-        :viewport-transformed="isRotatedPhonePortrait"
+        :viewport-transformed="isRotatedPhonePortrait || hasViewportHinge"
         :viewport-transform-key="`${viewportWidth}x${viewportHeight}:${viewportLeft},${viewportTop}:${isRotatedPhonePortrait ? 'rotated' : 'native'}`"
         :quick-phrase="quickPhrase"
         @discard-card="sendDiscardCard"
@@ -1137,8 +1151,11 @@ const viewportGeometryBusy = ref(false);
 const {
   effectiveHeight,
   effectiveWidth,
+  hasViewportHinge,
   isCompactViewport,
   isLegacyCompactViewport,
+  isRoomyTouchViewport,
+  roomForTwoHandRows,
   isRotatedPhonePortrait,
   isUltraCompactViewport,
   viewportHeight,
@@ -1168,7 +1185,15 @@ function acceptCompactLayout() {
 }
 
 watch(() => displayPreferences.value.skin, skin => { document.documentElement.dataset.skin = skin; }, { immediate: true });
+const resolvedHandLayout = computed<"single" | "paged">(() => {
+  if (displayPreferences.value.seniorMode) return "paged";
+  const layout = displayPreferences.value.handLayout;
+  if (layout !== "adaptive") return layout;
+  const narrow = effectiveWidth.value < 600 || (effectiveWidth.value < 760 && effectiveHeight.value <= 500);
+  return narrow ? "paged" : "single";
+});
 function resolveCardDisplayMode(mode: CardDisplayMode, atTable = false): RenderedCardMode {
+  if (displayPreferences.value.seniorMode) return "large";
   if (mode !== "adaptive") return mode;
   if (atTable && displayPreferences.value.skin === "puxian-house" && !isUltraCompactViewport.value) return "long";
   return isCompactViewport.value ? "large" : "long";

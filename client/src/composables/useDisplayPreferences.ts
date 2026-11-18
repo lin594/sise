@@ -20,9 +20,10 @@ function readDisplayPreferences(): GameDisplayPreferences {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<GameDisplayPreferences>;
       return {
+        seniorMode: parsed.seniorMode === true,
         skin: normalizeSkin(parsed.skin),
         tableLayout: normalizeTableLayout(parsed.tableLayout),
-        handLayout: parsed.handLayout === "paged" ? "paged" : "single",
+        handLayout: parsed.handLayout === "single" || parsed.handLayout === "paged" ? parsed.handLayout : "adaptive",
         ownCards: normalizeCardDisplayMode(parsed.ownCards) ?? "adaptive",
         tableCards: normalizeCardDisplayMode(parsed.tableCards) ?? "adaptive",
         seatDirection: parsed.seatDirection === "clockwise" ? "clockwise" : "counterclockwise",
@@ -40,9 +41,10 @@ function readDisplayPreferences(): GameDisplayPreferences {
 
   const legacyMode = readStoredValue(LEGACY_TABLE_CARD_MODE_KEY);
   return {
+    seniorMode: false,
     skin: normalizeSkin(null),
     tableLayout: normalizeTableLayout(null),
-    handLayout: "single",
+    handLayout: "adaptive",
     ownCards: "adaptive",
     tableCards: legacyMode === "simple" ? "large" : legacyMode === "full" ? "long" : "adaptive",
     seatDirection: "counterclockwise",

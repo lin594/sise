@@ -36,9 +36,10 @@ export interface ListeningHints {
 }
 
 export interface GameDisplayPreferences {
+  seniorMode: boolean;
   skin: SkinId;
   tableLayout: TableLayoutId;
-  handLayout: "single" | "paged";
+  handLayout: "adaptive" | "single" | "paged";
   ownCards: CardDisplayMode;
   tableCards: CardDisplayMode;
   seatDirection: SeatDirection;
