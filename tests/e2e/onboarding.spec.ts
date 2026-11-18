@@ -15,6 +15,9 @@ test("a fresh player chooses a table layout once and keyboard focus returns to t
   await expect(practice).toBeVisible();
   await expect(practice).toContainText("直接练一局");
   await page.screenshot({ path: testInfo.outputPath("first-visit-568x320.png") });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("first-visit-1440x900.png") });
+  await page.setViewportSize({ width: 568, height: 320 });
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("sise_game_display_preferences_v2") ?? "{}").tableLayout)).toBe("adaptive");
   await tutorial.focus();
   await expect(tutorial).toBeFocused();
