@@ -83,7 +83,7 @@ test("a shared three-second public clock preserves the ten-second manual respons
 
     await Promise.all([
       expect(host.locator("main.layout")).toHaveAttribute("data-decision-attention", "none"),
-      expect(host.getByTestId("pending-card").locator(".response-caption")).toHaveCount(0),
+      expect(host.getByTestId("response-source")).toHaveText(/打出$/),
       expect(host.getByTestId("decision-countdown")).toHaveText(/^[0-3]秒$/),
       expect(host.locator(".action-dock .btn")).toHaveCount(0),
       expect(host.getByTestId("action-guidance")).toHaveCount(0),
@@ -92,7 +92,7 @@ test("a shared three-second public clock preserves the ten-second manual respons
       expect(host.locator(".center-pointer.pointer-down")).toBeVisible(),
       expect(host).not.toHaveTitle(/轮到你/),
       expect(host.getByTestId("game-settings")).toHaveAttribute("aria-label", "全局设置"),
-      expect(guest.getByTestId("pending-card").locator(".response-caption")).toHaveCount(0),
+      expect(guest.getByTestId("response-source")).toHaveText(/打出$/),
       expect(guest.getByTestId("decision-countdown")).toHaveText(/^[0-3]秒$/),
     ]);
 

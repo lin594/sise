@@ -90,8 +90,216 @@ html[data-skin]:not([data-skin="cyber-minimal"]) :is(.mode-options, .direction-o
 
 html[data-skin="cyber-minimal"] { --table-felt: #1f3448; --table-wood: #24303b; }
 html[data-skin="licheng-water"] { --table-felt: #d4ddc4; --table-wood: #725638; }
-html[data-skin="puxian-house"] { --table-felt: #e4cfac; --table-wood: #754333; }
 html[data-skin="meizhou-sea"] { --table-felt: #c1dcd9; --table-wood: #6c6350; }
 html[data-skin] .board:is([data-table-layout="classic"], [data-table-layout="mahjong"]) .table { background: transparent; border: 0; }
 
 html[data-skin] .board .btn.enabled { background: var(--ui-accent); color: #fffdf4; }
+
+[data-skin="puxian-house"] {
+  --table-felt: #194740;
+  --table-wood: #472b20;
+  --felt-surface:
+    radial-gradient(ellipse at 46% 38%, #477e6259, #102f2b22 90%),
+    url('/skins/puxian-felt.png') center / 192px 192px repeat,
+    linear-gradient(var(--table-felt), var(--table-felt));
+  --wood-surface:
+    repeating-linear-gradient(2deg, #eed3ab18 0 1px, transparent 1px 4px, #140d0a22 4px 5px),
+    linear-gradient(175deg, #714b34, #492e20 54%, #301c15);
+  --paper-speckle: repeating-linear-gradient(156deg, #57442a10 0 1px, #fff5d215 1px 2px, transparent 2px 4px);
+  --card-back:
+    repeating-linear-gradient(45deg, #e4a08a24 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-45deg, #e4a08a27 0 1px, transparent 1px 4px),
+    linear-gradient(100deg, #97382e, #6d241e);
+}
+
+html[data-skin="puxian-house"] .layout.table-active {
+  background: #251c15;
+}
+
+html[data-skin="puxian-house"] .board {
+  --ui-text: #f7ebce;
+  --ui-muted: #d3ddc3;
+  --ui-border: #abbb9f;
+  --ui-accent: #a34f38;
+  --ui-accent-text: #ffdead;
+  --ui-gold-text: #ffdb9a;
+  --ui-danger-text: #ffcec0;
+  --ui-page: #1c382f;
+  --ui-panel: #23473d;
+  --ui-raised: #2c5146;
+  --ui-page-rgb: 28,56,47;
+  --ui-panel-rgb: 35,71,61;
+  --ui-raised-rgb: 44,81,70;
+  --ui-border-rgb: 171,187,159;
+  --ui-muted-rgb: 211,221,195;
+  --ui-accent-rgb: 232,186,116;
+  --response-label-bg: #e7cda0;
+  --response-label-ink: #49281a;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="classic"]::before {
+  border-color: transparent;
+  background: var(--felt-surface), var(--wood-surface);
+  background-clip: padding-box, padding-box, padding-box, border-box, border-box;
+  box-shadow: inset 0 0 0 1px #e6bc7d55, inset 0 12px 24px #132d2766, 0 3px 5px #1b110caa;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] {
+  border-color: transparent;
+  border-radius: 10px;
+  background: var(--felt-surface), var(--wood-surface);
+  background-clip: padding-box, padding-box, padding-box, border-box, border-box;
+  box-shadow: inset 0 0 0 1px #e6bc7d55, inset 0 8px 26px #132d2777, 0 3px 5px #1b110caa;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="compact"] .table {
+  border-color: transparent;
+  background: var(--felt-surface), var(--wood-surface);
+  background-clip: padding-box, padding-box, padding-box, border-box, border-box;
+  box-shadow: inset 0 0 0 1px #e6bc7d55, inset 0 8px 26px #132d2777;
+}
+
+html[data-skin="puxian-house"] .board :is(.seat-identity > strong, .seat-identity > h3) .seat-name {
+  display: inline-block;
+  max-width: 100%;
+  padding-inline: .38em;
+  overflow: hidden;
+  vertical-align: top;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--wood-surface);
+  box-shadow: inset 0 0 0 1px #d4ac795c, inset 0 1px 1px #d4ac7933, 0 2px 3px #142e2699;
+  border-radius: 4px;
+  color: #f8e8c6;
+  text-shadow: 0 1px #22140d;
+}
+
+html[data-skin="puxian-house"] .board :is(.player-card.active, .self-info-card.active) .seat-name {
+  box-shadow: inset 0 0 0 1px #ffdb9a, 0 2px 4px #142e2699;
+  text-decoration: none;
+}
+
+html[data-skin="puxian-house"] .card:is(.color-red, .color-yellow, .color-green, .color-white, .color-gold) {
+  background: var(--paper-speckle), linear-gradient(108deg, #fff5cf55 0%, transparent 55%, #3f29151c 100%), var(--paper-face, #f6e7c6);
+  border-color: var(--paper-edge, #b39565);
+  color: var(--paper-ink, #30261a);
+  box-shadow: inset 0 0 0 1px #fff4d45c, inset 0 -2px 0 #5f442633, 0 2px 2px #17282250;
+}
+
+html[data-skin="puxian-house"] .card.color-red {
+  --paper-face: #ca6859;
+  --paper-edge: #8c4032;
+  --paper-ink: #33150f;
+}
+
+html[data-skin="puxian-house"] .card.color-yellow {
+  --paper-face: #e8bc52;
+  --paper-edge: #99732e;
+  --paper-ink: #352513;
+}
+
+html[data-skin="puxian-house"] .card.color-green {
+  --paper-face: #83ab75;
+  --paper-edge: #597347;
+  --paper-ink: #1b2918;
+}
+
+html[data-skin="puxian-house"] .card.color-gold {
+  --paper-face: #dbad68;
+  --paper-edge: #856339;
+  --paper-ink: #332014;
+}
+
+html[data-skin="puxian-house"] .card .text {
+  font-family: "Songti SC", "Noto Serif CJK SC", SimSun, serif;
+}
+
+html[data-skin="puxian-house"] .card.response-card {
+  outline-color: #f4cd83;
+  box-shadow: 0 0 0 1px #452c1b, 0 3px 8px #102820ab;
+}
+
+html[data-skin="puxian-house"] .deck-number {
+  top: auto;
+  bottom: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px 4px;
+  transform: translateX(-50%);
+  border-color: #ae845d;
+  border-radius: 4px;
+  background: #402b21;
+  color: #ffefcf;
+}
+
+html[data-skin="puxian-house"] .deck-number strong {
+  font-size: clamp(11px, 1.5vh, 13px);
+}
+
+html .appearance-settings .skin-preview[data-skin="puxian-house"] {
+  border: 2px solid var(--table-wood);
+  background: var(--felt-surface);
+}
+
+html[data-skin="puxian-house"] .board .self-hand-card {
+  background: linear-gradient(0deg, #102f2780, #102f2700 85%);
+}
+
+html[data-skin="puxian-house"] .board:not([data-table-layout="classic"]) .self-turn-outline {
+  border-color: #e6bf82;
+  box-shadow: inset 0 0 0 1px #e6bf8240;
+}
+
+html[data-skin="puxian-house"] .board[data-table-layout="compact"] .player-card.active,
+html[data-skin="puxian-house"] .board[data-table-layout="compact"] .center.my-turn {
+  border-color: #ad8c58;
+  box-shadow: inset 0 0 0 1px #ad8c5833;
+}
+
+html[data-skin="puxian-house"] .board .center-pointer-head {
+  border-bottom-color: #e5bb73;
+}
+
+html[data-skin="puxian-house"] .board .btn.enabled:is([data-testid="action-draw"], [data-testid="action-pass"]) {
+  background: #ead7b4;
+  color: #4d2c20;
+  border-color: #b68a5b;
+}
+
+html[data-skin="puxian-house"] .board .btn.enabled[data-testid="action-chi"] {
+  background: linear-gradient(165deg, #9f4a36, #813828);
+  color: #fff2d6;
+  border-color: #d89169;
+}
+
+/* Keep the card centered on its existing flight anchor as the face grows. */
+@media (min-width: 961px) and (min-height: 501px) {
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .center-card-pair {
+    grid-template-columns: 56px 74px;
+    gap: 22px;
+  }
+
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .response-card-face {
+    width: 67px;
+    height: 90px;
+    font-size: 31px;
+  }
+
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .response-card-face.mode-long {
+    width: 49px;
+    font-size: 25px;
+  }
+
+  html[data-skin="puxian-house"] .board[data-table-layout="classic"] .response-source {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+}
+
+@media (min-width: 381px) and (min-height: 381px) {
+  html[data-skin="puxian-house"] .board[data-table-layout="mahjong"] .response-card-face {
+    width: 31px;
+    height: 42px;
+    font-size: 16px;
+  }
+}

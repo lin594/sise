@@ -173,6 +173,106 @@
       "evidence": "docs/APPEARANCE.md；设计参考 electroxiao 提交 156a6ba，不能据此推定许可。 2026-09-10 维护者确认整体采用 AGPL-3.0：https://github.com/lin594/sise/issues/33#issuecomment-5613001439"
     },
     {
+      "path": "client/public/skins/puxian-felt.png",
+      "sha256": "c8ca10d27e9cb5b9ec74d96c20171e5b935d2c2cb9d0d33f026137531215da6d",
+      "source": "docs/validation/paper-table/material-study.webp",
+      "author": "项目使用 Codex 图像生成制作",
+      "originality": "从本项目生成的概念图裁取空白织面，平衡明暗后导出 PNG",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/after-1440x900.webp",
+      "sha256": "bc2c170c6934279692bab2285ab0c8020300e27b5b699e300ec7e1473e4a2938",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/after-390x844.webp",
+      "sha256": "d77d5a52ccbd8a9263ad3b816352feeb8fc087ddc985e781ff3f232215a2ecb6",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/after-568x320.webp",
+      "sha256": "423a7bbd4490e738c563b3d369b4a8f84f816f44034509acfaf41ca6a78b9760",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/after-844x390.webp",
+      "sha256": "b3a928db8fdeccfbe6df91dfaaba9cfbc1121e3cd36ec2c908a19528f86b22a6",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/before-1440x900.webp",
+      "sha256": "8f7dc77d408cedc51a1b835fd142395194fedd8b4475336c4c06d14eaf0ef9e4",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/before-390x844.webp",
+      "sha256": "f1ba2f0babcfdd8c3432e8db99c4de8b6639081d38a48ce939e06ae90a7aac1d",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/before-568x320.webp",
+      "sha256": "0d01781f41eb75321f112c58bf5431be49aa7c2fb0bca961d4e2c9633166b6c8",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/before-844x390.webp",
+      "sha256": "9091347562628cdb07b27c41f7fa0f7c4e954ca1619c32db855852534a1cc214",
+      "source": "本项目浏览器实装验收",
+      "author": "项目验证记录贡献者",
+      "originality": "固定牌局夹具的 Chrome 截图",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
+      "path": "docs/validation/paper-table/material-study.webp",
+      "sha256": "938f5a9a5c89dd1d25b5942afc2b3613bb9d4e7cec4051643d1af6b644a488d8",
+      "source": "本项目莆仙熟人桌美术概念",
+      "author": "项目使用 Codex 图像生成制作",
+      "originality": "由图像生成工具制作的材质与布局参考",
+      "allowedUse": "按项目 AGPL-3.0 许可证使用、修改和分发；保留来源记录",
+      "status": "随项目分发",
+      "evidence": "docs/validation/paper-table/README.md"
+    },
+    {
       "path": "docs/validation/color-assistance/adaptive-long-1440x900.png",
       "sha256": "01dce7dc6dbf5f0f086fe3fb0fea8418aa4c4f7d1cfb728b6f161d102ce7e002",
       "source": "仓库验证资料",
