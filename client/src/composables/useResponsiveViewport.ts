@@ -23,16 +23,16 @@ function hasOccludedGap(segments: readonly DOMRectReadOnly[]): boolean {
   }));
 }
 
-function selectPane(visible: ViewportRect, segments: readonly DOMRectReadOnly[]): ViewportRect | null {
+function selectPane(visible: ViewportRect, segments: readonly DOMRectReadOnly[]): { visible: ViewportRect; segment: DOMRectReadOnly } | null {
   if (!hasOccludedGap(segments)) return null;
-  let best: ViewportRect | null = null;
+  let best: { visible: ViewportRect; segment: DOMRectReadOnly } | null = null;
   for (const segment of segments) {
     const left = Math.max(visible.left, segment.left);
     const top = Math.max(visible.top, segment.top);
     const width = Math.min(visible.left + visible.width, segment.right) - left;
     const height = Math.min(visible.top + visible.height, segment.bottom) - top;
-    if (width > 0 && height > 0 && (!best || width * height > best.width * best.height)) {
-      best = { left, top, width, height };
+    if (width > 0 && height > 0 && (!best || width * height > best.visible.width * best.visible.height)) {
+      best = { visible: { left, top, width, height }, segment };
     }
   }
   return best;
@@ -41,6 +41,8 @@ function selectPane(visible: ViewportRect, segments: readonly DOMRectReadOnly[])
 export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
   const viewportWidth = ref(typeof window === "undefined" ? 1280 : window.innerWidth);
   const viewportHeight = ref(typeof window === "undefined" ? 720 : window.innerHeight);
+  const layoutWidth = ref(viewportWidth.value);
+  const layoutHeight = ref(viewportHeight.value);
   const viewportLeft = ref(0);
   const viewportTop = ref(0);
   const coarsePointer = ref(false);
@@ -52,13 +54,17 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
 
   const updateViewport = () => {
     const visual = window.visualViewport;
+    const layout = {
+      width: document.documentElement.clientWidth || window.innerWidth,
+      height: document.documentElement.clientHeight || window.innerHeight,
+    };
     // Pinch zoom is magnification, not a request to rotate/reflow the table.
     // innerWidth may expand to fit the previous rotated canvas on iOS/mobile
     // emulation; the root client size still describes the new layout viewport.
     const useVisual = visual && Math.abs(visual.scale - 1) < 0.01;
     const visible = {
-      width: useVisual ? visual.width : document.documentElement.clientWidth || window.innerWidth,
-      height: useVisual ? visual.height : document.documentElement.clientHeight || window.innerHeight,
+      width: useVisual ? visual.width : layout.width,
+      height: useVisual ? visual.height : layout.height,
       left: useVisual ? visual.offsetLeft : 0,
       top: useVisual ? visual.offsetTop : 0,
     };
@@ -66,7 +72,12 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
     // A physical occlusion takes effect immediately, including during a flight.
     if (geometryBusy?.value && !pane && !hasViewportHinge.value) return;
     hasViewportHinge.value = Boolean(pane);
-    const usable = pane ?? visible;
+    const usable = pane?.visible ?? visible;
+    // A keyboard changes the visible area, not the device's orientation. Use
+    // the layout viewport (or the chosen physical pane before clipping) for
+    // rotation, while still fitting the table and dialogs above the keyboard.
+    layoutWidth.value = pane?.segment.width ?? layout.width;
+    layoutHeight.value = pane?.segment.height ?? layout.height;
     viewportWidth.value = usable.width;
     viewportHeight.value = usable.height;
     viewportLeft.value = usable.left;
@@ -96,11 +107,11 @@ export function useResponsiveViewport(geometryBusy?: Ref<boolean>) {
 
   const isPhoneLike = computed(
     () => (coarsePointer.value || hasViewportHinge.value)
-      && Math.min(viewportWidth.value, viewportHeight.value) <= PHONE_SHORT_EDGE_MAX,
+      && Math.min(layoutWidth.value, layoutHeight.value) <= PHONE_SHORT_EDGE_MAX,
   );
   const isRotatedPhonePortrait = computed(
     () => isPhoneLike.value
-      && viewportHeight.value >= viewportWidth.value * PORTRAIT_PHONE_MIN_ASPECT,
+      && layoutHeight.value >= layoutWidth.value * PORTRAIT_PHONE_MIN_ASPECT,
   );
   const effectiveWidth = computed(() =>
     isRotatedPhonePortrait.value ? viewportHeight.value : viewportWidth.value,
