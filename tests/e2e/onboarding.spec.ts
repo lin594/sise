@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test("a fresh player chooses a table layout once and keyboard focus returns to the lobby", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 568, height: 320 });
@@ -118,6 +118,25 @@ test.describe("touch lobby readability", () => {
     await expect(page.getByTestId("game-board")).toBeVisible();
   });
 
+  async function expectLobbyHeaderContained(page: Page) {
+    await expect.poll(() => page.evaluate(() => {
+      const header = document.querySelector<HTMLElement>(".top")!;
+      const headerRect = header.getBoundingClientRect();
+      const lobbyRect = document.querySelector(".lobby")!.getBoundingClientRect();
+      const rotated = document.querySelector(".layout")!.classList.contains("rotated-phone-portrait");
+      const controls = [...header.querySelectorAll<HTMLElement>("button")]
+        .filter(element => element.getBoundingClientRect().width > 0);
+      return header.offsetHeight <= 64
+        && (rotated ? headerRect.left >= lobbyRect.right - 1 : headerRect.bottom <= lobbyRect.top + 1)
+        && controls.every(element => {
+          const rect = element.getBoundingClientRect();
+          return rect.left >= headerRect.left - 1 && rect.right <= headerRect.right + 1
+            && rect.top >= headerRect.top - 1 && rect.bottom <= headerRect.bottom + 1
+            && element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+        });
+    })).toBe(true);
+  }
+
   for (const [width, height] of [[320, 568], [568, 320]]) {
     test(`friend controls remain reachable when enlarged at ${width}x${height}`, async ({ page }, info) => {
       await page.setViewportSize({ width, height });
@@ -132,9 +151,22 @@ test.describe("touch lobby readability", () => {
         await expect(page.getByTestId("fill-bots")).toBeInViewport({ ratio: 1 });
         await expect(page.getByTestId("lobby-start")).toBeInViewport({ ratio: 1 });
       }
+      await expectLobbyHeaderContained(page);
+      const originalHeaderHeight = await page.locator(".top").evaluate(el => (el as HTMLElement).offsetHeight);
       await page.getByTestId("show-invite-qr").click();
       await expect(page.getByTestId("friend-invite-qr")).toBeVisible();
       await page.getByTestId("close-friend-invite-qr").click();
+      // Lazy QR styles must not restyle the root canvas, even when opened in
+      // landscape before rotating. Visible controls alone missed that overlap.
+      for (const viewport of [{ width, height }, { width: height, height: width }]) {
+        await page.setViewportSize(viewport);
+        await expectLobbyHeaderContained(page);
+        expect(await page.locator(".top").evaluate(el => (el as HTMLElement).offsetHeight)).toBe(originalHeaderHeight);
+        await page.getByTestId("game-settings").click();
+        await expect(page.getByTestId("settings-panel")).toBeVisible();
+        await page.getByRole("button", { name: "关闭设置", exact: true }).click();
+      }
+      await page.setViewportSize({ width, height });
       const scoring = page.getByTestId("friend-table-settings-toggle");
       await scoring.scrollIntoViewIfNeeded();
       await expectTouchControl(scoring, true);
@@ -150,6 +182,7 @@ test.describe("touch lobby readability", () => {
       const scroll = page.getByTestId("lobby-scroll");
       expect(await scroll.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
       await expect(page.getByTestId("fill-bots")).toBeInViewport({ ratio: 1 });
+      await expectLobbyHeaderContained(page);
       await page.screenshot({ path: info.outputPath(`senior-friend-controls-${width}x${height}.png`) });
       await page.getByTestId("fill-bots").click();
       await expect(page.getByTestId("lobby-start")).toBeEnabled();

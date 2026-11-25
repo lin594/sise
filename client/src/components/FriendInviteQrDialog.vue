@@ -296,41 +296,6 @@ h2 {
   }
 }
 
-:global(.layout[data-rotated-phone-portrait="true"]) .invite-qr-dialog {
-  width: min(35rem, calc(100% - 0.2rem));
-  max-height: calc(100% - 0.2rem);
-  grid-template-columns: minmax(9rem, 10rem) minmax(0, 1fr);
-  gap: 0.65rem;
-  padding: 0.55rem;
-  text-align: left;
-}
-
-:global(.layout[data-rotated-phone-portrait="true"]) .qr-frame {
-  width: min(10rem, calc(var(--effective-viewport-height, 320px) * 0.5));
-}
-
-:global(.layout[data-rotated-phone-portrait="true"]) h2 {
-  font-size: 1.2rem;
-}
-
-:global(.layout[data-rotated-phone-portrait="true"]) #invite-qr-description {
-  margin-top: 0.25rem;
-  font-size: 0.9rem;
-  line-height: 1.35;
-}
-
-:global(.layout[data-rotated-phone-portrait="true"]) .privacy-note {
-  margin-top: 0.3rem;
-  font-size: 0.75rem;
-}
-
-:global(.layout[data-rotated-phone-portrait="true"]) .qr-close {
-  min-height: 46px;
-  margin-top: 0.45rem;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.95rem;
-}
-
 @media (max-height: 420px) {
   .invite-qr-mask {
     padding: 0.35rem;
@@ -373,7 +338,9 @@ h2 {
 
 /* Portrait phones are rotated by the app into a landscape game canvas, while
    media queries still report the physical portrait viewport. Keep this modal
-   on the effective landscape axis instead of applying the stacked phone rule. */
+   on the effective landscape axis instead of applying the stacked phone rule.
+   Keep each complete selector inside :global(); a global prefix on its own
+   drops the following descendant in Vue and would style the app canvas. */
 :global(.layout.rotated-phone-portrait .invite-qr-mask) {
   padding: 0.35rem;
 }
@@ -387,7 +354,7 @@ h2 {
   text-align: left;
 }
 
-:global(.layout.rotated-phone-portrait .qr-frame) {
+:global(.layout.rotated-phone-portrait .invite-qr-dialog .qr-frame) {
   width: 10.5rem;
 }
 
@@ -395,18 +362,18 @@ h2 {
   font-size: 1.2rem;
 }
 
-:global(.layout.rotated-phone-portrait #invite-qr-description) {
+:global(.layout.rotated-phone-portrait .invite-qr-dialog #invite-qr-description) {
   margin-top: 0.25rem;
   font-size: 0.9rem;
   line-height: 1.35;
 }
 
-:global(.layout.rotated-phone-portrait .privacy-note) {
+:global(.layout.rotated-phone-portrait .invite-qr-dialog .privacy-note) {
   margin-top: 0.3rem;
   font-size: 0.75rem;
 }
 
-:global(.layout.rotated-phone-portrait .qr-close) {
+:global(.layout.rotated-phone-portrait .invite-qr-dialog .qr-close) {
   min-height: 46px;
   margin-top: 0.45rem;
   padding: 0.45rem 0.6rem;
