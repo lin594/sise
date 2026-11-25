@@ -15,7 +15,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { nextTick, onMounted, ref, watch } from "vue";
 const props = defineProps<{ nickname: string; history: string[]; randomName: string }>();
 const emit = defineEmits<{ save: [name: string]; close: []; randomize: [] }>();
 const draft = ref(props.nickname);
@@ -25,10 +25,12 @@ const historyOpen = ref(false);
 watch(() => props.randomName, value => { if (value) draft.value = value; });
 onMounted(() => { input.value?.focus(); input.value?.select(); });
 function save() { if (draft.value.trim()) emit('save', draft.value.trim().slice(0, 16)); }
-function selectHistoryName(name: string) {
+async function selectHistoryName(name: string) {
   draft.value = name;
   historyOpen.value = false;
+  await nextTick();
   input.value?.focus();
+  input.value?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 function trapFocus(event: KeyboardEvent) {
   const nodes = Array.from(dialog.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input') ?? []);
