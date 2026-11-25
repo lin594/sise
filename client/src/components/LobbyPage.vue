@@ -1683,7 +1683,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
     padding: 0.5rem;
   }
 
-  .mode-selection {
+  .lobby.mode-selection {
     gap: 0.2rem;
     padding: 0.3rem;
   }
