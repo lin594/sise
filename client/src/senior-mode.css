@@ -20,6 +20,20 @@ html[data-skin] .layout.senior-mode {
   --senior-response-width: clamp(44px, calc(12 * var(--effective-vh)), 82px);
   --senior-response-height: clamp(44px, calc(12 * var(--effective-vh)), 86px);
 }
+/* The lobby header already reserves 48px for identity/install actions. Keep
+   its settings and accessibility controls within that same usable touch row. */
+html[data-skin] .layout .top:not(.game-control-header) :is(.tool-button, .senior-entry) {
+  min-height: 44px;
+}
+html[data-skin] .layout.senior-mode .top:not(.game-control-header) :is(.tool-button, .senior-entry) {
+  min-width: 48px;
+  min-height: 48px;
+}
+/* Lobby controls keep the same readable touch targets before entering a game. */
+html[data-skin] .layout.senior-mode .lobby {
+  --lobby-control-height: 48px;
+  --lobby-control-font: 16px;
+}
 html[data-skin] .layout.senior-mode .senior-entry { min-height: 44px; font-size: 16px; }
 html[data-skin] .layout.senior-mode.game-tools-active { --game-header-height: max(48px, calc(5.8 * var(--effective-vh))); }
 html[data-skin] .layout.senior-mode .board[data-table-layout] .cards.hand:has(.hand-card) {
