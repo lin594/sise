@@ -677,7 +677,7 @@ test('senior players can read and change the selected discard before committing 
   await expect(page.getByTestId('hand-card-unique-red-shi')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('action-chi').click();
   const confirm = page.getByTestId('discard-confirm');
-  await expect(confirm).toHaveText('出牌');
+  await expect(confirm).toHaveText('先选牌');
   await expect(confirm).toBeDisabled();
 
   const rook = page.getByTestId('hand-card-post-red-ju');
@@ -757,4 +757,103 @@ test('automatic hand layout retains readable touch targets on small phones and a
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(page.locator('.hand-viewport.single-line')).toBeVisible();
   await expect(page.getByTestId('hand-scroll-next')).toHaveCount(0);
+});
+
+for (const seniorMode of [false, true]) test(`discard confirmation names the hidden selection across phone sizes (${seniorMode ? 'senior' : 'standard'})`, async ({ page, browserName }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.addInitScript(senior => {
+    localStorage.setItem('sise_game_display_preferences_v2', JSON.stringify({ seniorMode: senior, reduceMotion: true, handLayout: 'paged' }));
+    localStorage.setItem('sise_context_hints_v1', '{"enabled":false}');
+  }, seniorMode);
+  await page.goto('/?new=1&e2eDebug=1');
+  await startLobbyAction(page);
+  await page.evaluate(() => (window as any).__siseLocalTest.setupScenario('chi_local_upper_full_hand'));
+  await expect.poll(() => page.evaluate(() => (window as any).__siseLocalTest.getLastResult())).toMatchObject({ scenario: 'chi_local_upper_full_hand', ok: true });
+  await expect(page.locator('.hand-card')).toHaveCount(20);
+  await expect(page.getByTestId('hand-card-d1')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('action-chi').tap();
+  const confirm = page.getByTestId('discard-confirm');
+  await expect(confirm).toHaveText('先选牌');
+  await expect(confirm).toBeDisabled();
+  const hand = page.locator('.cards.hand');
+
+  // Use actual browser touch input: dragging the rotated hand must not select
+  // a card, and the next deliberate tap must still work.
+  if (browserName === 'chromium') {
+    const cdp = await page.context().newCDPSession(page);
+    const rect = (await hand.boundingBox())!;
+    const x = rect.x + rect.width / 2;
+    const y = rect.y + rect.height * .75;
+    const before = await hand.evaluate(element => element.scrollLeft);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let step = 1; step <= 8; step++) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - step * 16 }] });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(() => hand.evaluate(element => element.scrollLeft)).toBeGreaterThan(before + 80);
+    await expect(page.locator('.hand-card[aria-pressed="true"]')).toHaveCount(0);
+    await cdp.detach();
+  }
+  while (await page.getByTestId('hand-scroll-prev').isEnabled()) await page.getByTestId('hand-scroll-prev').tap();
+  const choices = page.locator('.hand-card:enabled');
+  const first = choices.first();
+  const second = choices.nth(1);
+  const firstId = (await first.getAttribute('data-card-id'))!;
+  const secondId = (await second.getAttribute('data-card-id'))!;
+  const firstLabel = (await first.getAttribute('aria-label'))!.split('，')[0];
+  const secondLabel = (await second.getAttribute('aria-label'))!.split('，')[0];
+  await first.tap();
+  await expect(confirm).toHaveText(`出${firstLabel}`);
+  await second.tap();
+  await expect(confirm).toHaveText(`出${secondLabel}`);
+  await expect(page.getByTestId(`hand-card-${firstId}`)).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId(`hand-card-${firstId}`).tap();
+  while (await page.getByTestId('hand-scroll-next').isEnabled()) await page.getByTestId('hand-scroll-next').tap();
+  const selected = page.getByTestId(`hand-card-${firstId}`);
+  await expect(selected).toHaveAttribute('aria-pressed', 'true');
+  expect(await selected.evaluate(element => {
+    const card = element.getBoundingClientRect();
+    const viewport = element.closest('.hand')!.getBoundingClientRect();
+    return card.bottom <= viewport.top || card.right <= viewport.left;
+  })).toBe(true);
+  await expect(confirm).toHaveAccessibleName(`出${firstLabel}`);
+
+  const confirmFits = () => confirm.evaluate((element, minSize) => {
+    const rect = element.getBoundingClientRect();
+    const range = document.createRange(); range.selectNodeContents(element);
+    const text = range.getBoundingClientRect();
+    return rect.width >= minSize && rect.height >= minSize
+      && rect.left >= 0 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight + 1
+      && text.left >= rect.left && text.right <= rect.right && text.top >= rect.top && text.bottom <= rect.bottom
+      && element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }, seniorMode ? 48 : 44);
+
+  for (const viewport of [
+    { width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 },
+    { width: 568, height: 320 }, { width: 667, height: 375 }, { width: 690, height: 820 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(confirm).toHaveText(`出${firstLabel}`);
+    await expect.poll(confirmFits).toBe(true);
+    if (viewport.width === 320 || viewport.width === 690) {
+      await page.screenshot({ path: testInfo.outputPath(`named-discard-${viewport.width}.png`) });
+    }
+  }
+  await page.setViewportSize({ width: 568, height: 320 });
+  for (const layout of ['classic', 'compact', 'mahjong']) {
+    await page.getByTestId('game-settings').tap();
+    await revealSetting(page, `layout-${layout}`);
+    await page.getByTestId(`layout-${layout}`).tap();
+    await page.getByRole('button', { name: '关闭设置', exact: true }).tap();
+    await expect(confirm).toHaveText(`出${firstLabel}`);
+    await expect.poll(confirmFits).toBe(true);
+  }
+  // Confirm while the selected card is offscreen, proving the label identifies
+  // the actual submitted card rather than the currently visible hand page.
+  await page.setViewportSize({ width: 320, height: 568 });
+  while (await page.getByTestId('hand-scroll-next').isEnabled()) await page.getByTestId('hand-scroll-next').tap();
+  await confirm.tap();
+  await expect(selected).toHaveCount(0);
+  await expect(page.getByTestId(`hand-card-${secondId}`)).toHaveCount(1);
 });
