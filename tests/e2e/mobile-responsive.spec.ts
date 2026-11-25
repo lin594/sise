@@ -47,24 +47,24 @@ async function finishOpeningIfNeeded(page: Page): Promise<void> {
 }
 
 async function applyLocalDebugScenario(page: Page, scenario: string): Promise<void> {
-  await expect.poll(() =>
-    page.evaluate((nextScenario) => {
-      const bridge = (window as Window & {
-        __siseLocalTest?: {
-          setupScenario: (scenario: string) => void;
-          getLastResult: () => { scenario: string; ok: boolean } | null;
-        };
-      }).__siseLocalTest;
-      if (!bridge) {
-        throw new Error("Local test bridge is unavailable");
-      }
-      const result = bridge.getLastResult();
-      if (result?.scenario !== nextScenario || !result.ok) {
-        bridge.setupScenario(nextScenario);
-      }
-      return result;
-    }, scenario),
-  ).toMatchObject({ scenario, ok: true });
+  // Send once: repeated fixture resets can invalidate the action clicked just
+  // after the first acknowledgement arrives on a busy browser worker.
+  await page.evaluate((nextScenario) => {
+    const bridge = (window as Window & {
+      __siseLocalTest?: {
+        setupScenario: (scenario: string) => void;
+        getLastResult: () => { scenario: string; ok: boolean } | null;
+      };
+    }).__siseLocalTest;
+    if (!bridge) throw new Error("Local test bridge is unavailable");
+    const result = bridge.getLastResult();
+    if (result?.scenario !== nextScenario || !result.ok) bridge.setupScenario(nextScenario);
+  }, scenario);
+  await expect.poll(() => page.evaluate(() =>
+    (window as Window & {
+      __siseLocalTest?: { getLastResult: () => { scenario: string; ok: boolean } | null };
+    }).__siseLocalTest?.getLastResult(),
+  )).toMatchObject({ scenario, ok: true });
 }
 
 async function expectSimplifiedTableCenter(page: Page): Promise<void> {
@@ -1296,7 +1296,7 @@ test.describe("compact landscape gameplay", () => {
     await expect(page.locator(".action-dock").getByTestId("discard-confirm")).toBeVisible();
     await expect(page.locator(".hand-toolbar").getByTestId("discard-confirm")).toHaveCount(0);
     await expect(discardConfirm).toBeDisabled();
-    await expect(discardConfirm).toHaveText("出");
+    await expect(discardConfirm).toHaveText("先选牌");
     const handBeforeSelection = await page.locator("[data-testid^='hand-card-']").evaluateAll((cards) =>
       cards.map((card) => (card as HTMLElement).dataset.testid),
     );
@@ -1310,8 +1310,8 @@ test.describe("compact landscape gameplay", () => {
     )).toEqual(handBeforeSelection);
     await expect(discardConfirm).toBeEnabled();
     await expect(page.getByTestId("action-guidance")).toContainText("先选一张手牌，再点“出牌”");
-    await expect(discardConfirm).toHaveText("出");
-    await expect(discardConfirm).toHaveAttribute("aria-label", "出牌");
+    await expect(discardConfirm).toHaveText(`出${selectedCardLabel}`);
+    await expect(discardConfirm).toHaveAttribute("aria-label", `出${selectedCardLabel}`);
     const gameSettings = page.getByTestId("game-settings");
     await expect(gameSettings).toBeEnabled();
     await expect(gameSettings).toHaveText("设置");

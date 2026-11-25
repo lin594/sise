@@ -86,7 +86,7 @@ test("a player composes chi directly from the real hand without a candidate dial
   await chi.click();
   const discard = page.getByTestId("discard-confirm");
   await expect(discard).toBeVisible();
-  await expect(discard).toHaveText("出");
+  await expect(discard).toHaveText("先选牌");
   await expect(discard).toBeDisabled();
 });
 
