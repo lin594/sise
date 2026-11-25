@@ -826,6 +826,8 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .repository-link { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; color: var(--ui-accent-text); text-underline-offset: 3px; }
 .repository-link:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 8px; }
 .lobby {
+  --lobby-control-height: 44px;
+  --lobby-control-font: 14px;
   background: var(--ui-panel, #0b1220);
   border: 1px solid var(--ui-raised, #1e293b);
   border-radius: 12px;
@@ -899,7 +901,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary {
   min-width: 11.5rem;
-  min-height: 40px;
+  min-height: var(--lobby-control-height, 44px);
   padding: 0.48rem 0.72rem;
   border: 1px solid rgba(var(--ui-accent-rgb, 56, 189, 248), 0.5);
   border-radius: 0.72rem;
@@ -933,7 +935,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .guest-profile-summary-copy strong {
   color: var(--ui-gold-text, #fef08a);
-  font-size: max(0.875rem, 14px);
+  font-size: max(0.875rem, var(--lobby-control-font, 14px));
 }
 
 .guest-profile-summary-copy > span {
@@ -945,7 +947,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .guest-profile-summary-view {
   align-self: center;
   color: var(--ui-accent-text, #bae6fd);
-  font-size: max(0.875rem, 14px);
+  font-size: max(0.875rem, var(--lobby-control-font, 14px));
   font-weight: 850;
   white-space: nowrap;
 }
@@ -958,6 +960,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .invite-button {
+  font-size: var(--lobby-control-font, 14px);
   white-space: nowrap;
 }
 
@@ -1279,8 +1282,9 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 .bot-level-button {
+  font-size: var(--lobby-control-font, 14px);
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--lobby-control-height, 44px);
   padding: 0.4rem 0.25rem;
   border: 1px solid #475569;
   border-radius: 9px;
@@ -1309,6 +1313,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .primary,
 .ghost,
 .danger {
+  font-size: var(--lobby-control-font, 14px);
   border: none;
   border-radius: 8px;
   padding: 10px 14px;
@@ -1361,7 +1366,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
 .mini {
   padding: 7px 10px;
-  font-size: 0.78rem;
+  font-size: var(--lobby-control-font, 14px);
   min-height: 48px;
 }
 
@@ -1713,7 +1718,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   .mode-selection .mode-enter {
     margin-top: 0.2rem;
     padding-top: 0.25rem;
-    font-size: 0.78rem;
+    font-size: var(--lobby-control-font, 14px);
   }
 
   .lobby-scroll {
@@ -1726,7 +1731,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .mode-selection .guest-profile-summary {
     min-width: 0;
-    min-height: 40px;
+    min-height: var(--lobby-control-height, 44px);
     padding: 0.3rem 0.5rem;
     display: flex;
     align-items: baseline;
@@ -1740,7 +1745,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection .guest-profile-summary-copy strong {
-    font-size: max(0.875rem, 14px);
+    font-size: max(0.875rem, var(--lobby-control-font, 14px));
   }
 
   .mode-selection .guest-profile-summary-copy > span {
@@ -1748,13 +1753,13 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .mode-selection .guest-profile-summary-view {
-    font-size: max(0.875rem, 14px);
+    font-size: max(0.875rem, var(--lobby-control-font, 14px));
   }
 
   .head-action {
-    min-height: 42px;
+    min-height: var(--lobby-control-height, 44px);
     padding: 0.45rem 0.65rem;
-    font-size: 0.78rem;
+    font-size: var(--lobby-control-font, 14px);
   }
 
   .lobby-kicker {
@@ -1791,6 +1796,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 
   .invite-card {
     display: grid;
+    padding-block: 0.5rem;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
@@ -1809,12 +1815,12 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .scoring-options button {
-    min-height: 42px;
+    min-height: var(--lobby-control-height, 44px);
     padding: 0.28rem 0.42rem;
   }
 
   .scoring-mode-summary {
-    min-height: 42px;
+    min-height: var(--lobby-control-height, 44px);
     padding: 0.35rem 0.5rem;
   }
 
@@ -1823,7 +1829,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   }
 
   .invite-card .invite-button {
-    min-height: 42px;
+    min-height: var(--lobby-control-height, 44px);
     padding: 0.5rem 0.7rem;
   }
 
@@ -1853,9 +1859,9 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   .friend-waiting-room .lobby-primary-actions button {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 46px;
+    min-height: max(46px, var(--lobby-control-height, 44px));
     padding: 0.45rem 0.55rem;
-    font-size: 0.9375rem;
+    font-size: max(0.9375rem, var(--lobby-control-font, 14px));
   }
 
   .friend-waiting-room .start-hint {
@@ -1923,25 +1929,25 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 }
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .invite-button) {
-  min-height: 42px;
+  min-height: var(--lobby-control-height, 44px);
   padding-inline: 0.5rem;
-  font-size: 0.76rem;
+  font-size: var(--lobby-control-font, 14px);
 }
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-actions) {
-  min-height: 46px;
+  min-height: max(46px, var(--lobby-control-height, 44px));
   padding-top: 0.1rem;
 }
 
 :global(.layout.legacy-compact-viewport .friend-waiting-room .lobby-primary-actions button) {
-  min-height: 46px;
+  min-height: max(46px, var(--lobby-control-height, 44px));
   padding-block: 0.4rem;
 }
 .mode-enter { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--ui-border, #475569); color: var(--ui-accent-text, #bae6fd); font-weight: 800; }
 .mode-selection .mode-card { min-height: 9rem; }
 @media (min-height: 381px) and (max-height: 450px) { .mode-selection .mode-card { min-height: 0; padding: .65rem; } .mode-enter { margin-top: .5rem; padding-top: .4rem; } }
 
-.friend-table-settings > summary, .bot-settings > summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; background: rgba(128, 104, 70, .1); }
+.friend-table-settings > summary, .bot-settings > summary { cursor: pointer; min-height: var(--lobby-control-height, 44px); font-size: max(1rem, var(--lobby-control-font, 14px)); display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 7px; background: rgba(128, 104, 70, .1); }
 .friend-table-settings > summary::before, .bot-settings > summary::before { content: "▸"; }
 .friend-table-settings[open] > summary::before, .bot-settings[open] > summary::before { content: "▾"; }
 .friend-table-settings { margin-top: 8px; }
@@ -1949,7 +1955,7 @@ function trapLeaveFocus(event: KeyboardEvent): void {
 .mode-selection .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .practice-card { cursor: default; }
 .practice-actions { display: flex; gap: .4rem; align-self: end; }
-.practice-actions button { flex: 1; min-width: 0; min-height: 42px; padding: .4rem; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-panel); color: var(--ui-text); font-weight: 700; cursor: pointer; }
+.practice-actions button { font-size: var(--lobby-control-font, 14px); flex: 1; min-width: 0; min-height: var(--lobby-control-height, 44px); padding: .4rem; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-panel); color: var(--ui-text); font-weight: 700; cursor: pointer; }
 .practice-actions button:last-child { background: var(--ui-accent); color: #fffaf0; }
 .mode-tiles { display: flex; gap: 4px; margin: .35rem 0; }
 .mode-tiles .card { width: 24px; height: 46px; border-radius: 3px; font-size: 16px; }
@@ -1969,11 +1975,51 @@ function trapLeaveFocus(event: KeyboardEvent): void {
   :global(html[data-skin="puxian-house"] .mode-selection .lobby-head) { min-height: 190px; padding: 1.25rem 1.5rem; border-radius: 8px; background: #123b33 url('/skins/first-table-hero.webp') center / cover no-repeat; }
 }
 @media (max-width: 720px), (max-height: 380px) {
-  .mode-selection .mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
+  .mode-selection .mode-grid { grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, .85fr)); gap: .35rem; }
   .mode-selection .mode-card { min-height: 0; gap: .15rem; }
   .mode-selection .mode-tiles { margin: 0; gap: 2px; }
   .mode-selection .mode-tiles .card { width: 18px; height: 32px; font-size: 11px; }
   .mode-selection .practice-actions { gap: .2rem; }
-  .mode-selection .practice-actions button { min-height: 36px; padding: .2rem; font-size: .72rem; }
+  .mode-selection .practice-actions button { padding: .3rem .2rem; }
+}
+
+/* A square unfolded touch screen has reading room even when its width falls
+   below the phone media queries. Use the measured canvas classification. */
+:global(.layout.roomy-touch-viewport .mode-selection .mode-grid) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .mode-card) {
+  padding: .85rem;
+  gap: .5rem;
+  align-content: start;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .mode-head) {
+  flex-wrap: wrap;
+  gap: .2rem .5rem;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .mode-head strong) {
+  font-size: max(1.125rem, var(--lobby-control-font));
+}
+:global(.layout.roomy-touch-viewport .mode-selection .mode-head span),
+:global(.layout.roomy-touch-viewport .mode-selection .mode-card p) {
+  display: block;
+  font-size: var(--lobby-control-font);
+  line-height: 1.5;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .practice-actions) {
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .practice-actions button) {
+  flex-basis: 100%;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .mode-enter) {
+  font-size: var(--lobby-control-font);
+  margin-top: .5rem;
+}
+:global(.layout.roomy-touch-viewport .mode-selection .offline-readiness) {
+  font-size: var(--lobby-control-font);
+  line-height: 1.4;
 }
 </style>
