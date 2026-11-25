@@ -644,7 +644,7 @@
           :actions="props.actions ?? []"
           :can-act="canAct"
           :can-discard="canDiscard"
-          :discard-label="seniorDiscardLabel"
+          :discard-label="discardConfirmLabel"
           :has-discard-selection="Boolean(selectedDiscardCardId)"
           :discard-pending="Boolean(discardingCardId)"
           :is-current-turn="Boolean(props.isCurrentTurn)"
@@ -1955,10 +1955,9 @@ function handCardById(id: string): Card | undefined { return props.privateHand.f
 const selectedPreview = computed(() => canDiscard.value
   ? handCardById(selectedDiscardCardId.value ?? "")
   : undefined);
-const seniorDiscardLabel = computed(() => {
-  if (!props.seniorMode) return undefined;
-  return selectedPreview.value ? `出${getCardAccessibleText(selectedPreview.value)}` : "出牌";
-});
+const discardConfirmLabel = computed(() =>
+  selectedPreview.value ? `出${getCardLabelText(selectedPreview.value)}` : "先选牌",
+);
 const selectedDiscardListeningRoute = computed(() => selectedPreview.value
   ? markedListeningRoutes.value.find((route) => route.discardCardId === selectedPreview.value?.id)
   : undefined);
@@ -6252,6 +6251,8 @@ watch(() => [props.tableLayout, props.tableCardMode, props.ownCardMode, flights.
 .board .fixed-clock { position: static; min-width: 0; width: 52px; padding-inline: 1px; }
 .board .embedded-actions { padding: 0; }
 .board .embedded-actions :deep(.btn) { flex: 0 1 96px; min-width: 44px; max-width: 96px; min-height: 44px; }
+/* Keep the selected card name readable even when its hand page is out of view. */
+.board .embedded-actions :deep([data-testid="discard-confirm"]) { flex: 0 0 auto; width: auto; min-width: 96px; max-width: 100%; white-space: nowrap; }
 .board .embedded-actions :deep(.action-row) { flex-wrap: wrap; }
 .board .dynamic-action-track { grid-column: 3; grid-row: 1; overflow: visible; min-width: 0; }
 .board .self-info-card { grid-column: 2; grid-row: 1; min-width: 0; padding-block: 0; }

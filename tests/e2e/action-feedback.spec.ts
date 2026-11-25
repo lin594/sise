@@ -75,7 +75,7 @@ test("an accepted meld yields immediately to the next discard instruction", asyn
 
   await page.getByTestId("action-chi").click();
   await expect(page.getByTestId("discard-confirm")).toBeVisible();
-  await expect(page.getByTestId("discard-confirm")).toHaveText("出");
+  await expect(page.getByTestId("discard-confirm")).toHaveText("先选牌");
   await expect(page.getByTestId("discard-confirm")).toBeDisabled();
   await expect(page.getByTestId("action-feedback")).toHaveCount(0);
 });
